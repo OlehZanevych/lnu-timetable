@@ -1,0 +1,37 @@
+<h2>Timetable</h2>
+
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+<table class="timetable">
+  <thead>
+    <tr>
+      <th>Slot</th>
+      @for (d of days; track d) {
+        <th>{{ dayLabel(d) }}</th>
+      }
+    </tr>
+  </thead>
+  <tbody>
+    @for (s of slots(); track s.ordinal) {
+      <tr>
+        <th class="slot">{{ s.ordinal }}<br /><small>{{ s.startTime }}–{{ s.endTime }}</small></th>
+        @for (d of days; track d) {
+          <td>
+            @for (e of cell(s.ordinal, d); track e.id) {
+              <div class="class" [class.biweekly]="e.weekParity !== 'WEEKLY'">
+                <strong>{{ e.workload.course?.name }}</strong>
+                <span>{{ e.workload.classType }} · {{ audience(e) }}</span>
+                <span>{{ e.workload.lecturer?.lastName }} · room {{ e.room.number }}</span>
+                @if (e.weekParity !== 'WEEKLY') {
+                  <em>{{ e.weekParity }}</em>
+                }
+              </div>
+            }
+          </td>
+        }
+      </tr>
+    }
+  </tbody>
+</table>

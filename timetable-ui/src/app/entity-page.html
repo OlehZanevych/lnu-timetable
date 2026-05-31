@@ -1,0 +1,77 @@
+@let m = meta;
+
+<div class="page-header">
+  <div>
+    <h2>{{ m.label }}</h2>
+    <p class="muted">{{ rows().length }} record(s)</p>
+  </div>
+  <button type="button" (click)="openCreate()">+ Add</button>
+</div>
+
+@if (error() && !showForm()) {
+  <p class="error">{{ error() }}</p>
+}
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        @for (f of m.fields; track f.name) {
+          <th>{{ f.label }}</th>
+        }
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (row of rows(); track row.id) {
+        <tr>
+          <td>{{ row.id }}</td>
+          @for (f of m.fields; track f.name) {
+            <td>{{ display(row, f) }}</td>
+          }
+          <td class="row-actions">
+            <button type="button" class="ghost" (click)="edit(row)">Edit</button>
+            <button type="button" class="ghost danger" (click)="remove(row)">Delete</button>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td [attr.colspan]="m.fields.length + 2" class="muted">No data yet — click “Add”.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+@if (showForm()) {
+  <div class="modal-backdrop" (click)="reset()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId() ? 'Edit' : 'New' }} {{ m.name }}</h3>
+        <button type="button" class="close" (click)="reset()">✕</button>
+      </div>
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <form (ngSubmit)="save()" class="entity-form">
+        @for (f of m.fields; track f.name) {
+          <label>
+            <span>{{ f.label }}{{ f.required ? ' *' : '' }}</span>
+            @if (f.type === 'ref') {
+              <app-search-select [options]="options()[f.name] || []" [(ngModel)]="form[f.name]" [name]="f.name" />
+            } @else if (f.type === 'textarea') {
+              <textarea [(ngModel)]="form[f.name]" [name]="f.name"></textarea>
+            } @else {
+              <input [type]="f.type" [(ngModel)]="form[f.name]" [name]="f.name" [required]="!!f.required" />
+            }
+          </label>
+        }
+        <div class="actions">
+          <button type="submit">{{ editingId() ? 'Update' : 'Create' }}</button>
+          <button type="button" class="ghost" (click)="reset()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

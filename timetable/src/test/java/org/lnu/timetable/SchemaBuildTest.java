@@ -1,0 +1,59 @@
+package org.lnu.timetable;
+
+import graphql.schema.DataFetcher;
+import graphql.schema.GraphQLSchema;
+import graphql.schema.idl.SchemaPrinter;
+import org.junit.jupiter.api.Test;
+import org.lnu.timetable.config.TimetableSchemaConfig;
+import org.lnu.timetable.framework.config.MutationDefinition;
+import org.lnu.timetable.framework.config.QueryDefinition;
+import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
+import org.lnu.timetable.framework.metadata.RelationMetadata;
+import org.lnu.timetable.framework.schema.DataFetcherProvider;
+import org.lnu.timetable.framework.schema.DynamicGraphQLSchemaBuilder;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class SchemaBuildTest {
+
+    private final DataFetcherProvider noop = new DataFetcherProvider() {
+        public DataFetcher<?> namespace() { return env -> new Object(); }
+        public DataFetcher<?> query(QueryDefinition def) { return env -> null; }
+        public DataFetcher<?> connection(QueryDefinition def) { return env -> null; }
+        public DataFetcher<?> mutation(MutationDefinition def) { return env -> null; }
+        public DataFetcher<?> relation(RelationMetadata rel) { return env -> null; }
+    };
+
+    @Test
+    void buildsTimetableSchema() {
+        EntityMetadataRegistry registry = new EntityMetadataRegistry();
+        DynamicGraphQLSchemaBuilder builder = new DynamicGraphQLSchemaBuilder(registry);
+
+        GraphQLSchema schema = builder.buildSchema(List.of(new TimetableSchemaConfig()), noop);
+        String sdl = new SchemaPrinter().print(schema);
+        System.out.println(sdl);
+
+        // Federation service
+        assertTrue(sdl.contains("_service: _Service!"));
+        // Query namespaces
+        assertTrue(sdl.contains("specialties: SpecialtyQueries"));
+        assertTrue(sdl.contains("lecturerWorkloads: LecturerWorkloadQueries"));
+        assertTrue(sdl.contains("timetableEntries: TimetableEntryQueries"));
+        assertTrue(sdl.contains("combinedGroups: CombinedGroupQueries"));
+        // Many-to-many relation (list) and nullable to-one relation
+        assertTrue(sdl.contains("academicGroups: [AcademicGroup!]"));
+        assertTrue(sdl.contains("combinedGroups: [CombinedGroup!]"));
+        assertTrue(sdl.contains("academicGroup: AcademicGroup\n") || sdl.contains("academicGroup: AcademicGroup "));
+        // Non-null to-one relation
+        assertTrue(sdl.contains("lecturer: Lecturer!"));
+        // Connection shape
+        assertTrue(sdl.contains("type LecturerWorkloadConnection"));
+        assertTrue(sdl.contains("nodes: [LecturerWorkload!]!"));
+        // Input payloads + mutations
+        assertTrue(sdl.contains("createTimetableEntry"));
+        assertTrue(sdl.contains("TimetableEntryInputPayload"));
+        assertTrue(sdl.contains("workloadId: ID"));
+    }
+}

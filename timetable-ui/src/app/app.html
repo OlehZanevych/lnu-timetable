@@ -1,0 +1,24 @@
+<header class="topbar">
+  <div class="brand">
+    <span class="crest">ЛНУ</span>
+    <div>
+      <strong>Львівський національний університет імені Івана Франка</strong>
+      <span>Система формування розкладу занять</span>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar">
+    <a class="nav-timetable" routerLink="/timetable" routerLinkActive="active">📅 Розклад / Timetable</a>
+    @for (s of sections; track s.title) {
+      <h3>{{ s.title }}</h3>
+      @for (e of s.items; track e.single) {
+        <a [routerLink]="['/e', e.single]" routerLinkActive="active">{{ e.label }}</a>
+      }
+    }
+  </nav>
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>
