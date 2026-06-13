@@ -1,0 +1,113 @@
+<div class="page-header">
+  <div>
+    <h2>Корпуси</h2>
+    <p class="muted">Навчальні корпуси університету</p>
+  </div>
+  <button type="button" (click)="openCreate()">+ Додати корпус</button>
+</div>
+
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+<ul class="building-list">
+  @for (b of buildings(); track b.id) {
+    <li class="building-list-item">
+      <div class="building-list-icon">&#x1F3DB;</div>
+      <div class="building-list-body">
+        <h3 class="building-list-name">
+          <a [routerLink]="['/building', b.id]">{{ b.name }}</a>
+        </h3>
+        <ul class="building-contacts">
+          @if (b.address) {
+            <li><span class="contact-icon">&#x1F4CD;</span><span>{{ b.address }}</span></li>
+          }
+          @if (b.city || b.postalCode) {
+            <li>
+              <span class="contact-icon">&#x1F4EE;</span>
+              <span>{{ b.city }}{{ b.city && b.postalCode ? ', ' : '' }}{{ b.postalCode }}</span>
+            </li>
+          }
+        </ul>
+      </div>
+      <div class="building-list-actions">
+        <button type="button" class="ghost" (click)="openEdit(b)">Редагувати</button>
+        <a [routerLink]="['/building', b.id]" class="btn-link">Відкрити &#x2192;</a>
+      </div>
+    </li>
+  } @empty {
+    <li class="building-list-empty muted">Корпусів ще немає &mdash; натисніть &laquo;Додати корпус&raquo;.</li>
+  }
+</ul>
+
+<!-- ── Create modal ── -->
+
+@if (showCreateForm()) {
+  <div class="modal-backdrop" (click)="closeCreate()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Новий корпус</h3>
+        <button type="button" class="close" (click)="closeCreate()">&#x2715;</button>
+      </div>
+      @if (createError()) { <p class="error">{{ createError() }}</p> }
+      <form (ngSubmit)="saveCreate()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="createForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Адреса</span>
+          <input type="text" [(ngModel)]="createForm['address']" name="address" />
+        </label>
+        <label>
+          <span>Місто</span>
+          <input type="text" [(ngModel)]="createForm['city']" name="city" />
+        </label>
+        <label>
+          <span>Поштовий індекс</span>
+          <input type="text" [(ngModel)]="createForm['postalCode']" name="postalCode" />
+        </label>
+        <div class="actions">
+          <button type="submit">Створити</button>
+          <button type="button" class="ghost" (click)="closeCreate()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Edit modal ── -->
+
+@if (editingBuilding()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування корпусу</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Адреса</span>
+          <input type="text" [(ngModel)]="editForm['address']" name="address" />
+        </label>
+        <label>
+          <span>Місто</span>
+          <input type="text" [(ngModel)]="editForm['city']" name="city" />
+        </label>
+        <label>
+          <span>Поштовий індекс</span>
+          <input type="text" [(ngModel)]="editForm['postalCode']" name="postalCode" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

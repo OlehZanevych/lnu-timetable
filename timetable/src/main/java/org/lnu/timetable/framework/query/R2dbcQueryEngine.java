@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Builds and executes optimized SQL queries that select only the requested columns.
@@ -18,6 +19,9 @@ public class R2dbcQueryEngine {
 
     /** A column to select, aliased to the GraphQL field name (map key). */
     public record Col(String column, String alias) {}
+
+    /** An equality filter applied as a WHERE clause to list/count queries. */
+    public record Filter(String column, Object value) {}
 
     private final DatabaseClient db;
 
@@ -30,16 +34,14 @@ public class R2dbcQueryEngine {
         return db.sql(sql).bind("v", value).map(row -> mapRow(row, cols)).one();
     }
 
-    public Flux<Map<String, Object>> selectList(String table, List<Col> cols, String orderByColumn, int limit, long offset) {
+    public Flux<Map<String, Object>> selectList(String table, List<Col> cols, String orderByColumn,
+                                                int limit, long offset, List<Filter> filters) {
         StringBuilder sql = new StringBuilder("SELECT ").append(projection(cols)).append(" FROM ").append(table);
-        if (orderByColumn != null) {
-            sql.append(" ORDER BY ").append(orderByColumn);
-        }
+        appendWhere(sql, filters);
+        if (orderByColumn != null) sql.append(" ORDER BY ").append(orderByColumn);
         sql.append(" LIMIT ").append(limit);
-        if (offset != 0) {
-            sql.append(" OFFSET ").append(offset);
-        }
-        return db.sql(sql.toString()).map(row -> mapRow(row, cols)).all();
+        if (offset != 0) sql.append(" OFFSET ").append(offset);
+        return bindFilters(db.sql(sql.toString()), filters).map(row -> mapRow(row, cols)).all();
     }
 
     public Flux<Map<String, Object>> selectWhere(String table, List<Col> cols, String whereColumn, Object value, String orderByColumn) {
@@ -53,6 +55,14 @@ public class R2dbcQueryEngine {
 
     public Mono<Long> count(String table) {
         return db.sql("SELECT COUNT(*) FROM " + table).map(row -> ((Number) row.get(0)).longValue()).one();
+    }
+
+    public Mono<Long> countWhere(String table, List<Filter> filters) {
+        if (filters.isEmpty()) return count(table);
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ").append(table);
+        appendWhere(sql, filters);
+        return bindFilters(db.sql(sql.toString()), filters)
+            .map(row -> ((Number) row.get(0)).longValue()).one();
     }
 
     public Flux<Map<String, Object>> selectViaJoinTable(String table, List<Col> cols, String joinTable,
@@ -86,6 +96,21 @@ public class R2dbcQueryEngine {
 
     public Mono<Long> delete(String table, Object id) {
         return db.sql("DELETE FROM " + table + " WHERE id = :v").bind("v", id).fetch().rowsUpdated();
+    }
+
+    private void appendWhere(StringBuilder sql, List<Filter> filters) {
+        if (filters.isEmpty()) return;
+        String conditions = IntStream.range(0, filters.size())
+            .mapToObj(i -> filters.get(i).column() + " = :f" + i)
+            .collect(Collectors.joining(" AND "));
+        sql.append(" WHERE ").append(conditions);
+    }
+
+    private DatabaseClient.GenericExecuteSpec bindFilters(DatabaseClient.GenericExecuteSpec spec, List<Filter> filters) {
+        for (int i = 0; i < filters.size(); i++) {
+            spec = spec.bind("f" + i, filters.get(i).value());
+        }
+        return spec;
     }
 
     private String projection(List<Col> cols) {

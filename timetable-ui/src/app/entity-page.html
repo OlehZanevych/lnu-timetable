@@ -3,9 +3,9 @@
 <div class="page-header">
   <div>
     <h2>{{ m.label }}</h2>
-    <p class="muted">{{ rows().length }} record(s)</p>
+    <p class="muted">{{ rows().length }} запис(ів)</p>
   </div>
-  <button type="button" (click)="openCreate()">+ Add</button>
+  <button type="button" (click)="openCreate()">+ Додати</button>
 </div>
 
 @if (error() && !showForm()) {
@@ -31,12 +31,12 @@
             <td>{{ display(row, f) }}</td>
           }
           <td class="row-actions">
-            <button type="button" class="ghost" (click)="edit(row)">Edit</button>
-            <button type="button" class="ghost danger" (click)="remove(row)">Delete</button>
+            <button type="button" class="ghost" (click)="edit(row)">Редагувати</button>
+            <button type="button" class="ghost danger" (click)="remove(row)">Видалити</button>
           </td>
         </tr>
       } @empty {
-        <tr><td [attr.colspan]="m.fields.length + 2" class="muted">No data yet — click “Add”.</td></tr>
+        <tr><td [attr.colspan]="m.fields.length + 2" class="muted">Даних ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>
@@ -46,7 +46,7 @@
   <div class="modal-backdrop" (click)="reset()">
     <div class="modal" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3>{{ editingId() ? 'Edit' : 'New' }} {{ m.name }}</h3>
+        <h3>{{ editingId() ? 'Редагування' : 'Новий запис' }}: {{ m.name }}</h3>
         <button type="button" class="close" (click)="reset()">✕</button>
       </div>
 
@@ -68,8 +68,8 @@
           </label>
         }
         <div class="actions">
-          <button type="submit">{{ editingId() ? 'Update' : 'Create' }}</button>
-          <button type="button" class="ghost" (click)="reset()">Cancel</button>
+          <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>
+          <button type="button" class="ghost" (click)="reset()">Скасувати</button>
         </div>
       </form>
     </div>

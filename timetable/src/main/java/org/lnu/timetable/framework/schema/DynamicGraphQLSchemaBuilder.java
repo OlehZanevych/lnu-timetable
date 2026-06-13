@@ -33,39 +33,66 @@ public class DynamicGraphQLSchemaBuilder {
     }
 
     public GraphQLSchema buildSchema(List<GraphQLSchemaConfig> configs, DataFetcherProvider fetchers) {
+        SchemaDefinition schemaDef = collectSchemaDefinition(configs);
+        buildAllTypes(schemaDef);
+
+        Map<Class<?>, List<QueryDefinition>> queriesByEntity = groupQueries(schemaDef.getQueries());
+        Map<Class<?>, List<MutationDefinition>> mutationsByEntity = groupMutations(schemaDef.getMutations());
+
+        GraphQLObjectType queryType = buildQueryType(queriesByEntity);
+        GraphQLObjectType mutationType = buildMutationType(mutationsByEntity);
+        GraphQLCodeRegistry codeRegistry = buildCodeRegistry(schemaDef, queriesByEntity, mutationsByEntity, fetchers);
+
+        return assembleSchema(queryType, mutationType, codeRegistry);
+    }
+
+    // -------------------------------------------------------------------------
+    // Schema assembly steps
+    // -------------------------------------------------------------------------
+
+    private SchemaDefinition collectSchemaDefinition(List<GraphQLSchemaConfig> configs) {
         SchemaDefinition schemaDef = new SchemaDefinition();
         for (GraphQLSchemaConfig config : configs) {
             config.configure(schemaDef);
         }
+        return schemaDef;
+    }
 
-        // Build common types
-        GraphQLObjectType pageInfoType = buildPageInfoType();
-        builtTypes.put("ConnectionPageInfo", pageInfoType);
+    private void buildAllTypes(SchemaDefinition schemaDef) {
+        builtTypes.put("ConnectionPageInfo", buildPageInfoType());
 
-        // Build entity types from type definitions
         for (TypeDefinition typeDef : schemaDef.getTypes()) {
             buildObjectType(typeDef);
         }
-
-        // Build connection types for connection queries
         for (QueryDefinition queryDef : schemaDef.getQueries()) {
             if (queryDef.getQueryType() == QueryDefinition.QueryType.CONNECTION) {
                 buildConnectionType(queryDef);
             }
         }
-
-        // Build mutation response types and input types
         for (MutationDefinition mutDef : schemaDef.getMutations()) {
             buildMutationTypes(mutDef);
         }
+    }
 
-        // Build Query type
-        GraphQLObjectType.Builder queryTypeBuilder = newObject().name("Query");
-        // Group queries by entity into XxxQueries types
-        Map<Class<?>, List<QueryDefinition>> queriesByEntity = new LinkedHashMap<>();
-        for (QueryDefinition qd : schemaDef.getQueries()) {
-            queriesByEntity.computeIfAbsent(qd.getEntityClass(), k -> new ArrayList<>()).add(qd);
+    private Map<Class<?>, List<QueryDefinition>> groupQueries(List<QueryDefinition> queries) {
+        Map<Class<?>, List<QueryDefinition>> map = new LinkedHashMap<>();
+        for (QueryDefinition qd : queries) {
+            map.computeIfAbsent(qd.getEntityClass(), k -> new ArrayList<>()).add(qd);
         }
+        return map;
+    }
+
+    private Map<Class<?>, List<MutationDefinition>> groupMutations(List<MutationDefinition> mutations) {
+        Map<Class<?>, List<MutationDefinition>> map = new LinkedHashMap<>();
+        for (MutationDefinition md : mutations) {
+            map.computeIfAbsent(md.getEntityClass(), k -> new ArrayList<>()).add(md);
+        }
+        return map;
+    }
+
+    /** Builds the Query root type, grouping fields into per-entity XxxQueries namespaces. */
+    private GraphQLObjectType buildQueryType(Map<Class<?>, List<QueryDefinition>> queriesByEntity) {
+        GraphQLObjectType.Builder builder = newObject().name("Query");
 
         for (var entry : queriesByEntity.entrySet()) {
             String entityName = entry.getKey().getSimpleName();
@@ -79,30 +106,29 @@ public class DynamicGraphQLSchemaBuilder {
             GraphQLObjectType queriesType = queriesTypeBuilder.build();
             builtTypes.put(queriesTypeName, queriesType);
 
-            queryTypeBuilder.field(newFieldDefinition()
-                .name(fieldName)
-                .type(queriesType)
-                .build());
+            builder.field(newFieldDefinition().name(fieldName).type(queriesType).build());
         }
 
-        // Apollo Federation: _service { sdl } so gateways/Apollo Studio can fetch the schema
+        addApolloFederationServiceField(builder);
+
+        return builder.build();
+    }
+
+    /** Adds the Apollo Federation _service { sdl } field so gateways/Apollo Studio can fetch the schema. */
+    private void addApolloFederationServiceField(GraphQLObjectType.Builder queryBuilder) {
         GraphQLObjectType serviceType = newObject().name("_Service")
             .field(newFieldDefinition().name("sdl").type(GraphQLString))
             .build();
         builtTypes.put("_Service", serviceType);
-        queryTypeBuilder.field(newFieldDefinition()
+        queryBuilder.field(newFieldDefinition()
             .name("_service")
             .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("_Service")))
             .build());
+    }
 
-        GraphQLObjectType queryType = queryTypeBuilder.build();
-
-        // Build Mutation type
-        GraphQLObjectType.Builder mutationTypeBuilder = newObject().name("Mutation");
-        Map<Class<?>, List<MutationDefinition>> mutationsByEntity = new LinkedHashMap<>();
-        for (MutationDefinition md : schemaDef.getMutations()) {
-            mutationsByEntity.computeIfAbsent(md.getEntityClass(), k -> new ArrayList<>()).add(md);
-        }
+    /** Builds the Mutation root type, grouping fields into per-entity XxxMutations namespaces. */
+    private GraphQLObjectType buildMutationType(Map<Class<?>, List<MutationDefinition>> mutationsByEntity) {
+        GraphQLObjectType.Builder builder = newObject().name("Mutation");
 
         for (var entry : mutationsByEntity.entrySet()) {
             String entityName = entry.getKey().getSimpleName();
@@ -116,58 +142,32 @@ public class DynamicGraphQLSchemaBuilder {
             GraphQLObjectType mutationsType = mutationsTypeBuilder.build();
             builtTypes.put(mutationsTypeName, mutationsType);
 
-            mutationTypeBuilder.field(newFieldDefinition()
-                .name(fieldName)
-                .type(mutationsType)
-                .build());
+            builder.field(newFieldDefinition().name(fieldName).type(mutationsType).build());
         }
 
-        GraphQLObjectType mutationType = mutationTypeBuilder.build();
+        return builder.build();
+    }
 
-        // Build code registry with data fetchers
+    private GraphQLCodeRegistry buildCodeRegistry(
+            SchemaDefinition schemaDef,
+            Map<Class<?>, List<QueryDefinition>> queriesByEntity,
+            Map<Class<?>, List<MutationDefinition>> mutationsByEntity,
+            DataFetcherProvider fetchers) {
+
         GraphQLCodeRegistry.Builder codeRegistry = GraphQLCodeRegistry.newCodeRegistry();
 
-        // Apollo Federation _service.sdl resolver (prints the schema on demand)
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "_service"),
-            (DataFetcher<Object>) env -> Map.of("sdl", new SchemaPrinter().print(env.getGraphQLSchema())));
+        registerApolloFederationFetcher(codeRegistry);
+        registerQueryFetchers(codeRegistry, queriesByEntity, fetchers);
+        registerMutationFetchers(codeRegistry, mutationsByEntity, fetchers);
+        registerRelationFetchers(codeRegistry, schemaDef.getTypes(), fetchers);
 
-        // Query namespace fetchers (return empty object to enable nested resolution)
-        for (var entry : queriesByEntity.entrySet()) {
-            String entityName = entry.getKey().getSimpleName();
-            String queriesTypeName = entityName + "Queries";
-            String fieldName = pluralize(CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL, entityName));
-            codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", fieldName), fetchers.namespace());
+        return codeRegistry.build();
+    }
 
-            for (QueryDefinition qd : entry.getValue()) {
-                DataFetcher<?> fetcher = qd.getQueryType() == QueryDefinition.QueryType.CONNECTION
-                    ? fetchers.connection(qd) : fetchers.query(qd);
-                codeRegistry.dataFetcher(FieldCoordinates.coordinates(queriesTypeName, qd.getName()), fetcher);
-            }
-        }
-
-        // Mutation namespace and individual mutation fetchers
-        for (var entry : mutationsByEntity.entrySet()) {
-            String entityName = entry.getKey().getSimpleName();
-            String mutationsTypeName = entityName + "Mutations";
-            String fieldName = pluralize(CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL, entityName));
-            codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", fieldName), fetchers.namespace());
-
-            for (MutationDefinition md : entry.getValue()) {
-                codeRegistry.dataFetcher(FieldCoordinates.coordinates(mutationsTypeName, md.getName()), fetchers.mutation(md));
-            }
-        }
-
-        // Relation fetchers on entity types
-        for (TypeDefinition typeDef : schemaDef.getTypes()) {
-            String typeName = resolveTypeName(typeDef);
-            EntityMetadata metadata = metadataRegistry.getMetadata(typeDef.getEntityClass());
-            for (TypeDefinition.RelationFieldDefinition relField : typeDef.getRelationFields()) {
-                RelationMetadata rel = metadata.getRelation(relField.fieldName());
-                if (rel != null) {
-                    codeRegistry.dataFetcher(FieldCoordinates.coordinates(typeName, relField.fieldName()), fetchers.relation(rel));
-                }
-            }
-        }
+    private GraphQLSchema assembleSchema(
+            GraphQLObjectType queryType,
+            GraphQLObjectType mutationType,
+            GraphQLCodeRegistry codeRegistry) {
 
         Set<GraphQLType> additionalTypes = new LinkedHashSet<>();
         additionalTypes.addAll(builtTypes.values());
@@ -178,9 +178,81 @@ public class DynamicGraphQLSchemaBuilder {
             .query(queryType)
             .mutation(mutationType)
             .additionalTypes(additionalTypes)
-            .codeRegistry(codeRegistry.build())
+            .codeRegistry(codeRegistry)
             .build();
     }
+
+    // -------------------------------------------------------------------------
+    // Code registry helpers
+    // -------------------------------------------------------------------------
+
+    private void registerApolloFederationFetcher(GraphQLCodeRegistry.Builder codeRegistry) {
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "_service"),
+            (DataFetcher<Object>) env -> Map.of("sdl", new SchemaPrinter().print(env.getGraphQLSchema())));
+    }
+
+    private void registerQueryFetchers(
+            GraphQLCodeRegistry.Builder codeRegistry,
+            Map<Class<?>, List<QueryDefinition>> queriesByEntity,
+            DataFetcherProvider fetchers) {
+
+        for (var entry : queriesByEntity.entrySet()) {
+            String entityName = entry.getKey().getSimpleName();
+            String queriesTypeName = entityName + "Queries";
+            String fieldName = pluralize(CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL, entityName));
+
+            codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", fieldName), fetchers.namespace());
+
+            for (QueryDefinition qd : entry.getValue()) {
+                DataFetcher<?> fetcher = qd.getQueryType() == QueryDefinition.QueryType.CONNECTION
+                    ? fetchers.connection(qd) : fetchers.query(qd);
+                codeRegistry.dataFetcher(FieldCoordinates.coordinates(queriesTypeName, qd.getName()), fetcher);
+            }
+        }
+    }
+
+    private void registerMutationFetchers(
+            GraphQLCodeRegistry.Builder codeRegistry,
+            Map<Class<?>, List<MutationDefinition>> mutationsByEntity,
+            DataFetcherProvider fetchers) {
+
+        for (var entry : mutationsByEntity.entrySet()) {
+            String entityName = entry.getKey().getSimpleName();
+            String mutationsTypeName = entityName + "Mutations";
+            String fieldName = pluralize(CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_CAMEL, entityName));
+
+            codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", fieldName), fetchers.namespace());
+
+            for (MutationDefinition md : entry.getValue()) {
+                codeRegistry.dataFetcher(
+                    FieldCoordinates.coordinates(mutationsTypeName, md.getName()),
+                    fetchers.mutation(md));
+            }
+        }
+    }
+
+    private void registerRelationFetchers(
+            GraphQLCodeRegistry.Builder codeRegistry,
+            List<TypeDefinition> typeDefs,
+            DataFetcherProvider fetchers) {
+
+        for (TypeDefinition typeDef : typeDefs) {
+            String typeName = resolveTypeName(typeDef);
+            EntityMetadata metadata = metadataRegistry.getMetadata(typeDef.getEntityClass());
+            for (TypeDefinition.RelationFieldDefinition relField : typeDef.getRelationFields()) {
+                RelationMetadata rel = metadata.getRelation(relField.fieldName());
+                if (rel != null) {
+                    codeRegistry.dataFetcher(
+                        FieldCoordinates.coordinates(typeName, relField.fieldName()),
+                        fetchers.relation(rel));
+                }
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Type builders
+    // -------------------------------------------------------------------------
 
     private GraphQLObjectType buildPageInfoType() {
         return newObject().name("ConnectionPageInfo")
@@ -312,14 +384,19 @@ public class DynamicGraphQLSchemaBuilder {
                 .type(GraphQLTypeReference.typeRef(entityName))
                 .argument(newArgument().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
                 .build();
-            case CONNECTION -> newFieldDefinition()
-                .name(queryDef.getName())
-                .type(GraphQLTypeReference.typeRef(entityName + "Connection"))
-                .argument(newArgument().name("limit").type(GraphQLNonNull.nonNull(GraphQLInt))
-                    .defaultValueProgrammatic(queryDef.getDefaultLimit()))
-                .argument(newArgument().name("offset").type(GraphQLNonNull.nonNull(GraphQLInt))
-                    .defaultValueProgrammatic(queryDef.getDefaultOffset()))
-                .build();
+            case CONNECTION -> {
+                var connectionField = newFieldDefinition()
+                    .name(queryDef.getName())
+                    .type(GraphQLTypeReference.typeRef(entityName + "Connection"))
+                    .argument(newArgument().name("limit").type(GraphQLNonNull.nonNull(GraphQLInt))
+                        .defaultValueProgrammatic(queryDef.getDefaultLimit()))
+                    .argument(newArgument().name("offset").type(GraphQLNonNull.nonNull(GraphQLInt))
+                        .defaultValueProgrammatic(queryDef.getDefaultOffset()));
+                for (QueryDefinition.FilterParam fp : queryDef.getFilters()) {
+                    connectionField.argument(newArgument().name(fp.paramName()).type(GraphQLID)); // nullable
+                }
+                yield connectionField.build();
+            }
             case LIST -> newFieldDefinition()
                 .name(queryDef.getName())
                 .type(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(entityName))))
@@ -356,10 +433,8 @@ public class DynamicGraphQLSchemaBuilder {
             .name(mutDef.getName())
             .type(GraphQLTypeReference.typeRef(responseName));
 
-        if (mutDef.getMutationType() == MutationDefinition.MutationType.UPDATE) {
-            fieldBuilder.argument(newArgument().name("id").type(GraphQLNonNull.nonNull(GraphQLID)));
-        }
-        if (mutDef.getMutationType() == MutationDefinition.MutationType.DELETE) {
+        if (mutDef.getMutationType() == MutationDefinition.MutationType.UPDATE ||
+            mutDef.getMutationType() == MutationDefinition.MutationType.DELETE) {
             fieldBuilder.argument(newArgument().name("id").type(GraphQLNonNull.nonNull(GraphQLID)));
         }
 
@@ -373,6 +448,10 @@ public class DynamicGraphQLSchemaBuilder {
 
         return fieldBuilder.build();
     }
+
+    // -------------------------------------------------------------------------
+    // Utilities
+    // -------------------------------------------------------------------------
 
     private GraphQLOutputType mapJavaTypeToGraphQL(Class<?> type) {
         if (type == String.class) return GraphQLString;

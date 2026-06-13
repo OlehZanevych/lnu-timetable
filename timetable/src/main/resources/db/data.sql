@@ -1,7 +1,42 @@
--- Generated from article variant 4 (V=500, L=60, G=40, A=20) by scripts/generate_data.py
-INSERT INTO faculties (id, name, abbreviation, email) VALUES (1, 'Faculty 1', 'Ф1', 'faculty1@lnu.edu.ua'),
- (2, 'Faculty 2', 'Ф2', 'faculty2@lnu.edu.ua');
-SELECT setval('faculties_id_seq', 2);
+-- Seed data: real LNU faculties (from lnu.edu.ua/structure/faculties/) + synthetic scheduling data
+INSERT INTO buildings (id, name, address, city, postal_code) VALUES
+ (1,  'Корпус на вул. Грушевського',          'вул. Грушевського, 4',          'Львів', '79005'),
+ (2,  'Корпус на вул. Дорошенка',              'вул. Дорошенка, 41',            'Львів', '79000'),
+ (3,  'Корпус на просп. Свободи',              'проспект Свободи, 18',          'Львів', '79008'),
+ (4,  'Корпус на вул. Драгоманова',            'вул. Драгоманова, 50',          'Львів', '79005'),
+ (5,  'Корпус на вул. Чупринки',               'вул. Генерала Чупринки, 49',    'Львів', '79044'),
+ (6,  'Університетський корпус',               'вул. Університетська, 1',       'Львів', '79000'),
+ (7,  'Корпус на вул. Валовій',                'вул. Валова, 18',               'Львів', '79008'),
+ (8,  'Корпус на вул. Січових Стрільців, 19',  'вул. Січових Стрільців, 19',    'Львів', '79000'),
+ (9,  'Корпус на вул. Туган-Барановського',    'вул. Туган-Барановського, 7',   'Львів', '79000'),
+ (10, 'Корпус на вул. Коперника',              'вул. Коперника, 3',             'Львів', '79000'),
+ (11, 'Корпус на вул. Кирила і Мефодія, 8',   'вул. Кирила і Мефодія, 8',      'Львів', '79005'),
+ (12, 'Корпус на вул. Кирила і Мефодія, 6',   'вул. Кирила і Мефодія, 6',      'Львів', '79005'),
+ (13, 'Корпус на вул. Січових Стрільців, 14',  'вул. Січових Стрільців, 14',    'Львів', '79000');
+SELECT setval('buildings_id_seq', 13);
+
+-- IDs 1–2 kept as ФПМіІ and ММФ so synthetic scheduling data (departments/specialties/workloads) still references valid faculty_ids.
+INSERT INTO faculties (id, name, abbreviation, email, phone, website, building_id) VALUES
+ (1,  'Факультет прикладної математики та інформатики', 'ФПМіІ', 'ami@lnu.edu.ua',                   '(+38 032) 274-01-80; 239-41-86',       'https://ami.lnu.edu.ua',          6),
+ (2,  'Механіко-математичний факультет',                'ММФ',   'dmmf@lnu.edu.ua',                  '(+38 032) 260-00-09; 239-41-74; 239-47-43', 'https://new.mmf.lnu.edu.ua',   6),
+ (3,  'Біологічний факультет',                          'БФ',    'biolog@lnu.edu.ua',                '(+38 032) 274-03-72; 239-41-53',       'https://bioweb.lnu.edu.ua',       1),
+ (4,  'Географічний факультет',                         'ГеогФ', 'geography.faculty@lnu.edu.ua',     '(+38 032) 239-46-46; 239-41-62',       'https://geography.lnu.edu.ua',    2),
+ (5,  'Геологічний факультет',                          'ГеолФ', 'geology.faculty@lnu.edu.ua',       '(+38 032) 239-41-56',                  'https://geology.lnu.edu.ua',      1),
+ (6,  'Економічний факультет',                          'ЕкФ',   'edean@lnu.edu.ua',                 '(+38 032) 239-41-68',                  'https://econom.lnu.edu.ua',       3),
+ (7,  'Факультет електроніки та комп''ютерних технологій', 'ФЕКТ', 'electronics.faculty@lnu.edu.ua', '(+38 032) 261-14-91; 239-47-24; 239-41-82', 'https://electronics.lnu.edu.ua', 4),
+ (8,  'Факультет журналістики',                         'ФЖ',    'journft@lnu.edu.ua',               '(+38 032) 239-47-51',                  'https://journ.lnu.edu.ua',        5),
+ (9,  'Факультет іноземних мов',                        'ФІМ',   'lingua.faculty@lnu.edu.ua',        '(+38 032) 239-47-16',                  'https://lingua.lnu.edu.ua',       6),
+ (10, 'Історичний факультет',                           'ІФ',    'clio@lnu.edu.ua',                  '(+38 032) 261-03-28',                  'https://clio.lnu.edu.ua',         6),
+ (11, 'Факультет культури і мистецтв',                  'ФКМ',   'fkultart@lnu.edu.ua',              '(+38 032) 239-41-97',                  'https://kultart.lnu.edu.ua',      7),
+ (12, 'Факультет міжнародних відносин',                 'ФМВ',   'intrel.faculty@lnu.edu.ua',        '(+38 032) 272-79-73; 239-44-20; 239-47-48', 'https://intrel.lnu.edu.ua',    8),
+ (13, 'Факультет педагогічної освіти',                  'ФПО',   'pedagogy.faculty@lnu.edu.ua',      '(+38 032) 239-42-30',                  'https://pedagogy.lnu.edu.ua',     9),
+ (14, 'Факультет управління фінансами та бізнесу',      'ФУФБ',  'financial.faculty@lnu.edu.ua',     '(+38 032) 235-64-50; 235-86-54',       'https://financial.lnu.edu.ua',    10),
+ (15, 'Фізичний факультет',                             'ФзФ',   'physics.faculty@lnu.edu.ua',       '(+38 032) 239-41-16',                  'https://physics.lnu.edu.ua',      11),
+ (16, 'Філологічний факультет',                         'ФлФ',   'philology.faculty@lnu.edu.ua',     '(+38 032) 255-41-33; 239-41-58; 239-41-88', 'https://philology.lnu.edu.ua', 6),
+ (17, 'Філософський факультет',                         'ФсФ',   'dfilos@lnu.edu.ua',                '(+38 032) 239-45-79',                  'https://filos.lnu.edu.ua',        6),
+ (18, 'Хімічний факультет',                             'ХФ',    'chemdek@lnu.edu.ua',               '(+38 032) 260-03-91; 239-45-10',       'https://chem.lnu.edu.ua',         12),
+ (19, 'Юридичний факультет',                            'ЮФ',    'law.faculty@lnu.edu.ua',           '(+38 032) 239-41-02',                  'https://law.lnu.edu.ua',          13);
+SELECT setval('faculties_id_seq', 19);
 INSERT INTO departments (id, name, abbreviation, faculty_id) VALUES (1, 'Department 1', 'К1', 1),
  (2, 'Department 2', 'К2', 2),
  (3, 'Department 3', 'К3', 1),
@@ -208,26 +243,28 @@ INSERT INTO students (id, first_name, last_name, email, academic_group_id) VALUE
  (39, 'Тарас', 'Поліщук', 'stud39@lnu.edu.ua', 39),
  (40, 'Наталія', 'Кравець', 'stud40@lnu.edu.ua', 40);
 SELECT setval('students_id_seq', 40);
-INSERT INTO rooms (id, number, building, capacity, kind, faculty_id) VALUES (1, '100', 'Building 1', 30, 'LECTURE_HALL', 1),
- (2, '101', 'Building 2', 60, 'COMPUTER_LAB', 2),
- (3, '102', 'Building 3', 90, 'SEMINAR_ROOM', 1),
- (4, '103', 'Building 1', 120, 'LECTURE_HALL', 2),
- (5, '104', 'Building 2', 30, 'COMPUTER_LAB', 1),
- (6, '105', 'Building 3', 60, 'SEMINAR_ROOM', 2),
- (7, '106', 'Building 1', 90, 'LECTURE_HALL', 1),
- (8, '107', 'Building 2', 120, 'COMPUTER_LAB', 2),
- (9, '108', 'Building 3', 30, 'SEMINAR_ROOM', 1),
- (10, '109', 'Building 1', 60, 'LECTURE_HALL', 2),
- (11, '110', 'Building 2', 90, 'COMPUTER_LAB', 1),
- (12, '111', 'Building 3', 120, 'SEMINAR_ROOM', 2),
- (13, '112', 'Building 1', 30, 'LECTURE_HALL', 1),
- (14, '113', 'Building 2', 60, 'COMPUTER_LAB', 2),
- (15, '114', 'Building 3', 90, 'SEMINAR_ROOM', 1),
- (16, '115', 'Building 1', 120, 'LECTURE_HALL', 2),
- (17, '116', 'Building 2', 30, 'COMPUTER_LAB', 1),
- (18, '117', 'Building 3', 60, 'SEMINAR_ROOM', 2),
- (19, '118', 'Building 1', 90, 'LECTURE_HALL', 1),
- (20, '119', 'Building 2', 120, 'COMPUTER_LAB', 2);
+-- building_id: 6=Університетський корпус, 4=Драгоманова, 1=Грушевського
+INSERT INTO rooms (id, number, capacity, kind, faculty_id, building_id) VALUES
+ (1,  '100', 30,  'LECTURE_HALL',  1, 6),
+ (2,  '101', 60,  'COMPUTER_LAB',  2, 4),
+ (3,  '102', 90,  'SEMINAR_ROOM',  1, 1),
+ (4,  '103', 120, 'LECTURE_HALL',  2, 6),
+ (5,  '104', 30,  'COMPUTER_LAB',  1, 4),
+ (6,  '105', 60,  'SEMINAR_ROOM',  2, 1),
+ (7,  '106', 90,  'LECTURE_HALL',  1, 6),
+ (8,  '107', 120, 'COMPUTER_LAB',  2, 4),
+ (9,  '108', 30,  'SEMINAR_ROOM',  1, 1),
+ (10, '109', 60,  'LECTURE_HALL',  2, 6),
+ (11, '110', 90,  'COMPUTER_LAB',  1, 4),
+ (12, '111', 120, 'SEMINAR_ROOM',  2, 1),
+ (13, '112', 30,  'LECTURE_HALL',  1, 6),
+ (14, '113', 60,  'COMPUTER_LAB',  2, 4),
+ (15, '114', 90,  'SEMINAR_ROOM',  1, 1),
+ (16, '115', 120, 'LECTURE_HALL',  2, 6),
+ (17, '116', 30,  'COMPUTER_LAB',  1, 4),
+ (18, '117', 60,  'SEMINAR_ROOM',  2, 1),
+ (19, '118', 90,  'LECTURE_HALL',  1, 6),
+ (20, '119', 120, 'COMPUTER_LAB',  2, 4);
 SELECT setval('rooms_id_seq', 20);
 INSERT INTO time_slots (id, ordinal, start_time, end_time) VALUES (1, 1, '08:30', '09:50'),
  (2, 2, '10:10', '11:30'),

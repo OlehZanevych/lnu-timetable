@@ -19,16 +19,17 @@ public class Room {
     private String name;
 
     @Nullable
-    @Description("Building / educational block (корпус)")
-    private String building;
-
-    @Nullable
     private Integer capacity;
 
     @Nullable
     @Description("Room kind: LECTURE_HALL, COMPUTER_LAB, SEMINAR_ROOM")
     private String kind;
 
+    @Nullable
     @ManyToOne(joinColumn = "faculty_id")
     private Faculty faculty;
+
+    @Nullable
+    @ManyToOne(joinColumn = "building_id")
+    private Building building;
 }

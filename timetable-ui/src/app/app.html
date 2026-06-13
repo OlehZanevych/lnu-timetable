@@ -10,13 +10,15 @@
 
 <div class="layout">
   <nav class="sidebar">
-    <a class="nav-timetable" routerLink="/timetable" routerLinkActive="active">📅 Розклад / Timetable</a>
-    @for (s of sections; track s.title) {
-      <h3>{{ s.title }}</h3>
-      @for (e of s.items; track e.single) {
-        <a [routerLink]="['/e', e.single]" routerLinkActive="active">{{ e.label }}</a>
-      }
-    }
+    <a class="nav-home" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+      🎓 Факультети
+    </a>
+    <a class="nav-timetable" routerLink="/timetable" routerLinkActive="active">📅 Розклад</a>
+
+    <h3>Загальне</h3>
+    <a [routerLink]="['/e', 'building']" routerLinkActive="active">Корпуси</a>
+    <a [routerLink]="['/e', 'timeSlot']" routerLinkActive="active">Часові слоти</a>
+    <a [routerLink]="['/e', 'combinedGroup']" routerLinkActive="active">Об'єднані групи</a>
   </nav>
   <main class="content">
     <router-outlet />

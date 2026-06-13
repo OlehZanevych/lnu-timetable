@@ -1,0 +1,109 @@
+@let d = department();
+
+<div class="faculty-header">
+  @if (d?.faculty) {
+    <a [routerLink]="['/faculty', d!.faculty.id]" class="back-link">&#x2190; {{ d!.faculty.name }}</a>
+  }
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ d?.name ?? '&#x2026;' }}</h2>
+      @if (d?.abbreviation) { <p class="muted">{{ d!.abbreviation }}</p> }
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+
+  <!-- Nav -->
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Кафедра</p>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'info'"
+            (click)="activeSection.set('info')">
+      &#x2139; Інформація
+    </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'lecturers'"
+            (click)="activeSection.set('lecturers')">
+      &#x1F393; Викладачі
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <div class="faculty-section">
+
+    <!-- ── Info ── -->
+    @if (activeSection() === 'info') {
+      @if (d) {
+        <div class="page-header">
+          <h2>Інформація про кафедру</h2>
+          <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+        </div>
+        <div class="card info-card">
+          <table class="info-table">
+            <tbody>
+              <tr><th>Факультет</th><td><a [routerLink]="['/faculty', d.faculty.id]">{{ d.faculty.name }}</a></td></tr>
+              <tr><th>Назва</th><td>{{ d.name || '&mdash;' }}</td></tr>
+              <tr><th>Абревіатура</th><td>{{ d.abbreviation || '&mdash;' }}</td></tr>
+              <tr><th>Ел. пошта</th><td>
+                @if (d.email) { <a [href]="'mailto:' + d.email">{{ d.email }}</a> } @else { &mdash; }
+              </td></tr>
+              <tr><th>Телефон</th><td>{{ d.phone || '&mdash;' }}</td></tr>
+              @if (d.info) {
+                <tr><th>Інформація</th><td class="info-text">{{ d.info }}</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ── Lecturers ── -->
+    @if (activeSection() === 'lecturers') {
+      <app-lecturer [filterValue]="departmentId" [presets]="deptPreset" />
+    }
+
+  </div>
+</div>
+
+<!-- ── Edit modal ── -->
+
+@if (showEditForm()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування кафедри</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Абревіатура</span>
+          <input type="text" [(ngModel)]="editForm['abbreviation']" name="abbreviation" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="editForm['email']" name="email" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input type="text" [(ngModel)]="editForm['phone']" name="phone" />
+        </label>
+        <label style="width: 100%">
+          <span>Інформація</span>
+          <textarea [(ngModel)]="editForm['info']" name="info"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

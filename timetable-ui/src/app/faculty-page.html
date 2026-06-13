@@ -1,0 +1,266 @@
+@let f = faculty();
+@let fid = facultyId;
+
+<div class="faculty-header">
+  <a routerLink="/" class="back-link">&#x2190; Факультети</a>
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ f?.name ?? '&#x2026;' }}</h2>
+      <p class="muted">{{ f?.abbreviation }}</p>
+    </div>
+    <div class="faculty-header-actions">
+      <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+
+  <!-- Section navigation -->
+  <nav class="faculty-nav">
+    @for (group of sectionGroups; track group) {
+      <p class="faculty-nav-group">{{ group }}</p>
+      @for (sec of sectionsForGroup(group); track sec.key) {
+        <button type="button" class="faculty-nav-item"
+                [class.active]="activeSection() === sec.key"
+                (click)="selectSection(sec.key)">
+          {{ sec.label }}
+        </button>
+      }
+    }
+  </nav>
+
+  <!-- Section content -->
+  <div class="faculty-section">
+
+    @switch (activeSection()) {
+
+      <!-- ── Info ── -->
+
+      @case ('info') {
+        @if (f) {
+          <div class="page-header">
+            <div>
+              <h2>Інформація про факультет</h2>
+            </div>
+            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          </div>
+          <div class="card info-card">
+            <table class="info-table">
+              <tbody>
+                <tr>
+                  <th>Назва</th>
+                  <td>{{ f.name || '&mdash;' }}</td>
+                </tr>
+                <tr>
+                  <th>Абревіатура</th>
+                  <td>{{ f.abbreviation || '&mdash;' }}</td>
+                </tr>
+                <tr>
+                  <th>Корпус</th>
+                  <td>{{ f.building?.name || '&mdash;' }}</td>
+                </tr>
+                <tr>
+                  <th>Адреса</th>
+                  <td>{{ f.building?.address || '&mdash;' }}</td>
+                </tr>
+                <tr>
+                  <th>Телефон</th>
+                  <td>{{ f.phone || '&mdash;' }}</td>
+                </tr>
+                <tr>
+                  <th>Ел. пошта</th>
+                  <td>
+                    @if (f.email) {
+                      <a [href]="'mailto:' + f.email">{{ f.email }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+                <tr>
+                  <th>Веб-сайт</th>
+                  <td>
+                    @if (f.website) {
+                      <a [href]="f.website" target="_blank" rel="noopener">{{ f.website }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+                @if (f.info) {
+                  <tr>
+                    <th>Опис</th>
+                    <td class="info-text">{{ f.info }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- ── Structure ── -->
+
+      @case ('departments') {
+        <app-department-list [facultyId]="fid" />
+      }
+
+      @case ('specialties') {
+        <app-specialty [filterValue]="fid" [presets]="facultyPreset" />
+      }
+
+      @case ('rooms') {
+        <app-room [filterValue]="fid" [presets]="facultyPreset" />
+      }
+
+      <!-- ── People & Groups ── -->
+
+      @case ('students') {
+        <app-student />
+      }
+
+      @case ('academicGroups') {
+        <div class="section-filter">
+          <label>Фільтр за спеціальністю</label>
+          <select [(ngModel)]="selectedSpecId" name="specFilter">
+            <option value="">Усі спеціальності</option>
+            @for (sp of specs(); track sp.id) {
+              <option [value]="sp.id">{{ sp.name }}</option>
+            }
+          </select>
+        </div>
+        <app-academic-group [filterValue]="specFilterValue" [presets]="specPreset" />
+      }
+
+      @case ('combinedGroups') {
+        <app-combined-group />
+      }
+
+      <!-- ── Curricula ── -->
+
+      @case ('courses') {
+        <div class="section-filter">
+          <label>Фільтр за кафедрою</label>
+          <select [(ngModel)]="selectedDeptId" name="deptFilter">
+            <option value="">Усі кафедри</option>
+            @for (d of depts(); track d.id) {
+              <option [value]="d.id">{{ d.name }}</option>
+            }
+          </select>
+        </div>
+        <app-course [filterValue]="deptFilterValue" [presets]="deptPreset" />
+      }
+
+      @case ('curricula') {
+        <div class="section-filter">
+          <label>Фільтр за спеціальністю</label>
+          <select [(ngModel)]="selectedSpecId" name="specFilter">
+            <option value="">Усі спеціальності</option>
+            @for (sp of specs(); track sp.id) {
+              <option [value]="sp.id">{{ sp.name }}</option>
+            }
+          </select>
+        </div>
+        <app-curriculum [filterValue]="specFilterValue" [presets]="specPreset" />
+      }
+
+      @case ('curriculumItems') {
+        <app-curriculum-item />
+      }
+
+      @case ('workingCurricula') {
+        <app-working-curriculum />
+      }
+
+      @case ('workingCurriculumItems') {
+        <app-working-curriculum-item />
+      }
+
+      <!-- ── Scheduling ── -->
+
+      @case ('workloads') {
+        <app-lecturer-workload />
+      }
+
+    }
+  </div>
+</div>
+
+<!-- ── Edit modal ──────────────────────────────────────────────────────────── -->
+
+@if (showEditForm()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування факультету</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+
+      @if (editError()) {
+        <p class="error">{{ editError() }}</p>
+      }
+
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Абревіатура</span>
+          <input type="text" [(ngModel)]="editForm['abbreviation']" name="abbreviation" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="editForm['email']" name="email" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input type="text" [(ngModel)]="editForm['phone']" name="phone" />
+        </label>
+        <label>
+          <span>Веб-сайт</span>
+          <input type="text" [(ngModel)]="editForm['website']" name="website" />
+        </label>
+        <label>
+          <span>Опис</span>
+          <textarea [(ngModel)]="editForm['info']" name="info"></textarea>
+        </label>
+        <label>
+          <span>Корпус</span>
+          <app-search-select [options]="buildingOptions()" [(ngModel)]="editForm['buildingId']" name="buildingId" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirmation modal ──────────────────────────────────────────── -->
+
+@if (showDeleteConfirm()) {
+  <div class="modal-backdrop" (click)="closeDelete()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення факультету</h3>
+        <button type="button" class="close" (click)="closeDelete()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Ви впевнені, що хочете видалити факультет<br>
+        <strong>{{ f?.name }}</strong>?<br>
+        <span class="muted">Цю дію неможливо скасувати.</span>
+      </p>
+
+      @if (deleteError()) {
+        <p class="error">{{ deleteError() }}</p>
+      }
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmDelete()">Так, видалити</button>
+        <button type="button" class="ghost" (click)="closeDelete()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}

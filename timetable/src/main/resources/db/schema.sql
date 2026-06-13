@@ -1,6 +1,17 @@
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 
+-- ============================ Infrastructure: Buildings ============================
+
+CREATE TABLE buildings
+(
+    id          BIGSERIAL PRIMARY KEY,
+    name        VARCHAR(120) NOT NULL,
+    address     VARCHAR(160),
+    city        VARCHAR(64),
+    postal_code VARCHAR(10)
+);
+
 -- ============================ Organisational structure ============================
 
 CREATE TABLE faculties
@@ -8,10 +19,10 @@ CREATE TABLE faculties
     id           BIGSERIAL PRIMARY KEY,
     name         VARCHAR(160) NOT NULL UNIQUE,
     abbreviation VARCHAR(32),
-    website      VARCHAR(64),
+    website      VARCHAR(128),
     email        VARCHAR(64),
-    phone        VARCHAR(64),
-    address      VARCHAR(160),
+    phone        VARCHAR(128),
+    building_id  BIGINT REFERENCES buildings (id) ON DELETE SET NULL,
     info         TEXT
 );
 
@@ -134,17 +145,17 @@ CREATE TABLE students
     academic_group_id  BIGINT NOT NULL REFERENCES academic_groups (id) ON DELETE CASCADE
 );
 
--- ============================ Infrastructure ============================
+-- ============================ Infrastructure: Rooms ============================
 
 CREATE TABLE rooms
 (
-    id         BIGSERIAL PRIMARY KEY,
-    number     VARCHAR(32) NOT NULL,
-    name       VARCHAR(96),
-    building   VARCHAR(96),
-    capacity   INTEGER,
-    kind       VARCHAR(32),
-    faculty_id BIGINT REFERENCES faculties (id) ON DELETE SET NULL
+    id          BIGSERIAL PRIMARY KEY,
+    number      VARCHAR(32) NOT NULL,
+    name        VARCHAR(96),
+    capacity    INTEGER,
+    kind        VARCHAR(32),
+    faculty_id  BIGINT REFERENCES faculties (id) ON DELETE SET NULL,
+    building_id BIGINT REFERENCES buildings (id) ON DELETE SET NULL
 );
 
 CREATE TABLE time_slots

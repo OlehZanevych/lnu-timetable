@@ -62,6 +62,127 @@ tbody tr:hover { background: #f7f9fc; }
 .modal-header h3 { margin: 0; color: var(--navy); }
 .modal .close { background: transparent; color: #616e7c; font-size: 18px; padding: 2px 8px; }
 
+/* ── Sidebar home / timetable links ── */
+.sidebar .nav-home { background: rgba(201, 162, 39, 0.18); color: #fff; margin-bottom: 2px; }
+.sidebar .nav-home:hover { background: rgba(201, 162, 39, 0.3); }
+
+/* ── Faculty home list (LNU-style) ── */
+.faculty-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.faculty-list-item {
+  display: flex; align-items: flex-start; gap: 24px;
+  background: #fff; border: 1px solid var(--line); border-top: none;
+  padding: 22px 24px; transition: background .12s;
+}
+.faculty-list-item:first-child { border-top: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+.faculty-list-item:last-child { border-radius: 0 0 10px 10px; }
+.faculty-list-item:only-child { border-radius: 10px; border-top: 1px solid var(--line); }
+.faculty-list-item:hover { background: #f7f9fc; }
+
+.faculty-logo {
+  flex-shrink: 0; width: 88px; height: 88px;
+  border: 2px solid var(--gold); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: Georgia, serif; font-size: 18px; font-weight: 700;
+  color: var(--navy); text-decoration: none; text-align: center; line-height: 1.1;
+  padding: 6px; transition: border-color .15s, box-shadow .15s;
+}
+.faculty-logo:hover { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(29,79,145,.15); }
+
+.faculty-list-body { flex: 1; min-width: 0; }
+.faculty-list-name { margin: 0 0 10px; font-size: 17px; font-family: Georgia, serif; color: var(--navy); }
+.faculty-list-name a { color: inherit; text-decoration: none; }
+.faculty-list-name a:hover { text-decoration: underline; color: var(--blue); }
+
+.faculty-contacts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.faculty-contacts li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text); }
+.contact-icon { flex-shrink: 0; font-size: 12px; width: 18px; text-align: center; }
+.faculty-contacts a { color: var(--blue); text-decoration: none; }
+.faculty-contacts a:hover { text-decoration: underline; }
+
+/* ── Faculty page layout ── */
+.faculty-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.back-link { color: var(--blue); text-decoration: none; font-size: 13px; white-space: nowrap; }
+.back-link:hover { text-decoration: underline; }
+.faculty-header h2 { margin: 0; }
+
+.faculty-layout { display: flex; gap: 20px; align-items: flex-start; }
+
+.faculty-nav { width: 180px; flex-shrink: 0; background: #fff; border: 1px solid var(--line);
+  border-radius: 10px; padding: 10px 8px; }
+.faculty-nav-group { font-size: 10px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--gold); font-weight: 700; margin: 12px 6px 4px; }
+.faculty-nav-group:first-child { margin-top: 4px; }
+.faculty-nav-item { display: block; width: 100%; text-align: left; background: transparent;
+  color: var(--text); border: none; border-radius: 6px; padding: 7px 10px;
+  font-size: 13px; cursor: pointer; }
+.faculty-nav-item:hover { background: #eef2f9; color: var(--navy); }
+.faculty-nav-item.active { background: var(--blue); color: #fff; }
+
+.faculty-section { flex: 1; min-width: 0; }
+
+/* ── Section secondary filter bar ── */
+.section-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+.section-filter label { font-size: 12px; color: var(--navy); white-space: nowrap; font-weight: 600; }
+.section-filter select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+  font: inherit; font-size: 13px; color: var(--text); background: #fff; cursor: pointer; }
+
+/* ── Faculty header with actions ── */
+.faculty-header-title { display: flex; align-items: flex-start; justify-content: space-between; flex: 1; gap: 12px; }
+.faculty-header-actions { display: flex; gap: 8px; flex-shrink: 0; padding-top: 2px; }
+
+/* ── Faculty info table ── */
+.info-card { margin-top: 0; }
+.info-table { width: 100%; }
+.info-table th { width: 160px; font-weight: 600; color: var(--navy); background: #eef2f9; white-space: nowrap; }
+.info-table td { color: var(--text); }
+.info-text { white-space: pre-wrap; }
+
+/* ── Delete / danger button ── */
+button.danger { background: #b91c1c !important; color: #fff !important; }
+button.danger:hover { background: #991b1b !important; }
+
+/* ── Confirm modal ── */
+.modal-confirm { width: min(460px, 100%); }
+.confirm-text { font-size: 15px; line-height: 1.6; margin: 0 0 18px; }
+.confirm-text strong { color: var(--navy); }
+
+/* ── Truncated table cell ── */
+.cell-info { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Building list (at /e/building) ── */
+.building-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; }
+.building-list-item {
+  display: flex; align-items: center; gap: 20px;
+  background: #fff; border: 1px solid var(--line); border-top: none;
+  padding: 16px 20px; transition: background .12s;
+}
+.building-list-item:first-child { border-top: 1px solid var(--line); border-radius: 10px 10px 0 0; }
+.building-list-item:last-child { border-radius: 0 0 10px 10px; }
+.building-list-item:only-child { border-radius: 10px; border-top: 1px solid var(--line); }
+.building-list-item:hover { background: #f7f9fc; }
+.building-list-icon { flex-shrink: 0; font-size: 28px; line-height: 1; width: 40px; text-align: center; }
+.building-list-body { flex: 1; min-width: 0; }
+.building-list-name { margin: 0 0 4px; font-size: 15px; font-family: Georgia, serif; color: var(--navy); }
+.building-list-name a { color: inherit; text-decoration: none; }
+.building-list-name a:hover { text-decoration: underline; color: var(--blue); }
+.building-contacts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.building-contacts li { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: #7b8794; }
+.building-list-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.building-list-empty { display: block; padding: 16px 0; }
+
+/* ── Narrow modal (for building/room forms) ── */
+.modal-narrow { width: min(520px, 100%); }
+
+/* ── Nav badge ── */
+.nav-badge { display: inline-block; background: var(--gold); color: var(--navy); border-radius: 10px;
+  font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 6px; line-height: 1.4; }
+
+/* ── Link styled as button ── */
+.btn-link { display: inline-block; padding: 8px 14px; border: 1px solid var(--line); border-radius: 6px;
+  background: transparent; color: var(--blue); font-size: 14px; text-decoration: none; white-space: nowrap; }
+.btn-link:hover { background: #eef2f9; }
+
 /* ── Timetable grid ── */
 .timetable td { width: 16%; }
 .timetable .slot { background: #eef2f9; white-space: nowrap; color: var(--navy); }

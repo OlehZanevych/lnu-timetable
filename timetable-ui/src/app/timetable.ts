@@ -16,7 +16,7 @@ interface Entry {
   };
 }
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
 @Component({
   selector: 'app-timetable',

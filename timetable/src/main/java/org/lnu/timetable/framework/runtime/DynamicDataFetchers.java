@@ -58,17 +58,25 @@ public class DynamicDataFetchers implements DataFetcherProvider {
             int limit = ((Number) env.getArgument("limit")).intValue();
             long offset = ((Number) env.getArgument("offset")).longValue();
 
+            List<R2dbcQueryEngine.Filter> filters = new ArrayList<>();
+            for (QueryDefinition.FilterParam fp : def.getFilters()) {
+                Object val = env.getArgument(fp.paramName());
+                if (val != null) {
+                    filters.add(new R2dbcQueryEngine.Filter(fp.column(), coerce(val, Long.class)));
+                }
+            }
+
             SelectedField nodesField = immediate(env.getSelectionSet(), "nodes");
             boolean pageInfoSelected = immediate(env.getSelectionSet(), "pageInfo") != null;
 
             if (nodesField == null) {
-                return engine.count(md.tableName())
+                return engine.countWhere(md.tableName(), filters)
                     .map(total -> connection(null, pageInfo(total, limit + offset)))
                     .toFuture();
             }
 
             List<Col> cols = resolveCols(md, nodesField.getSelectionSet());
-            return engine.selectList(md.tableName(), cols, columnOf(md, def.getOrderBy()), limit, offset)
+            return engine.selectList(md.tableName(), cols, columnOf(md, def.getOrderBy()), limit, offset, filters)
                 .collectList()
                 .flatMap(nodes -> {
                     if (!pageInfoSelected) {
@@ -77,7 +85,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
                     if (nodes.size() < limit) {
                         return Mono.just(connection(nodes, pageInfo(offset + nodes.size(), -1)));
                     }
-                    return engine.count(md.tableName())
+                    return engine.countWhere(md.tableName(), filters)
                         .map(total -> connection(nodes, pageInfo(total, limit + offset)));
                 })
                 .toFuture();

@@ -1,4 +1,4 @@
-<h2>Timetable</h2>
+<h2>Розклад занять</h2>
 
 @if (error()) {
   <p class="error">{{ error() }}</p>
@@ -7,7 +7,7 @@
 <table class="timetable">
   <thead>
     <tr>
-      <th>Slot</th>
+      <th>Пара</th>
       @for (d of days; track d) {
         <th>{{ dayLabel(d) }}</th>
       }

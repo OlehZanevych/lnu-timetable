@@ -1,0 +1,146 @@
+<div class="page-header">
+  <div>
+    <h2>Факультети</h2>
+    <p class="muted">Оберіть факультет для роботи в його контексті</p>
+  </div>
+  <button type="button" (click)="openCreate()">+ Додати факультет</button>
+</div>
+
+@if (error()) {
+  <p class="error">{{ error() }}</p>
+}
+
+<ul class="faculty-list">
+  @for (f of faculties(); track f.id) {
+    <li class="faculty-list-item">
+      <a class="faculty-logo" [routerLink]="['/faculty', f.id]">
+        {{ f.abbreviation || f.name.slice(0, 2) }}
+      </a>
+      <div class="faculty-list-body">
+        <h3 class="faculty-list-name">
+          <a [routerLink]="['/faculty', f.id]">{{ f.name }}</a>
+        </h3>
+        <ul class="faculty-contacts">
+          @if (f.building?.address) {
+            <li>
+              <span class="contact-icon">&#x1F4CD;</span>
+              <span>{{ f.building!.address }}</span>
+            </li>
+          }
+          @if (f.phone) {
+            <li>
+              <span class="contact-icon">&#x1F4DE;</span>
+              <span>{{ f.phone }}</span>
+            </li>
+          }
+          @if (f.email) {
+            <li>
+              <span class="contact-icon">&#x2709;</span>
+              <a [href]="'mailto:' + f.email">{{ f.email }}</a>
+            </li>
+          }
+          @if (f.website) {
+            <li>
+              <span class="contact-icon">&#x1F310;</span>
+              <a [href]="f.website" target="_blank" rel="noopener">{{ f.website }}</a>
+            </li>
+          }
+        </ul>
+      </div>
+      <div class="building-list-actions">
+        <button type="button" class="ghost" (click)="openEdit(f)">Редагувати</button>
+        <a [routerLink]="['/faculty', f.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
+      </div>
+    </li>
+  } @empty {
+    <li class="muted" style="padding: 16px 0">Факультетів ще немає &mdash; натисніть &laquo;Додати факультет&raquo;.</li>
+  }
+</ul>
+
+<!-- ── Create modal ── -->
+
+@if (showForm()) {
+  <div class="modal-backdrop" (click)="reset()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Новий факультет</h3>
+        <button type="button" class="close" (click)="reset()">&#x2715;</button>
+      </div>
+      @if (formError()) { <p class="error">{{ formError() }}</p> }
+      <form (ngSubmit)="save()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="form['name']" name="name" required />
+        </label>
+        <label>
+          <span>Абревіатура</span>
+          <input type="text" [(ngModel)]="form['abbreviation']" name="abbreviation" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="form['email']" name="email" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input type="text" [(ngModel)]="form['phone']" name="phone" />
+        </label>
+        <label>
+          <span>Веб-сайт</span>
+          <input type="text" [(ngModel)]="form['website']" name="website" />
+        </label>
+        <label>
+          <span>Корпус</span>
+          <app-search-select [options]="buildingOptions()" [(ngModel)]="form['buildingId']" name="buildingId" />
+        </label>
+        <div class="actions">
+          <button type="submit">Створити</button>
+          <button type="button" class="ghost" (click)="reset()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Edit modal ── -->
+
+@if (editingFaculty()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування факультету</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Абревіатура</span>
+          <input type="text" [(ngModel)]="editForm['abbreviation']" name="abbreviation" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="editForm['email']" name="email" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input type="text" [(ngModel)]="editForm['phone']" name="phone" />
+        </label>
+        <label>
+          <span>Веб-сайт</span>
+          <input type="text" [(ngModel)]="editForm['website']" name="website" />
+        </label>
+        <label>
+          <span>Корпус</span>
+          <app-search-select [options]="buildingOptions()" [(ngModel)]="editForm['buildingId']" name="buildingId" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

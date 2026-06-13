@@ -26,7 +26,7 @@ export type Option = { id: string; label: string };
           @for (o of filtered(); track o.id) {
             <li [class.sel]="o.id === value()" (click)="pick(o)">{{ o.label }}</li>
           } @empty {
-            <li class="ss-empty">No matches</li>
+            <li class="ss-empty">Нічого не знайдено</li>
           }
         </ul>
       }
@@ -36,7 +36,7 @@ export type Option = { id: string; label: string };
 })
 export class SearchSelect implements ControlValueAccessor {
   options = input<Option[]>([]);
-  placeholder = input('— select —');
+  placeholder = input('— оберіть —');
 
   private host = inject(ElementRef);
   value = signal('');

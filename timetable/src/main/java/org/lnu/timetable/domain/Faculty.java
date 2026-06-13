@@ -3,6 +3,7 @@ package org.lnu.timetable.domain;
 import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
+import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
 
@@ -18,7 +19,7 @@ public class Faculty {
     private String name;
 
     @Nullable
-    @Description("Short abbreviation, e.g. ФПМІ")
+    @Description("Short abbreviation, e.g. ФПМіІ")
     private String abbreviation;
 
     @Nullable
@@ -31,7 +32,8 @@ public class Faculty {
     private String phone;
 
     @Nullable
-    private String address;
+    @ManyToOne(joinColumn = "building_id")
+    private Building building;
 
     @Nullable
     private String info;

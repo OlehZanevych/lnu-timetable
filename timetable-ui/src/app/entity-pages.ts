@@ -8,6 +8,7 @@ const IMPORTS = [FormsModule, SearchSelect];
 const meta = (name: string): EntityMeta => ENTITIES.find((e) => e.name === name)!;
 const TPL = './entity-page.html';
 
+@Component({ selector: 'app-building', templateUrl: TPL, imports: IMPORTS }) export class BuildingPage extends BaseEntity { meta = meta('Building'); }
 @Component({ selector: 'app-faculty', templateUrl: TPL, imports: IMPORTS }) export class FacultyPage extends BaseEntity { meta = meta('Faculty'); }
 @Component({ selector: 'app-department', templateUrl: TPL, imports: IMPORTS }) export class DepartmentPage extends BaseEntity { meta = meta('Department'); }
 @Component({ selector: 'app-specialty', templateUrl: TPL, imports: IMPORTS }) export class SpecialtyPage extends BaseEntity { meta = meta('Specialty'); }

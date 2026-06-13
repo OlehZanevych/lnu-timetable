@@ -1,12 +1,30 @@
-import { Directive, OnInit, inject, signal } from '@angular/core';
+import { Directive, Input, OnChanges, OnInit, SimpleChanges, inject, signal } from '@angular/core';
 import { GraphqlService } from './graphql.service';
 import { EntityMeta, FieldMeta, entityBySingle } from './entities';
 import { Option } from './search-select';
 
 /** Shared CRUD logic for every entity page. Subclasses only provide `meta`. */
 @Directive()
-export abstract class BaseEntity implements OnInit {
+export abstract class BaseEntity implements OnInit, OnChanges {
   abstract meta: EntityMeta;
+
+  /**
+   * When set, appends `meta.filterParam: filterValue` to the connection query.
+   * Changing this value triggers an automatic reload.
+   */
+  @Input()
+  set filterValue(val: string | null | undefined) {
+    this._filterValue = val ?? null;
+    if (this.initialized) this.load();
+  }
+  get filterValue(): string | null { return this._filterValue; }
+  private _filterValue: string | null = null;
+
+  /**
+   * Key/value pairs pre-filled into the create form when openCreate() is called.
+   * Useful for pre-selecting a parent entity (e.g. { facultyId: '1' }).
+   */
+  @Input() presets: Record<string, string> = {};
 
   protected gql = inject(GraphqlService);
 
@@ -17,9 +35,25 @@ export abstract class BaseEntity implements OnInit {
   error = signal('');
   form: Record<string, any> = {};
 
+  private initialized = false;
+
   ngOnInit() {
+    this.initialized = true;
     this.load();
     this.loadOptions();
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // filterValue changes are handled by the setter; only re-trigger if not already handled
+    // presets changes do not need a reload — they only affect the create form
+  }
+
+  private filterClause(): string {
+    const m = this.meta;
+    if (m.filterParam && this._filterValue) {
+      return `, ${m.filterParam}: "${this._filterValue}"`;
+    }
+    return '';
   }
 
   private refFields(): FieldMeta[] {
@@ -34,7 +68,8 @@ export abstract class BaseEntity implements OnInit {
 
   load() {
     const m = this.meta;
-    const q = `{ ${m.namespace} { ${m.list}(limit: 1000, offset: 0) { nodes { ${this.selection()} } } } }`;
+    const filter = this.filterClause();
+    const q = `{ ${m.namespace} { ${m.list}(limit: 1000, offset: 0${filter}) { nodes { ${this.selection()} } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.rows.set(d[m.namespace][m.list].nodes),
       error: (e) => this.error.set(e.message)
@@ -60,6 +95,7 @@ export abstract class BaseEntity implements OnInit {
 
   openCreate() {
     this.reset();
+    Object.assign(this.form, this.presets);
     this.showForm.set(true);
   }
 
@@ -102,7 +138,7 @@ export abstract class BaseEntity implements OnInit {
       next: (d: any) => {
         const res = d[m.namespace][op];
         if (res.isSuccess) { this.reset(); this.load(); }
-        else this.error.set(res.errorStatus || 'Operation failed');
+        else this.error.set(res.errorStatus || 'Помилка операції');
       },
       error: (e) => this.error.set(e.message)
     });
@@ -115,7 +151,7 @@ export abstract class BaseEntity implements OnInit {
       next: (d: any) => {
         const res = d[m.namespace][`delete${m.name}`];
         if (res.isSuccess) this.load();
-        else this.error.set(res.errorStatus || 'Delete failed');
+        else this.error.set(res.errorStatus || 'Помилка видалення');
       },
       error: (e) => this.error.set(e.message)
     });

@@ -4,7 +4,10 @@ import graphql.schema.DataFetcher;
 import graphql.schema.GraphQLSchema;
 import graphql.schema.idl.SchemaPrinter;
 import org.junit.jupiter.api.Test;
-import org.lnu.timetable.config.TimetableSchemaConfig;
+import org.lnu.timetable.config.CurriculumSchemaConfig;
+import org.lnu.timetable.config.OrganizationSchemaConfig;
+import org.lnu.timetable.config.PeopleSchemaConfig;
+import org.lnu.timetable.config.SchedulingSchemaConfig;
 import org.lnu.timetable.framework.config.MutationDefinition;
 import org.lnu.timetable.framework.config.QueryDefinition;
 import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
@@ -31,13 +34,22 @@ class SchemaBuildTest {
         EntityMetadataRegistry registry = new EntityMetadataRegistry();
         DynamicGraphQLSchemaBuilder builder = new DynamicGraphQLSchemaBuilder(registry);
 
-        GraphQLSchema schema = builder.buildSchema(List.of(new TimetableSchemaConfig()), noop);
+        GraphQLSchema schema = builder.buildSchema(
+            List.of(
+                new OrganizationSchemaConfig(),
+                new CurriculumSchemaConfig(),
+                new PeopleSchemaConfig(),
+                new SchedulingSchemaConfig()
+            ),
+            noop
+        );
         String sdl = new SchemaPrinter().print(schema);
         System.out.println(sdl);
 
         // Federation service
         assertTrue(sdl.contains("_service: _Service!"));
         // Query namespaces
+        assertTrue(sdl.contains("buildings: BuildingQueries"));
         assertTrue(sdl.contains("specialties: SpecialtyQueries"));
         assertTrue(sdl.contains("lecturerWorkloads: LecturerWorkloadQueries"));
         assertTrue(sdl.contains("timetableEntries: TimetableEntryQueries"));
@@ -55,5 +67,9 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("createTimetableEntry"));
         assertTrue(sdl.contains("TimetableEntryInputPayload"));
         assertTrue(sdl.contains("workloadId: ID"));
+        // Filter arguments on connection fields
+        assertTrue(sdl.contains("departmentConnection(limit: Int! = 1000, offset: Int! = 0, facultyId: ID)"));
+        assertTrue(sdl.contains("specialtyConnection(limit: Int! = 1000, offset: Int! = 0, facultyId: ID)"));
+        assertTrue(sdl.contains("lecturerConnection(limit: Int! = 1000, offset: Int! = 0, departmentId: ID)"));
     }
 }

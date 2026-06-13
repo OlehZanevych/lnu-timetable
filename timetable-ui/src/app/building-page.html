@@ -1,0 +1,206 @@
+@let b = building();
+
+<div class="faculty-header">
+  <a routerLink="/e/building" class="back-link">&#x2190; Корпуси</a>
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ b?.name ?? '&#x2026;' }}</h2>
+      @if (b?.city) { <p class="muted">{{ b!.city }}</p> }
+    </div>
+    <div class="faculty-header-actions">
+      <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+
+  <!-- Nav -->
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Корпус</p>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'info'"
+            (click)="activeSection.set('info')">
+      &#x2139; Інформація
+    </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'rooms'"
+            (click)="activeSection.set('rooms')">
+      &#x1F6AA; Аудиторії
+      @if (b?.rooms?.length) {
+        <span class="nav-badge">{{ b!.rooms.length }}</span>
+      }
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <div class="faculty-section">
+
+    <!-- ── Info ── -->
+    @if (activeSection() === 'info') {
+      @if (b) {
+        <div class="page-header">
+          <h2>Інформація про корпус</h2>
+          <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+        </div>
+        <div class="card info-card">
+          <table class="info-table">
+            <tbody>
+              <tr><th>Назва</th><td>{{ b.name || '&mdash;' }}</td></tr>
+              <tr><th>Адреса</th><td>{{ b.address || '&mdash;' }}</td></tr>
+              <tr><th>Місто</th><td>{{ b.city || '&mdash;' }}</td></tr>
+              <tr><th>Поштовий індекс</th><td>{{ b.postalCode || '&mdash;' }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      }
+    }
+
+    <!-- ── Rooms ── -->
+    @if (activeSection() === 'rooms') {
+      <div class="page-header">
+        <div>
+          <h2>Аудиторії</h2>
+          @if (b?.rooms) { <p class="muted">{{ b!.rooms.length }} запис(ів)</p> }
+        </div>
+        <button type="button" (click)="openCreateRoom()">+ Додати аудиторію</button>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Номер</th>
+              <th>Назва</th>
+              <th>Місткість</th>
+              <th>Тип</th>
+              <th>Факультет</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (room of b?.rooms ?? []; track room.id) {
+              <tr>
+                <td>{{ room.id }}</td>
+                <td>{{ room.number }}</td>
+                <td>{{ room.name || '&mdash;' }}</td>
+                <td>{{ room.capacity ?? '&mdash;' }}</td>
+                <td>{{ room.kind || '&mdash;' }}</td>
+                <td>{{ room.faculty?.name || '&mdash;' }}</td>
+                <td class="row-actions">
+                  <button type="button" class="ghost" (click)="openEditRoom(room)">Редагувати</button>
+                  <button type="button" class="ghost danger" (click)="deleteRoom(room)">Видалити</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="7" class="muted">Аудиторій ще немає &mdash; натисніть &laquo;Додати аудиторію&raquo;.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+
+  </div>
+</div>
+
+<!-- ── Edit building modal ── -->
+
+@if (showEditForm()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування корпусу</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Адреса</span>
+          <input type="text" [(ngModel)]="editForm['address']" name="address" />
+        </label>
+        <label>
+          <span>Місто</span>
+          <input type="text" [(ngModel)]="editForm['city']" name="city" />
+        </label>
+        <label>
+          <span>Поштовий індекс</span>
+          <input type="text" [(ngModel)]="editForm['postalCode']" name="postalCode" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Room form modal (create + edit) ── -->
+
+@if (showRoomForm()) {
+  <div class="modal-backdrop" (click)="closeRoom()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingRoomId() ? 'Редагування аудиторії' : 'Нова аудиторія' }}</h3>
+        <button type="button" class="close" (click)="closeRoom()">&#x2715;</button>
+      </div>
+      @if (roomError()) { <p class="error">{{ roomError() }}</p> }
+      <form (ngSubmit)="saveRoom()" class="entity-form">
+        <label>
+          <span>Номер *</span>
+          <input type="text" [(ngModel)]="roomForm['number']" name="number" required />
+        </label>
+        <label>
+          <span>Назва</span>
+          <input type="text" [(ngModel)]="roomForm['name']" name="name" />
+        </label>
+        <label>
+          <span>Місткість</span>
+          <input type="number" [(ngModel)]="roomForm['capacity']" name="capacity" />
+        </label>
+        <label>
+          <span>Тип</span>
+          <input type="text" [(ngModel)]="roomForm['kind']" name="kind" />
+        </label>
+        <label>
+          <span>Факультет</span>
+          <app-search-select [options]="facultyOptions()" [(ngModel)]="roomForm['facultyId']" name="facultyId" />
+        </label>
+        <div class="actions">
+          <button type="submit">{{ editingRoomId() ? 'Зберегти' : 'Створити' }}</button>
+          <button type="button" class="ghost" (click)="closeRoom()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Delete building confirmation ── -->
+
+@if (showDeleteConfirm()) {
+  <div class="modal-backdrop" (click)="closeDelete()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення корпусу</h3>
+        <button type="button" class="close" (click)="closeDelete()">&#x2715;</button>
+      </div>
+      <p class="confirm-text">
+        Ви впевнені, що хочете видалити корпус<br>
+        <strong>{{ b?.name }}</strong>?<br>
+        <span class="muted">Цю дію неможливо скасувати.</span>
+      </p>
+      @if (deleteError()) { <p class="error">{{ deleteError() }}</p> }
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmDelete()">Так, видалити</button>
+        <button type="button" class="ghost" (click)="closeDelete()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}

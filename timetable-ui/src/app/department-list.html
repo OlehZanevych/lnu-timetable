@@ -1,0 +1,123 @@
+<div class="page-header">
+  <div>
+    <h2>Кафедри</h2>
+    <p class="muted">{{ departments().length }} запис(ів)</p>
+  </div>
+  <button type="button" (click)="openCreate()">+ Додати</button>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Назва</th>
+        <th>Абревіатура</th>
+        <th>Ел. пошта</th>
+        <th>Телефон</th>
+        <th>Інформація</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (d of departments(); track d.id) {
+        <tr>
+          <td>{{ d.id }}</td>
+          <td>{{ d.name }}</td>
+          <td>{{ d.abbreviation || '&mdash;' }}</td>
+          <td>{{ d.email || '&mdash;' }}</td>
+          <td>{{ d.phone || '&mdash;' }}</td>
+          <td class="cell-info">{{ d.info || '&mdash;' }}</td>
+          <td class="row-actions">
+            <button type="button" class="ghost" (click)="openEdit(d)">Редагувати</button>
+            <a [routerLink]="['/department', d.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="7" class="muted">Кафедр ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Create modal ── -->
+
+@if (showCreateForm()) {
+  <div class="modal-backdrop" (click)="closeCreate()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Нова кафедра</h3>
+        <button type="button" class="close" (click)="closeCreate()">&#x2715;</button>
+      </div>
+      @if (createError()) { <p class="error">{{ createError() }}</p> }
+      <form (ngSubmit)="saveCreate()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="createForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Абревіатура</span>
+          <input type="text" [(ngModel)]="createForm['abbreviation']" name="abbreviation" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="createForm['email']" name="email" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input type="text" [(ngModel)]="createForm['phone']" name="phone" />
+        </label>
+        <label style="width: 100%">
+          <span>Інформація</span>
+          <textarea [(ngModel)]="createForm['info']" name="info"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">Створити</button>
+          <button type="button" class="ghost" (click)="closeCreate()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Edit modal ── -->
+
+@if (editingDept()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування кафедри</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Абревіатура</span>
+          <input type="text" [(ngModel)]="editForm['abbreviation']" name="abbreviation" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="editForm['email']" name="email" />
+        </label>
+        <label>
+          <span>Телефон</span>
+          <input type="text" [(ngModel)]="editForm['phone']" name="phone" />
+        </label>
+        <label style="width: 100%">
+          <span>Інформація</span>
+          <textarea [(ngModel)]="editForm['info']" name="info"></textarea>
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
