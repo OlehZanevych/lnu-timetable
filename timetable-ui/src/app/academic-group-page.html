@@ -1,0 +1,110 @@
+@let g = group();
+
+<div class="faculty-header">
+  @if (g?.specialty) {
+    <a [routerLink]="['/specialty', g!.specialty.id]" class="back-link">&#x2190; {{ g!.specialty.name }}</a>
+  }
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ g?.name ?? '&#x2026;' }}</h2>
+      @if (g) { <p class="muted">{{ g.studyForm }}, {{ g.courseYear }} курс</p> }
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+
+  <!-- Nav -->
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Академічна група</p>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'info'"
+            (click)="activeSection.set('info')">
+      &#x2139; Інформація
+    </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'students'"
+            (click)="activeSection.set('students')">
+      &#x1F393; Студенти
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <div class="faculty-section">
+
+    @switch (activeSection()) {
+
+      <!-- ── Info ── -->
+      @case ('info') {
+        @if (g) {
+          <div class="page-header">
+            <h2>Інформація про групу</h2>
+            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          </div>
+          <div class="card info-card">
+            <table class="info-table">
+              <tbody>
+                <tr>
+                  <th>Факультет</th>
+                  <td><a [routerLink]="['/faculty', g.specialty.faculty.id]">{{ g.specialty.faculty.name }}</a></td>
+                </tr>
+                <tr>
+                  <th>Спеціальність</th>
+                  <td><a [routerLink]="['/specialty', g.specialty.id]">{{ g.specialty.name }}</a></td>
+                </tr>
+                <tr><th>Назва</th><td>{{ g.name }}</td></tr>
+                <tr><th>Курс</th><td>{{ g.courseYear }}</td></tr>
+                <tr><th>Форма навчання</th><td>{{ g.studyForm }}</td></tr>
+                <tr><th>Кількість студентів</th><td>{{ g.studentsCount ?? '&mdash;' }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- ── Students ── -->
+      @case ('students') {
+        <app-student [filterValue]="groupId" [presets]="groupPreset" [refFilters]="studentRefFilters" />
+      }
+
+    }
+  </div>
+</div>
+
+<!-- ── Edit modal ── -->
+
+@if (showEditForm()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування групи</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Курс *</span>
+          <input type="number" [(ngModel)]="editForm['courseYear']" name="courseYear" required />
+        </label>
+        <label>
+          <span>Форма навчання *</span>
+          <input type="text" [(ngModel)]="editForm['studyForm']" name="studyForm" required />
+        </label>
+        <label>
+          <span>Кількість студентів</span>
+          <input type="number" [(ngModel)]="editForm['studentsCount']" name="studentsCount" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

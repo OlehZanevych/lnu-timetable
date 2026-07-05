@@ -14,10 +14,39 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
 
     @Override
     public void configure(SchemaDefinition s) {
+        configureAcademicDegree(s);
         configureLecturer(s);
         configureStudent(s);
         configureAcademicGroup(s);
         configureCombinedGroup(s);
+    }
+
+    // -------------------------------------------------------------------------
+    // AcademicDegree
+    // -------------------------------------------------------------------------
+
+    private void configureAcademicDegree(SchemaDefinition s) {
+        s.type(AcademicDegree.class)
+            .fields("name", "abbreviation", "level")
+            .relation("lecturers");
+
+        s.query("academicDegreeConnection").entity(AcademicDegree.class).connection().orderBy("level");
+        s.query("academicDegree").entity(AcademicDegree.class).findById();
+
+        s.mutation("createAcademicDegree").entity(AcademicDegree.class).create()
+            .inputFields("name", "abbreviation", "level")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("updateAcademicDegree").entity(AcademicDegree.class).update()
+            .inputFields("name", "abbreviation", "level")
+            .errorStatus("ACADEMICDEGREE_NOT_FOUND", "AcademicDegree not found")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("deleteAcademicDegree").entity(AcademicDegree.class).delete()
+            .errorStatus("ACADEMICDEGREE_NOT_FOUND", "AcademicDegree not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 
     // -------------------------------------------------------------------------
@@ -26,20 +55,21 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureLecturer(SchemaDefinition s) {
         s.type(Lecturer.class)
-            .fields("firstName", "lastName", "email", "position", "academicDegree", "maxHoursPerWeek")
+            .fields("firstName", "lastName", "email", "position", "maxHoursPerWeek")
+            .nullableRelation("academicDegree")
             .relation("department").relation("workloads");
 
         s.query("lecturerConnection").entity(Lecturer.class).connection().orderBy("lastName").filter("departmentId", "department_id");
         s.query("lecturer").entity(Lecturer.class).findById();
 
         s.mutation("createLecturer").entity(Lecturer.class).create()
-            .inputFields("firstName", "lastName", "email", "position", "academicDegree", "maxHoursPerWeek", "departmentId")
+            .inputFields("firstName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturer").entity(Lecturer.class).update()
-            .inputFields("firstName", "lastName", "email", "position", "academicDegree", "maxHoursPerWeek", "departmentId")
+            .inputFields("firstName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURER_NOT_FOUND", "Lecturer not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

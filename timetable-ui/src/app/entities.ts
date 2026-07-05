@@ -3,12 +3,16 @@
 export interface FieldMeta {
   name: string;            // scalar field name, or FK input field (e.g. "facultyId") for refs
   label: string;
-  type: 'text' | 'number' | 'textarea' | 'ref';
+  type: 'text' | 'number' | 'textarea' | 'ref' | 'enum';
   required?: boolean;
+  // enum-only:
+  enumOptions?: { value: string; label: string }[];
   // ref-only:
   ref?: string;            // referenced entity key (single name), used to load options
   relation?: string;       // relation field name in GraphQL (e.g. "faculty")
   refLabel?: string;       // scalar field on the referenced entity used as a label
+  // optional parent filter (e.g. filter departments by faculty when selecting for lecturer)
+  parentFilter?: { namespace: string; list: string; label: string };
 }
 
 export interface EntityMeta {
@@ -23,6 +27,41 @@ export interface EntityMeta {
 
 const ref = (name: string, label: string, ref: string, relation: string, refLabel: string, required = false): FieldMeta =>
   ({ name, label, type: 'ref', ref, relation, refLabel, required });
+
+const DEGREE_OPTIONS = [
+  { value: 'JUNIOR_BACHELOR', label: 'Молодший бакалавр' },
+  { value: 'BACHELOR',        label: 'Бакалавр' },
+  { value: 'MASTER',          label: 'Магістр' },
+  { value: 'PHD',             label: 'Доктор філософії' },
+  { value: 'DOCTOR_OF_SCIENCE', label: 'Доктор наук' }
+];
+
+const COURSE_TYPE_OPTIONS = [
+  { value: 'MANDATORY',          label: "Обов'язкова" },
+  { value: 'ELECTIVE_GROUP',     label: 'Група вибіркових' },
+  { value: 'ELECTIVE',           label: 'Вибіркова' },
+  { value: 'OPTIONAL',           label: 'Факультатив' },
+  { value: 'INTERNSHIP',         label: 'Практика' },
+  { value: 'COURSE_PROJECT',     label: 'Курсовий проєкт' },
+  { value: 'COURSE_WORK',        label: 'Курсова робота' },
+  { value: 'QUALIFICATION_WORK', label: 'Кваліфікаційна робота' }
+];
+
+const CONTROL_FORM_OPTIONS = [
+  { value: 'EXAM',          label: 'Екзамен' },
+  { value: 'CREDIT',        label: 'Залік' },
+  { value: 'GRADED_CREDIT', label: 'Диф. залік' },
+  { value: 'COURSE_WORK',   label: 'Курсова робота' },
+  { value: 'COURSE_PROJECT',label: 'Курсовий проєкт' },
+  { value: 'THESIS',        label: 'Кваліфікаційна робота' }
+];
+
+const HOUR_TYPE_OPTIONS = [
+  { value: 'LECTURE',          label: 'Лекції' },
+  { value: 'PRACTICAL',        label: 'Практичні' },
+  { value: 'LAB',              label: 'Лабораторні' },
+  { value: 'INDEPENDENT_WORK', label: 'Самостійна робота' }
+];
 
 export const ENTITIES: EntityMeta[] = [
   {
@@ -62,7 +101,7 @@ export const ENTITIES: EntityMeta[] = [
     fields: [
       { name: 'code', label: 'Код', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text', required: true },
-      { name: 'degree', label: 'Ступінь', type: 'text', required: true },
+      { name: 'degree', label: 'Ступінь', type: 'enum', required: true, enumOptions: DEGREE_OPTIONS },
       { name: 'qualification', label: 'Кваліфікація', type: 'text' },
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name', true)
     ]
@@ -70,18 +109,15 @@ export const ENTITIES: EntityMeta[] = [
   {
     name: 'Course', label: 'Дисципліни', single: 'course', namespace: 'courses', list: 'courseConnection', filterParam: 'departmentId',
     fields: [
-      { name: 'code', label: 'Код', type: 'text' },
       { name: 'name', label: 'Назва', type: 'text', required: true },
-      { name: 'ectsCredits', label: 'ECTS', type: 'number' },
-      ref('departmentId', 'Кафедра', 'department', 'department', 'name', true)
+      { name: 'courseType', label: 'Тип', type: 'enum', required: true, enumOptions: COURSE_TYPE_OPTIONS },
+      ref('departmentId', 'Кафедра', 'department', 'department', 'name', true),
+      ref('parentCourseId', 'Група вибіркових', 'course', 'parentCourse', 'name')
     ]
   },
   {
     name: 'Curriculum', label: 'Навчальні плани', single: 'curriculum', namespace: 'curriculums', list: 'curriculumConnection', filterParam: 'specialtyId',
     fields: [
-      { name: 'name', label: 'Назва', type: 'text', required: true },
-      { name: 'admissionYear', label: 'Рік вступу', type: 'number', required: true },
-      { name: 'degree', label: 'Ступінь', type: 'text', required: true },
       ref('specialtyId', 'Спеціальність', 'specialty', 'specialty', 'name', true)
     ]
   },
@@ -89,29 +125,41 @@ export const ENTITIES: EntityMeta[] = [
     name: 'CurriculumItem', label: 'Позиції навч. плану', single: 'curriculumItem', namespace: 'curriculumItems', list: 'curriculumItemConnection', filterParam: 'curriculumId',
     fields: [
       { name: 'semester', label: 'Семестр', type: 'number', required: true },
-      { name: 'controlForm', label: 'Форма контролю', type: 'text', required: true },
+      { name: 'controlForm', label: 'Форма контролю', type: 'enum', required: true, enumOptions: CONTROL_FORM_OPTIONS },
       { name: 'ectsCredits', label: 'ECTS', type: 'number' },
-      ref('curriculumId', 'Навчальний план', 'curriculum', 'curriculum', 'name', true),
+      ref('curriculumId', 'Навчальний план', 'curriculum', 'curriculum', 'id', true),
       ref('courseId', 'Дисципліна', 'course', 'course', 'name', true)
     ]
   },
   {
-    name: 'WorkingCurriculum', label: 'Робочі навч. плани', single: 'workingCurriculum', namespace: 'workingCurriculums', list: 'workingCurriculumConnection', filterParam: 'curriculumId',
+    name: 'CurriculumItemHours', label: 'Год. позиції навч. плану', single: 'curriculumItemHours', namespace: 'curriculumItemHourss', list: 'curriculumItemHoursConnection', filterParam: 'curriculumItemId',
     fields: [
-      { name: 'academicYear', label: 'Навчальний рік', type: 'text', required: true },
-      { name: 'semester', label: 'Семестр', type: 'number', required: true },
-      ref('curriculumId', 'Навчальний план', 'curriculum', 'curriculum', 'name', true)
+      { name: 'hourType', label: 'Тип годин', type: 'enum', required: true, enumOptions: HOUR_TYPE_OPTIONS },
+      { name: 'hours', label: 'Годин', type: 'number', required: true },
+      ref('curriculumItemId', 'Позиція навч. плану', 'curriculumItem', 'curriculumItem', 'semester', true)
     ]
   },
   {
-    name: 'WorkingCurriculumItem', label: 'Позиції РНП', single: 'workingCurriculumItem', namespace: 'workingCurriculumItems', list: 'workingCurriculumItemConnection', filterParam: 'workingCurriculumId',
+    name: 'WorkingCurriculumItem', label: 'Позиції РНП', single: 'workingCurriculumItem', namespace: 'workingCurriculumItems', list: 'workingCurriculumItemConnection', filterParam: 'departmentId',
     fields: [
-      { name: 'lectureHours', label: 'Год. лекцій', type: 'number' },
-      { name: 'practicalHours', label: 'Год. практ.', type: 'number' },
-      { name: 'labHours', label: 'Год. лаб.', type: 'number' },
-      { name: 'seminarHours', label: 'Год. сем.', type: 'number' },
-      ref('workingCurriculumId', 'Робочий навч. план', 'workingCurriculum', 'workingCurriculum', 'academicYear', true),
-      ref('courseId', 'Дисципліна', 'course', 'course', 'name', true)
+      { name: 'lecturerCount', label: 'К-сть викладачів', type: 'number', required: true },
+      { name: 'teachingFormat', label: 'Формат викладання', type: 'enum', required: true,
+        enumOptions: [
+          { value: 'TOGETHER',   label: 'Разом' },
+          { value: 'SEPARATELY', label: 'Окремо' }
+        ]
+      },
+      ref('curriculumItemHoursId', 'Год. позиції', 'curriculumItemHours', 'curriculumItemHours', 'hourType', true),
+      ref('departmentId', 'Кафедра', 'department', 'department', 'name', true),
+      ref('courseId', 'Вибіркова дисципліна', 'course', 'course', 'name')
+    ]
+  },
+  {
+    name: 'AcademicDegree', label: 'Наукові ступені', single: 'academicDegree', namespace: 'academicDegrees', list: 'academicDegreeConnection',
+    fields: [
+      { name: 'name', label: 'Назва', type: 'text', required: true },
+      { name: 'abbreviation', label: 'Абревіатура', type: 'text' },
+      { name: 'level', label: 'Рівень', type: 'number', required: true }
     ]
   },
   {
@@ -120,23 +168,29 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'firstName', label: "Ім'я", type: 'text', required: true },
       { name: 'lastName', label: 'Прізвище', type: 'text', required: true },
       { name: 'email', label: 'Ел. пошта', type: 'text' },
-      { name: 'position', label: 'Посада', type: 'text' },
-      { name: 'academicDegree', label: 'Ступінь', type: 'text' },
+      { name: 'position', label: 'Посада', type: 'enum',
+        enumOptions: [
+          { value: 'ASSISTANT',          label: 'Асистент' },
+          { value: 'TEACHER',            label: 'Викладач' },
+          { value: 'SENIOR_LECTURER',    label: 'Старший викладач' },
+          { value: 'DOCENT',             label: 'Доцент' },
+          { value: 'PROFESSOR',          label: 'Професор' },
+          { value: 'HEAD_OF_DEPARTMENT', label: 'Завідувач кафедри' }
+        ]
+      },
+      ref('academicDegreeId', 'Наук. ступінь', 'academicDegree', 'academicDegree', 'name'),
       { name: 'maxHoursPerWeek', label: 'Макс. год./тижд.', type: 'number' },
-      ref('departmentId', 'Кафедра', 'department', 'department', 'name', true)
+      { name: 'departmentId', label: 'Кафедра', type: 'ref', ref: 'department', relation: 'department', refLabel: 'name', required: true,
+        parentFilter: { namespace: 'faculties', list: 'facultyConnection', label: 'Факультет' } }
     ]
   },
   {
     name: 'LecturerWorkload', label: 'Навантаження', single: 'lecturerWorkload', namespace: 'lecturerWorkloads', list: 'lecturerWorkloadConnection', filterParam: 'lecturerId',
     fields: [
-      { name: 'classType', label: 'Тип заняття', type: 'text', required: true },
-      { name: 'periodicity', label: 'Periodicity', type: 'text', required: true },
-      { name: 'hoursPerWeek', label: 'Год./тижд.', type: 'number' },
       ref('lecturerId', 'Викладач', 'lecturer', 'lecturer', 'lastName', true),
-      ref('courseId', 'Дисципліна', 'course', 'course', 'name', true),
       ref('academicGroupId', 'Академічна група', 'academicGroup', 'academicGroup', 'name'),
       ref('combinedGroupId', "Об'єднана група", 'combinedGroup', 'combinedGroup', 'name'),
-      ref('workingCurriculumId', 'Робочий навч. план', 'workingCurriculum', 'workingCurriculum', 'academicYear')
+      ref('workingCurriculumItemId', 'Позиція РНП', 'workingCurriculumItem', 'workingCurriculumItem', 'teachingFormat', true)
     ]
   },
   {
@@ -190,7 +244,7 @@ export const ENTITIES: EntityMeta[] = [
     fields: [
       { name: 'dayOfWeek', label: 'День (1-6)', type: 'number', required: true },
       { name: 'weekParity', label: 'Тиждень', type: 'text', required: true },
-      ref('workloadId', 'Навантаження', 'workload', 'workload', 'classType', true),
+      ref('workloadId', 'Навантаження', 'workload', 'workload', 'id', true),
       ref('timeSlotId', 'Часовий слот', 'timeSlot', 'timeSlot', 'startTime', true),
       ref('roomId', 'Аудиторія', 'room', 'room', 'number', true)
     ]

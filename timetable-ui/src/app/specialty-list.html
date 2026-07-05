@@ -1,0 +1,113 @@
+<div class="page-header">
+  <div>
+    <h2>Спеціальності</h2>
+    <p class="muted">{{ specialties().length }} запис(ів)</p>
+  </div>
+  <button type="button" (click)="openCreate()">+ Додати</button>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Код</th>
+        <th>Назва</th>
+        <th>Ступінь</th>
+        <th>Кваліфікація</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (s of specialties(); track s.id) {
+        <tr>
+          <td>{{ s.id }}</td>
+          <td>{{ s.code }}</td>
+          <td>{{ s.name }}</td>
+          <td>{{ s.degree }}</td>
+          <td>{{ s.qualification || '&mdash;' }}</td>
+          <td class="row-actions">
+            <button type="button" class="ghost" (click)="openEdit(s)">Редагувати</button>
+            <a [routerLink]="['/specialty', s.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="6" class="muted">Спеціальностей ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Create modal ── -->
+
+@if (showCreateForm()) {
+  <div class="modal-backdrop" (click)="closeCreate()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Нова спеціальність</h3>
+        <button type="button" class="close" (click)="closeCreate()">&#x2715;</button>
+      </div>
+      @if (createError()) { <p class="error">{{ createError() }}</p> }
+      <form (ngSubmit)="saveCreate()" class="entity-form">
+        <label>
+          <span>Код *</span>
+          <input type="text" [(ngModel)]="createForm['code']" name="code" required />
+        </label>
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="createForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Ступінь *</span>
+          <input type="text" [(ngModel)]="createForm['degree']" name="degree" required />
+        </label>
+        <label>
+          <span>Кваліфікація</span>
+          <input type="text" [(ngModel)]="createForm['qualification']" name="qualification" />
+        </label>
+        <div class="actions">
+          <button type="submit">Створити</button>
+          <button type="button" class="ghost" (click)="closeCreate()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Edit modal ── -->
+
+@if (editingSpec()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування спеціальності</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Код *</span>
+          <input type="text" [(ngModel)]="editForm['code']" name="code" required />
+        </label>
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Ступінь *</span>
+          <input type="text" [(ngModel)]="editForm['degree']" name="degree" required />
+        </label>
+        <label>
+          <span>Кваліфікація</span>
+          <input type="text" [(ngModel)]="editForm['qualification']" name="qualification" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

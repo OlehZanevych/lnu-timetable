@@ -105,7 +105,7 @@
       }
 
       @case ('specialties') {
-        <app-specialty [filterValue]="fid" [presets]="facultyPreset" />
+        <app-specialty-list [facultyId]="fid" />
       }
 
       @case ('rooms') {
@@ -128,7 +128,7 @@
             }
           </select>
         </div>
-        <app-academic-group [filterValue]="specFilterValue" [presets]="specPreset" />
+        <app-academic-group-list [specialtyId]="specFilterValue" />
       }
 
       @case ('combinedGroups') {
@@ -167,8 +167,8 @@
         <app-curriculum-item />
       }
 
-      @case ('workingCurricula') {
-        <app-working-curriculum />
+      @case ('curriculumItemHours') {
+        <app-curriculum-item-hours />
       }
 
       @case ('workingCurriculumItems') {

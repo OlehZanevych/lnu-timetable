@@ -17,7 +17,7 @@
     <thead>
       <tr>
         <th>#</th>
-        @for (f of m.fields; track f.name) {
+        @for (f of tableFields; track f.name) {
           <th>{{ f.label }}</th>
         }
         <th></th>
@@ -27,7 +27,7 @@
       @for (row of rows(); track row.id) {
         <tr>
           <td>{{ row.id }}</td>
-          @for (f of m.fields; track f.name) {
+          @for (f of tableFields; track f.name) {
             <td>{{ display(row, f) }}</td>
           }
           <td class="row-actions">
@@ -36,7 +36,7 @@
           </td>
         </tr>
       } @empty {
-        <tr><td [attr.colspan]="m.fields.length + 2" class="muted">Даних ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td [attr.colspan]="tableFields.length + 2" class="muted">Даних ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>
@@ -56,16 +56,34 @@
 
       <form (ngSubmit)="save()" class="entity-form">
         @for (f of m.fields; track f.name) {
+          @if (editingId() || !presets[f.name]) {
           <label>
             <span>{{ f.label }}{{ f.required ? ' *' : '' }}</span>
             @if (f.type === 'ref') {
-              <app-search-select [options]="options()[f.name] || []" [(ngModel)]="form[f.name]" [name]="f.name" />
+              @if (f.parentFilter) {
+                <app-dept-faculty-select
+                  [deptOptions]="options()[f.name] || []"
+                  [parentOptions]="options()[f.name + '_parent'] || []"
+                  [parentLabel]="f.parentFilter.label"
+                  [(ngModel)]="form[f.name]"
+                  [name]="f.name" />
+              } @else {
+                <app-search-select [options]="options()[f.name] || []" [(ngModel)]="form[f.name]" [name]="f.name" />
+              }
+            } @else if (f.type === 'enum') {
+              <select [(ngModel)]="form[f.name]" [name]="f.name">
+                <option value="">— не обрано —</option>
+                @for (opt of f.enumOptions || []; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
             } @else if (f.type === 'textarea') {
               <textarea [(ngModel)]="form[f.name]" [name]="f.name"></textarea>
             } @else {
               <input [type]="f.type" [(ngModel)]="form[f.name]" [name]="f.name" [required]="!!f.required" />
             }
           </label>
+          }
         }
         <div class="actions">
           <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>

@@ -25,24 +25,23 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureLecturerWorkload(SchemaDefinition s) {
         s.type(LecturerWorkload.class)
-            .fields("classType", "periodicity", "hoursPerWeek")
-            .relation("lecturer").relation("course")
-            .nullableRelation("academicGroup").nullableRelation("combinedGroup").nullableRelation("workingCurriculum")
+            .relation("lecturer")
+            .nullableRelation("academicGroup")
+            .nullableRelation("combinedGroup")
+            .relation("workingCurriculumItem")
             .relation("timetableEntries");
 
         s.query("lecturerWorkloadConnection").entity(LecturerWorkload.class).connection().orderBy("id").filter("lecturerId", "lecturer_id");
         s.query("lecturerWorkload").entity(LecturerWorkload.class).findById();
 
         s.mutation("createLecturerWorkload").entity(LecturerWorkload.class).create()
-            .inputFields("classType", "periodicity", "hoursPerWeek", "lecturerId", "courseId",
-                "academicGroupId", "combinedGroupId", "workingCurriculumId")
+            .inputFields("lecturerId", "academicGroupId", "combinedGroupId", "workingCurriculumItemId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturerWorkload").entity(LecturerWorkload.class).update()
-            .inputFields("classType", "periodicity", "hoursPerWeek", "lecturerId", "courseId",
-                "academicGroupId", "combinedGroupId", "workingCurriculumId")
+            .inputFields("lecturerId", "academicGroupId", "combinedGroupId", "workingCurriculumItemId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURERWORKLOAD_NOT_FOUND", "LecturerWorkload not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

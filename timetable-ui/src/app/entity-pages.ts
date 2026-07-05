@@ -2,12 +2,14 @@ import { Component, Type } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BaseEntity } from './base-entity';
 import { SearchSelect } from './search-select';
+import { DeptFacultySelect } from './dept-faculty-select';
 import { ENTITIES, EntityMeta } from './entities';
 
-const IMPORTS = [FormsModule, SearchSelect];
+const IMPORTS = [FormsModule, SearchSelect, DeptFacultySelect];
 const meta = (name: string): EntityMeta => ENTITIES.find((e) => e.name === name)!;
 const TPL = './entity-page.html';
 
+@Component({ selector: 'app-academic-degree', templateUrl: TPL, imports: IMPORTS }) export class AcademicDegreePage extends BaseEntity { meta = meta('AcademicDegree'); }
 @Component({ selector: 'app-building', templateUrl: TPL, imports: IMPORTS }) export class BuildingPage extends BaseEntity { meta = meta('Building'); }
 @Component({ selector: 'app-faculty', templateUrl: TPL, imports: IMPORTS }) export class FacultyPage extends BaseEntity { meta = meta('Faculty'); }
 @Component({ selector: 'app-department', templateUrl: TPL, imports: IMPORTS }) export class DepartmentPage extends BaseEntity { meta = meta('Department'); }
@@ -15,7 +17,7 @@ const TPL = './entity-page.html';
 @Component({ selector: 'app-course', templateUrl: TPL, imports: IMPORTS }) export class CoursePage extends BaseEntity { meta = meta('Course'); }
 @Component({ selector: 'app-curriculum', templateUrl: TPL, imports: IMPORTS }) export class CurriculumPage extends BaseEntity { meta = meta('Curriculum'); }
 @Component({ selector: 'app-curriculum-item', templateUrl: TPL, imports: IMPORTS }) export class CurriculumItemPage extends BaseEntity { meta = meta('CurriculumItem'); }
-@Component({ selector: 'app-working-curriculum', templateUrl: TPL, imports: IMPORTS }) export class WorkingCurriculumPage extends BaseEntity { meta = meta('WorkingCurriculum'); }
+@Component({ selector: 'app-curriculum-item-hours', templateUrl: TPL, imports: IMPORTS }) export class CurriculumItemHoursPage extends BaseEntity { meta = meta('CurriculumItemHours'); }
 @Component({ selector: 'app-working-curriculum-item', templateUrl: TPL, imports: IMPORTS }) export class WorkingCurriculumItemPage extends BaseEntity { meta = meta('WorkingCurriculumItem'); }
 @Component({ selector: 'app-lecturer', templateUrl: TPL, imports: IMPORTS }) export class LecturerPage extends BaseEntity { meta = meta('Lecturer'); }
 @Component({ selector: 'app-lecturer-workload', templateUrl: TPL, imports: IMPORTS }) export class LecturerWorkloadPage extends BaseEntity { meta = meta('LecturerWorkload'); }
@@ -28,13 +30,14 @@ const TPL = './entity-page.html';
 
 /** single key -> component, used to generate routes. */
 export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
+  { single: 'academicDegree', component: AcademicDegreePage },
   { single: 'faculty', component: FacultyPage },
   { single: 'department', component: DepartmentPage },
   { single: 'specialty', component: SpecialtyPage },
   { single: 'course', component: CoursePage },
   { single: 'curriculum', component: CurriculumPage },
   { single: 'curriculumItem', component: CurriculumItemPage },
-  { single: 'workingCurriculum', component: WorkingCurriculumPage },
+  { single: 'curriculumItemHours', component: CurriculumItemHoursPage },
   { single: 'workingCurriculumItem', component: WorkingCurriculumItemPage },
   { single: 'lecturer', component: LecturerPage },
   { single: 'lecturerWorkload', component: LecturerWorkloadPage },
