@@ -23,6 +23,15 @@ public class R2dbcQueryEngine {
     /** An equality filter applied as a WHERE clause to list/count queries. */
     public record Filter(String column, Object value) {}
 
+    /**
+     * Wraps a value destined for a column backed by a native Postgres enum type (see
+     * {@code @PgEnum}), so {@link #insert} / {@link #update} can add an explicit {@code ::type}
+     * cast in the generated SQL. R2DBC binds plain Java values as their default wire type (a
+     * {@code String} becomes VARCHAR), and Postgres will not implicitly coerce that to a custom
+     * enum column type the way it does for untyped literals in plain SQL text.
+     */
+    public record EnumValue(Object value, String pgType) {}
+
     private final DatabaseClient db;
 
     public R2dbcQueryEngine(DatabaseClient db) {
@@ -75,23 +84,37 @@ public class R2dbcQueryEngine {
 
     public Mono<Object> insert(String table, LinkedHashMap<String, Object> columnValues) {
         String columns = String.join(", ", columnValues.keySet());
-        String binds = columnValues.keySet().stream().map(c -> ":" + c).collect(Collectors.joining(", "));
+        String binds = columnValues.entrySet().stream()
+            .map(e -> ":" + e.getKey() + castSuffix(e.getValue()))
+            .collect(Collectors.joining(", "));
         String sql = "INSERT INTO " + table + " (" + columns + ") VALUES (" + binds + ") RETURNING id";
         DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
         for (var e : columnValues.entrySet()) {
-            spec = spec.bind(e.getKey(), e.getValue());
+            spec = spec.bind(e.getKey(), unwrap(e.getValue()));
         }
         return spec.map(row -> row.get("id")).one();
     }
 
     public Mono<Long> update(String table, LinkedHashMap<String, Object> columnValues, Object id) {
-        String assignments = columnValues.keySet().stream().map(c -> c + " = :" + c).collect(Collectors.joining(", "));
+        String assignments = columnValues.entrySet().stream()
+            .map(e -> e.getKey() + " = :" + e.getKey() + castSuffix(e.getValue()))
+            .collect(Collectors.joining(", "));
         String sql = "UPDATE " + table + " SET " + assignments + " WHERE id = :idValue";
         DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
         for (var e : columnValues.entrySet()) {
-            spec = spec.bind(e.getKey(), e.getValue());
+            spec = spec.bind(e.getKey(), unwrap(e.getValue()));
         }
         return spec.bind("idValue", id).fetch().rowsUpdated();
+    }
+
+    /** Returns a Postgres {@code ::type} cast suffix for values wrapped in {@link EnumValue}, otherwise empty. */
+    private String castSuffix(Object value) {
+        return value instanceof EnumValue ev ? "::" + ev.pgType() : "";
+    }
+
+    /** Unwraps an {@link EnumValue} to the raw value that should actually be bound. */
+    private Object unwrap(Object value) {
+        return value instanceof EnumValue ev ? ev.value() : value;
     }
 
     public Mono<Long> delete(String table, Object id) {

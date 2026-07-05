@@ -28,21 +28,24 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     private void configureCourse(SchemaDefinition s) {
         s.type(Course.class)
             .fields("name", "courseType")
-            .relation("department")
+            .nullableRelation("faculty")
+            .nullableRelation("department")
             .nullableRelation("parentCourse")
             .relation("childCourses");
 
-        s.query("courseConnection").entity(Course.class).connection().orderBy("name").filter("departmentId", "department_id");
+        s.query("courseConnection").entity(Course.class).connection().orderBy("name")
+            .filter("departmentId", "department_id")
+            .filter("facultyId", "faculty_id");
         s.query("course").entity(Course.class).findById();
 
         s.mutation("createCourse").entity(Course.class).create()
-            .inputFields("name", "courseType", "departmentId", "parentCourseId")
+            .inputFields("name", "courseType", "departmentId", "facultyId", "parentCourseId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateCourse").entity(Course.class).update()
-            .inputFields("name", "courseType", "departmentId", "parentCourseId")
+            .inputFields("name", "courseType", "departmentId", "facultyId", "parentCourseId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("COURSE_NOT_FOUND", "Course not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -96,12 +99,14 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("createCurriculumItem").entity(CurriculumItem.class).create()
             .inputFields("semester", "controlForm", "ectsCredits", "curriculumId", "courseId")
+            .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateCurriculumItem").entity(CurriculumItem.class).update()
             .inputFields("semester", "controlForm", "ectsCredits", "curriculumId", "courseId")
+            .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("CURRICULUMITEM_NOT_FOUND", "CurriculumItem not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

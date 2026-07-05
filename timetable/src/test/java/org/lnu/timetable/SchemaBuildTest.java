@@ -67,9 +67,9 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("createTimetableEntry"));
         assertTrue(sdl.contains("TimetableEntryInputPayload"));
         assertTrue(sdl.contains("workloadId: ID"));
-        // Filter arguments on connection fields
-        assertTrue(sdl.contains("departmentConnection(limit: Int! = 1000, offset: Int! = 0, facultyId: ID)"));
-        assertTrue(sdl.contains("specialtyConnection(limit: Int! = 1000, offset: Int! = 0, facultyId: ID)"));
-        assertTrue(sdl.contains("lecturerConnection(limit: Int! = 1000, offset: Int! = 0, departmentId: ID)"));
+        // Filter arguments on connection fields (graphql-java prints arguments in alphabetical order)
+        assertTrue(sdl.contains("departmentConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
+        assertTrue(sdl.contains("specialtyConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
+        assertTrue(sdl.contains("lecturerConnection(departmentId: ID, limit: Int! = 1000, offset: Int! = 0)"));
     }
 }

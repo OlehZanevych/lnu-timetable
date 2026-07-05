@@ -6,6 +6,7 @@ import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
@@ -26,6 +27,7 @@ public class Lecturer {
     private String email;
 
     @Nullable
+    @PgEnum("lecturer_position")
     @Description("Academic position: ASSISTANT, TEACHER, SENIOR_LECTURER, DOCENT, PROFESSOR, HEAD_OF_DEPARTMENT")
     private String position;
 

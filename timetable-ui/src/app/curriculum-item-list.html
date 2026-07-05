@@ -1,0 +1,122 @@
+<div class="page-header">
+  <div>
+    <h2>Навчальні плани</h2>
+    <p class="muted">{{ items().length }} запис(ів)</p>
+  </div>
+  @if (curriculumId()) {
+    <button type="button" (click)="openCreate()">+ Додати</button>
+  }
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@if (!curriculumId()) {
+  <div class="card" style="padding: 20px;">
+    <p class="muted">Для цієї спеціальності ще не створено навчальний план.</p>
+    <button type="button" (click)="createCurriculum()">Створити навчальний план</button>
+  </div>
+} @else {
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Семестр</th>
+          <th>Дисципліна</th>
+          <th>Форма контролю</th>
+          <th>ECTS</th>
+          <th>Години</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of items(); track item.id) {
+          <tr>
+            <td>{{ item.id }}</td>
+            <td>{{ item.semester }}</td>
+            <td>{{ item.course?.name || '&mdash;' }}</td>
+            <td>{{ controlFormLabel(item.controlForm) }}</td>
+            <td>{{ item.ectsCredits ?? '&mdash;' }}</td>
+            <td>
+              @for (h of item.hours; track h.id) {
+                <div>{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</div>
+              } @empty {
+                <span class="muted">&mdash;</span>
+              }
+            </td>
+            <td class="row-actions">
+              <button type="button" class="ghost" (click)="openEdit(item)">Редагувати</button>
+              <button type="button" class="ghost danger" (click)="remove(item)">Видалити</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr><td colspan="7" class="muted">Позицій навчального плану ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+<!-- ── Create/Edit modal ── -->
+
+@if (showForm()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId() ? 'Редагування позиції навчального плану' : 'Нова позиція навчального плану' }}</h3>
+        <button type="button" class="close" (click)="closeForm()">&#x2715;</button>
+      </div>
+
+      @if (formError()) { <p class="error">{{ formError() }}</p> }
+
+      <form (ngSubmit)="save()" class="entity-form">
+        <label>
+          <span>Факультет (звужує список дисциплін)</span>
+          <app-search-select [options]="facultyOptions()" placeholder="— всі факультети —"
+                              [ngModel]="courseFacultyFilter()" (ngModelChange)="onCourseFacultyFilterChange($event)"
+                              name="courseFacultyFilter" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Кафедра (звужує список дисциплін)</span>
+          <app-search-select [options]="filteredDepartmentOptions()" placeholder="— всі кафедри —"
+                              [ngModel]="courseDepartmentFilter()" (ngModelChange)="onCourseDepartmentFilterChange($event)"
+                              name="courseDepartmentFilter" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Дисципліна *</span>
+          <app-search-select [options]="courseOptions()" [(ngModel)]="form['courseId']" name="courseId" />
+        </label>
+        <label>
+          <span>Семестр *</span>
+          <input type="number" [(ngModel)]="form['semester']" name="semester" required />
+        </label>
+        <label>
+          <span>Форма контролю *</span>
+          <select [(ngModel)]="form['controlForm']" name="controlForm">
+            <option value="">— не обрано —</option>
+            @for (opt of CONTROL_FORM_OPTIONS; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>ECTS</span>
+          <input type="number" [(ngModel)]="form['ectsCredits']" name="ectsCredits" />
+        </label>
+
+        <p class="hours-title">Години за видами робіт</p>
+        @for (opt of HOUR_TYPE_OPTIONS; track opt.value) {
+          <label>
+            <span>{{ opt.label }}</span>
+            <input type="number" min="0" [(ngModel)]="formHours[opt.value]" [name]="'hours_' + opt.value" />
+          </label>
+        }
+
+        <div class="actions">
+          <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>
+          <button type="button" class="ghost" (click)="closeForm()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
