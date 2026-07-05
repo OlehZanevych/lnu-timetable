@@ -8,7 +8,6 @@ interface Specialty {
   code: string;
   name: string;
   degree: string;
-  qualification?: string;
 }
 
 @Component({
@@ -37,7 +36,7 @@ export class SpecialtyList implements OnInit, OnChanges {
 
   load() {
     if (!this.facultyId) return;
-    const q = `{ specialties { specialtyConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id code name degree qualification } } } }`;
+    const q = `{ specialties { specialtyConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id code name degree } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.specialties.set(d.specialties.specialtyConnection.nodes),
       error: (e) => this.error.set(e.message)
@@ -51,7 +50,7 @@ export class SpecialtyList implements OnInit, OnChanges {
 
   saveCreate() {
     const input: Record<string, any> = { facultyId: this.facultyId };
-    for (const f of ['code', 'name', 'degree', 'qualification']) {
+    for (const f of ['code', 'name', 'degree']) {
       if (this.createForm[f]) input[f] = this.createForm[f];
     }
     const q = `mutation($input: SpecialtyInputPayload!) { specialties { createSpecialty(specialty: $input) { isSuccess errorStatus } } }`;
@@ -72,7 +71,6 @@ export class SpecialtyList implements OnInit, OnChanges {
       code: spec.code ?? '',
       name: spec.name ?? '',
       degree: spec.degree ?? '',
-      qualification: spec.qualification ?? '',
     };
     this.editError.set('');
     this.editingSpec.set(spec);
@@ -84,7 +82,7 @@ export class SpecialtyList implements OnInit, OnChanges {
     const spec = this.editingSpec();
     if (!spec) return;
     const input: Record<string, any> = { facultyId: this.facultyId };
-    for (const f of ['code', 'name', 'degree', 'qualification']) {
+    for (const f of ['code', 'name', 'degree']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
     const q = `mutation($id: ID!, $input: SpecialtyInputPayload!) { specialties { updateSpecialty(id: $id, specialty: $input) { isSuccess errorStatus } } }`;

@@ -116,20 +116,20 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureSpecialty(SchemaDefinition s) {
         s.type(Specialty.class)
-            .fields("code", "name", "degree", "qualification")
+            .fields("code", "name", "degree")
             .relation("faculty").relation("groups").relation("curricula");
 
         s.query("specialtyConnection").entity(Specialty.class).connection().orderBy("code").filter("facultyId", "faculty_id");
         s.query("specialty").entity(Specialty.class).findById();
 
         s.mutation("createSpecialty").entity(Specialty.class).create()
-            .inputFields("code", "name", "degree", "qualification", "facultyId")
+            .inputFields("code", "name", "degree", "facultyId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateSpecialty").entity(Specialty.class).update()
-            .inputFields("code", "name", "degree", "qualification", "facultyId")
+            .inputFields("code", "name", "degree", "facultyId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("SPECIALTY_NOT_FOUND", "Specialty not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

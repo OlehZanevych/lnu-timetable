@@ -47,7 +47,6 @@
                 <tr><th>Код</th><td>{{ s.code || '&mdash;' }}</td></tr>
                 <tr><th>Назва</th><td>{{ s.name || '&mdash;' }}</td></tr>
                 <tr><th>Ступінь</th><td>{{ degreeLabels[s.degree] || s.degree || '&mdash;' }}</td></tr>
-                <tr><th>Кваліфікація</th><td>{{ s.qualification || '&mdash;' }}</td></tr>
               </tbody>
             </table>
           </div>
@@ -95,10 +94,6 @@
               <option [value]="opt.value">{{ opt.label }}</option>
             }
           </select>
-        </label>
-        <label>
-          <span>Кваліфікація</span>
-          <input type="text" [(ngModel)]="editForm['qualification']" name="qualification" />
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

@@ -16,7 +16,6 @@
         <th>Код</th>
         <th>Назва</th>
         <th>Ступінь</th>
-        <th>Кваліфікація</th>
         <th></th>
       </tr>
     </thead>
@@ -27,14 +26,13 @@
           <td>{{ s.code }}</td>
           <td>{{ s.name }}</td>
           <td>{{ s.degree }}</td>
-          <td>{{ s.qualification || '&mdash;' }}</td>
           <td class="row-actions">
             <button type="button" class="ghost" (click)="openEdit(s)">Редагувати</button>
             <a [routerLink]="['/specialty', s.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="6" class="muted">Спеціальностей ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="5" class="muted">Спеціальностей ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>
@@ -62,10 +60,6 @@
         <label>
           <span>Ступінь *</span>
           <input type="text" [(ngModel)]="createForm['degree']" name="degree" required />
-        </label>
-        <label>
-          <span>Кваліфікація</span>
-          <input type="text" [(ngModel)]="createForm['qualification']" name="qualification" />
         </label>
         <div class="actions">
           <button type="submit">Створити</button>
@@ -98,10 +92,6 @@
         <label>
           <span>Ступінь *</span>
           <input type="text" [(ngModel)]="editForm['degree']" name="degree" required />
-        </label>
-        <label>
-          <span>Кваліфікація</span>
-          <input type="text" [(ngModel)]="editForm['qualification']" name="qualification" />
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

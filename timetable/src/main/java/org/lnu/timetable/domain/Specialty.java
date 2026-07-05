@@ -4,7 +4,6 @@ import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
-import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
 
 import java.util.List;
@@ -23,10 +22,6 @@ public class Specialty {
 
     @Description("Degree level: BACHELOR, MASTER or PHD")
     private String degree;
-
-    @Nullable
-    @Description("Awarded qualification")
-    private String qualification;
 
     @ManyToOne(joinColumn = "faculty_id")
     private Faculty faculty;

@@ -45,7 +45,6 @@ CREATE TABLE specialties
     code          VARCHAR(16)  NOT NULL,
     name          VARCHAR(160) NOT NULL,
     degree        degree       NOT NULL,
-    qualification VARCHAR(160),
     faculty_id    BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
     UNIQUE (code, degree)
 );
@@ -70,6 +69,7 @@ CREATE TABLE lecturers
     email                VARCHAR(64),
     position             lecturer_position,
     academic_degree_id   BIGINT REFERENCES academic_degrees (id) ON DELETE SET NULL,
+    min_hours_per_week   INTEGER,
     max_hours_per_week   INTEGER,
     department_id        BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE
 );
@@ -136,7 +136,7 @@ CREATE TABLE curricula
     specialty_id BIGINT NOT NULL UNIQUE REFERENCES specialties (id) ON DELETE CASCADE
 );
 
-CREATE TYPE control_form AS ENUM ('EXAM', 'CREDIT', 'GRADED_CREDIT', 'COURSE_WORK', 'COURSE_PROJECT', 'THESIS');
+CREATE TYPE control_form AS ENUM ('EXAM', 'CREDIT', 'GRADED_CREDIT');
 
 CREATE TABLE curriculum_items
 (
@@ -148,16 +148,14 @@ CREATE TABLE curriculum_items
     course_id     BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE
 );
 
--- Hours per hour type for a curriculum item.
--- Lives at the curriculum level — not the working curriculum level.
 CREATE TYPE hour_type AS ENUM ('LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK');
 
 CREATE TABLE curriculum_item_hours
 (
     id                 BIGSERIAL PRIMARY KEY,
+    curriculum_item_id BIGINT NOT NULL REFERENCES curriculum_items (id) ON DELETE CASCADE,
     hour_type          hour_type NOT NULL,
-    hours              INTEGER   NOT NULL,
-    curriculum_item_id BIGINT NOT NULL REFERENCES curriculum_items (id) ON DELETE CASCADE
+    hours              INTEGER   NOT NULL
 );
 
 CREATE TYPE teaching_format AS ENUM ('TOGETHER', 'SEPARATELY');
@@ -165,11 +163,10 @@ CREATE TYPE teaching_format AS ENUM ('TOGETHER', 'SEPARATELY');
 CREATE TABLE working_curriculum_items
 (
     id                       BIGSERIAL PRIMARY KEY,
-    lecturer_count           INTEGER        NOT NULL DEFAULT 1,
-    teaching_format          teaching_format NOT NULL DEFAULT 'SEPARATELY',
     curriculum_item_hours_id BIGINT NOT NULL REFERENCES curriculum_item_hours (id) ON DELETE CASCADE,
+    lecturer_count           INTEGER        NOT NULL DEFAULT 1,
+    teaching_format          teaching_format NOT NULL DEFAULT 'TOGETHER',
     department_id            BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE,
-    -- set only when the group has chosen a specific elective from an ELECTIVE_GROUP
     course_id                BIGINT REFERENCES courses (id) ON DELETE SET NULL
 );
 
@@ -185,12 +182,12 @@ CREATE TABLE working_curriculum_item_groups
 CREATE TABLE rooms
 (
     id          BIGSERIAL PRIMARY KEY,
+    building_id BIGINT REFERENCES buildings (id) ON DELETE SET NULL,
     number      VARCHAR(32) NOT NULL,
     name        VARCHAR(96),
     capacity    INTEGER,
     kind        VARCHAR(32),
-    faculty_id  BIGINT REFERENCES faculties (id) ON DELETE SET NULL,
-    building_id BIGINT REFERENCES buildings (id) ON DELETE SET NULL
+    faculty_id  BIGINT REFERENCES faculties (id) ON DELETE SET NULL
 );
 
 CREATE TABLE time_slots
@@ -206,10 +203,10 @@ CREATE TABLE time_slots
 CREATE TABLE lecturer_workloads
 (
     id                         BIGSERIAL PRIMARY KEY,
+    working_curriculum_item_id BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
     lecturer_id                BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
     academic_group_id          BIGINT REFERENCES academic_groups (id) ON DELETE SET NULL,
-    combined_group_id          BIGINT REFERENCES combined_groups (id) ON DELETE SET NULL,
-    working_curriculum_item_id BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE
+    combined_group_id          BIGINT REFERENCES combined_groups (id) ON DELETE SET NULL
 );
 
 CREATE TABLE timetable_entries

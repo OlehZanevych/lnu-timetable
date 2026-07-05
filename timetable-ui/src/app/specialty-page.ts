@@ -12,7 +12,6 @@ interface Specialty {
   code: string;
   name: string;
   degree: string;
-  qualification?: string;
   faculty: { id: string; name: string };
 }
 
@@ -62,7 +61,7 @@ export class SpecialtyDetailPage implements OnInit {
   ngOnInit() { this.load(); }
 
   private load() {
-    const q = `{ specialties { specialty(id: "${this.specialtyId}") { id code name degree qualification faculty { id name } } } }`;
+    const q = `{ specialties { specialty(id: "${this.specialtyId}") { id code name degree faculty { id name } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.specialty.set(d.specialties.specialty),
       error: (e) => this.error.set(e.message)
@@ -80,7 +79,6 @@ export class SpecialtyDetailPage implements OnInit {
       code: s.code ?? '',
       name: s.name ?? '',
       degree: s.degree ?? '',
-      qualification: s.qualification ?? '',
     };
     this.editError.set('');
     this.showEditForm.set(true);
@@ -92,7 +90,7 @@ export class SpecialtyDetailPage implements OnInit {
     const s = this.specialty();
     if (!s) return;
     const input: Record<string, any> = { facultyId: s.faculty.id };
-    for (const f of ['code', 'name', 'degree', 'qualification']) {
+    for (const f of ['code', 'name', 'degree']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
     const q = `mutation($id: ID!, $input: SpecialtyInputPayload!) { specialties { updateSpecialty(id: $id, specialty: $input) { isSuccess errorStatus } } }`;

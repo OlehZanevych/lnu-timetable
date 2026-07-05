@@ -102,7 +102,6 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'code', label: 'Код', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'degree', label: 'Ступінь', type: 'enum', required: true, enumOptions: DEGREE_OPTIONS },
-      { name: 'qualification', label: 'Кваліфікація', type: 'text' },
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name', true)
     ]
   },
