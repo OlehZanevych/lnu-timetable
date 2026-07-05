@@ -3,8 +3,12 @@ package org.lnu.timetable.domain;
 import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
+import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.OneToMany;
+
+import java.util.List;
 
 @Data
 @GraphQLEntity(table = "working_curriculum_items")
@@ -12,25 +16,27 @@ public class WorkingCurriculumItem {
 
     private Long id;
 
-    @Nullable
-    @Description("Lecture hours per semester")
-    private Integer lectureHours;
+    @Description("Number of lecturers assigned to deliver this item")
+    private Integer lecturerCount;
+
+    @Description("Whether all lecturers teach together (TOGETHER) or each group separately (SEPARATELY)")
+    private String teachingFormat;
+
+    @ManyToOne(joinColumn = "curriculum_item_hours_id")
+    private CurriculumItemHours curriculumItemHours;
+
+    @ManyToOne(joinColumn = "department_id")
+    private Department department;
 
     @Nullable
-    @Description("Practical hours per semester")
-    private Integer practicalHours;
-
-    @Nullable
-    @Description("Laboratory hours per semester")
-    private Integer labHours;
-
-    @Nullable
-    @Description("Seminar hours per semester")
-    private Integer seminarHours;
-
-    @ManyToOne(joinColumn = "working_curriculum_id")
-    private WorkingCurriculum workingCurriculum;
-
+    @Description("Specific elective chosen by the group; set only when curriculum item is an ELECTIVE_GROUP")
     @ManyToOne(joinColumn = "course_id")
     private Course course;
+
+    @ManyToMany(joinTable = "working_curriculum_item_groups",
+        joinColumn = "working_curriculum_item_id", inverseJoinColumn = "academic_group_id")
+    private List<AcademicGroup> academicGroups;
+
+    @OneToMany(mappedBy = "working_curriculum_item_id")
+    private List<LecturerWorkload> workloads;
 }

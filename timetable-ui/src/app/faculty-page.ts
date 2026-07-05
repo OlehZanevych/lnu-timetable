@@ -4,16 +4,18 @@ import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
 import { DepartmentList } from './department-list';
+import { SpecialtyList } from './specialty-list';
+import { AcademicGroupList } from './academic-group-list';
 import {
-  SpecialtyPage, RoomPage,
-  CoursePage, CurriculumPage, CurriculumItemPage, WorkingCurriculumPage, WorkingCurriculumItemPage,
-  LecturerWorkloadPage, StudentPage, AcademicGroupPage, CombinedGroupPage
+  RoomPage,
+  CoursePage, CurriculumPage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
+  LecturerWorkloadPage, StudentPage, CombinedGroupPage
 } from './entity-pages';
 
 export type FacultySection =
   | 'info'
   | 'departments' | 'specialties' | 'rooms'
-  | 'courses' | 'curricula' | 'curriculumItems' | 'workingCurricula' | 'workingCurriculumItems'
+  | 'courses' | 'curricula' | 'curriculumItems' | 'curriculumItemHours' | 'workingCurriculumItems'
   | 'workloads' | 'students' | 'academicGroups' | 'combinedGroups';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
@@ -42,7 +44,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'courses',                label: 'Дисципліни',           group: 'Навчальні плани' },
   { key: 'curricula',              label: 'Навчальні плани',      group: 'Навчальні плани' },
   { key: 'curriculumItems',        label: 'Позиції навч. плану',  group: 'Навчальні плани' },
-  { key: 'workingCurricula',       label: 'Робочі навч. плани',   group: 'Навчальні плани' },
+  { key: 'curriculumItemHours',    label: 'Год. позиції',         group: 'Навчальні плани' },
   { key: 'workingCurriculumItems', label: 'Позиції РНП',          group: 'Навчальні плани' },
   { key: 'workloads',              label: 'Навантаження',         group: 'Розклад' },
 ];
@@ -52,10 +54,10 @@ const SECTIONS: SectionDef[] = [
   templateUrl: './faculty-page.html',
   imports: [
     RouterLink, FormsModule, SearchSelect,
-    DepartmentList,
-    SpecialtyPage, RoomPage,
-    CoursePage, CurriculumPage, CurriculumItemPage, WorkingCurriculumPage, WorkingCurriculumItemPage,
-    LecturerWorkloadPage, StudentPage, AcademicGroupPage, CombinedGroupPage
+    DepartmentList, SpecialtyList, AcademicGroupList,
+    RoomPage,
+    CoursePage, CurriculumPage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
+    LecturerWorkloadPage, StudentPage, CombinedGroupPage
   ]
 })
 export class FacultyPage implements OnInit {

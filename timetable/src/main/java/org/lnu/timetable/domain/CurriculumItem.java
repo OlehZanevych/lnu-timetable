@@ -5,6 +5,9 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.OneToMany;
+
+import java.util.List;
 
 @Data
 @GraphQLEntity(table = "curriculum_items")
@@ -15,7 +18,7 @@ public class CurriculumItem {
     @Description("Semester number (1..N) in which the discipline is studied")
     private Integer semester;
 
-    @Description("Control form: EXAM or CREDIT")
+    @Description("Control form: EXAM, CREDIT, GRADED_CREDIT, COURSE_WORK, COURSE_PROJECT, THESIS")
     private String controlForm;
 
     @Nullable
@@ -26,4 +29,7 @@ public class CurriculumItem {
 
     @ManyToOne(joinColumn = "course_id")
     private Course course;
+
+    @OneToMany(mappedBy = "curriculum_item_id")
+    private List<CurriculumItemHours> hours;
 }

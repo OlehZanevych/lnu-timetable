@@ -23,16 +23,16 @@ public class Lecturer {
     private String email;
 
     @Nullable
-    @Description("Academic position: ASSISTANT, SENIOR_LECTURER, DOCENT, PROFESSOR")
+    @Description("Academic position: ASSISTANT, TEACHER, SENIOR_LECTURER, DOCENT, PROFESSOR, HEAD_OF_DEPARTMENT")
     private String position;
-
-    @Nullable
-    @Description("Scientific degree: PHD, DOCTOR_OF_SCIENCES")
-    private String academicDegree;
 
     @Nullable
     @Description("Maximum teaching hours per week")
     private Integer maxHoursPerWeek;
+
+    @Nullable
+    @ManyToOne(joinColumn = "academic_degree_id")
+    private AcademicDegree academicDegree;
 
     @ManyToOne(joinColumn = "department_id")
     private Department department;

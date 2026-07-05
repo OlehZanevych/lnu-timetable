@@ -26,6 +26,23 @@ export abstract class BaseEntity implements OnInit, OnChanges {
    */
   @Input() presets: Record<string, string> = {};
 
+  /**
+   * Scopes the option list for specific ref fields.
+   * Key = field name (e.g. 'academicGroupId'), value = the filter value to pass.
+   * The referenced entity's filterParam is used as the GraphQL argument name.
+   * Changing this triggers a reload of the affected options.
+   */
+  @Input()
+  set refFilters(val: Record<string, string>) {
+    const prev = JSON.stringify(this._refFilters);
+    this._refFilters = val ?? {};
+    if (this.initialized && JSON.stringify(this._refFilters) !== prev) {
+      this.loadOptions();
+    }
+  }
+  get refFilters(): Record<string, string> { return this._refFilters; }
+  private _refFilters: Record<string, string> = {};
+
   protected gql = inject(GraphqlService);
 
   rows = signal<any[]>([]);
@@ -61,9 +78,10 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   }
 
   private selection(): string {
-    const scalars = this.meta.fields.filter((f) => f.type !== 'ref').map((f) => f.name);
+    const scalars = this.meta.fields.filter((f) => f.type !== 'ref' && f.type !== 'enum').map((f) => f.name);
+    const enums = this.meta.fields.filter((f) => f.type === 'enum').map((f) => f.name);
     const relations = this.refFields().map((f) => `${f.relation} { id ${f.refLabel} }`);
-    return ['id', ...scalars, ...relations].join(' ');
+    return ['id', ...scalars, ...enums, ...relations].join(' ');
   }
 
   load() {
@@ -80,16 +98,48 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     for (const f of this.refFields()) {
       const r = entityBySingle(f.ref!);
       if (!r) continue;
-      const q = `{ ${r.namespace} { ${r.list}(limit: 1000) { nodes { id ${f.refLabel} } } } }`;
-      this.gql.request(q).subscribe((d: any) => {
-        const opts: Option[] = d[r.namespace][r.list].nodes.map((n: any) => ({ id: n.id, label: `${n[f.refLabel!]} (#${n.id})` }));
-        this.options.update((o) => ({ ...o, [f.name]: opts }));
-      });
+
+      if (f.parentFilter) {
+        // Load ref entities with their parent's info (e.g. departments with faculty { id name })
+        const q = `{ ${r.namespace} { ${r.list}(limit: 1000) { nodes { id ${f.refLabel} faculty { id name } } } } }`;
+        this.gql.request(q).subscribe((d: any) => {
+          const opts = d[r.namespace][r.list].nodes.map((n: any) => ({
+            id: n.id,
+            label: n[f.refLabel!],
+            facultyId: n.faculty?.id ?? '',
+          }));
+          this.options.update((o) => ({ ...o, [f.name]: opts }));
+        });
+        // Load parent entities (faculties) for the filter
+        const pf = f.parentFilter;
+        const pq = `{ ${pf.namespace} { ${pf.list}(limit: 1000) { nodes { id name } } } }`;
+        this.gql.request(pq).subscribe((d: any) => {
+          const opts: Option[] = d[pf.namespace][pf.list].nodes.map((n: any) => ({ id: n.id, label: n.name }));
+          this.options.update((o) => ({ ...o, [f.name + '_parent']: opts }));
+        });
+      } else {
+        const refFilterVal = this._refFilters[f.name];
+        const extraFilter = refFilterVal && r.filterParam ? `, ${r.filterParam}: "${refFilterVal}"` : '';
+        const q = `{ ${r.namespace} { ${r.list}(limit: 1000${extraFilter}) { nodes { id ${f.refLabel} } } } }`;
+        this.gql.request(q).subscribe((d: any) => {
+          const opts: Option[] = d[r.namespace][r.list].nodes.map((n: any) => ({ id: n.id, label: `${n[f.refLabel!]} (#${n.id})` }));
+          this.options.update((o) => ({ ...o, [f.name]: opts }));
+        });
+      }
     }
+  }
+
+  /** Fields shown in the table (excludes columns whose value is preset/fixed by context). */
+  get tableFields(): FieldMeta[] {
+    return this.meta.fields.filter((f) => !this.presets[f.name]);
   }
 
   display(row: any, f: FieldMeta): any {
     if (f.type === 'ref') return row[f.relation!] ? `${row[f.relation!][f.refLabel!]} (#${row[f.relation!].id})` : '—';
+    if (f.type === 'enum') {
+      const opt = f.enumOptions?.find((o) => o.value === row[f.name]);
+      return opt ? opt.label : (row[f.name] ?? '—');
+    }
     return row[f.name] ?? '—';
   }
 

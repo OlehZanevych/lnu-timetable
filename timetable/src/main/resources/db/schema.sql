@@ -37,78 +37,41 @@ CREATE TABLE departments
     info         TEXT
 );
 
+CREATE TYPE degree AS ENUM ('JUNIOR_BACHELOR', 'BACHELOR', 'MASTER', 'PHD', 'DOCTOR_OF_SCIENCE');
+
 CREATE TABLE specialties
 (
     id            BIGSERIAL PRIMARY KEY,
     code          VARCHAR(16)  NOT NULL,
     name          VARCHAR(160) NOT NULL,
-    degree        VARCHAR(16)  NOT NULL,
+    degree        degree       NOT NULL,
     qualification VARCHAR(160),
     faculty_id    BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
     UNIQUE (code, degree)
 );
 
--- ============================ Disciplines & curricula ============================
-
-CREATE TABLE courses
-(
-    id            BIGSERIAL PRIMARY KEY,
-    code          VARCHAR(32),
-    name          VARCHAR(200) NOT NULL,
-    ects_credits  INTEGER,
-    department_id BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE
-);
-
-CREATE TABLE curricula
-(
-    id             BIGSERIAL PRIMARY KEY,
-    name           VARCHAR(200) NOT NULL,
-    admission_year INTEGER      NOT NULL,
-    degree         VARCHAR(16)  NOT NULL,
-    specialty_id   BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE
-);
-
-CREATE TABLE curriculum_items
-(
-    id            BIGSERIAL PRIMARY KEY,
-    semester      INTEGER     NOT NULL,
-    control_form  VARCHAR(16) NOT NULL,
-    ects_credits  INTEGER,
-    curriculum_id BIGINT NOT NULL REFERENCES curricula (id) ON DELETE CASCADE,
-    course_id     BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE
-);
-
-CREATE TABLE working_curricula
-(
-    id            BIGSERIAL PRIMARY KEY,
-    academic_year VARCHAR(16) NOT NULL,
-    semester      INTEGER     NOT NULL,
-    curriculum_id BIGINT NOT NULL REFERENCES curricula (id) ON DELETE CASCADE
-);
-
-CREATE TABLE working_curriculum_items
-(
-    id                    BIGSERIAL PRIMARY KEY,
-    lecture_hours         INTEGER,
-    practical_hours       INTEGER,
-    lab_hours             INTEGER,
-    seminar_hours         INTEGER,
-    working_curriculum_id BIGINT NOT NULL REFERENCES working_curricula (id) ON DELETE CASCADE,
-    course_id             BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE
-);
-
 -- ============================ People & groups ============================
+
+CREATE TABLE academic_degrees
+(
+    id           BIGSERIAL PRIMARY KEY,
+    name         VARCHAR(100) NOT NULL UNIQUE,
+    abbreviation VARCHAR(20),
+    level        INTEGER      NOT NULL
+);
+
+CREATE TYPE lecturer_position AS ENUM ('ASSISTANT', 'TEACHER', 'SENIOR_LECTURER', 'DOCENT', 'PROFESSOR', 'HEAD_OF_DEPARTMENT');
 
 CREATE TABLE lecturers
 (
-    id                 BIGSERIAL PRIMARY KEY,
-    first_name         VARCHAR(64) NOT NULL,
-    last_name          VARCHAR(64) NOT NULL,
-    email              VARCHAR(64),
-    position           VARCHAR(32),
-    academic_degree    VARCHAR(32),
-    max_hours_per_week INTEGER,
-    department_id      BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE
+    id                   BIGSERIAL PRIMARY KEY,
+    first_name           VARCHAR(64)       NOT NULL,
+    last_name            VARCHAR(64)       NOT NULL,
+    email                VARCHAR(64),
+    position             lecturer_position,
+    academic_degree_id   BIGINT REFERENCES academic_degrees (id) ON DELETE SET NULL,
+    max_hours_per_week   INTEGER,
+    department_id        BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE
 );
 
 CREATE TABLE academic_groups
@@ -145,6 +108,78 @@ CREATE TABLE students
     academic_group_id  BIGINT NOT NULL REFERENCES academic_groups (id) ON DELETE CASCADE
 );
 
+-- ============================ Disciplines & curricula ============================
+
+CREATE TYPE course_type AS ENUM (
+    'MANDATORY',
+    'ELECTIVE_GROUP',
+    'ELECTIVE',
+    'OPTIONAL',
+    'INTERNSHIP',
+    'COURSE_PROJECT',
+    'COURSE_WORK',
+    'QUALIFICATION_WORK'
+);
+
+CREATE TABLE courses
+(
+    id               BIGSERIAL PRIMARY KEY,
+    name             VARCHAR(200) NOT NULL,
+    course_type      course_type  NOT NULL DEFAULT 'MANDATORY',
+    department_id    BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE,
+    parent_course_id BIGINT REFERENCES courses (id) ON DELETE CASCADE
+);
+
+CREATE TABLE curricula
+(
+    id           BIGSERIAL PRIMARY KEY,
+    specialty_id BIGINT NOT NULL UNIQUE REFERENCES specialties (id) ON DELETE CASCADE
+);
+
+CREATE TYPE control_form AS ENUM ('EXAM', 'CREDIT', 'GRADED_CREDIT', 'COURSE_WORK', 'COURSE_PROJECT', 'THESIS');
+
+CREATE TABLE curriculum_items
+(
+    id            BIGSERIAL PRIMARY KEY,
+    semester      INTEGER      NOT NULL,
+    control_form  control_form NOT NULL,
+    ects_credits  INTEGER,
+    curriculum_id BIGINT NOT NULL REFERENCES curricula (id) ON DELETE CASCADE,
+    course_id     BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE
+);
+
+-- Hours per hour type for a curriculum item.
+-- Lives at the curriculum level — not the working curriculum level.
+CREATE TYPE hour_type AS ENUM ('LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK');
+
+CREATE TABLE curriculum_item_hours
+(
+    id                 BIGSERIAL PRIMARY KEY,
+    hour_type          hour_type NOT NULL,
+    hours              INTEGER   NOT NULL,
+    curriculum_item_id BIGINT NOT NULL REFERENCES curriculum_items (id) ON DELETE CASCADE
+);
+
+CREATE TYPE teaching_format AS ENUM ('TOGETHER', 'SEPARATELY');
+
+CREATE TABLE working_curriculum_items
+(
+    id                       BIGSERIAL PRIMARY KEY,
+    lecturer_count           INTEGER        NOT NULL DEFAULT 1,
+    teaching_format          teaching_format NOT NULL DEFAULT 'SEPARATELY',
+    curriculum_item_hours_id BIGINT NOT NULL REFERENCES curriculum_item_hours (id) ON DELETE CASCADE,
+    department_id            BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE,
+    -- set only when the group has chosen a specific elective from an ELECTIVE_GROUP
+    course_id                BIGINT REFERENCES courses (id) ON DELETE SET NULL
+);
+
+CREATE TABLE working_curriculum_item_groups
+(
+    working_curriculum_item_id BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
+    academic_group_id          BIGINT NOT NULL REFERENCES academic_groups (id) ON DELETE CASCADE,
+    PRIMARY KEY (working_curriculum_item_id, academic_group_id)
+);
+
 -- ============================ Infrastructure: Rooms ============================
 
 CREATE TABLE rooms
@@ -170,15 +205,11 @@ CREATE TABLE time_slots
 
 CREATE TABLE lecturer_workloads
 (
-    id                    BIGSERIAL PRIMARY KEY,
-    class_type            VARCHAR(16) NOT NULL,
-    periodicity           VARCHAR(16) NOT NULL,
-    hours_per_week        INTEGER,
-    lecturer_id           BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
-    course_id             BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
-    academic_group_id     BIGINT REFERENCES academic_groups (id) ON DELETE SET NULL,
-    combined_group_id     BIGINT REFERENCES combined_groups (id) ON DELETE SET NULL,
-    working_curriculum_id BIGINT REFERENCES working_curricula (id) ON DELETE SET NULL
+    id                         BIGSERIAL PRIMARY KEY,
+    lecturer_id                BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
+    academic_group_id          BIGINT REFERENCES academic_groups (id) ON DELETE SET NULL,
+    combined_group_id          BIGINT REFERENCES combined_groups (id) ON DELETE SET NULL,
+    working_curriculum_item_id BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE
 );
 
 CREATE TABLE timetable_entries

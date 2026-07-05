@@ -1,0 +1,113 @@
+<div class="page-header">
+  <div>
+    <h2>Академічні групи</h2>
+    <p class="muted">{{ groups().length }} запис(ів)</p>
+  </div>
+  <button type="button" (click)="openCreate()">+ Додати</button>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Назва</th>
+        <th>Курс</th>
+        <th>Форма навчання</th>
+        <th>Студентів</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (g of groups(); track g.id) {
+        <tr>
+          <td>{{ g.id }}</td>
+          <td>{{ g.name }}</td>
+          <td>{{ g.courseYear }}</td>
+          <td>{{ g.studyForm }}</td>
+          <td>{{ g.studentsCount ?? '&mdash;' }}</td>
+          <td class="row-actions">
+            <button type="button" class="ghost" (click)="openEdit(g)">Редагувати</button>
+            <a [routerLink]="['/academic-group', g.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="6" class="muted">Груп ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Create modal ── -->
+
+@if (showCreateForm()) {
+  <div class="modal-backdrop" (click)="closeCreate()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Нова академічна група</h3>
+        <button type="button" class="close" (click)="closeCreate()">&#x2715;</button>
+      </div>
+      @if (createError()) { <p class="error">{{ createError() }}</p> }
+      <form (ngSubmit)="saveCreate()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="createForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Курс *</span>
+          <input type="number" [(ngModel)]="createForm['courseYear']" name="courseYear" required />
+        </label>
+        <label>
+          <span>Форма навчання *</span>
+          <input type="text" [(ngModel)]="createForm['studyForm']" name="studyForm" required />
+        </label>
+        <label>
+          <span>Кількість студентів</span>
+          <input type="number" [(ngModel)]="createForm['studentsCount']" name="studentsCount" />
+        </label>
+        <div class="actions">
+          <button type="submit">Створити</button>
+          <button type="button" class="ghost" (click)="closeCreate()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Edit modal ── -->
+
+@if (editingGroup()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування групи</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+      @if (editError()) { <p class="error">{{ editError() }}</p> }
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Назва *</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" required />
+        </label>
+        <label>
+          <span>Курс *</span>
+          <input type="number" [(ngModel)]="editForm['courseYear']" name="courseYear" required />
+        </label>
+        <label>
+          <span>Форма навчання *</span>
+          <input type="text" [(ngModel)]="editForm['studyForm']" name="studyForm" required />
+        </label>
+        <label>
+          <span>Кількість студентів</span>
+          <input type="number" [(ngModel)]="editForm['studentsCount']" name="studentsCount" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
