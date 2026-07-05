@@ -7,6 +7,7 @@ import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
@@ -19,6 +20,7 @@ public class WorkingCurriculumItem {
     @Description("Number of lecturers assigned to deliver this item")
     private Integer lecturerCount;
 
+    @PgEnum("teaching_format")
     @Description("Whether all lecturers teach together (TOGETHER) or each group separately (SEPARATELY)")
     private String teachingFormat;
 

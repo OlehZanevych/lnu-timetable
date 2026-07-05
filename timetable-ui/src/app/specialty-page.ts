@@ -2,7 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
-import { CurriculumPage } from './entity-pages';
+import { CurriculumItemList } from './curriculum-item-list';
 import { AcademicGroupList } from './academic-group-list';
 
 type SpecSection = 'info' | 'curricula' | 'academicGroups';
@@ -32,7 +32,7 @@ const SECTIONS: { key: SpecSection; label: string }[] = [
 @Component({
   selector: 'app-specialty-page',
   templateUrl: './specialty-page.html',
-  imports: [RouterLink, FormsModule, CurriculumPage, AcademicGroupList]
+  imports: [RouterLink, FormsModule, CurriculumItemList, AcademicGroupList]
 })
 export class SpecialtyDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
@@ -67,8 +67,6 @@ export class SpecialtyDetailPage implements OnInit {
       error: (e) => this.error.set(e.message)
     });
   }
-
-  get specPreset(): Record<string, string> { return { specialtyId: this.specialtyId }; }
 
   selectSection(key: SpecSection) { this.activeSection.set(key); }
 

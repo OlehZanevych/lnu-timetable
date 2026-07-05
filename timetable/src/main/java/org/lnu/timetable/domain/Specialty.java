@@ -5,6 +5,7 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
@@ -20,6 +21,7 @@ public class Specialty {
     @Description("Specialty name, e.g. Computer Science")
     private String name;
 
+    @PgEnum("degree")
     @Description("Degree level: BACHELOR, MASTER or PHD")
     private String degree;
 

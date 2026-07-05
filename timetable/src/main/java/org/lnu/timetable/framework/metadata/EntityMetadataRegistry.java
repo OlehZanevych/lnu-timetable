@@ -100,9 +100,11 @@ public class EntityMetadataRegistry {
                 String description = field.isAnnotationPresent(Description.class)
                     ? field.getAnnotation(Description.class).value() : null;
                 boolean nullable = field.isAnnotationPresent(org.lnu.timetable.framework.annotation.Nullable.class);
+                String pgEnumType = field.isAnnotationPresent(PgEnum.class)
+                    ? field.getAnnotation(PgEnum.class).value() : null;
 
                 fields.put(field.getName(), new EntityFieldMetadata(
-                    field.getName(), columnName, field.getType(), nullable, description
+                    field.getName(), columnName, field.getType(), nullable, description, pgEnumType
                 ));
 
                 if (!"id".equals(field.getName())) {

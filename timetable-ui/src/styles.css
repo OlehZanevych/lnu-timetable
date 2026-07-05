@@ -147,6 +147,10 @@ button.danger:hover { background: #991b1b !important; }
 .confirm-text { font-size: 15px; line-height: 1.6; margin: 0 0 18px; }
 .confirm-text strong { color: var(--navy); }
 
+/* ── Form section label (e.g. hours breakdown inside a modal form) ── */
+.hours-title { width: 100%; margin: 4px 0 -4px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .04em; color: var(--gold); font-weight: 700; }
+
 /* ── Truncated table cell ── */
 .cell-info { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 

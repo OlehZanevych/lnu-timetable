@@ -6,7 +6,7 @@ CREATE SCHEMA public;
 CREATE TABLE buildings
 (
     id          BIGSERIAL PRIMARY KEY,
-    name        VARCHAR(120) NOT NULL,
+    name        VARCHAR(120) NOT NULL UNIQUE,
     address     VARCHAR(160),
     city        VARCHAR(64),
     postal_code VARCHAR(10)
@@ -18,7 +18,7 @@ CREATE TABLE faculties
 (
     id           BIGSERIAL PRIMARY KEY,
     name         VARCHAR(160) NOT NULL UNIQUE,
-    abbreviation VARCHAR(32),
+    abbreviation VARCHAR(32) UNIQUE,
     website      VARCHAR(128),
     email        VARCHAR(64),
     phone        VARCHAR(128),
@@ -30,7 +30,7 @@ CREATE TABLE departments
 (
     id           BIGSERIAL PRIMARY KEY,
     name         VARCHAR(160) NOT NULL UNIQUE,
-    abbreviation VARCHAR(32),
+    abbreviation VARCHAR(32) UNIQUE,
     faculty_id   BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
     email        VARCHAR(64),
     phone        VARCHAR(64),
@@ -46,7 +46,8 @@ CREATE TABLE specialties
     name          VARCHAR(160) NOT NULL,
     degree        degree       NOT NULL,
     faculty_id    BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
-    UNIQUE (code, degree)
+    UNIQUE (code, degree),
+    UNIQUE (name, degree)
 );
 
 -- ============================ People & groups ============================
@@ -67,7 +68,7 @@ CREATE TABLE lecturers
     first_name           VARCHAR(64)       NOT NULL,
     middle_name          VARCHAR(64),
     last_name            VARCHAR(64)       NOT NULL,
-    email                VARCHAR(64),
+    email                VARCHAR(64) UNIQUE,
     position             lecturer_position,
     academic_degree_id   BIGINT REFERENCES academic_degrees (id) ON DELETE SET NULL,
     min_hours_per_week   INTEGER,
@@ -127,7 +128,8 @@ CREATE TABLE courses
     id               BIGSERIAL PRIMARY KEY,
     name             VARCHAR(200) NOT NULL,
     course_type      course_type  NOT NULL DEFAULT 'MANDATORY',
-    department_id    BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE,
+    faculty_id       BIGINT REFERENCES faculties (id) ON DELETE SET NULL,
+    department_id    BIGINT REFERENCES departments (id) ON DELETE CASCADE,
     parent_course_id BIGINT REFERENCES courses (id) ON DELETE CASCADE
 );
 
@@ -146,7 +148,8 @@ CREATE TABLE curriculum_items
     control_form  control_form NOT NULL,
     ects_credits  INTEGER,
     curriculum_id BIGINT NOT NULL REFERENCES curricula (id) ON DELETE CASCADE,
-    course_id     BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE
+    course_id     BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    UNIQUE (course_id, curriculum_id, semester)
 );
 
 CREATE TYPE hour_type AS ENUM ('LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK');
@@ -156,7 +159,8 @@ CREATE TABLE curriculum_item_hours
     id                 BIGSERIAL PRIMARY KEY,
     curriculum_item_id BIGINT NOT NULL REFERENCES curriculum_items (id) ON DELETE CASCADE,
     hour_type          hour_type NOT NULL,
-    hours              INTEGER   NOT NULL
+    hours              INTEGER   NOT NULL,
+    UNIQUE (curriculum_item_id, hour_type)
 );
 
 CREATE TYPE teaching_format AS ENUM ('TOGETHER', 'SEPARATELY');

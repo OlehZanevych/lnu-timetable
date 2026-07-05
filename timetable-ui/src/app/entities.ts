@@ -47,16 +47,13 @@ const COURSE_TYPE_OPTIONS = [
   { value: 'QUALIFICATION_WORK', label: 'Кваліфікаційна робота' }
 ];
 
-const CONTROL_FORM_OPTIONS = [
+export const CONTROL_FORM_OPTIONS = [
   { value: 'EXAM',          label: 'Екзамен' },
   { value: 'CREDIT',        label: 'Залік' },
-  { value: 'GRADED_CREDIT', label: 'Диф. залік' },
-  { value: 'COURSE_WORK',   label: 'Курсова робота' },
-  { value: 'COURSE_PROJECT',label: 'Курсовий проєкт' },
-  { value: 'THESIS',        label: 'Кваліфікаційна робота' }
+  { value: 'GRADED_CREDIT', label: 'Диф. залік' }
 ];
 
-const HOUR_TYPE_OPTIONS = [
+export const HOUR_TYPE_OPTIONS = [
   { value: 'LECTURE',          label: 'Лекції' },
   { value: 'PRACTICAL',        label: 'Практичні' },
   { value: 'LAB',              label: 'Лабораторні' },
@@ -110,7 +107,8 @@ export const ENTITIES: EntityMeta[] = [
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'courseType', label: 'Тип', type: 'enum', required: true, enumOptions: COURSE_TYPE_OPTIONS },
-      ref('departmentId', 'Кафедра', 'department', 'department', 'name', true),
+      ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name'),
+      ref('departmentId', 'Кафедра', 'department', 'department', 'name'),
       ref('parentCourseId', 'Група вибіркових', 'course', 'parentCourse', 'name')
     ]
   },

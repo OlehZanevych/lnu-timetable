@@ -13,6 +13,7 @@ import org.lnu.timetable.framework.metadata.RelationMetadata;
 import org.lnu.timetable.framework.metadata.RelationType;
 import org.lnu.timetable.framework.query.R2dbcQueryEngine;
 import org.lnu.timetable.framework.query.R2dbcQueryEngine.Col;
+import org.lnu.timetable.framework.query.R2dbcQueryEngine.EnumValue;
 import org.lnu.timetable.framework.schema.DataFetcherProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -136,22 +137,24 @@ public class DynamicDataFetchers implements DataFetcherProvider {
     private Mono<Map<String, Object>> createHandler(MutationDefinition def, EntityMetadata md, Map<String, Object> input) {
         LinkedHashMap<String, Object> columnValues = new LinkedHashMap<>();
         Map<String, Object> data = new LinkedHashMap<>();
-        bindInput(md, def.getInputFields(), input, columnValues, data);
+        bindFields(md, def.getInputFields(), input, columnValues, data);
 
         return engine.insert(md.tableName(), columnValues)
-            .map(id -> {
+            .flatMap(id -> {
                 data.put("id", id);
-                return success(data);
+                return createNestedLists(def, input, id).thenReturn(success(data));
             })
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
 
     private Mono<Map<String, Object>> updateHandler(MutationDefinition def, EntityMetadata md, Object id, Map<String, Object> input) {
         LinkedHashMap<String, Object> columnValues = new LinkedHashMap<>();
-        bindInput(md, def.getInputFields(), input, columnValues, new LinkedHashMap<>());
+        bindFields(md, def.getInputFields(), input, columnValues, null);
 
         return engine.update(md.tableName(), columnValues, id)
-            .map(rows -> rows > 0 ? success(null) : error(def, notFoundStatus(def, md)))
+            .flatMap(rows -> rows > 0
+                ? reconcileNestedLists(def, input, id).thenReturn(success(null))
+                : Mono.just(error(def, notFoundStatus(def, md))))
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
 
@@ -161,18 +164,108 @@ public class DynamicDataFetchers implements DataFetcherProvider {
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
 
-    private void bindInput(EntityMetadata md, List<String> inputFields, Map<String, Object> input,
-                           LinkedHashMap<String, Object> columnValues, Map<String, Object> data) {
-        for (String field : inputFields) {
+    private void bindFields(EntityMetadata md, List<String> fieldNames, Map<String, Object> input,
+                            LinkedHashMap<String, Object> columnValues, Map<String, Object> data) {
+        for (String field : fieldNames) {
             Object value = input.get(field);
             if (value == null) continue;
             EntityFieldMetadata fm = md.getField(field);
             String column = fm != null ? fm.columnName() : snake(field);
             Class<?> type = fm != null ? fm.type() : Long.class;
             Object coerced = coerce(value, type);
-            columnValues.put(column, coerced);
-            data.put(field, coerced);
+            Object bound = (fm != null && fm.pgEnumType() != null)
+                ? new EnumValue(coerced, fm.pgEnumType())
+                : coerced;
+            columnValues.put(column, bound);
+            if (data != null) data.put(field, coerced);
         }
+    }
+
+    // --- nested one-to-many list handling (see MutationDefinition#nestedList) ---
+
+    /** Inserts every item of each declared nested list, pointing its FK at the newly created parent. */
+    private Mono<Void> createNestedLists(MutationDefinition def, Map<String, Object> input, Object parentId) {
+        if (def.getNestedLists().isEmpty()) return Mono.empty();
+
+        List<Mono<?>> ops = new ArrayList<>();
+        for (MutationDefinition.NestedListDefinition nl : def.getNestedLists()) {
+            List<Map<String, Object>> items = nestedItems(input, nl);
+            EntityMetadata childMd = registry.getMetadata(nl.childEntityClass());
+            String fkColumn = fkColumn(childMd, nl.fkField());
+
+            for (Map<String, Object> item : items) {
+                LinkedHashMap<String, Object> childCols = new LinkedHashMap<>();
+                bindFields(childMd, nl.childInputFields(), item, childCols, null);
+                childCols.put(fkColumn, parentId);
+                ops.add(engine.insert(childMd.tableName(), childCols));
+            }
+        }
+        return ops.isEmpty() ? Mono.empty() : Mono.when(ops);
+    }
+
+    /**
+     * Reconciles each declared nested list against the existing child rows for {@code parentId}:
+     * items whose {@code id} matches an existing row update it, items with no matching {@code id}
+     * are inserted, and existing rows not referenced by any item are deleted. A nested list field
+     * that's entirely absent from the input leaves that list's rows untouched.
+     */
+    private Mono<Void> reconcileNestedLists(MutationDefinition def, Map<String, Object> input, Object parentId) {
+        if (def.getNestedLists().isEmpty()) return Mono.empty();
+
+        List<Mono<Void>> ops = new ArrayList<>();
+        for (MutationDefinition.NestedListDefinition nl : def.getNestedLists()) {
+            if (!input.containsKey(nl.fieldName())) continue;
+            ops.add(reconcileNestedList(nl, nestedItems(input, nl), parentId));
+        }
+        return ops.isEmpty() ? Mono.empty() : Mono.when(ops);
+    }
+
+    private Mono<Void> reconcileNestedList(MutationDefinition.NestedListDefinition nl, List<Map<String, Object>> items, Object parentId) {
+        EntityMetadata childMd = registry.getMetadata(nl.childEntityClass());
+        String fkColumn = fkColumn(childMd, nl.fkField());
+
+        return engine.selectWhere(childMd.tableName(), List.of(new Col("id", "id")), fkColumn, parentId, null)
+            .map(row -> (Object) row.get("id"))
+            .collectList()
+            .flatMap(existingIds -> {
+                Set<Object> toDelete = new LinkedHashSet<>(existingIds);
+                List<Mono<?>> ops = new ArrayList<>();
+
+                for (Map<String, Object> item : items) {
+                    Object rawId = item.get("id");
+                    Object itemId = rawId != null ? coerce(rawId, Long.class) : null;
+
+                    LinkedHashMap<String, Object> childCols = new LinkedHashMap<>();
+                    bindFields(childMd, nl.childInputFields(), item, childCols, null);
+
+                    if (itemId != null && toDelete.remove(itemId)) {
+                        ops.add(engine.update(childMd.tableName(), childCols, itemId));
+                    } else {
+                        childCols.put(fkColumn, parentId);
+                        ops.add(engine.insert(childMd.tableName(), childCols));
+                    }
+                }
+                for (Object staleId : toDelete) {
+                    ops.add(engine.delete(childMd.tableName(), staleId));
+                }
+                return ops.isEmpty() ? Mono.empty() : Mono.when(ops);
+            });
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> nestedItems(Map<String, Object> input, MutationDefinition.NestedListDefinition nl) {
+        Object raw = input.get(nl.fieldName());
+        if (!(raw instanceof List<?> list)) return List.of();
+        List<Map<String, Object>> items = new ArrayList<>(list.size());
+        for (Object o : list) {
+            items.add((Map<String, Object>) o);
+        }
+        return items;
+    }
+
+    private String fkColumn(EntityMetadata childMd, String fkField) {
+        EntityFieldMetadata fm = childMd.getField(fkField);
+        return fm != null ? fm.columnName() : snake(fkField);
     }
 
     // --- response helpers ---

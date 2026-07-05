@@ -353,7 +353,8 @@ public class DynamicGraphQLSchemaBuilder {
         // Build input type for create/update
         if (mutDef.getMutationType() != MutationDefinition.MutationType.DELETE) {
             String inputTypeName = entityName + "InputPayload";
-            if (!builtInputTypes.containsKey(inputTypeName) && !mutDef.getInputFields().isEmpty()) {
+            boolean hasContent = !mutDef.getInputFields().isEmpty() || !mutDef.getNestedLists().isEmpty();
+            if (!builtInputTypes.containsKey(inputTypeName) && hasContent) {
                 var inputBuilder = newInputObject().name(inputTypeName);
                 for (String fieldName : mutDef.getInputFields()) {
                     EntityFieldMetadata fieldMeta = metadata.getField(fieldName);
@@ -368,9 +369,47 @@ public class DynamicGraphQLSchemaBuilder {
                         inputBuilder.field(newInputObjectField().name(fieldName).type(GraphQLID));
                     }
                 }
+                for (MutationDefinition.NestedListDefinition nl : mutDef.getNestedLists()) {
+                    String nestedTypeName = buildNestedInputType(nl);
+                    inputBuilder.field(newInputObjectField().name(nl.fieldName())
+                        .type(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(nestedTypeName)))));
+                }
                 builtInputTypes.put(inputTypeName, inputBuilder.build());
             }
         }
+    }
+
+    /**
+     * Builds (once per child entity) the input type used for nested one-to-many list items, e.g.
+     * {@code CurriculumItemHoursNestedInput}. Includes an optional {@code id} so updates can match
+     * an item to an existing child row; see {@link MutationDefinition#nestedList}.
+     */
+    private String buildNestedInputType(MutationDefinition.NestedListDefinition nl) {
+        String nestedTypeName = nl.childEntityClass().getSimpleName() + "NestedInput";
+        if (builtInputTypes.containsKey(nestedTypeName)) {
+            return nestedTypeName;
+        }
+
+        EntityMetadata childMetadata = metadataRegistry.getMetadata(nl.childEntityClass());
+        var inputBuilder = newInputObject().name(nestedTypeName)
+            .field(newInputObjectField().name("id").type(GraphQLID)
+                .description("Existing row id to update; omit (or use an id that doesn't match an existing row) to create a new row"));
+
+        for (String fieldName : nl.childInputFields()) {
+            EntityFieldMetadata fieldMeta = childMetadata.getField(fieldName);
+            if (fieldMeta != null) {
+                GraphQLInputType inputType = mapJavaTypeToGraphQLInput(fieldMeta.type());
+                if (!fieldMeta.nullable()) {
+                    inputType = GraphQLNonNull.nonNull(inputType);
+                }
+                inputBuilder.field(newInputObjectField().name(fieldName).type(inputType));
+            } else {
+                inputBuilder.field(newInputObjectField().name(fieldName).type(GraphQLID));
+            }
+        }
+
+        builtInputTypes.put(nestedTypeName, inputBuilder.build());
+        return nestedTypeName;
     }
 
     private GraphQLFieldDefinition buildQueryField(QueryDefinition queryDef) {

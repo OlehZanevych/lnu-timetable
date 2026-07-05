@@ -55,7 +55,7 @@
 
       <!-- ── Curricula ── -->
       @case ('curricula') {
-        <app-curriculum [filterValue]="specialtyId" [presets]="specPreset" />
+        <app-curriculum-item-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />
       }
 
       <!-- ── Academic Groups ── -->

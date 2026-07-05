@@ -6,6 +6,7 @@ import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
@@ -18,7 +19,8 @@ public class CurriculumItem {
     @Description("Semester number (1..N) in which the discipline is studied")
     private Integer semester;
 
-    @Description("Control form: EXAM, CREDIT, GRADED_CREDIT, COURSE_WORK, COURSE_PROJECT, THESIS")
+    @PgEnum("control_form")
+    @Description("Control form: EXAM, CREDIT, GRADED_CREDIT")
     private String controlForm;
 
     @Nullable
