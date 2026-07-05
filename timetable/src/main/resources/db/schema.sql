@@ -65,6 +65,7 @@ CREATE TABLE lecturers
 (
     id                   BIGSERIAL PRIMARY KEY,
     first_name           VARCHAR(64)       NOT NULL,
+    middle_name          VARCHAR(64),
     last_name            VARCHAR(64)       NOT NULL,
     email                VARCHAR(64),
     position             lecturer_position,

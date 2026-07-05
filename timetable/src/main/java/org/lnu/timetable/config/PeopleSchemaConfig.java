@@ -55,7 +55,7 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureLecturer(SchemaDefinition s) {
         s.type(Lecturer.class)
-            .fields("firstName", "lastName", "email", "position", "maxHoursPerWeek")
+            .fields("firstName", "middleName", "lastName", "email", "position", "maxHoursPerWeek")
             .nullableRelation("academicDegree")
             .relation("department").relation("workloads");
 
@@ -63,13 +63,13 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         s.query("lecturer").entity(Lecturer.class).findById();
 
         s.mutation("createLecturer").entity(Lecturer.class).create()
-            .inputFields("firstName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
+            .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturer").entity(Lecturer.class).update()
-            .inputFields("firstName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
+            .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURER_NOT_FOUND", "Lecturer not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

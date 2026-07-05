@@ -165,6 +165,7 @@ export const ENTITIES: EntityMeta[] = [
     name: 'Lecturer', label: 'Викладачі', single: 'lecturer', namespace: 'lecturers', list: 'lecturerConnection', filterParam: 'departmentId',
     fields: [
       { name: 'firstName', label: "Ім'я", type: 'text', required: true },
+      { name: 'middleName', label: 'По батькові', type: 'text' },
       { name: 'lastName', label: 'Прізвище', type: 'text', required: true },
       { name: 'email', label: 'Ел. пошта', type: 'text' },
       { name: 'position', label: 'Посада', type: 'enum',
