@@ -1,18 +1,18 @@
 # Timetable UI
 
-An **Angular 21** front-end for the [Timetable GraphQL Service](../timetable). It lets staff
-conveniently enter all the data needed to generate a university course timetable, and
-displays the resulting schedule as a weekly grid. Styled after
+An **Angular 21** front-end for the [Timetable GraphQL Service](../timetable). It lets deanery
+staff enter all the data needed to generate a university course timetable, and displays the
+resulting schedule as a weekly grid. Styled after
 [lnu.edu.ua](https://lnu.edu.ua/structure/faculties/) (navy + gold, serif headings).
 
-- Angular 21 (standalone components, **signals**, **zoneless** change detection, new control flow)
-- Talks to the service over plain GraphQL-over-HTTP (no Apollo dependency)
+- Angular 21 (standalone components, **signals**, **zoneless** change detection, new `@if`/`@for`/`@switch` control flow)
+- Talks to the service over plain GraphQL-over-HTTP (`GraphqlService`, no Apollo Client dependency)
 
 ---
 
 ## Requirements
 
-- Node.js 20+ (developed on Node 24, npm 11)
+- Node.js 20+ (developed on Node 24, npm 11.6.1)
 - The GraphQL service running on `http://localhost:8080` (see `../timetable`)
 
 ---
@@ -24,7 +24,7 @@ npm install        # first time only
 npm start          # ng serve on http://localhost:4200
 ```
 
-`npm start` proxies `/graphql` → `http://localhost:8080` (see `src/proxy.conf.json`), so the
+`npm start` proxies `/graphql` → `http://localhost:8080` (`src/proxy.conf.json`), so the
 backend must be running. Then open **http://localhost:4200**.
 
 ```bash
@@ -33,28 +33,56 @@ npm run build      # production build into dist/
 
 ---
 
-## How it works
+## Two architectures, side by side
 
-The UI mirrors the backend's **config-driven** philosophy: a single metadata file describes
-every entity, and generic components render the CRUD screens and forms from it.
+The app has grown two different UI patterns over time, and both are still in active use for
+different purposes:
+
+1. **Generic, config-driven CRUD tables** — one metadata file (`entities.ts`) describes every
+   entity; a shared `BaseEntity` directive + `entity-page.html` template render a table +
+   modal create/edit form for it. Adding an entity here is a metadata edit, not new markup.
+2. **Dedicated hierarchical drill-down pages** — hand-written components with their own
+   GraphQL queries/mutations for the main "browse the university" flow: faculties → buildings
+   → departments → specialties → academic groups, each with an information page and
+   purpose-built child-list widgets (e.g. curriculum items with nested hour blocks, working
+   curriculum items with faculty/department/group pickers).
+
+Both talk to the same backend through the same `GraphqlService`; which one a given screen uses
+just depends on whether it needed a bespoke layout.
 
 ```
 src/app/
-├── entities.ts          # METADATA: all 16 entities, their fields and FK relations
-├── graphql.service.ts   # tiny GraphQL-over-HTTP client (POST /graphql, query + variables)
-├── base-entity.ts       # BaseEntity: shared CRUD logic (list/create/update/delete + option loading)
-├── entity-page.html     # shared template (table + modal form) used by every entity page
-├── entity-pages.ts      # 16 thin components that extend BaseEntity and supply their `meta`
-├── search-select.ts     # SearchSelect: a select2-like searchable dropdown (ControlValueAccessor)
-├── timetable.ts/.html   # weekly timetable grid (days × time slots)
-├── app.ts/.html         # shell: LNU header + grouped sidebar navigation
-└── app.routes.ts        # routes generated from ENTITY_PAGES + /timetable
+├── entities.ts               # metadata for the generic CRUD tables: fields, FK refs, options
+├── graphql.service.ts        # tiny GraphQL-over-HTTP client (POST /graphql, query + variables)
+├── base-entity.ts            # BaseEntity: shared list/create/update/delete + option loading
+├── entity-page.html          # shared table + modal-form template for the generic pages
+├── entity-pages.ts           # thin components extending BaseEntity, one per entity, → /e/:single
+├── search-select.ts          # SearchSelect: select2-like searchable single-value dropdown
+├── multi-select.ts           # MultiSelect: checkbox-list dropdown for many-to-many fields
+├── dept-faculty-select.ts    # DeptFacultySelect: faculty-filtered department picker
+├── app.ts / app.html         # shell: LNU header + sidebar navigation
+├── app.routes.ts             # route table (see below)
+│
+├── faculty-home.ts           # "/" — faculty tiles (drill-down entry point)
+├── faculty-page.ts/.html     # "/faculty/:id" — faculty detail with tabbed sections
+├── building-home.ts          # "/building" home — building tiles
+├── building-page.ts/.html    # "/building/:id" — building detail (faculties, rooms)
+├── department-page.ts/.html  # "/department/:id" — department detail (lecturers, courses)
+├── specialty-page.ts/.html   # "/specialty/:id" — specialty detail (curricula, groups)
+├── academic-group-page.ts/.html  # "/academic-group/:id" — group detail (students, workloads)
+├── department-list.ts        # child-list widget: departments within a faculty
+├── specialty-list.ts         # child-list widget: specialties within a faculty
+├── academic-group-list.ts    # child-list widget: academic groups within a specialty
+├── curriculum-item-list.ts   # child-list widget: curriculum items (semester/course/ECTS/hours)
+├── working-curriculum-list.ts# child-list widget: working curriculum items under each hours block
+│
+└── timetable.ts/.html        # "/timetable" — weekly grid (days × time slots)
 ```
 
-### Entity metadata (`entities.ts`)
+### Generic CRUD tables (`entities.ts` / `BaseEntity`)
 
-Each entity declares the GraphQL field names and its form fields. Foreign keys are `ref`
-fields that point at another entity for the dropdown:
+Each entity in `entities.ts` declares its GraphQL field/namespace names and form fields;
+foreign keys are `ref(...)` fields pointing at another entity for the dropdown:
 
 ```ts
 {
@@ -67,54 +95,116 @@ fields that point at another entity for the dropdown:
 }
 ```
 
-`BaseEntity` builds the queries/mutations from this metadata:
-- **list**: `{ <namespace> { <list>(limit, offset) { nodes { id …fields… <relation { id label }> } } } }`
-- **create/update/delete**: typed GraphQL variables (`$input: <Name>InputPayload!`, `$id: ID!`).
-
-### Per-entity components (inheritance)
-
-There is a real component per entity (`FacultyPage`, `LecturerWorkloadPage`, …) so each can
-be customized later, but all share `BaseEntity` (logic) and `entity-page.html` (view):
+`BaseEntity` (an abstract `@Directive`) builds the queries/mutations from this metadata —
+list (`{ <namespace> { <list>(limit, offset) { nodes {...} } } }`), create/update (typed
+`$input: <Name>InputPayload!`) and delete (`$id: ID!`) — and every entity page is a one-line
+subclass rendered through the shared `entity-page.html` (table + modal form):
 
 ```ts
 @Component({ selector: 'app-course', templateUrl: './entity-page.html', imports: [FormsModule, SearchSelect] })
 export class CoursePage extends BaseEntity { meta = meta('Course'); }
 ```
 
-### Searchable selects
+`entity-pages.ts` currently registers 16 such pages (`academicDegree`, `faculty`,
+`department`, `specialty`, `course`, `curriculumItem`, `curriculumItemHours`,
+`workingCurriculumItem`, `lecturer`, `lecturerWorkload`, `student`, `academicGroup`,
+`combinedGroup`, `room`, `timeSlot`, `timetableEntry`), each routed at `/e/:single`. These are
+the fallback / power-user screens — useful for bulk edits or entities without a dedicated
+drill-down page (`Room`, `TimeSlot`, `CombinedGroup`, `AcademicDegree`, `LecturerWorkload`,
+`TimetableEntry`).
 
-Every foreign-key field uses `<app-search-select>` — type to filter the options (like
-select2), with a clear button and outside-click close. It implements `ControlValueAccessor`,
-so it works with `[(ngModel)]`.
+### Hierarchical drill-down pages
 
-### Navigation
+The main browsing flow is a set of hand-written pages, each fetching its own GraphQL query
+and composing purpose-built child-list components rather than going through `BaseEntity`:
 
-The sidebar groups entities for convenient top-down data entry:
+- **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
+  tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
+  info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, students,
+  academic groups, combined groups, courses, curriculum items, curriculum item hours, working
+  curriculum items, workloads.
+- **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): faculties housed
+  in the building, rooms.
+- **`DepartmentDetailPage`** (`/department/:id`): lecturers, courses owned by the department.
+- **`SpecialtyDetailPage`** (`/specialty/:id`): academic groups, curriculum items
+  (`CurriculumItemList`) and, per curriculum item, its hour blocks and working curriculum
+  items (`WorkingCurriculumList`) — see below.
+- **`AcademicGroupDetailPage`** (`/academic-group/:id`): students, workloads for the group.
 
-1. **Структура / Structure** — Faculties → Departments → Specialties → Rooms → Time slots
-2. **Навчальні плани / Curricula** — Courses → Curricula → Curriculum items → Working curricula → items
-3. **Люди та групи / People & groups** — Lecturers, Students, Academic groups, Combined groups
-4. **Розклад / Scheduling** — Workloads → Timetable entries
+#### Curriculum items and working curriculum items (`SpecialtyDetailPage`)
 
-The **Timetable** view renders `timetableEntries` as a grid (rows = time slots, columns =
-Mon–Sat); bi-weekly (numerator/denominator) classes are highlighted.
+The "Робочі навчальні плани" tab of the specialty page renders, for every `CurriculumItem`:
+a header block ("Семестр 1, Дисципліна: …, Форма контролю: …, ECTS: …"), then one child block
+per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours block a table of
+`WorkingCurriculumItem` rows with an add/edit modal (`WorkingCurriculumList`) offering:
+
+- an optional **faculty filter** (defaults to the specialty's own faculty) that narrows the
+  **department** dropdown (`DeptFacultySelect` pattern, reused from `CurriculumItemList`'s
+  own faculty→department cascade),
+  - lecturer count, teaching format (`TEACHING_FORMAT_OPTIONS`: Разом/Окремо),
+- an **academic groups** multi-select (`MultiSelect`, backed by the `academicGroupIds`
+  many-to-many mutation field), and
+- when the curriculum item's course is an `ELECTIVE_GROUP`, an extra **elective course**
+  dropdown scoped to that group's child courses.
+
+### Reusable form controls
+
+All three are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
+
+- **`SearchSelect`** — select2-like single-value searchable dropdown (used for every to-one FK).
+- **`MultiSelect`** — checkbox-list dropdown with tag display, for many-to-many fields.
+- **`DeptFacultySelect`** *(pattern)* — a faculty filter paired with a department
+  `SearchSelect` whose options are filtered by the chosen faculty, defaulting to the parent
+  entity's own faculty; implemented inline in `curriculum-item-list.ts` and
+  `working-curriculum-list.ts` via a `filteredDepartmentOptions` computed signal rather than
+  as a single shared component.
+
+### Routes (`app.routes.ts`)
+
+| Path | Component | Notes |
+|---|---|---|
+| `/` | `FacultyHome` | faculty tiles, drill-down entry point |
+| `/faculty/:id` | `FacultyPage` | tabbed faculty detail |
+| `/building/:id` | `BuildingPage` | building detail |
+| `/department/:id` | `DepartmentDetailPage` | department detail |
+| `/specialty/:id` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
+| `/academic-group/:id` | `AcademicGroupDetailPage` | group detail |
+| `/timetable` | `Timetable` | weekly grid |
+| `/e/building` | `BuildingHome` | building tiles (overrides the generic table for this entity) |
+| `/e/:single` | generic `entity-pages.ts` component | one per remaining entity |
+
+The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад")
+plus a flat "Загальне" group of generic-table links for entities with no dedicated page
+(`Building`, `TimeSlot`, `CombinedGroup`, `AcademicDegree`).
 
 ---
 
 ## Adding a new entity to the UI
 
-When you add an entity to the backend, add it here too:
-
-1. Append an `EntityMeta` to `ENTITIES` in `entities.ts`.
-2. Add a one-line component in `entity-pages.ts` and register it in `ENTITY_PAGES`.
-3. Add its `single` key to the appropriate section in `app.ts`.
+- **If it only needs a plain CRUD table**: append an `EntityMeta` to `ENTITIES` in
+  `entities.ts`, add a one-line component to `entity-pages.ts`/`ENTITY_PAGES`, and link it
+  from `app.html`.
+- **If it needs a dedicated drill-down page or child-list widget** (like
+  `WorkingCurriculumList`): write a standalone component with its own GraphQL
+  query/mutations via `GraphqlService`, register its route in `app.routes.ts`, and embed it
+  where relevant (e.g. as a `@case` in a parent detail page's section switch).
 
 ---
 
-## Notes / limitations
+## Notes / known limitations
 
-- Suggested data-entry order: Faculties → Departments → Specialties → Rooms / Time slots →
-  Courses → Curricula → Working curricula → Lecturers / Groups → Workloads → Timetable entries.
-- Combined-group ↔ academic-group membership (many-to-many) is **read-only** in the UI,
-  matching the backend; seed it via the service's `data.sql`.
-- Lists are fetched with `limit: 1000` (no pagination UI yet).
+- `CombinedGroup ↔ AcademicGroup` membership (many-to-many) is still **read-only** in the UI,
+  matching the backend — only `WorkingCurriculumItem ↔ AcademicGroup` has been wired up with
+  an editable multi-select so far; seed `CombinedGroup` membership via the service's
+  `data.sql`.
+- `timetable.ts` requests `workload { classType course { name } … }`, but the current
+  `LecturerWorkload` GraphQL type only exposes `lecturer`, `academicGroup`, `combinedGroup`,
+  `workingCurriculumItem` and `timetableEntries` — there's no `classType` scalar or direct
+  `course` relation. The timetable grid's per-cell subject/type label is stale relative to the
+  backend schema and needs to be reworked to read the class/course from
+  `workingCurriculumItem` instead.
+- Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
+- The `CurriculumItemHours` entity's generic-table namespace is `curriculumItemHourss`
+  (naive `+s` pluralization of a name already ending in "s") — cosmetic only, doesn't affect
+  the dedicated `CurriculumItemList`/`WorkingCurriculumList` pages which don't go through
+  `entities.ts`.

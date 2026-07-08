@@ -117,7 +117,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
     private void configureSpecialty(SchemaDefinition s) {
         s.type(Specialty.class)
             .fields("code", "name", "degree")
-            .relation("faculty").relation("groups").relation("curricula");
+            .relation("faculty").relation("groups");
 
         s.query("specialtyConnection").entity(Specialty.class).connection().orderBy("code").filter("facultyId", "faculty_id");
         s.query("specialty").entity(Specialty.class).findById();

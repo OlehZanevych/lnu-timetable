@@ -30,7 +30,4 @@ public class Specialty {
 
     @OneToMany(mappedBy = "specialty_id")
     private List<AcademicGroup> groups;
-
-    @OneToMany(mappedBy = "specialty_id")
-    private List<Curriculum> curricula;
 }

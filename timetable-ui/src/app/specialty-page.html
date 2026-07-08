@@ -58,6 +58,11 @@
         <app-curriculum-item-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />
       }
 
+      <!-- ── Working curricula ── -->
+      @case ('workingCurricula') {
+        <app-working-curriculum-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />
+      }
+
       <!-- ── Academic Groups ── -->
       @case ('academicGroups') {
         <app-academic-group-list [specialtyId]="specialtyId" />

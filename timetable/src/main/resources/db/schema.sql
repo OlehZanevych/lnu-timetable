@@ -133,23 +133,17 @@ CREATE TABLE courses
     parent_course_id BIGINT REFERENCES courses (id) ON DELETE CASCADE
 );
 
-CREATE TABLE curricula
-(
-    id           BIGSERIAL PRIMARY KEY,
-    specialty_id BIGINT NOT NULL UNIQUE REFERENCES specialties (id) ON DELETE CASCADE
-);
-
 CREATE TYPE control_form AS ENUM ('EXAM', 'CREDIT', 'GRADED_CREDIT');
 
 CREATE TABLE curriculum_items
 (
-    id            BIGSERIAL PRIMARY KEY,
-    semester      INTEGER      NOT NULL,
-    control_form  control_form NOT NULL,
-    ects_credits  INTEGER,
-    curriculum_id BIGINT NOT NULL REFERENCES curricula (id) ON DELETE CASCADE,
-    course_id     BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
-    UNIQUE (course_id, curriculum_id, semester)
+    id           BIGSERIAL PRIMARY KEY,
+    semester     INTEGER      NOT NULL,
+    control_form control_form NOT NULL,
+    ects_credits INTEGER,
+    specialty_id BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE,
+    course_id    BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    UNIQUE (course_id, specialty_id, semester)
 );
 
 CREATE TYPE hour_type AS ENUM ('LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK');

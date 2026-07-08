@@ -16,6 +16,7 @@ public class MutationDefinition {
     private final List<String> inputFields = new ArrayList<>();
     private final List<ErrorStatus> errorStatuses = new ArrayList<>();
     private final List<NestedListDefinition> nestedLists = new ArrayList<>();
+    private final List<ManyToManyDefinition> manyToManyLists = new ArrayList<>();
 
     public MutationDefinition(String name) {
         this.name = name;
@@ -75,12 +76,37 @@ public class MutationDefinition {
         return this;
     }
 
+    /**
+     * Declares a many-to-many relation's id list on this mutation's input payload, so a single
+     * create/update call can also set the join table membership in one round trip instead of
+     * requiring separate mutations to link each row.
+     * <p>
+     * The generated input field is a plain list of ids, e.g. {@code academicGroupIds: [ID!]}.
+     * <p>
+     * On CREATE, if the field is present, one join-table row is inserted per id, referencing the
+     * newly created parent.
+     * <p>
+     * On UPDATE, if the field is present, the parent's existing join-table rows are replaced
+     * entirely with one row per id in the incoming list (an empty list clears all rows). Omitting
+     * the field entirely leaves the existing rows untouched.
+     *
+     * @param fieldName         the list field's name on the input payload, e.g. "academicGroupIds"
+     * @param joinTable         the join table name, e.g. "working_curriculum_item_groups"
+     * @param joinColumn        the join table column referencing this entity, e.g. "working_curriculum_item_id"
+     * @param inverseJoinColumn the join table column referencing the target entity, e.g. "academic_group_id"
+     */
+    public MutationDefinition manyToMany(String fieldName, String joinTable, String joinColumn, String inverseJoinColumn) {
+        manyToManyLists.add(new ManyToManyDefinition(fieldName, joinTable, joinColumn, inverseJoinColumn));
+        return this;
+    }
+
     public String getName() { return name; }
     public Class<?> getEntityClass() { return entityClass; }
     public MutationType getMutationType() { return mutationType; }
     public List<String> getInputFields() { return inputFields; }
     public List<ErrorStatus> getErrorStatuses() { return errorStatuses; }
     public List<NestedListDefinition> getNestedLists() { return nestedLists; }
+    public List<ManyToManyDefinition> getManyToManyLists() { return manyToManyLists; }
 
     public record ErrorStatus(String name, String description) {}
 
@@ -89,5 +115,12 @@ public class MutationDefinition {
         Class<?> childEntityClass,
         String fkField,
         List<String> childInputFields
+    ) {}
+
+    public record ManyToManyDefinition(
+        String fieldName,
+        String joinTable,
+        String joinColumn,
+        String inverseJoinColumn
     ) {}
 }

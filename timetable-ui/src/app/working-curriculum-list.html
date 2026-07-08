@@ -1,0 +1,115 @@
+<div class="page-header">
+  <div>
+    <h2>Робочі навчальні плани</h2>
+    <p class="muted">{{ items().length }} позицій навчального плану</p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@for (item of items(); track item.id) {
+  <div class="card wci-item-card">
+    <div class="wci-item-header">
+      <strong>Семестр {{ item.semester }}</strong>
+      <span>Дисципліна: {{ item.course?.name || '&mdash;' }}</span>
+      <span>Форма контролю: {{ controlFormLabel(item.controlForm) }}</span>
+      <span>ECTS: {{ item.ectsCredits ?? '&mdash;' }}</span>
+    </div>
+
+    @for (h of item.hours; track h.id) {
+      <div class="wci-hours-block">
+        <div class="wci-hours-header">
+          <span>{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</span>
+          <button type="button" class="ghost" (click)="openCreate(h, item)">+ Додати</button>
+        </div>
+        <table class="wci-table">
+          <thead>
+            <tr>
+              <th>Кафедра</th>
+              <th>К-сть викладачів</th>
+              <th>Формат викладання</th>
+              <th>Академічні групи</th>
+              <th>Вибіркова дисципліна</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (wci of h.workingCurriculumItems; track wci.id) {
+              <tr>
+                <td>{{ wci.department?.name || '&mdash;' }}</td>
+                <td>{{ wci.lecturerCount }}</td>
+                <td>{{ teachingFormatLabel(wci.teachingFormat) }}</td>
+                <td>{{ groupNames(wci) }}</td>
+                <td>{{ wci.course?.name || '&mdash;' }}</td>
+                <td class="row-actions">
+                  <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>
+                  <button type="button" class="ghost danger" (click)="remove(wci)">Видалити</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="6" class="muted">Записів ще немає.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+} @empty {
+  <p class="muted">Для цієї спеціальності ще немає позицій навчального плану.</p>
+}
+
+<!-- ── Create/Edit modal ── -->
+
+@if (showForm()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId() ? 'Редагування позиції РНП' : 'Нова позиція РНП' }}</h3>
+        <button type="button" class="close" (click)="closeForm()">&#x2715;</button>
+      </div>
+
+      @if (formError()) { <p class="error">{{ formError() }}</p> }
+
+      <form (ngSubmit)="save()" class="entity-form">
+        <label>
+          <span>Факультет (звужує список кафедр)</span>
+          <app-search-select [options]="facultyOptions()" placeholder="— всі факультети —"
+                              [ngModel]="departmentFacultyFilter()" (ngModelChange)="onDepartmentFacultyFilterChange($event)"
+                              name="departmentFacultyFilter" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Кафедра *</span>
+          <app-search-select [options]="filteredDepartmentOptions()" [(ngModel)]="form['departmentId']" name="departmentId" />
+        </label>
+        <label>
+          <span>К-сть викладачів *</span>
+          <input type="number" min="1" [(ngModel)]="form['lecturerCount']" name="lecturerCount" required />
+        </label>
+        <label>
+          <span>Формат викладання *</span>
+          <select [(ngModel)]="form['teachingFormat']" name="teachingFormat">
+            <option value="">— не обрано —</option>
+            @for (opt of TEACHING_FORMAT_OPTIONS; track opt.value) {
+              <option [value]="opt.value">{{ opt.label }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>Академічні групи</span>
+          <app-multi-select [options]="groupOptions()" [(ngModel)]="formGroupIds" name="academicGroupIds" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        @if (isElectiveContext()) {
+          <label>
+            <span>Вибіркова дисципліна *</span>
+            <app-search-select [options]="electiveOptions()" [(ngModel)]="form['courseId']" name="courseId" />
+          </label>
+        }
+
+        <div class="actions">
+          <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>
+          <button type="button" class="ghost" (click)="closeForm()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}

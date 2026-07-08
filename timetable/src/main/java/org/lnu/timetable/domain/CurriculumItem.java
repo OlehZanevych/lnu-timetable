@@ -26,8 +26,8 @@ public class CurriculumItem {
     @Nullable
     private Integer ectsCredits;
 
-    @ManyToOne(joinColumn = "curriculum_id")
-    private Curriculum curriculum;
+    @ManyToOne(joinColumn = "specialty_id")
+    private Specialty specialty;
 
     @ManyToOne(joinColumn = "course_id")
     private Course course;

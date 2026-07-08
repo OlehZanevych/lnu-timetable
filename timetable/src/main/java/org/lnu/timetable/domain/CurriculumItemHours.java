@@ -4,7 +4,10 @@ import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
+import org.lnu.timetable.framework.annotation.OneToMany;
 import org.lnu.timetable.framework.annotation.PgEnum;
+
+import java.util.List;
 
 @Data
 @GraphQLEntity(table = "curriculum_item_hours")
@@ -21,4 +24,7 @@ public class CurriculumItemHours {
 
     @ManyToOne(joinColumn = "curriculum_item_id")
     private CurriculumItem curriculumItem;
+
+    @OneToMany(mappedBy = "curriculum_item_hours_id")
+    private List<WorkingCurriculumItem> workingCurriculumItems;
 }

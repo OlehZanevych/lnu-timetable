@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +32,13 @@ public class R2dbcQueryEngine {
      * enum column type the way it does for untyped literals in plain SQL text.
      */
     public record EnumValue(Object value, String pgType) {}
+
+    /**
+     * A row returned from a batched lookup, paired with the "grouping key" (the FK / join-table
+     * value it belongs to) so callers can bucket rows back per original request key. Used by
+     * {@link #selectWhereIn} and {@link #selectViaJoinTableBatch} to support DataLoader batching.
+     */
+    public record KeyedRow(Object key, Map<String, Object> row) {}
 
     private final DatabaseClient db;
 
@@ -74,12 +82,41 @@ public class R2dbcQueryEngine {
             .map(row -> ((Number) row.get(0)).longValue()).one();
     }
 
-    public Flux<Map<String, Object>> selectViaJoinTable(String table, List<Col> cols, String joinTable,
-                                                        String joinColumn, String inverseJoinColumn, Object value) {
-        String sql = "SELECT " + projection(cols) + " FROM " + table
-            + " WHERE id IN (SELECT " + inverseJoinColumn + " FROM " + joinTable
-            + " WHERE " + joinColumn + " = :v) ORDER BY id";
-        return db.sql(sql).bind("v", value).map(row -> mapRow(row, cols)).all();
+    /** Batched many-to-one / one-to-one lookup: fetches every row of {@code table} whose id is in {@code ids} in a single query. */
+    public Flux<Map<String, Object>> selectByIds(String table, List<Col> cols, Collection<Object> ids) {
+        if (ids.isEmpty()) return Flux.empty();
+        String sql = "SELECT " + projection(cols) + " FROM " + table + " WHERE id = ANY(:ids)";
+        return db.sql(sql).bind("ids", toLongArray(ids)).map(row -> mapRow(row, cols)).all();
+    }
+
+    /**
+     * Batched one-to-many lookup: fetches every row of {@code table} whose {@code fkColumn} is in
+     * {@code fkValues} in a single query, pairing each row with its {@code fkColumn} value so the
+     * caller can group rows back per parent id.
+     */
+    public Flux<KeyedRow> selectWhereIn(String table, List<Col> cols, String fkColumn, Collection<Object> fkValues) {
+        if (fkValues.isEmpty()) return Flux.empty();
+        String sql = "SELECT " + projection(cols) + ", " + fkColumn + " AS \"__batchFk\" FROM " + table
+            + " WHERE " + fkColumn + " = ANY(:vals) ORDER BY id";
+        return db.sql(sql).bind("vals", toLongArray(fkValues))
+            .map(row -> new KeyedRow(row.get("__batchFk"), mapRow(row, cols)))
+            .all();
+    }
+
+    /**
+     * Batched many-to-many lookup: for every id in {@code parentIds}, fetches the linked rows of
+     * {@code table} via {@code joinTable} in a single query, pairing each row with the parent id
+     * (the join table's {@code joinColumn} value) it belongs to.
+     */
+    public Flux<KeyedRow> selectViaJoinTableBatch(String table, List<Col> cols, String joinTable,
+                                                  String joinColumn, String inverseJoinColumn, Collection<Object> parentIds) {
+        if (parentIds.isEmpty()) return Flux.empty();
+        String sql = "SELECT " + projectionQualified(cols, "t") + ", jt." + joinColumn + " AS \"__batchFk\" FROM " + joinTable + " jt"
+            + " JOIN " + table + " t ON t.id = jt." + inverseJoinColumn
+            + " WHERE jt." + joinColumn + " = ANY(:vals) ORDER BY t.id";
+        return db.sql(sql).bind("vals", toLongArray(parentIds))
+            .map(row -> new KeyedRow(row.get("__batchFk"), mapRow(row, cols)))
+            .all();
     }
 
     public Mono<Object> insert(String table, LinkedHashMap<String, Object> columnValues) {
@@ -121,6 +158,17 @@ public class R2dbcQueryEngine {
         return db.sql("DELETE FROM " + table + " WHERE id = :v").bind("v", id).fetch().rowsUpdated();
     }
 
+    /** Deletes every row of {@code table} whose {@code column} equals {@code value}; used to clear join-table rows. */
+    public Mono<Long> deleteWhere(String table, String column, Object value) {
+        return db.sql("DELETE FROM " + table + " WHERE " + column + " = :v").bind("v", value).fetch().rowsUpdated();
+    }
+
+    /** Inserts a single row into a many-to-many join table linking {@code joinValue} to {@code inverseValue}. */
+    public Mono<Long> insertJoinRow(String joinTable, String joinColumn, Object joinValue, String inverseJoinColumn, Object inverseValue) {
+        String sql = "INSERT INTO " + joinTable + " (" + joinColumn + ", " + inverseJoinColumn + ") VALUES (:a, :b)";
+        return db.sql(sql).bind("a", joinValue).bind("b", inverseValue).fetch().rowsUpdated();
+    }
+
     private void appendWhere(StringBuilder sql, List<Filter> filters) {
         if (filters.isEmpty()) return;
         String conditions = IntStream.range(0, filters.size())
@@ -138,6 +186,15 @@ public class R2dbcQueryEngine {
 
     private String projection(List<Col> cols) {
         return cols.stream().map(c -> c.column() + " AS \"" + c.alias() + "\"").collect(Collectors.joining(", "));
+    }
+
+    /** Same as {@link #projection} but table-qualifies each column, for queries that join multiple tables. */
+    private String projectionQualified(List<Col> cols, String tableAlias) {
+        return cols.stream().map(c -> tableAlias + "." + c.column() + " AS \"" + c.alias() + "\"").collect(Collectors.joining(", "));
+    }
+
+    private Long[] toLongArray(Collection<Object> values) {
+        return values.stream().map(v -> ((Number) v).longValue()).toArray(Long[]::new);
     }
 
     private Map<String, Object> mapRow(io.r2dbc.spi.Readable row, List<Col> cols) {

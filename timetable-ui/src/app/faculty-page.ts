@@ -8,14 +8,14 @@ import { SpecialtyList } from './specialty-list';
 import { AcademicGroupList } from './academic-group-list';
 import {
   RoomPage,
-  CoursePage, CurriculumPage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
+  CoursePage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
   LecturerWorkloadPage, StudentPage, CombinedGroupPage
 } from './entity-pages';
 
 export type FacultySection =
   | 'info'
   | 'departments' | 'specialties' | 'rooms'
-  | 'courses' | 'curricula' | 'curriculumItems' | 'curriculumItemHours' | 'workingCurriculumItems'
+  | 'courses' | 'curriculumItems' | 'curriculumItemHours' | 'workingCurriculumItems'
   | 'workloads' | 'students' | 'academicGroups' | 'combinedGroups';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
@@ -42,7 +42,6 @@ const SECTIONS: SectionDef[] = [
   { key: 'academicGroups',         label: 'Академічні групи',     group: 'Люди та групи' },
   { key: 'combinedGroups',         label: "Об'єднані групи",      group: 'Люди та групи' },
   { key: 'courses',                label: 'Дисципліни',           group: 'Навчальні плани' },
-  { key: 'curricula',              label: 'Навчальні плани',      group: 'Навчальні плани' },
   { key: 'curriculumItems',        label: 'Позиції навч. плану',  group: 'Навчальні плани' },
   { key: 'curriculumItemHours',    label: 'Год. позиції',         group: 'Навчальні плани' },
   { key: 'workingCurriculumItems', label: 'Позиції РНП',          group: 'Навчальні плани' },
@@ -56,7 +55,7 @@ const SECTIONS: SectionDef[] = [
     RouterLink, FormsModule, SearchSelect,
     DepartmentList, SpecialtyList, AcademicGroupList,
     RoomPage,
-    CoursePage, CurriculumPage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
+    CoursePage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
     LecturerWorkloadPage, StudentPage, CombinedGroupPage
   ]
 })

@@ -4,7 +4,8 @@ A reactive **Spring Boot + GraphQL + R2DBC** service for university course timet
 Ivan Franko National University of Lviv (LNU). It ships a small **config-driven framework**:
 you describe entities with annotations and declare GraphQL types/queries/mutations in a
 configuration class — **no controllers, services or repositories, and no `.gqls` files**.
-The schema and optimized SQL handlers are generated at startup.
+The schema, optimized SQL handlers, and N+1-safe batched relation loading are all generated
+at startup.
 
 - `groupId` `org.lnu`, `artifactId` `timetable`, root package `org.lnu.timetable`
 - Spring Boot 4.0.6, Java 25, WebFlux, Spring for GraphQL, R2DBC (PostgreSQL)
@@ -22,7 +23,9 @@ that with two things the developer writes:
 
 At startup the framework scans entities, builds the GraphQL schema programmatically, and
 creates data fetchers that translate each GraphQL selection set into an **optimized SQL
-query selecting only the requested columns**.
+query selecting only the requested columns** — batching sibling-row relation lookups via
+`DataLoader` so nested queries don't degrade into N+1 SQL calls (see
+[Avoiding N+1 queries](#avoiding-n1-queries-dataloader-batching)).
 
 ---
 
@@ -33,7 +36,7 @@ query selecting only the requested columns**.
   ```bash
   export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home
   ```
-- **PostgreSQL** running on `localhost:5432` with a database named `timetable`.
+- **PostgreSQL** running on `localhost:5432` with a database named `lnu-timetable`.
 - Maven (the bundled `mvnw` wrapper also works).
 
 ---
@@ -42,15 +45,16 @@ query selecting only the requested columns**.
 
 ```bash
 # create database (psql from your PostgreSQL install)
-createdb -h localhost -U postgres timetable
+createdb -h localhost -U postgres lnu-timetable
 # load schema and seed data
-psql -h localhost -U postgres -d timetable -f src/main/resources/db/schema.sql
-psql -h localhost -U postgres -d timetable -f src/main/resources/db/data.sql
+psql -h localhost -U postgres -d lnu-timetable -f src/main/resources/db/schema.sql
+psql -h localhost -U postgres -d lnu-timetable -f src/main/resources/db/data.sql
 ```
 
 `schema.sql` starts with `DROP SCHEMA public CASCADE`, so it always recreates a clean
-schema in the `timetable` database. Connection settings live in
-`src/main/resources/application.properties`.
+schema. Connection URL, credentials and pool sizing live in
+`src/main/resources/application.properties` (also toggles GraphiQL and R2DBC SQL/param
+debug logging, which is how the N+1 query problem described below was originally spotted).
 
 ---
 
@@ -64,6 +68,8 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home mvn spring-
 - GraphiQL (browser IDE): `http://localhost:8080/graphiql`
 - `GET /` redirects to **Apollo Studio Sandbox** pointed at this service
 - Apollo Federation `_service { sdl }` is served for schema introspection by gateways
+- A permissive `CorsFilter` allows any origin/method — fine for local dev, tighten before
+  deploying anywhere public
 
 Run tests (schema assembly):
 ```bash
@@ -80,24 +86,34 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 
 | Entity | Table | Notes |
 |---|---|---|
-| `Faculty` | `faculties` | → departments, specialties, rooms |
+| `Building` | `buildings` | → faculties, rooms |
+| `Faculty` | `faculties` | → building?, departments, specialties, rooms |
 | `Department` (кафедра) | `departments` | → faculty, lecturers, courses |
-| `Specialty` (спеціальність) | `specialties` | code, degree; → faculty, groups, curricula |
-| `Course` (дисципліна) | `courses` | ECTS; → department |
-| `Curriculum` (навчальний план) | `curricula` | admission year, degree; → specialty, items |
-| `CurriculumItem` | `curriculum_items` | semester, control form; → curriculum, course |
-| `WorkingCurriculum` (робочий план) | `working_curricula` | academic year, semester; → curriculum |
-| `WorkingCurriculumItem` | `working_curriculum_items` | hours by class type; → course |
+| `Specialty` (спеціальність) | `specialties` | code, degree; → faculty, groups, curriculum items |
+| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options) |
+| `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **specialty directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
+| `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
+| `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups |
 | `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads |
-| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | classType, periodicity; → lecturer, course, academicGroup?, combinedGroup?, workingCurriculum? |
+| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | → lecturer, academicGroup?, combinedGroup?, workingCurriculumItem, timetable entries |
 | `Student` | `students` | → academic group |
 | `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
 | `CombinedGroup` (об'єднана група) | `combined_groups` | M-N academic groups (electives) |
 | `Room` (аудиторія) | `rooms` | capacity, kind; → faculty? |
 | `TimeSlot` (пара) | `time_slots` | ordinal, start/end time |
 | `TimetableEntry` (**the schedule / "gene"**) | `timetable_entries` | dayOfWeek, weekParity; → workload, timeSlot, room |
+| `AcademicDegree` | `academic_degrees` | name, abbreviation, level; → lecturers |
 
 Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all supported.
+Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbreviation`,
+`departments.abbreviation`, `specialties(name, degree)`, `academic_groups.name`,
+`lecturers.email`, `curriculum_items(course_id, specialty_id, semester)`,
+`curriculum_item_hours(curriculum_item_id, hour_type)`.
+
+> **History note**: earlier versions of this service modeled a *curriculum* as its own
+> entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
+> it. Since a specialty only ever has one curriculum, that indirection was removed —
+> `CurriculumItem` now references `Specialty` directly via `specialty_id`.
 
 ---
 
@@ -105,19 +121,22 @@ Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all sup
 
 ```
 org.lnu.timetable.framework
-├── annotation/    @GraphQLEntity, @Description, @Nullable,
+├── annotation/    @GraphQLEntity, @Description, @Nullable, @PgEnum,
 │                  @OneToOne, @OneToMany, @ManyToOne, @ManyToMany
 ├── metadata/      EntityMetadataRegistry — scans @GraphQLEntity at startup,
 │                  builds EntityMetadata (fields, columns, types, relations)
 ├── config/        GraphQLSchemaConfig + DSL: SchemaDefinition, TypeDefinition,
-│                  QueryDefinition, MutationDefinition
+│                  QueryDefinition, MutationDefinition (create/update/delete,
+│                  plus .nestedList(...) and .manyToMany(...) — see below)
 ├── schema/        DynamicGraphQLSchemaBuilder — builds GraphQLSchema from
 │                  metadata + config; DataFetcherProvider
-├── query/         R2dbcQueryEngine — table-driven optimized SQL (selectOne,
+├── query/         R2dbcQueryEngine — table-driven optimized SQL: selectOne,
 │                  selectList, selectWhere, count, insert, update, delete,
-│                  selectViaJoinTable)
-└── runtime/       DynamicDataFetchers (query/connection/mutation/relation),
-                   DynamicGraphQlConfiguration (exposes the GraphQlSource bean)
+│                  plus the batched selectByIds / selectWhereIn /
+│                  selectViaJoinTableBatch used by relation DataLoaders
+└── runtime/       DynamicDataFetchers (query/connection/mutation/relation,
+                   with per-request DataLoader batching), DynamicGraphQlConfiguration
+                   (exposes the GraphQlSource bean)
 ```
 
 ### Define an entity
@@ -126,33 +145,68 @@ org.lnu.timetable.framework
 @GraphQLEntity(table = "courses")
 public class Course {
     private Long id;
-    @Nullable private String code;            // @Nullable → nullable in schema; non-null otherwise
     @Description("Discipline name") private String name;
-    @Nullable private Integer ectsCredits;
-    @ManyToOne(joinColumn = "department_id") private Department department;
+    @PgEnum("course_type") @Description("MANDATORY, ELECTIVE_GROUP, ELECTIVE, …")
+    private String courseType;
+    @Nullable @ManyToOne(joinColumn = "department_id") private Department department;
 }
 ```
 
 Field → column names are derived `lowerCamel → lower_snake` (e.g. `ectsCredits` →
-`ects_credits`). `@Description` text appears in the GraphQL schema.
+`ects_credits`). `@Description` text appears in the GraphQL schema. `@Nullable` makes a
+field/relation optional; `@PgEnum("pg_type_name")` marks a `String` field backed by a native
+Postgres `ENUM` column, so `R2dbcQueryEngine` adds the right `::type` cast on insert/update
+(R2DBC otherwise binds it as a plain `VARCHAR`, which Postgres won't implicitly coerce).
 
 ### Declare the API (no service/repository/controller)
 
 ```java
 @Component
-public class TimetableSchemaConfig implements GraphQLSchemaConfig {
+public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     public void configure(SchemaDefinition s) {
-        s.type(Course.class).fields("code", "name", "ectsCredits").relation("department");
-        s.query("courseConnection").entity(Course.class).connection().orderBy("name");
-        s.query("course").entity(Course.class).findById();
-        s.mutation("createCourse").entity(Course.class).create().inputFields("code", "name", "ectsCredits", "departmentId");
+        s.type(CurriculumItem.class)
+            .fields("semester", "controlForm", "ectsCredits")
+            .relation("specialty").relation("course").relation("hours");
+
+        s.query("curriculumItemConnection").entity(CurriculumItem.class).connection()
+            .orderBy("semester").filter("specialtyId", "specialty_id");
+        s.query("curriculumItem").entity(CurriculumItem.class).findById();
+
+        s.mutation("createCurriculumItem").entity(CurriculumItem.class).create()
+            .inputFields("semester", "controlForm", "ectsCredits", "specialtyId", "courseId")
+            .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
         // update/delete analogous
     }
 }
 ```
 
 `nullableRelation(...)` declares an optional to-one relation (e.g. a workload tied to either
-an academic group *or* a combined group).
+an academic group *or* a combined group; an elective `WorkingCurriculumItem.course`).
+
+**Nested one-to-many children in one mutation** — `.nestedList(fieldName, childClass,
+fkField, ...childInputFields)` lets a single `createCurriculumItem`/`updateCurriculumItem`
+call also create/update/delete the item's `hours` rows: on create, every list item is
+inserted with the FK pointed at the new parent; on update, an item with a matching `id`
+updates that row, an item with no matching `id` inserts one, and any existing row not
+referenced by the incoming list is deleted.
+
+**Many-to-many membership in one mutation** — `.manyToMany(fieldName, joinTable, joinColumn,
+inverseJoinColumn)` exposes a plain `[ID!]` input field (e.g. `academicGroupIds`) that
+replaces the join-table membership wholesale on save:
+
+```java
+s.mutation("createWorkingCurriculumItem").entity(WorkingCurriculumItem.class).create()
+    .inputFields("lecturerCount", "teachingFormat", "curriculumItemHoursId", "departmentId", "courseId")
+    .manyToMany("academicGroupIds", "working_curriculum_item_groups", "working_curriculum_item_id", "academic_group_id")
+    .errorStatus(/* … */);
+```
+
+On create, one join row is inserted per incoming id. On update, if the field is present, all
+of the parent's existing join rows are deleted and replaced with one row per incoming id
+(omit the field entirely to leave membership untouched).
 
 ### Generated GraphQL shape
 
@@ -180,21 +234,61 @@ SELECT id AS "id", name AS "name" FROM faculties WHERE id = $1
 
 ---
 
+## Avoiding N+1 queries (DataLoader batching)
+
+Because a GraphQL relation field's data fetcher is invoked **once per parent row**, a naive
+implementation issues one SQL query per row for every relation a query touches. With a
+nested query like `curriculumItems → hours → workingCurriculumItems → department/course`,
+that used to fan out into dozens of tiny queries per page load, visible in the R2DBC debug
+logs (enabled via `application.properties`) as a wall of near-identical
+`SELECT id FROM faculties WHERE id = $1` calls.
+
+`DynamicDataFetchers.relation(...)` now resolves every relation field (to-one, to-many,
+many-to-many) through a per-request `org.dataloader.DataLoader`:
+
+- One `DataLoader` is registered per `(ownerGraphQLType, relationField)` pair — e.g.
+  `"WorkingCurriculumItem.department"` — the first time that relation is built (at
+  schema-build/startup time, via Spring's `BatchLoaderRegistry` bean), never per request.
+- Instead of querying immediately, the data fetcher calls `loader.load(key, cols)` (`cols`
+  is the resolved column list for that field occurrence, passed as the loader's *key
+  context*). All calls made to the same loader within one GraphQL execution tick — i.e. by
+  every sibling row requesting that relation — are automatically batched by graphql-java's
+  dataloader dispatching (this graphql-java version dispatches automatically whenever a
+  `DataLoaderRegistry` is present; no extra instrumentation wiring needed) into **one** SQL
+  call:
+  - many-to-one / one-to-one → `R2dbcQueryEngine.selectByIds` (`WHERE id = ANY(:ids)`)
+  - one-to-many → `selectWhereIn` (`WHERE fk_column = ANY(:ids)`, paired with the owning fk
+    value so rows can be grouped back per parent)
+  - many-to-many → `selectViaJoinTableBatch` (a single join-table query for every parent id)
+- Rows come back grouped per requested key (`Map<key, row>` or `Map<key, List<row>>`), so
+  every sibling gets its slice without a second round trip.
+
+This is entirely transparent to `GraphQLSchemaConfig` classes and to clients — the generated
+schema and the queries you send are unchanged; only the number of SQL round trips drops.
+
+---
+
 ## Adding a new entity (the whole workflow)
 
 1. Create the annotated POJO in `org.lnu.timetable.domain`.
 2. Add its table to `src/main/resources/db/schema.sql` (and seed rows to `data.sql`).
-3. Add a `type` + queries + mutations block in `TimetableSchemaConfig` (a `crud(...)` helper
-   does connection + findById + create/update/delete with standard error statuses).
-4. Restart — the schema and SQL handlers are regenerated automatically.
+3. Add a `type` + queries + mutations block in the relevant `*SchemaConfig` (or a new one,
+   registered as a `@Component` implementing `GraphQLSchemaConfig` — all of them are picked
+   up automatically via `List<GraphQLSchemaConfig>` injection).
+4. Restart — the schema, SQL handlers and relation batch loaders are regenerated
+   automatically.
 
 ---
 
 ## Known limitations
 
-- **Many-to-many membership** (e.g. `CombinedGroup ↔ AcademicGroup`) is queryable but not
-  editable through the generated mutations; seed it via `data.sql` or direct SQL.
-- Relations are resolved per parent row (no DataLoader batching yet); column-level
-  optimization is in place, N+1 batching is not.
-- Generated query namespaces are pluralized simply (`Curriculum` → `curriculums`,
-  not the Latin "curricula").
+- Not every many-to-many relation is wired for mutation yet — `CombinedGroup ↔
+  AcademicGroup` membership is queryable but still read-only through the generated
+  mutations (seed it via `data.sql` or direct SQL). `WorkingCurriculumItem ↔ AcademicGroup`
+  demonstrates the pattern (`.manyToMany(...)`); applying it to `CombinedGroup` would be a
+  small, mechanical change.
+- Query/mutation namespace pluralization is a naive suffix rule (`+s`, or `y → ies`) — it
+  mishandles a name that already ends in "s", e.g. `CurriculumItemHours` becomes the
+  namespace `curriculumItemHourss` (double s) rather than something more natural.
+- Connections are offset/limit only (`pageInfo.total` / `hasNextPage` / `nextPageOffset`) —
+  no cursor-based pagination.
