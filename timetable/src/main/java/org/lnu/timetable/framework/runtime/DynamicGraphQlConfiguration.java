@@ -13,6 +13,11 @@ import java.util.List;
 /**
  * Builds the GraphQL schema from all schema configuration classes at startup and
  * exposes it as a {@link GraphQlSource}, replacing the default .gqls-based source.
+ * <p>
+ * Per-level {@code DataLoader} dispatching (see {@link DynamicDataFetchers}) is automatic in
+ * this version of graphql-java whenever a {@code DataLoaderRegistry} is present on the {@code
+ * ExecutionInput} — Spring GraphQL populates one per request from the {@code BatchLoaderRegistry}
+ * bean, so no extra instrumentation needs to be registered here.
  */
 @Configuration
 public class DynamicGraphQlConfiguration {

@@ -150,19 +150,6 @@
         <app-course [filterValue]="deptFilterValue" [presets]="deptPreset" />
       }
 
-      @case ('curricula') {
-        <div class="section-filter">
-          <label>Фільтр за спеціальністю</label>
-          <select [(ngModel)]="selectedSpecId" name="specFilter">
-            <option value="">Усі спеціальності</option>
-            @for (sp of specs(); track sp.id) {
-              <option [value]="sp.id">{{ sp.name }}</option>
-            }
-          </select>
-        </div>
-        <app-curriculum [filterValue]="specFilterValue" [presets]="specPreset" />
-      }
-
       @case ('curriculumItems') {
         <app-curriculum-item />
       }

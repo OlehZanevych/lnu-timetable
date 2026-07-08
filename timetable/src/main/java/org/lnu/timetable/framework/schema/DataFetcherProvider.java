@@ -13,5 +13,11 @@ public interface DataFetcherProvider {
     DataFetcher<?> query(QueryDefinition def);
     DataFetcher<?> connection(QueryDefinition def);
     DataFetcher<?> mutation(MutationDefinition def);
-    DataFetcher<?> relation(RelationMetadata rel);
+
+    /**
+     * @param ownerTypeName the GraphQL type the relation field is declared on, e.g. "CurriculumItem";
+     *                      combined with {@code rel}'s field name this uniquely identifies the batch
+     *                      loader used to avoid N+1 queries for this relation.
+     */
+    DataFetcher<?> relation(String ownerTypeName, RelationMetadata rel);
 }

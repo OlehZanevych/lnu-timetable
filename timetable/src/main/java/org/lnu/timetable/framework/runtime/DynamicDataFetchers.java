@@ -4,6 +4,8 @@ import com.google.common.base.CaseFormat;
 import graphql.schema.DataFetcher;
 import graphql.schema.DataFetchingFieldSelectionSet;
 import graphql.schema.SelectedField;
+import org.dataloader.BatchLoaderEnvironment;
+import org.dataloader.DataLoader;
 import org.lnu.timetable.framework.config.MutationDefinition;
 import org.lnu.timetable.framework.config.QueryDefinition;
 import org.lnu.timetable.framework.metadata.EntityFieldMetadata;
@@ -14,9 +16,11 @@ import org.lnu.timetable.framework.metadata.RelationType;
 import org.lnu.timetable.framework.query.R2dbcQueryEngine;
 import org.lnu.timetable.framework.query.R2dbcQueryEngine.Col;
 import org.lnu.timetable.framework.query.R2dbcQueryEngine.EnumValue;
+import org.lnu.timetable.framework.query.R2dbcQueryEngine.KeyedRow;
 import org.lnu.timetable.framework.schema.DataFetcherProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.graphql.execution.BatchLoaderRegistry;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -25,16 +29,24 @@ import java.util.*;
 /**
  * Provides optimized data fetchers that translate the GraphQL selection set
  * into SQL queries fetching only the requested columns.
+ * <p>
+ * Relation fields (to-one, to-many, many-to-many) are resolved through per-request {@link
+ * org.dataloader.DataLoader}s registered on {@link BatchLoaderRegistry} (see {@link
+ * #registerLoaderIfAbsent}), so that N sibling rows requesting the same relation in one query
+ * result in a single batched SQL query instead of N individual ones.
  */
 @Component
 public class DynamicDataFetchers implements DataFetcherProvider {
 
     private final EntityMetadataRegistry registry;
     private final R2dbcQueryEngine engine;
+    private final BatchLoaderRegistry batchLoaderRegistry;
+    private final Set<String> registeredLoaders = Collections.synchronizedSet(new HashSet<>());
 
-    public DynamicDataFetchers(EntityMetadataRegistry registry, R2dbcQueryEngine engine) {
+    public DynamicDataFetchers(EntityMetadataRegistry registry, R2dbcQueryEngine engine, BatchLoaderRegistry batchLoaderRegistry) {
         this.registry = registry;
         this.engine = engine;
+        this.batchLoaderRegistry = batchLoaderRegistry;
     }
 
     @Override
@@ -106,30 +118,101 @@ public class DynamicDataFetchers implements DataFetcherProvider {
     }
 
     @Override
-    public DataFetcher<?> relation(RelationMetadata rel) {
+    public DataFetcher<?> relation(String ownerTypeName, RelationMetadata rel) {
         EntityMetadata targetMd = registry.getMetadata(rel.targetEntity());
+        String loaderName = ownerTypeName + "." + rel.fieldName();
+        registerLoaderIfAbsent(loaderName, rel, targetMd);
+
         return env -> {
             Map<String, Object> parent = env.getSource();
             List<Col> cols = resolveCols(targetMd, env.getSelectionSet());
+            DataLoader<Object, Object> loader = env.getDataLoader(loaderName);
 
-            if (rel.type() == RelationType.ONE_TO_MANY) {
+            if (rel.type() == RelationType.ONE_TO_MANY || rel.type() == RelationType.MANY_TO_MANY) {
                 Object parentId = parent.get("id");
-                return engine.selectWhere(targetMd.tableName(), cols, rel.mappedBy(), parentId, "id")
-                    .collectList().toFuture();
-            }
-            if (rel.type() == RelationType.MANY_TO_MANY) {
-                Object parentId = parent.get("id");
-                return engine.selectViaJoinTable(targetMd.tableName(), cols, rel.joinTable(),
-                        rel.joinColumn(), rel.inverseJoinColumn(), parentId)
-                    .collectList().toFuture();
+                return loader.load(parentId, cols);
             }
             // MANY_TO_ONE / owning ONE_TO_ONE
             Object fk = parent.get(camel(rel.joinColumn()));
             if (fk == null) {
                 return Mono.empty().toFuture();
             }
-            return engine.selectOne(targetMd.tableName(), cols, "id", fk).toFuture();
+            return loader.load(fk, cols);
         };
+    }
+
+    // --- relation batch loading (avoids N+1 queries; see class javadoc) ---
+
+    /**
+     * Registers, once per {@code loaderName}, a batch loader that resolves this relation for
+     * however many parent rows request it within a single GraphQL execution tick. Safe to call
+     * repeatedly (e.g. if the same relation field is somehow wired twice); registration only
+     * happens once, and always happens at schema-build time (startup), before any request.
+     */
+    private void registerLoaderIfAbsent(String loaderName, RelationMetadata rel, EntityMetadata targetMd) {
+        if (!registeredLoaders.add(loaderName)) return;
+
+        if (rel.type() == RelationType.ONE_TO_MANY) {
+            batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
+                engine.selectWhereIn(targetMd.tableName(), colsFromContext(env, targetMd), rel.mappedBy(), keys)
+                    .collectList()
+                    .map(rows -> groupByKey(keys, rows)));
+        } else if (rel.type() == RelationType.MANY_TO_MANY) {
+            batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
+                engine.selectViaJoinTableBatch(targetMd.tableName(), colsFromContext(env, targetMd),
+                        rel.joinTable(), rel.joinColumn(), rel.inverseJoinColumn(), keys)
+                    .collectList()
+                    .map(rows -> groupByKey(keys, rows)));
+        } else {
+            // MANY_TO_ONE / owning ONE_TO_ONE
+            batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
+                engine.selectByIds(targetMd.tableName(), colsFromContext(env, targetMd), keys)
+                    .collectList()
+                    .map(rows -> {
+                        Map<Object, Object> byId = new HashMap<>();
+                        for (Map<String, Object> row : rows) {
+                            byId.put(row.get("id"), row);
+                        }
+                        return byId;
+                    }));
+        }
+    }
+
+    /**
+     * Groups batched one-to-many / many-to-many rows back per requested key, so every key gets a
+     * (possibly empty) list rather than {@code null} when it has no matching rows.
+     */
+    private Map<Object, Object> groupByKey(Set<Object> keys, List<KeyedRow> rows) {
+        Map<Object, Object> grouped = new HashMap<>();
+        for (Object key : keys) {
+            grouped.put(key, new ArrayList<Map<String, Object>>());
+        }
+        for (KeyedRow kr : rows) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> list = (List<Map<String, Object>>) grouped.get(kr.key());
+            if (list != null) list.add(kr.row());
+        }
+        return grouped;
+    }
+
+    /**
+     * Recovers the requested columns from the batch call's key contexts (each key was loaded with
+     * the current selection set's columns as its context — see {@link #relation}). Every key in a
+     * given batch shares the same context because they all come from the same GraphQL field
+     * occurrence (same query AST node) resolved once per sibling row, so any one of them works.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Col> colsFromContext(BatchLoaderEnvironment env, EntityMetadata fallbackMd) {
+        for (Object ctx : env.getKeyContexts().values()) {
+            if (ctx instanceof List<?> list) return (List<Col>) list;
+        }
+        List<Col> cols = new ArrayList<>();
+        cols.add(new Col("id", "id"));
+        for (String field : fallbackMd.selectableColumns()) {
+            EntityFieldMetadata fm = fallbackMd.getField(field);
+            if (fm != null) cols.add(new Col(fm.columnName(), field));
+        }
+        return cols;
     }
 
     // --- mutation handlers ---
@@ -142,7 +225,8 @@ public class DynamicDataFetchers implements DataFetcherProvider {
         return engine.insert(md.tableName(), columnValues)
             .flatMap(id -> {
                 data.put("id", id);
-                return createNestedLists(def, input, id).thenReturn(success(data));
+                return Mono.when(createNestedLists(def, input, id), createManyToManyLists(def, input, id))
+                    .thenReturn(success(data));
             })
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
@@ -153,7 +237,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
 
         return engine.update(md.tableName(), columnValues, id)
             .flatMap(rows -> rows > 0
-                ? reconcileNestedLists(def, input, id).thenReturn(success(null))
+                ? Mono.when(reconcileNestedLists(def, input, id), reconcileManyToManyLists(def, input, id)).thenReturn(success(null))
                 : Mono.just(error(def, notFoundStatus(def, md))))
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
@@ -266,6 +350,56 @@ public class DynamicDataFetchers implements DataFetcherProvider {
     private String fkColumn(EntityMetadata childMd, String fkField) {
         EntityFieldMetadata fm = childMd.getField(fkField);
         return fm != null ? fm.columnName() : snake(fkField);
+    }
+
+    // --- many-to-many id list handling (see MutationDefinition#manyToMany) ---
+
+    /** Inserts one join-table row per id of each declared many-to-many list, for the newly created parent. */
+    private Mono<Void> createManyToManyLists(MutationDefinition def, Map<String, Object> input, Object parentId) {
+        if (def.getManyToManyLists().isEmpty()) return Mono.empty();
+
+        List<Mono<?>> ops = new ArrayList<>();
+        for (MutationDefinition.ManyToManyDefinition mm : def.getManyToManyLists()) {
+            for (Object targetId : idList(input, mm.fieldName())) {
+                ops.add(engine.insertJoinRow(mm.joinTable(), mm.joinColumn(), parentId, mm.inverseJoinColumn(), targetId));
+            }
+        }
+        return ops.isEmpty() ? Mono.empty() : Mono.when(ops);
+    }
+
+    /**
+     * Reconciles each declared many-to-many list against the existing join-table rows for
+     * {@code parentId}: when the field is present in the input, all of the parent's existing
+     * join rows for that relation are deleted and replaced with one row per incoming id. A
+     * many-to-many field that's entirely absent from the input leaves the existing rows untouched.
+     */
+    private Mono<Void> reconcileManyToManyLists(MutationDefinition def, Map<String, Object> input, Object parentId) {
+        if (def.getManyToManyLists().isEmpty()) return Mono.empty();
+
+        List<Mono<Void>> ops = new ArrayList<>();
+        for (MutationDefinition.ManyToManyDefinition mm : def.getManyToManyLists()) {
+            if (!input.containsKey(mm.fieldName())) continue;
+
+            List<Mono<?>> inserts = new ArrayList<>();
+            for (Object targetId : idList(input, mm.fieldName())) {
+                inserts.add(engine.insertJoinRow(mm.joinTable(), mm.joinColumn(), parentId, mm.inverseJoinColumn(), targetId));
+            }
+            Mono<Void> op = engine.deleteWhere(mm.joinTable(), mm.joinColumn(), parentId)
+                .then(inserts.isEmpty() ? Mono.empty() : Mono.when(inserts));
+            ops.add(op);
+        }
+        return ops.isEmpty() ? Mono.empty() : Mono.when(ops);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> idList(Map<String, Object> input, String fieldName) {
+        Object raw = input.get(fieldName);
+        if (!(raw instanceof List<?> list)) return List.of();
+        List<Object> ids = new ArrayList<>(list.size());
+        for (Object o : list) {
+            ids.add(coerce(o, Long.class));
+        }
+        return ids;
     }
 
     // --- response helpers ---

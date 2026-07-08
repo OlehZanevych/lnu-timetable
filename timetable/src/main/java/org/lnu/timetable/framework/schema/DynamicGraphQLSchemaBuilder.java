@@ -244,7 +244,7 @@ public class DynamicGraphQLSchemaBuilder {
                 if (rel != null) {
                     codeRegistry.dataFetcher(
                         FieldCoordinates.coordinates(typeName, relField.fieldName()),
-                        fetchers.relation(rel));
+                        fetchers.relation(typeName, rel));
                 }
             }
         }
@@ -353,7 +353,8 @@ public class DynamicGraphQLSchemaBuilder {
         // Build input type for create/update
         if (mutDef.getMutationType() != MutationDefinition.MutationType.DELETE) {
             String inputTypeName = entityName + "InputPayload";
-            boolean hasContent = !mutDef.getInputFields().isEmpty() || !mutDef.getNestedLists().isEmpty();
+            boolean hasContent = !mutDef.getInputFields().isEmpty() || !mutDef.getNestedLists().isEmpty()
+                || !mutDef.getManyToManyLists().isEmpty();
             if (!builtInputTypes.containsKey(inputTypeName) && hasContent) {
                 var inputBuilder = newInputObject().name(inputTypeName);
                 for (String fieldName : mutDef.getInputFields()) {
@@ -373,6 +374,10 @@ public class DynamicGraphQLSchemaBuilder {
                     String nestedTypeName = buildNestedInputType(nl);
                     inputBuilder.field(newInputObjectField().name(nl.fieldName())
                         .type(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef(nestedTypeName)))));
+                }
+                for (MutationDefinition.ManyToManyDefinition mm : mutDef.getManyToManyLists()) {
+                    inputBuilder.field(newInputObjectField().name(mm.fieldName())
+                        .type(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLID))));
                 }
                 builtInputTypes.put(inputTypeName, inputBuilder.build());
             }

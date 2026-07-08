@@ -3,9 +3,10 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { CurriculumItemList } from './curriculum-item-list';
+import { WorkingCurriculumList } from './working-curriculum-list';
 import { AcademicGroupList } from './academic-group-list';
 
-type SpecSection = 'info' | 'curricula' | 'academicGroups';
+type SpecSection = 'info' | 'curricula' | 'workingCurricula' | 'academicGroups';
 
 interface Specialty {
   id: string;
@@ -24,15 +25,16 @@ const DEGREE_LABELS: Record<string, string> = {
 };
 
 const SECTIONS: { key: SpecSection; label: string }[] = [
-  { key: 'info',           label: '&#x2139; Інформація' },
-  { key: 'curricula',      label: '&#x1F4CB; Навчальні плани' },
-  { key: 'academicGroups', label: '&#x1F393; Академічні групи' },
+  { key: 'info',            label: '&#x2139; Інформація' },
+  { key: 'curricula',       label: '&#x1F4CB; Навчальні плани' },
+  { key: 'workingCurricula', label: '&#x1F5C2; Робочі навчальні плани' },
+  { key: 'academicGroups',  label: '&#x1F393; Академічні групи' },
 ];
 
 @Component({
   selector: 'app-specialty-page',
   templateUrl: './specialty-page.html',
-  imports: [RouterLink, FormsModule, CurriculumItemList, AcademicGroupList]
+  imports: [RouterLink, FormsModule, CurriculumItemList, WorkingCurriculumList, AcademicGroupList]
 })
 export class SpecialtyDetailPage implements OnInit {
   private route = inject(ActivatedRoute);

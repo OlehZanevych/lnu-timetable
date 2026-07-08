@@ -1078,21 +1078,7 @@ INSERT INTO courses (id, name, course_type, faculty_id, department_id) VALUES
  (454, 'Генетичні алгоритми в задачах кібербезпеки', 'ELECTIVE', 1, 5),
  (455, 'Конфіденційність та етика в ШІ для кібербезпеки', 'ELECTIVE', 1, 5);
 SELECT setval('courses_id_seq', 455);
-INSERT INTO curricula (id, specialty_id) VALUES
- (2, 2),
- (4, 4),
- (1, 1),
- (7, 7),
- (3, 3),
- (5, 5),
- (6, 6),
- (8, 8),
- (12, 12),
- (9, 9),
- (10, 10),
- (11, 11);
-SELECT setval('curricula_id_seq', 12);
-INSERT INTO curriculum_items (id, semester, control_form, ects_credits, curriculum_id, course_id) VALUES
+INSERT INTO curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES
  (2, 2, 'CREDIT', 4, 2, 2),
  (4, 4, 'GRADED_CREDIT', 4, 4, 4),
  (6, 6, 'CREDIT', 4, 2, 6),

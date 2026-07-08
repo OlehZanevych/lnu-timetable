@@ -3,59 +3,50 @@
     <h2>Навчальні плани</h2>
     <p class="muted">{{ items().length }} запис(ів)</p>
   </div>
-  @if (curriculumId()) {
-    <button type="button" (click)="openCreate()">+ Додати</button>
-  }
+  <button type="button" (click)="openCreate()">+ Додати</button>
 </div>
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 
-@if (!curriculumId()) {
-  <div class="card" style="padding: 20px;">
-    <p class="muted">Для цієї спеціальності ще не створено навчальний план.</p>
-    <button type="button" (click)="createCurriculum()">Створити навчальний план</button>
-  </div>
-} @else {
-  <div class="card">
-    <table>
-      <thead>
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Семестр</th>
+        <th>Дисципліна</th>
+        <th>Форма контролю</th>
+        <th>ECTS</th>
+        <th>Години</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of items(); track item.id) {
         <tr>
-          <th>#</th>
-          <th>Семестр</th>
-          <th>Дисципліна</th>
-          <th>Форма контролю</th>
-          <th>ECTS</th>
-          <th>Години</th>
-          <th></th>
+          <td>{{ item.id }}</td>
+          <td>{{ item.semester }}</td>
+          <td>{{ item.course?.name || '&mdash;' }}</td>
+          <td>{{ controlFormLabel(item.controlForm) }}</td>
+          <td>{{ item.ectsCredits ?? '&mdash;' }}</td>
+          <td>
+            @for (h of item.hours; track h.id) {
+              <div>{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</div>
+            } @empty {
+              <span class="muted">&mdash;</span>
+            }
+          </td>
+          <td class="row-actions">
+            <button type="button" class="ghost" (click)="openEdit(item)">Редагувати</button>
+            <button type="button" class="ghost danger" (click)="remove(item)">Видалити</button>
+          </td>
         </tr>
-      </thead>
-      <tbody>
-        @for (item of items(); track item.id) {
-          <tr>
-            <td>{{ item.id }}</td>
-            <td>{{ item.semester }}</td>
-            <td>{{ item.course?.name || '&mdash;' }}</td>
-            <td>{{ controlFormLabel(item.controlForm) }}</td>
-            <td>{{ item.ectsCredits ?? '&mdash;' }}</td>
-            <td>
-              @for (h of item.hours; track h.id) {
-                <div>{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</div>
-              } @empty {
-                <span class="muted">&mdash;</span>
-              }
-            </td>
-            <td class="row-actions">
-              <button type="button" class="ghost" (click)="openEdit(item)">Редагувати</button>
-              <button type="button" class="ghost danger" (click)="remove(item)">Видалити</button>
-            </td>
-          </tr>
-        } @empty {
-          <tr><td colspan="7" class="muted">Позицій навчального плану ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
-        }
-      </tbody>
-    </table>
-  </div>
-}
+      } @empty {
+        <tr><td colspan="7" class="muted">Позицій навчального плану ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
 
 <!-- ── Create/Edit modal ── -->
 

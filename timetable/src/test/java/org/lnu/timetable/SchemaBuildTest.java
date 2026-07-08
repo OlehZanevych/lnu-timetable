@@ -26,7 +26,7 @@ class SchemaBuildTest {
         public DataFetcher<?> query(QueryDefinition def) { return env -> null; }
         public DataFetcher<?> connection(QueryDefinition def) { return env -> null; }
         public DataFetcher<?> mutation(MutationDefinition def) { return env -> null; }
-        public DataFetcher<?> relation(RelationMetadata rel) { return env -> null; }
+        public DataFetcher<?> relation(String ownerTypeName, RelationMetadata rel) { return env -> null; }
     };
 
     @Test

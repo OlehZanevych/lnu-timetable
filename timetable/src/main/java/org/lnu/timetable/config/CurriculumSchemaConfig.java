@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for academic curriculum entities:
- * Course, Curriculum, CurriculumItem, CurriculumItemHours, WorkingCurriculumItem.
+ * Course, CurriculumItem, CurriculumItemHours, WorkingCurriculumItem.
  */
 @Component
 public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
@@ -15,7 +15,6 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     @Override
     public void configure(SchemaDefinition s) {
         configureCourse(s);
-        configureCurriculum(s);
         configureCurriculumItem(s);
         configureCurriculumItemHours(s);
         configureWorkingCurriculumItem(s);
@@ -57,55 +56,26 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     }
 
     // -------------------------------------------------------------------------
-    // Curriculum
-    // -------------------------------------------------------------------------
-
-    private void configureCurriculum(SchemaDefinition s) {
-        s.type(Curriculum.class)
-            .relation("specialty").relation("items");
-
-        s.query("curriculumConnection").entity(Curriculum.class).connection().orderBy("id").filter("specialtyId", "specialty_id");
-        s.query("curriculum").entity(Curriculum.class).findById();
-
-        s.mutation("createCurriculum").entity(Curriculum.class).create()
-            .inputFields("specialtyId")
-            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
-            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
-            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
-
-        s.mutation("updateCurriculum").entity(Curriculum.class).update()
-            .inputFields("specialtyId")
-            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
-            .errorStatus("CURRICULUM_NOT_FOUND", "Curriculum not found")
-            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
-            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
-
-        s.mutation("deleteCurriculum").entity(Curriculum.class).delete()
-            .errorStatus("CURRICULUM_NOT_FOUND", "Curriculum not found")
-            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
-    }
-
-    // -------------------------------------------------------------------------
     // CurriculumItem
     // -------------------------------------------------------------------------
 
     private void configureCurriculumItem(SchemaDefinition s) {
         s.type(CurriculumItem.class)
             .fields("semester", "controlForm", "ectsCredits")
-            .relation("curriculum").relation("course").relation("hours");
+            .relation("specialty").relation("course").relation("hours");
 
-        s.query("curriculumItemConnection").entity(CurriculumItem.class).connection().orderBy("semester").filter("curriculumId", "curriculum_id");
+        s.query("curriculumItemConnection").entity(CurriculumItem.class).connection().orderBy("semester").filter("specialtyId", "specialty_id");
         s.query("curriculumItem").entity(CurriculumItem.class).findById();
 
         s.mutation("createCurriculumItem").entity(CurriculumItem.class).create()
-            .inputFields("semester", "controlForm", "ectsCredits", "curriculumId", "courseId")
+            .inputFields("semester", "controlForm", "ectsCredits", "specialtyId", "courseId")
             .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateCurriculumItem").entity(CurriculumItem.class).update()
-            .inputFields("semester", "controlForm", "ectsCredits", "curriculumId", "courseId")
+            .inputFields("semester", "controlForm", "ectsCredits", "specialtyId", "courseId")
             .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("CURRICULUMITEM_NOT_FOUND", "CurriculumItem not found")
@@ -124,7 +94,8 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     private void configureCurriculumItemHours(SchemaDefinition s) {
         s.type(CurriculumItemHours.class)
             .fields("hourType", "hours")
-            .relation("curriculumItem");
+            .relation("curriculumItem")
+            .relation("workingCurriculumItems");
 
         s.query("curriculumItemHoursConnection").entity(CurriculumItemHours.class).connection().orderBy("hourType").filter("curriculumItemId", "curriculum_item_id");
         s.query("curriculumItemHours").entity(CurriculumItemHours.class).findById();
@@ -165,12 +136,14 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("createWorkingCurriculumItem").entity(WorkingCurriculumItem.class).create()
             .inputFields("lecturerCount", "teachingFormat", "curriculumItemHoursId", "departmentId", "courseId")
+            .manyToMany("academicGroupIds", "working_curriculum_item_groups", "working_curriculum_item_id", "academic_group_id")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateWorkingCurriculumItem").entity(WorkingCurriculumItem.class).update()
             .inputFields("lecturerCount", "teachingFormat", "curriculumItemHoursId", "departmentId", "courseId")
+            .manyToMany("academicGroupIds", "working_curriculum_item_groups", "working_curriculum_item_id", "academic_group_id")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("WORKINGCURRICULUMITEM_NOT_FOUND", "WorkingCurriculumItem not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

@@ -60,6 +60,11 @@ export const HOUR_TYPE_OPTIONS = [
   { value: 'INDEPENDENT_WORK', label: 'Самостійна робота' }
 ];
 
+export const TEACHING_FORMAT_OPTIONS = [
+  { value: 'TOGETHER',   label: 'Разом' },
+  { value: 'SEPARATELY', label: 'Окремо' }
+];
+
 export const ENTITIES: EntityMeta[] = [
   {
     name: 'Building', label: 'Корпуси', single: 'building', namespace: 'buildings', list: 'buildingConnection',
@@ -113,18 +118,12 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Curriculum', label: 'Навчальні плани', single: 'curriculum', namespace: 'curriculums', list: 'curriculumConnection', filterParam: 'specialtyId',
-    fields: [
-      ref('specialtyId', 'Спеціальність', 'specialty', 'specialty', 'name', true)
-    ]
-  },
-  {
-    name: 'CurriculumItem', label: 'Позиції навч. плану', single: 'curriculumItem', namespace: 'curriculumItems', list: 'curriculumItemConnection', filterParam: 'curriculumId',
+    name: 'CurriculumItem', label: 'Позиції навч. плану', single: 'curriculumItem', namespace: 'curriculumItems', list: 'curriculumItemConnection', filterParam: 'specialtyId',
     fields: [
       { name: 'semester', label: 'Семестр', type: 'number', required: true },
       { name: 'controlForm', label: 'Форма контролю', type: 'enum', required: true, enumOptions: CONTROL_FORM_OPTIONS },
       { name: 'ectsCredits', label: 'ECTS', type: 'number' },
-      ref('curriculumId', 'Навчальний план', 'curriculum', 'curriculum', 'id', true),
+      ref('specialtyId', 'Спеціальність', 'specialty', 'specialty', 'name', true),
       ref('courseId', 'Дисципліна', 'course', 'course', 'name', true)
     ]
   },
@@ -140,12 +139,7 @@ export const ENTITIES: EntityMeta[] = [
     name: 'WorkingCurriculumItem', label: 'Позиції РНП', single: 'workingCurriculumItem', namespace: 'workingCurriculumItems', list: 'workingCurriculumItemConnection', filterParam: 'departmentId',
     fields: [
       { name: 'lecturerCount', label: 'К-сть викладачів', type: 'number', required: true },
-      { name: 'teachingFormat', label: 'Формат викладання', type: 'enum', required: true,
-        enumOptions: [
-          { value: 'TOGETHER',   label: 'Разом' },
-          { value: 'SEPARATELY', label: 'Окремо' }
-        ]
-      },
+      { name: 'teachingFormat', label: 'Формат викладання', type: 'enum', required: true, enumOptions: TEACHING_FORMAT_OPTIONS },
       ref('curriculumItemHoursId', 'Год. позиції', 'curriculumItemHours', 'curriculumItemHours', 'hourType', true),
       ref('departmentId', 'Кафедра', 'department', 'department', 'name', true),
       ref('courseId', 'Вибіркова дисципліна', 'course', 'course', 'name')

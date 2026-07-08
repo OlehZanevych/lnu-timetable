@@ -27,9 +27,8 @@ interface CurriculumItem {
 }
 
 /**
- * Shows the curriculum items (with their per-type hour breakdown) that make up
- * the single curriculum belonging to a specialty, with create/edit/delete support
- * for each item. Replaces the old display of the single root `curricula` record.
+ * Shows the curriculum items (with their per-type hour breakdown) belonging directly
+ * to a specialty, with create/edit/delete support for each item.
  */
 @Component({
   selector: 'app-curriculum-item-list',
@@ -46,7 +45,6 @@ export class CurriculumItemList implements OnInit, OnChanges {
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
 
-  curriculumId = signal<string | null>(null);
   items = signal<CurriculumItem[]>([]);
   courseOptions = signal<Option[]>([]);
   error = signal('');
@@ -84,11 +82,11 @@ export class CurriculumItemList implements OnInit, OnChanges {
     this.initialized = true;
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
-    this.loadCurriculum();
+    if (this.specialtyId) this.loadItems();
   }
 
   ngOnChanges() {
-    if (this.initialized) this.loadCurriculum();
+    if (this.initialized && this.specialtyId) this.loadItems();
   }
 
   private loadFacultyOptions() {
@@ -143,36 +141,9 @@ export class CurriculumItemList implements OnInit, OnChanges {
     this.loadCourseOptions();
   }
 
-  private loadCurriculum() {
-    if (!this.specialtyId) return;
-    const q = `{ curriculums { curriculumConnection(limit: 1, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id } } } }`;
-    this.gql.request(q).subscribe({
-      next: (d: any) => {
-        const node = d.curriculums.curriculumConnection.nodes[0];
-        this.curriculumId.set(node ? node.id : null);
-        if (node) this.loadItems(); else this.items.set([]);
-      },
-      error: (e) => this.error.set(e.message)
-    });
-  }
-
-  createCurriculum() {
-    const input = { specialtyId: this.specialtyId };
-    const q = `mutation($input: CurriculumInputPayload!) { curriculums { createCurriculum(curriculum: $input) { isSuccess errorStatus data { id } } } }`;
-    this.gql.request(q, { input }).subscribe({
-      next: (d: any) => {
-        const res = d.curriculums.createCurriculum;
-        if (res.isSuccess) { this.curriculumId.set(res.data.id); this.items.set([]); }
-        else this.error.set(res.errorStatus || 'Помилка операції');
-      },
-      error: (e) => this.error.set(e.message)
-    });
-  }
-
   private loadItems() {
-    const cid = this.curriculumId();
-    if (!cid) return;
-    const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, curriculumId: "${cid}") { nodes {
+    if (!this.specialtyId) return;
+    const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
       id semester controlForm ectsCredits
       course { id name faculty { id } department { id faculty { id } } }
       hours { id hourType hours }
@@ -247,9 +218,8 @@ export class CurriculumItemList implements OnInit, OnChanges {
    * are needed here anymore.
    */
   save() {
-    const cid = this.curriculumId();
-    if (!cid) return;
-    const input: Record<string, any> = { curriculumId: cid, hours: this.buildHoursInput() };
+    if (!this.specialtyId) return;
+    const input: Record<string, any> = { specialtyId: this.specialtyId, hours: this.buildHoursInput() };
     if (this.form['courseId']) input['courseId'] = this.form['courseId'];
     if (this.form['controlForm']) input['controlForm'] = this.form['controlForm'];
     if (this.form['semester'] !== undefined && this.form['semester'] !== '') input['semester'] = Number(this.form['semester']);
