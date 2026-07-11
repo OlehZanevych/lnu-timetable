@@ -6,6 +6,7 @@ import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS } from './entities';
 
 type DeptOption = Option & { facultyId: string };
+type GroupOption = Option & { courseYear: number };
 
 interface ChildCourse {
   id: string;
@@ -71,12 +72,15 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
   readonly TEACHING_FORMAT_OPTIONS = TEACHING_FORMAT_OPTIONS;
 
+  /** Робочі навчальні плани only make sense for taught hour types — not independent work. */
+  private readonly ADDABLE_HOUR_TYPES = new Set(['LECTURE', 'PRACTICAL', 'LAB']);
+
   items = signal<CurriculumItemNode[]>([]);
   error = signal('');
 
   facultyOptions = signal<Option[]>([]);
   departmentOptions = signal<DeptOption[]>([]);
-  groupOptions = signal<Option[]>([]);
+  groupOptions = signal<GroupOption[]>([]);
 
   /** Optional faculty filter that narrows the "Кафедра" select in the modal. */
   departmentFacultyFilter = signal('');
@@ -84,6 +88,17 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   filteredDepartmentOptions = computed(() => {
     const facultyId = this.departmentFacultyFilter();
     return facultyId ? this.departmentOptions().filter((d) => d.facultyId === facultyId) : this.departmentOptions();
+  });
+
+  /** The semester of the curriculum item the modal was opened from; drives the course-year filter below. */
+  activeSemester = signal<number | null>(null);
+
+  /** Groups only make sense to assign if their course year matches the item's semester (semesters 1-2 → year 1, 3-4 → year 2, etc.). */
+  filteredGroupOptions = computed(() => {
+    const semester = this.activeSemester();
+    if (semester == null) return this.groupOptions();
+    const year = Math.ceil(semester / 2);
+    return this.groupOptions().filter((g) => g.courseYear === year);
   });
 
   showForm = signal(false);
@@ -165,10 +180,10 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   private loadGroupOptions() {
     if (!this.specialtyId) return;
-    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id name } } } }`;
+    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id name courseYear } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => {
-        const opts: Option[] = d.academicGroups.academicGroupConnection.nodes.map((g: any) => ({ id: g.id, label: g.name }));
+        const opts: GroupOption[] = d.academicGroups.academicGroupConnection.nodes.map((g: any) => ({ id: g.id, label: g.name, courseYear: g.courseYear }));
         this.groupOptions.set(opts);
       },
       error: () => {}
@@ -181,6 +196,10 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   hourTypeLabel(v: string): string {
     return this.HOUR_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  }
+
+  canAddWorkingItem(hourType: string): boolean {
+    return this.ADDABLE_HOUR_TYPES.has(hourType);
   }
 
   teachingFormatLabel(v: string): string {
@@ -207,8 +226,10 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   // ── Create / Edit ────────────────────────────────────────────────────────
 
   openCreate(hours: HoursBlock, item: CurriculumItemNode) {
+    if (!this.canAddWorkingItem(hours.hourType)) return;
     this.editingId.set(null);
     this.activeHoursId = hours.id;
+    this.activeSemester.set(item.semester);
     this.form = { departmentId: '', lecturerCount: '1', teachingFormat: 'TOGETHER', courseId: '' };
     this.formGroupIds = [];
     // Default to the specialty's own faculty, since departments delivering this item most often
@@ -222,6 +243,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   openEdit(hours: HoursBlock, item: CurriculumItemNode, wci: WorkingItem) {
     this.editingId.set(wci.id);
     this.activeHoursId = hours.id;
+    this.activeSemester.set(item.semester);
     this.form = {
       departmentId: wci.department?.id ?? '',
       lecturerCount: wci.lecturerCount ?? '',

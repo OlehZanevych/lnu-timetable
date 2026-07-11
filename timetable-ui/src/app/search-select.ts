@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, computed, forwardRef, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, forwardRef, inject, input, signal } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 export type Option = { id: string; label: string };
@@ -75,8 +75,16 @@ export class SearchSelect implements ControlValueAccessor {
     this.onChange('');
   }
 
-  @HostListener('document:click', ['$event'])
-  onDocClick(e: MouseEvent) {
-    if (!this.host.nativeElement.contains(e.target)) this.open.set(false);
+  constructor() {
+    // Closes the dropdown on any outside click. Registered on `document` in the CAPTURE phase
+    // (not via @HostListener, which is bubble-phase) so this still fires even when a click is
+    // inside a modal that calls `$event.stopPropagation()` on its content wrapper (a common
+    // pattern in this app to stop backdrop-close clicks from closing the modal) — a bubble-phase
+    // listener would never see that click at all, leaving the dropdown stuck open.
+    const onDocClick = (e: MouseEvent) => {
+      if (!this.host.nativeElement.contains(e.target)) this.open.set(false);
+    };
+    document.addEventListener('click', onDocClick, true);
+    inject(DestroyRef).onDestroy(() => document.removeEventListener('click', onDocClick, true));
   }
 }

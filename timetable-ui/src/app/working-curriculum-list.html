@@ -20,37 +20,41 @@
       <div class="wci-hours-block">
         <div class="wci-hours-header">
           <span>{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</span>
-          <button type="button" class="ghost" (click)="openCreate(h, item)">+ Додати</button>
+          @if (canAddWorkingItem(h.hourType)) {
+            <button type="button" class="ghost" (click)="openCreate(h, item)">+ Додати</button>
+          }
         </div>
-        <table class="wci-table">
-          <thead>
-            <tr>
-              <th>Кафедра</th>
-              <th>К-сть викладачів</th>
-              <th>Формат викладання</th>
-              <th>Академічні групи</th>
-              <th>Вибіркова дисципліна</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (wci of h.workingCurriculumItems; track wci.id) {
+        @if (canAddWorkingItem(h.hourType) || h.workingCurriculumItems.length > 0) {
+          <table class="wci-table">
+            <thead>
               <tr>
-                <td>{{ wci.department?.name || '&mdash;' }}</td>
-                <td>{{ wci.lecturerCount }}</td>
-                <td>{{ teachingFormatLabel(wci.teachingFormat) }}</td>
-                <td>{{ groupNames(wci) }}</td>
-                <td>{{ wci.course?.name || '&mdash;' }}</td>
-                <td class="row-actions">
-                  <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>
-                  <button type="button" class="ghost danger" (click)="remove(wci)">Видалити</button>
-                </td>
+                <th>Кафедра</th>
+                <th>К-сть викладачів</th>
+                <th>Формат викладання</th>
+                <th>Академічні групи</th>
+                <th>Вибіркова дисципліна</th>
+                <th></th>
               </tr>
-            } @empty {
-              <tr><td colspan="6" class="muted">Записів ще немає.</td></tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (wci of h.workingCurriculumItems; track wci.id) {
+                <tr>
+                  <td>{{ wci.department?.name || '&mdash;' }}</td>
+                  <td>{{ wci.lecturerCount }}</td>
+                  <td>{{ teachingFormatLabel(wci.teachingFormat) }}</td>
+                  <td>{{ groupNames(wci) }}</td>
+                  <td>{{ wci.course?.name || '&mdash;' }}</td>
+                  <td class="row-actions">
+                    <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>
+                    <button type="button" class="ghost danger" (click)="remove(wci)">Видалити</button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="muted">Записів ще немає.</td></tr>
+              }
+            </tbody>
+          </table>
+        }
       </div>
     }
   </div>
@@ -96,7 +100,7 @@
         </label>
         <label>
           <span>Академічні групи</span>
-          <app-multi-select [options]="groupOptions()" [(ngModel)]="formGroupIds" name="academicGroupIds" [ngModelOptions]="{ standalone: true }" />
+          <app-multi-select [options]="filteredGroupOptions()" [(ngModel)]="formGroupIds" name="academicGroupIds" [ngModelOptions]="{ standalone: true }" />
         </label>
         @if (isElectiveContext()) {
           <label>
