@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, computed, forwardRef, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, ElementRef, computed, forwardRef, inject, input, signal } from '@angular/core';
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 import { Option } from './search-select';
 
@@ -104,8 +104,17 @@ export class MultiSelect implements ControlValueAccessor {
     this.onTouched();
   }
 
-  @HostListener('document:click', ['$event'])
-  onDocClick(e: MouseEvent) {
-    if (!this.host.nativeElement.contains(e.target)) this.open.set(false);
+  constructor() {
+    // See the identical constructor in SearchSelect for why this is a capture-phase listener on
+    // `document` rather than a (bubble-phase) @HostListener: modal content wrappers in this app
+    // call `$event.stopPropagation()` on click to keep the modal from closing, which also
+    // silently swallows the click before it can bubble to document. Since this component has no
+    // other way to close (toggling an item keeps the list open for further picks), that left it
+    // permanently stuck open inside any modal.
+    const onDocClick = (e: MouseEvent) => {
+      if (!this.host.nativeElement.contains(e.target)) this.open.set(false);
+    };
+    document.addEventListener('click', onDocClick, true);
+    inject(DestroyRef).onDestroy(() => document.removeEventListener('click', onDocClick, true));
   }
 }

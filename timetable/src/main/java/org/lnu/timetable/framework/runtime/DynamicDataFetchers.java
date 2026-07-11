@@ -220,7 +220,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
     private Mono<Map<String, Object>> createHandler(MutationDefinition def, EntityMetadata md, Map<String, Object> input) {
         LinkedHashMap<String, Object> columnValues = new LinkedHashMap<>();
         Map<String, Object> data = new LinkedHashMap<>();
-        bindFields(md, def.getInputFields(), input, columnValues, data);
+        bindFields(md, def.getInputFields(), input, columnValues, data, false);
 
         return engine.insert(md.tableName(), columnValues)
             .flatMap(id -> {
@@ -233,7 +233,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
 
     private Mono<Map<String, Object>> updateHandler(MutationDefinition def, EntityMetadata md, Object id, Map<String, Object> input) {
         LinkedHashMap<String, Object> columnValues = new LinkedHashMap<>();
-        bindFields(md, def.getInputFields(), input, columnValues, null);
+        bindFields(md, def.getInputFields(), input, columnValues, null, true);
 
         return engine.update(md.tableName(), columnValues, id)
             .flatMap(rows -> rows > 0
@@ -248,14 +248,31 @@ public class DynamicDataFetchers implements DataFetcherProvider {
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
 
+    /**
+     * Binds each declared field present in {@code input} to its target column. A field entirely
+     * absent from {@code input} is skipped so partial updates leave that column untouched.
+     * <p>
+     * A field present with an explicit {@code null} value (e.g. clearing an optional relation like
+     * {@code parentCourseId}) is skipped when {@code allowNullClear} is {@code false} (create — there's
+     * nothing to clear yet), or bound as an explicit SQL {@code NULL} when {@code true} (update —
+     * this is how the caller removes a previously-set optional relation).
+     */
     private void bindFields(EntityMetadata md, List<String> fieldNames, Map<String, Object> input,
-                            LinkedHashMap<String, Object> columnValues, Map<String, Object> data) {
+                            LinkedHashMap<String, Object> columnValues, Map<String, Object> data, boolean allowNullClear) {
         for (String field : fieldNames) {
+            if (!input.containsKey(field)) continue;
             Object value = input.get(field);
-            if (value == null) continue;
             EntityFieldMetadata fm = md.getField(field);
             String column = fm != null ? fm.columnName() : snake(field);
             Class<?> type = fm != null ? fm.type() : Long.class;
+
+            if (value == null) {
+                if (!allowNullClear) continue;
+                columnValues.put(column, new R2dbcQueryEngine.NullValue(type));
+                if (data != null) data.put(field, null);
+                continue;
+            }
+
             Object coerced = coerce(value, type);
             Object bound = (fm != null && fm.pgEnumType() != null)
                 ? new EnumValue(coerced, fm.pgEnumType())
@@ -279,7 +296,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
 
             for (Map<String, Object> item : items) {
                 LinkedHashMap<String, Object> childCols = new LinkedHashMap<>();
-                bindFields(childMd, nl.childInputFields(), item, childCols, null);
+                bindFields(childMd, nl.childInputFields(), item, childCols, null, false);
                 childCols.put(fkColumn, parentId);
                 ops.add(engine.insert(childMd.tableName(), childCols));
             }
@@ -318,11 +335,13 @@ public class DynamicDataFetchers implements DataFetcherProvider {
                 for (Map<String, Object> item : items) {
                     Object rawId = item.get("id");
                     Object itemId = rawId != null ? coerce(rawId, Long.class) : null;
+                    boolean isUpdate = itemId != null && toDelete.contains(itemId);
 
                     LinkedHashMap<String, Object> childCols = new LinkedHashMap<>();
-                    bindFields(childMd, nl.childInputFields(), item, childCols, null);
+                    bindFields(childMd, nl.childInputFields(), item, childCols, null, isUpdate);
 
-                    if (itemId != null && toDelete.remove(itemId)) {
+                    if (isUpdate) {
+                        toDelete.remove(itemId);
                         ops.add(engine.update(childMd.tableName(), childCols, itemId));
                     } else {
                         childCols.put(fkColumn, parentId);

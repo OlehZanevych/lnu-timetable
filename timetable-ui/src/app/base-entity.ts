@@ -168,9 +168,17 @@ export abstract class BaseEntity implements OnInit, OnChanges {
 
   private buildInput(): Record<string, any> {
     const input: Record<string, any> = {};
+    const isUpdate = this.editingId() !== null;
     for (const f of this.meta.fields) {
       const v = this.form[f.name];
-      if (v === undefined || v === null || v === '') continue;
+      const empty = v === undefined || v === null || v === '';
+      if (empty) {
+        // Editing an existing row: send an explicit null for cleared optional fields (e.g.
+        // removing a "Група вибіркових" parent course) so the backend clears the column instead
+        // of leaving it untouched. Creating: nothing to clear yet, so just omit the field.
+        if (isUpdate && !f.required) input[f.name] = null;
+        continue;
+      }
       input[f.name] = f.type === 'number' ? Number(v) : v;
     }
     return input;

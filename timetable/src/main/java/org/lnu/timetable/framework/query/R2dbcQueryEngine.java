@@ -34,6 +34,14 @@ public class R2dbcQueryEngine {
     public record EnumValue(Object value, String pgType) {}
 
     /**
+     * Wraps a Java type for a column that should be explicitly set to {@code NULL} (e.g. clearing
+     * an optional relation on update). R2DBC's {@code bind(name, null)} rejects {@code null}
+     * outright, so {@link #insert} / {@link #update} route these through {@code bindNull(name,
+     * type)} instead, which needs the target type to pick the correct wire format.
+     */
+    public record NullValue(Class<?> type) {}
+
+    /**
      * A row returned from a batched lookup, paired with the "grouping key" (the FK / join-table
      * value it belongs to) so callers can bucket rows back per original request key. Used by
      * {@link #selectWhereIn} and {@link #selectViaJoinTableBatch} to support DataLoader batching.
@@ -127,7 +135,7 @@ public class R2dbcQueryEngine {
         String sql = "INSERT INTO " + table + " (" + columns + ") VALUES (" + binds + ") RETURNING id";
         DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
         for (var e : columnValues.entrySet()) {
-            spec = spec.bind(e.getKey(), unwrap(e.getValue()));
+            spec = bindValue(spec, e.getKey(), e.getValue());
         }
         return spec.map(row -> row.get("id")).one();
     }
@@ -139,7 +147,7 @@ public class R2dbcQueryEngine {
         String sql = "UPDATE " + table + " SET " + assignments + " WHERE id = :idValue";
         DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
         for (var e : columnValues.entrySet()) {
-            spec = spec.bind(e.getKey(), unwrap(e.getValue()));
+            spec = bindValue(spec, e.getKey(), e.getValue());
         }
         return spec.bind("idValue", id).fetch().rowsUpdated();
     }
@@ -152,6 +160,14 @@ public class R2dbcQueryEngine {
     /** Unwraps an {@link EnumValue} to the raw value that should actually be bound. */
     private Object unwrap(Object value) {
         return value instanceof EnumValue ev ? ev.value() : value;
+    }
+
+    /** Binds a column value, routing {@link NullValue}-wrapped entries through {@code bindNull}. */
+    private DatabaseClient.GenericExecuteSpec bindValue(DatabaseClient.GenericExecuteSpec spec, String name, Object value) {
+        if (value instanceof NullValue nv) {
+            return spec.bindNull(name, nv.type());
+        }
+        return spec.bind(name, unwrap(value));
     }
 
     public Mono<Long> delete(String table, Object id) {
