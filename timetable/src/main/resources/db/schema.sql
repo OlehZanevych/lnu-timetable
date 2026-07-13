@@ -203,9 +203,21 @@ CREATE TABLE lecturer_workloads
 (
     id                         BIGSERIAL PRIMARY KEY,
     working_curriculum_item_id BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
-    lecturer_id                BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
-    academic_group_id          BIGINT REFERENCES academic_groups (id) ON DELETE SET NULL,
-    combined_group_id          BIGINT REFERENCES combined_groups (id) ON DELETE SET NULL
+    lecturer_id                BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE
+);
+
+CREATE TABLE lecturer_workload_academic_groups
+(
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    academic_group_id    BIGINT NOT NULL REFERENCES academic_groups (id) ON DELETE CASCADE,
+    PRIMARY KEY (lecturer_workload_id, academic_group_id)
+);
+
+CREATE TABLE lecturer_workload_combined_groups
+(
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    combined_group_id    BIGINT NOT NULL REFERENCES combined_groups (id) ON DELETE CASCADE,
+    PRIMARY KEY (lecturer_workload_id, combined_group_id)
 );
 
 CREATE TABLE timetable_entries

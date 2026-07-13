@@ -29,6 +29,11 @@
             (click)="activeSection.set('lecturers')">
       &#x1F393; Викладачі
     </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'workloads'"
+            (click)="activeSection.set('workloads')">
+      &#x1F5C2; Навантаження викладачів
+    </button>
   </nav>
 
   <!-- Content -->
@@ -63,6 +68,11 @@
     <!-- ── Lecturers ── -->
     @if (activeSection() === 'lecturers') {
       <app-lecturer [filterValue]="departmentId" [presets]="deptPreset" />
+    }
+
+    <!-- ── Lecturer workloads ── -->
+    @if (activeSection() === 'workloads') {
+      <app-lecturer-workload-list [departmentId]="departmentId" />
     }
 
   </div>

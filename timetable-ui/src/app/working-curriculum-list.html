@@ -32,7 +32,9 @@
                 <th>К-сть викладачів</th>
                 <th>Формат викладання</th>
                 <th>Академічні групи</th>
-                <th>Вибіркова дисципліна</th>
+                @if (isElectiveGroupCourse(item)) {
+                  <th>Вибіркова дисципліна</th>
+                }
                 <th></th>
               </tr>
             </thead>
@@ -43,14 +45,16 @@
                   <td>{{ wci.lecturerCount }}</td>
                   <td>{{ teachingFormatLabel(wci.teachingFormat) }}</td>
                   <td>{{ groupNames(wci) }}</td>
-                  <td>{{ wci.course?.name || '&mdash;' }}</td>
+                  @if (isElectiveGroupCourse(item)) {
+                    <td>{{ wci.course?.name || '&mdash;' }}</td>
+                  }
                   <td class="row-actions">
                     <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>
                     <button type="button" class="ghost danger" (click)="remove(wci)">Видалити</button>
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="6" class="muted">Записів ще немає.</td></tr>
+                <tr><td [attr.colspan]="isElectiveGroupCourse(item) ? 6 : 5" class="muted">Записів ще немає.</td></tr>
               }
             </tbody>
           </table>
@@ -91,12 +95,7 @@
         </label>
         <label>
           <span>Формат викладання *</span>
-          <select [(ngModel)]="form['teachingFormat']" name="teachingFormat">
-            <option value="">— не обрано —</option>
-            @for (opt of TEACHING_FORMAT_OPTIONS; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
+          <app-search-select [options]="TEACHING_FORMAT_SELECT_OPTIONS" [(ngModel)]="form['teachingFormat']" name="teachingFormat" placeholder="— не обрано —" />
         </label>
         <label>
           <span>Академічні групи</span>

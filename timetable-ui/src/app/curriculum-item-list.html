@@ -83,12 +83,7 @@
         </label>
         <label>
           <span>Форма контролю *</span>
-          <select [(ngModel)]="form['controlForm']" name="controlForm">
-            <option value="">— не обрано —</option>
-            @for (opt of CONTROL_FORM_OPTIONS; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
+          <app-search-select [options]="CONTROL_FORM_SELECT_OPTIONS" [(ngModel)]="form['controlForm']" name="controlForm" placeholder="— не обрано —" />
         </label>
         <label>
           <span>ECTS</span>

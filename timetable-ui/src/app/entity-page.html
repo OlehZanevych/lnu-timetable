@@ -71,12 +71,7 @@
                 <app-search-select [options]="options()[f.name] || []" [(ngModel)]="form[f.name]" [name]="f.name" />
               }
             } @else if (f.type === 'enum') {
-              <select [(ngModel)]="form[f.name]" [name]="f.name">
-                <option value="">— не обрано —</option>
-                @for (opt of f.enumOptions || []; track opt.value) {
-                  <option [value]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+              <app-search-select [options]="enumOptions(f)" [(ngModel)]="form[f.name]" [name]="f.name" placeholder="— не обрано —" />
             } @else if (f.type === 'textarea') {
               <textarea [(ngModel)]="form[f.name]" [name]="f.name"></textarea>
             } @else {

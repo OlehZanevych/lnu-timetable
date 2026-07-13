@@ -20,8 +20,6 @@ export type FacultySection =
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
 
-interface RefOption { id: string; name: string; }
-
 interface Faculty {
   id: string;
   name: string;
@@ -70,9 +68,9 @@ export class FacultyPage implements OnInit {
   error = signal('');
   activeSection = signal<FacultySection>('info');
 
-  specs = signal<RefOption[]>([]);
+  specs = signal<Option[]>([]);
   selectedSpecId = '';
-  depts = signal<RefOption[]>([]);
+  depts = signal<Option[]>([]);
   selectedDeptId = '';
 
   showEditForm = signal(false);
@@ -112,6 +110,11 @@ export class FacultyPage implements OnInit {
   get deptPreset(): Record<string, string> {
     return this.selectedDeptId ? { departmentId: this.selectedDeptId } : {};
   }
+  /** Courses on this page always belong to the current faculty, so facultyId is preset (hidden
+   *  column, hidden on create, still editable to reassign) alongside the optional department filter. */
+  get coursePreset(): Record<string, string> {
+    return { facultyId: this.facultyId, ...this.deptPreset };
+  }
   get specFilterValue(): string | null { return this.selectedSpecId || null; }
   get specPreset(): Record<string, string> {
     return this.selectedSpecId ? { specialtyId: this.selectedSpecId } : {};
@@ -128,14 +131,20 @@ export class FacultyPage implements OnInit {
   private loadDepts() {
     const q = `{ departments { departmentConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.depts.set(d.departments.departmentConnection.nodes)
+      next: (d: any) => {
+        const opts: Option[] = d.departments.departmentConnection.nodes.map((dep: any) => ({ id: dep.id, label: dep.name }));
+        this.depts.set(opts);
+      }
     });
   }
 
   private loadSpecs() {
     const q = `{ specialties { specialtyConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.specs.set(d.specialties.specialtyConnection.nodes)
+      next: (d: any) => {
+        const opts: Option[] = d.specialties.specialtyConnection.nodes.map((sp: any) => ({ id: sp.id, label: sp.name }));
+        this.specs.set(opts);
+      }
     });
   }
 

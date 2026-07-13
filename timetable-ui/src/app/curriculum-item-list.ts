@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
-import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS } from './entities';
+import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
 
 type DeptOption = Option & { facultyId: string };
 
@@ -44,6 +44,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
 
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
+  readonly CONTROL_FORM_SELECT_OPTIONS = toOptions(CONTROL_FORM_OPTIONS);
 
   items = signal<CurriculumItem[]>([]);
   courseOptions = signal<Option[]>([]);

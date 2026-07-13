@@ -5,6 +5,8 @@ import { GraphqlService } from './graphql.service';
 import { CurriculumItemList } from './curriculum-item-list';
 import { WorkingCurriculumList } from './working-curriculum-list';
 import { AcademicGroupList } from './academic-group-list';
+import { SearchSelect } from './search-select';
+import { toOptions } from './entities';
 
 type SpecSection = 'info' | 'curricula' | 'workingCurricula' | 'academicGroups';
 
@@ -34,7 +36,7 @@ const SECTIONS: { key: SpecSection; label: string }[] = [
 @Component({
   selector: 'app-specialty-page',
   templateUrl: './specialty-page.html',
-  imports: [RouterLink, FormsModule, CurriculumItemList, WorkingCurriculumList, AcademicGroupList]
+  imports: [RouterLink, FormsModule, CurriculumItemList, WorkingCurriculumList, AcademicGroupList, SearchSelect]
 })
 export class SpecialtyDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
@@ -59,6 +61,7 @@ export class SpecialtyDetailPage implements OnInit {
     { value: 'PHD',               label: 'Доктор філософії' },
     { value: 'DOCTOR_OF_SCIENCE', label: 'Доктор наук' },
   ];
+  readonly DEGREE_SELECT_OPTIONS = toOptions(this.DEGREE_OPTIONS);
 
   ngOnInit() { this.load(); }
 

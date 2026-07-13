@@ -3,7 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
 import { MultiSelect } from './multi-select';
-import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS } from './entities';
+import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
 
 type DeptOption = Option & { facultyId: string };
 type GroupOption = Option & { courseYear: number };
@@ -71,6 +71,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
   readonly TEACHING_FORMAT_OPTIONS = TEACHING_FORMAT_OPTIONS;
+  readonly TEACHING_FORMAT_SELECT_OPTIONS = toOptions(TEACHING_FORMAT_OPTIONS);
 
   /** Робочі навчальні плани only make sense for taught hour types — not independent work. */
   private readonly ADDABLE_HOUR_TYPES = new Set(['LECTURE', 'PRACTICAL', 'LAB']);
@@ -210,8 +211,13 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     return (wci.academicGroups ?? []).map((g) => g.name).join(', ') || '—';
   }
 
+  /** The "Вибіркова дисципліна" column/field only applies to items whose course is a group of electives. */
+  isElectiveGroupCourse(item: CurriculumItemNode): boolean {
+    return item.course?.courseType === 'ELECTIVE_GROUP';
+  }
+
   private setElectiveContext(item: CurriculumItemNode) {
-    const isElectiveGroup = item.course?.courseType === 'ELECTIVE_GROUP';
+    const isElectiveGroup = this.isElectiveGroupCourse(item);
     this.isElectiveContext.set(isElectiveGroup);
     if (!isElectiveGroup) {
       this.electiveOptions.set([]);

@@ -93,12 +93,7 @@
         </label>
         <label>
           <span>Ступінь *</span>
-          <select [(ngModel)]="editForm['degree']" name="degree">
-            <option value="">— не обрано —</option>
-            @for (opt of DEGREE_OPTIONS; track opt.value) {
-              <option [value]="opt.value">{{ opt.label }}</option>
-            }
-          </select>
+          <app-search-select [options]="DEGREE_SELECT_OPTIONS" [(ngModel)]="editForm['degree']" name="degree" placeholder="— не обрано —" />
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

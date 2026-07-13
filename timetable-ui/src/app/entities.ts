@@ -28,6 +28,10 @@ export interface EntityMeta {
 const ref = (name: string, label: string, ref: string, relation: string, refLabel: string, required = false): FieldMeta =>
   ({ name, label, type: 'ref', ref, relation, refLabel, required });
 
+/** Adapts a `{ value, label }` enum options list (this file's convention) to app-search-select's `{ id, label }` Option shape. */
+export const toOptions = (opts: { value: string; label: string }[]): { id: string; label: string }[] =>
+  opts.map((o) => ({ id: o.value, label: o.label }));
+
 const DEGREE_OPTIONS = [
   { value: 'JUNIOR_BACHELOR', label: 'Молодший бакалавр' },
   { value: 'BACHELOR',        label: 'Бакалавр' },
@@ -180,9 +184,10 @@ export const ENTITIES: EntityMeta[] = [
     name: 'LecturerWorkload', label: 'Навантаження', single: 'lecturerWorkload', namespace: 'lecturerWorkloads', list: 'lecturerWorkloadConnection', filterParam: 'lecturerId',
     fields: [
       ref('lecturerId', 'Викладач', 'lecturer', 'lecturer', 'lastName', true),
-      ref('academicGroupId', 'Академічна група', 'academicGroup', 'academicGroup', 'name'),
-      ref('combinedGroupId', "Об'єднана група", 'combinedGroup', 'combinedGroup', 'name'),
       ref('workingCurriculumItemId', 'Позиція РНП', 'workingCurriculumItem', 'workingCurriculumItem', 'teachingFormat', true)
+      // Академічні групи / Об'єднані групи are many-to-many now (academicGroupIds/combinedGroupIds)
+      // and are managed on the department's "Навантаження викладачів" subpage instead — the
+      // generic single-select ref field here can't represent a multi-valued relation.
     ]
   },
   {

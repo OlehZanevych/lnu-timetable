@@ -1,0 +1,111 @@
+<div class="page-header">
+  <div>
+    <h2>Навантаження викладачів</h2>
+    <p class="muted">{{ groups().length }} позицій навчального плану</p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@for (group of groups(); track group.id) {
+  <div class="card wci-item-card">
+    <div class="wci-item-header">
+      <strong>Семестр {{ group.semester }}</strong>
+      <span>Спеціальність: {{ group.specialty.name }}</span>
+      <span>Дисципліна: {{ group.course.name }}</span>
+      <span>Форма контролю: {{ controlFormLabel(group.controlForm) }}</span>
+      <span>ECTS: {{ group.ectsCredits ?? '&mdash;' }}</span>
+    </div>
+
+    @for (hg of group.hoursGroups; track hg.id) {
+      <div class="wci-hours-block">
+        <div class="wci-hours-header">
+          <span>{{ hourTypeLabel(hg.hourType) }}: {{ hg.hours }}</span>
+        </div>
+
+        @for (wci of hg.items; track wci.id) {
+          <div class="lw-record">
+            <div class="lw-record-header">
+              <span>К-сть викладачів: {{ wci.lecturerCount }}</span>
+              <span>Формат викладання: {{ teachingFormatLabel(wci.teachingFormat) }}</span>
+              <span>Академічні групи: {{ academicGroupNames(wci.academicGroups) }}</span>
+              @if (isElectiveGroupCourse(group)) {
+                <span>Вибіркова дисципліна: {{ wci.course?.name || '&mdash;' }}</span>
+              }
+              <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
+            </div>
+
+            <table class="wci-table">
+              <thead>
+                <tr>
+                  <th>Викладач</th>
+                  <th>Академічні групи</th>
+                  @if (wci.teachingFormat === 'SEPARATELY') {
+                    <th>Об'єднані групи</th>
+                  }
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (w of wci.workloads; track w.id) {
+                  <tr>
+                    <td>{{ lecturerFullName(w) }}</td>
+                    <td>{{ academicGroupNames(w.academicGroups) }}</td>
+                    @if (wci.teachingFormat === 'SEPARATELY') {
+                      <td>{{ combinedGroupNames(w.combinedGroups) }}</td>
+                    }
+                    <td class="row-actions">
+                      <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
+                      <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td [attr.colspan]="wci.teachingFormat === 'SEPARATELY' ? 4 : 3" class="muted">Навантаження ще немає.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  </div>
+} @empty {
+  <p class="muted">Для цієї кафедри ще немає позицій робочого навчального плану.</p>
+}
+
+<!-- ── Create/Edit modal ── -->
+
+@if (showForm()) {
+  <div class="modal-backdrop" (click)="closeForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ editingId() ? 'Редагування навантаження' : 'Нове навантаження' }}</h3>
+        <button type="button" class="close" (click)="closeForm()">&#x2715;</button>
+      </div>
+
+      @if (formError()) { <p class="error">{{ formError() }}</p> }
+
+      <form (ngSubmit)="save()" class="entity-form">
+        <label>
+          <span>Викладач *</span>
+          <app-search-select [options]="lecturerOptions()" [(ngModel)]="form['lecturerId']" name="lecturerId" />
+        </label>
+        <label>
+          <span>Академічні групи</span>
+          <app-multi-select [options]="activeAcademicGroupOptions()" [(ngModel)]="formAcademicGroupIds" name="academicGroupIds" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        @if (canUseCombinedGroups()) {
+          <label>
+            <span>Об'єднані групи</span>
+            <app-multi-select [options]="combinedGroupOptions()" [(ngModel)]="formCombinedGroupIds" name="combinedGroupIds" [ngModelOptions]="{ standalone: true }" />
+          </label>
+        }
+
+        <div class="actions">
+          <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>
+          <button type="button" class="ghost" (click)="closeForm()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
