@@ -121,12 +121,7 @@
       @case ('academicGroups') {
         <div class="section-filter">
           <label>Фільтр за спеціальністю</label>
-          <select [(ngModel)]="selectedSpecId" name="specFilter">
-            <option value="">Усі спеціальності</option>
-            @for (sp of specs(); track sp.id) {
-              <option [value]="sp.id">{{ sp.name }}</option>
-            }
-          </select>
+          <app-search-select [options]="specs()" [(ngModel)]="selectedSpecId" name="specFilter" placeholder="Усі спеціальності" />
         </div>
         <app-academic-group-list [specialtyId]="specFilterValue" />
       }
@@ -140,14 +135,9 @@
       @case ('courses') {
         <div class="section-filter">
           <label>Фільтр за кафедрою</label>
-          <select [(ngModel)]="selectedDeptId" name="deptFilter">
-            <option value="">Усі кафедри</option>
-            @for (d of depts(); track d.id) {
-              <option [value]="d.id">{{ d.name }}</option>
-            }
-          </select>
+          <app-search-select [options]="depts()" [(ngModel)]="selectedDeptId" name="deptFilter" placeholder="Усі кафедри" />
         </div>
-        <app-course [filterValue]="deptFilterValue" [presets]="deptPreset" />
+        <app-course [filterValue]="deptFilterValue" [presets]="coursePreset" />
       }
 
       @case ('curriculumItems') {

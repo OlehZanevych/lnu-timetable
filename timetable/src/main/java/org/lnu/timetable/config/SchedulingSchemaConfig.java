@@ -26,8 +26,8 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     private void configureLecturerWorkload(SchemaDefinition s) {
         s.type(LecturerWorkload.class)
             .relation("lecturer")
-            .nullableRelation("academicGroup")
-            .nullableRelation("combinedGroup")
+            .relation("academicGroups")
+            .relation("combinedGroups")
             .relation("workingCurriculumItem")
             .relation("timetableEntries");
 
@@ -35,13 +35,17 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
         s.query("lecturerWorkload").entity(LecturerWorkload.class).findById();
 
         s.mutation("createLecturerWorkload").entity(LecturerWorkload.class).create()
-            .inputFields("lecturerId", "academicGroupId", "combinedGroupId", "workingCurriculumItemId")
+            .inputFields("lecturerId", "workingCurriculumItemId")
+            .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
+            .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturerWorkload").entity(LecturerWorkload.class).update()
-            .inputFields("lecturerId", "academicGroupId", "combinedGroupId", "workingCurriculumItemId")
+            .inputFields("lecturerId", "workingCurriculumItemId")
+            .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
+            .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURERWORKLOAD_NOT_FOUND", "LecturerWorkload not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

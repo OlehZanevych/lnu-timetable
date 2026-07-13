@@ -3345,13 +3345,37 @@ ALTER TABLE public.working_curriculum_items ENABLE TRIGGER ALL;
 
 ALTER TABLE public.lecturer_workloads DISABLE TRIGGER ALL;
 
-INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id, academic_group_id, combined_group_id) VALUES (1, 3, 16, NULL, 4);
-INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id, academic_group_id, combined_group_id) VALUES (2, 5, 21, NULL, 6);
-INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id, academic_group_id, combined_group_id) VALUES (3, 6, 15, 5, NULL);
-INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id, academic_group_id, combined_group_id) VALUES (4, 7, 11, 6, NULL);
+INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id) VALUES (1, 3, 16);
+INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id) VALUES (2, 5, 21);
+INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id) VALUES (3, 6, 15);
+INSERT INTO public.lecturer_workloads (id, working_curriculum_item_id, lecturer_id) VALUES (4, 7, 11);
 
 
 ALTER TABLE public.lecturer_workloads ENABLE TRIGGER ALL;
+
+--
+-- Data for Name: lecturer_workload_academic_groups; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lecturer_workload_academic_groups DISABLE TRIGGER ALL;
+
+INSERT INTO public.lecturer_workload_academic_groups (lecturer_workload_id, academic_group_id) VALUES (3, 5);
+INSERT INTO public.lecturer_workload_academic_groups (lecturer_workload_id, academic_group_id) VALUES (4, 6);
+
+
+ALTER TABLE public.lecturer_workload_academic_groups ENABLE TRIGGER ALL;
+
+--
+-- Data for Name: lecturer_workload_combined_groups; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lecturer_workload_combined_groups DISABLE TRIGGER ALL;
+
+INSERT INTO public.lecturer_workload_combined_groups (lecturer_workload_id, combined_group_id) VALUES (1, 4);
+INSERT INTO public.lecturer_workload_combined_groups (lecturer_workload_id, combined_group_id) VALUES (2, 6);
+
+
+ALTER TABLE public.lecturer_workload_combined_groups ENABLE TRIGGER ALL;
 
 --
 -- Data for Name: rooms; Type: TABLE DATA; Schema: public; Owner: -

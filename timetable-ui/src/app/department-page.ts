@@ -3,8 +3,9 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { LecturerPage } from './entity-pages';
+import { LecturerWorkloadList } from './lecturer-workload-list';
 
-type DeptSection = 'info' | 'lecturers';
+type DeptSection = 'info' | 'lecturers' | 'workloads';
 
 interface Department {
   id: string;
@@ -19,7 +20,7 @@ interface Department {
 @Component({
   selector: 'app-department-page',
   templateUrl: './department-page.html',
-  imports: [RouterLink, FormsModule, LecturerPage]
+  imports: [RouterLink, FormsModule, LecturerPage, LecturerWorkloadList]
 })
 export class DepartmentDetailPage implements OnInit {
   private route = inject(ActivatedRoute);

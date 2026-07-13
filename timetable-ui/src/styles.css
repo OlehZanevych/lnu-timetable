@@ -198,6 +198,12 @@ button.danger:hover { background: #991b1b !important; }
 .wci-hours-header > span { font-weight: 600; color: var(--navy); }
 .wci-table { width: 100%; background: #fff; border-radius: 6px; overflow: hidden; }
 
+/* ── Lecturer workloads (department page): one level deeper than .wci-hours-block ── */
+.lw-record { margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.lw-record:last-child { margin-bottom: 0; }
+.lw-record-header { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--navy); }
+.lw-record-header button { margin-left: auto; }
+
 /* ── Timetable grid ── */
 .timetable td { width: 16%; }
 .timetable .slot { background: #eef2f9; white-space: nowrap; color: var(--navy); }

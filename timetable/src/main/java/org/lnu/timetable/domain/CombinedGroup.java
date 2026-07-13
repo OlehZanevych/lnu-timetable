@@ -5,7 +5,6 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.Nullable;
-import org.lnu.timetable.framework.annotation.OneToMany;
 
 import java.util.List;
 
@@ -26,6 +25,7 @@ public class CombinedGroup {
         joinColumn = "combined_group_id", inverseJoinColumn = "academic_group_id")
     private List<AcademicGroup> academicGroups;
 
-    @OneToMany(mappedBy = "combined_group_id")
+    @ManyToMany(joinTable = "lecturer_workload_combined_groups",
+        joinColumn = "combined_group_id", inverseJoinColumn = "lecturer_workload_id")
     private List<LecturerWorkload> workloads;
 }

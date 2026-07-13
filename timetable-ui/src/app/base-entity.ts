@@ -1,6 +1,6 @@
 import { Directive, Input, OnChanges, OnInit, SimpleChanges, inject, signal } from '@angular/core';
 import { GraphqlService } from './graphql.service';
-import { EntityMeta, FieldMeta, entityBySingle } from './entities';
+import { EntityMeta, FieldMeta, entityBySingle, toOptions } from './entities';
 import { Option } from './search-select';
 
 /** Shared CRUD logic for every entity page. Subclasses only provide `meta`. */
@@ -132,6 +132,11 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   /** Fields shown in the table (excludes columns whose value is preset/fixed by context). */
   get tableFields(): FieldMeta[] {
     return this.meta.fields.filter((f) => !this.presets[f.name]);
+  }
+
+  /** Options for an enum field's app-search-select, in {id, label} shape. */
+  enumOptions(f: FieldMeta): Option[] {
+    return toOptions(f.enumOptions || []);
   }
 
   display(row: any, f: FieldMeta): any {
