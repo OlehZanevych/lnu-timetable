@@ -1,0 +1,86 @@
+<div class="page-header">
+  <div>
+    <h2>Об'єднані позиції РНП</h2>
+    <p class="muted">Позиції робочого навчального плану, які кілька спеціальностей відвідують одночасно (напр. спільна лекція)</p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+@if (actionError()) { <p class="error">{{ actionError() }}</p> }
+
+<h3>Пропозиції об'єднання</h3>
+
+@if (proposals().length === 0) {
+  <p class="muted">Немає позицій з однаковим курсом, семестром і кількістю годин, які можна об'єднати.</p>
+}
+
+@for (g of proposals(); track g.key) {
+  <div class="card wci-item-card">
+    <div class="wci-item-header">
+      <strong>{{ g.course.name }}</strong>
+      <span>Семестр {{ g.semester }}</span>
+      <span>{{ hourTypeLabel(g.hourType) }}: {{ g.hours }} год.</span>
+    </div>
+
+    <table class="wci-table">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Спеціальність</th>
+          <th>Академічні групи</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of g.items; track item.id) {
+          <tr>
+            <td><input type="checkbox" [checked]="isChecked(g, item.id)" (change)="toggle(g, item.id)" /></td>
+            <td>{{ item.specialty.name }}</td>
+            <td>{{ academicGroupNames(item.academicGroups) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="merge-actions">
+      <button type="button" [disabled]="!canMerge(g)" (click)="merge(g)">Об'єднати вибрані ({{ g.selected.size }})</button>
+    </div>
+  </div>
+}
+
+<h3>Об'єднані позиції</h3>
+
+@if (existingCombined().length === 0) {
+  <p class="muted">Об'єднаних позицій ще немає.</p>
+}
+
+@for (c of existingCombined(); track c.id) {
+  <div class="card wci-item-card">
+    <div class="wci-item-header">
+      <strong>Об'єднання #{{ c.id }}</strong>
+      <button type="button" class="ghost danger" (click)="remove(c)">Видалити об'єднання</button>
+    </div>
+
+    <table class="wci-table">
+      <thead>
+        <tr>
+          <th>Спеціальність</th>
+          <th>Дисципліна</th>
+          <th>Семестр</th>
+          <th>Тип годин</th>
+          <th>Академічні групи</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (m of c.workingCurriculumItems; track m.id) {
+          <tr>
+            <td>{{ memberSpecialtyName(m) }}</td>
+            <td>{{ memberCourseName(m) }}</td>
+            <td>{{ memberSemester(m) }}</td>
+            <td>{{ hourTypeLabel(m.curriculumItemHours.hourType) }}</td>
+            <td>{{ academicGroupNames(m.academicGroups) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

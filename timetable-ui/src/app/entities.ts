@@ -181,13 +181,13 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'LecturerWorkload', label: 'Навантаження', single: 'lecturerWorkload', namespace: 'lecturerWorkloads', list: 'lecturerWorkloadConnection', filterParam: 'lecturerId',
+    name: 'LecturerWorkload', label: 'Навантаження', single: 'lecturerWorkload', namespace: 'lecturerWorkloads', list: 'lecturerWorkloadConnection',
     fields: [
-      ref('lecturerId', 'Викладач', 'lecturer', 'lecturer', 'lastName', true),
       ref('workingCurriculumItemId', 'Позиція РНП', 'workingCurriculumItem', 'workingCurriculumItem', 'teachingFormat', true)
-      // Академічні групи / Об'єднані групи are many-to-many now (academicGroupIds/combinedGroupIds)
-      // and are managed on the department's "Навантаження викладачів" subpage instead — the
-      // generic single-select ref field here can't represent a multi-valued relation.
+      // Викладачі / Академічні групи / Об'єднані групи are many-to-many now (lecturerIds/
+      // academicGroupIds/combinedGroupIds) and are managed on the department's "Навантаження
+      // викладачів" subpage instead — the generic single-select ref field here can't represent
+      // a multi-valued relation.
     ]
   },
   {

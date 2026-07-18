@@ -39,6 +39,10 @@ public class WorkingCurriculumItem {
         joinColumn = "working_curriculum_item_id", inverseJoinColumn = "academic_group_id")
     private List<AcademicGroup> academicGroups;
 
+    @ManyToMany(joinTable = "combined_working_curriculum_item_members",
+        joinColumn = "working_curriculum_item_id", inverseJoinColumn = "combined_working_curriculum_item_id")
+    private List<CombinedWorkingCurriculumItem> combinedWorkingCurriculumItems;
+
     @OneToMany(mappedBy = "working_curriculum_item_id")
     private List<LecturerWorkload> workloads;
 }

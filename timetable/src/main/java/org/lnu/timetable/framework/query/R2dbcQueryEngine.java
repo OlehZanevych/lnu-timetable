@@ -128,6 +128,13 @@ public class R2dbcQueryEngine {
     }
 
     public Mono<Object> insert(String table, LinkedHashMap<String, Object> columnValues) {
+        // Entities with no own scalar/FK input fields (e.g. a pure many-to-many hub like
+        // CombinedWorkingCurriculumItem) reach this with an empty map — "INSERT INTO t () VALUES ()"
+        // isn't valid Postgres syntax, so fall back to DEFAULT VALUES for every column.
+        if (columnValues.isEmpty()) {
+            return db.sql("INSERT INTO " + table + " DEFAULT VALUES RETURNING id")
+                .map(row -> row.get("id")).one();
+        }
         String columns = String.join(", ", columnValues.keySet());
         String binds = columnValues.entrySet().stream()
             .map(e -> ":" + e.getKey() + castSuffix(e.getValue()))
@@ -141,6 +148,17 @@ public class R2dbcQueryEngine {
     }
 
     public Mono<Long> update(String table, LinkedHashMap<String, Object> columnValues, Object id) {
+        // Entities with no own scalar/FK input fields (e.g. a pure many-to-many hub like
+        // CombinedWorkingCurriculumItem) reach this with an empty map — there's no "SET" clause to
+        // build, so just confirm the row exists (callers use the returned count to distinguish
+        // "not found" from "updated", then reconcile many-to-many lists regardless).
+        if (columnValues.isEmpty()) {
+            return db.sql("SELECT 1 FROM " + table + " WHERE id = :idValue")
+                .bind("idValue", id)
+                .map(row -> 1L)
+                .first()
+                .defaultIfEmpty(0L);
+        }
         String assignments = columnValues.entrySet().stream()
             .map(e -> e.getKey() + " = :" + e.getKey() + castSuffix(e.getValue()))
             .collect(Collectors.joining(", "));

@@ -30,6 +30,11 @@
       &#x1F393; Викладачі
     </button>
     <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'combinedItems'"
+            (click)="activeSection.set('combinedItems')">
+      &#x1F517; Об'єднані позиції РНП
+    </button>
+    <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloads'"
             (click)="activeSection.set('workloads')">
       &#x1F5C2; Навантаження викладачів
@@ -68,6 +73,11 @@
     <!-- ── Lecturers ── -->
     @if (activeSection() === 'lecturers') {
       <app-lecturer [filterValue]="departmentId" [presets]="deptPreset" />
+    }
+
+    <!-- ── Combined working curriculum items ── -->
+    @if (activeSection() === 'combinedItems') {
+      <app-combined-working-curriculum-item-list [departmentId]="departmentId" />
     }
 
     <!-- ── Lecturer workloads ── -->

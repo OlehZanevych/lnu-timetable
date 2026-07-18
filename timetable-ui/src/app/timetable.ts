@@ -10,7 +10,7 @@ interface Entry {
   workload: {
     classType: string;
     course?: { name: string };
-    lecturer?: { lastName: string };
+    lecturers?: { lastName: string }[];
     academicGroup?: { name: string };
     combinedGroup?: { name: string };
   };
@@ -45,12 +45,16 @@ export class Timetable {
     return e.workload.academicGroup?.name ?? e.workload.combinedGroup?.name ?? '';
   }
 
+  lecturerNames(e: Entry): string {
+    return (e.workload.lecturers ?? []).map((l) => l.lastName).join(', ');
+  }
+
   constructor() {
     const q = `{ timetableEntries { timetableEntryConnection(limit: 1000) { nodes {
       id dayOfWeek weekParity
       timeSlot { ordinal startTime endTime }
       room { number }
-      workload { classType course { name } lecturer { lastName } academicGroup { name } combinedGroup { name } }
+      workload { classType course { name } lecturers { lastName } academicGroup { name } combinedGroup { name } }
     } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.entries.set(d.timetableEntries.timetableEntryConnection.nodes),

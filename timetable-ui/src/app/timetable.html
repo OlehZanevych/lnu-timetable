@@ -23,7 +23,7 @@
               <div class="class" [class.biweekly]="e.weekParity !== 'WEEKLY'">
                 <strong>{{ e.workload.course?.name }}</strong>
                 <span>{{ e.workload.classType }} · {{ audience(e) }}</span>
-                <span>{{ e.workload.lecturer?.lastName }} · room {{ e.room.number }}</span>
+                <span>{{ lecturerNames(e) }} · room {{ e.room.number }}</span>
                 @if (e.weekParity !== 'WEEKLY') {
                   <em>{{ e.weekParity }}</em>
                 }

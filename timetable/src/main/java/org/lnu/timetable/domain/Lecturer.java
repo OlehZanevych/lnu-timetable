@@ -3,9 +3,9 @@ package org.lnu.timetable.domain;
 import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
+import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
-import org.lnu.timetable.framework.annotation.OneToMany;
 import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
@@ -42,6 +42,7 @@ public class Lecturer {
     @ManyToOne(joinColumn = "department_id")
     private Department department;
 
-    @OneToMany(mappedBy = "lecturer_id")
+    @ManyToMany(joinTable = "lecturer_workload_lecturers",
+        joinColumn = "lecturer_id", inverseJoinColumn = "lecturer_workload_id")
     private List<LecturerWorkload> workloads;
 }
