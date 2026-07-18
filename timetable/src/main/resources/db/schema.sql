@@ -176,6 +176,21 @@ CREATE TABLE working_curriculum_item_groups
     PRIMARY KEY (working_curriculum_item_id, academic_group_id)
 );
 
+-- A "combined" working curriculum item bundles several working_curriculum_items that relate to
+-- the same course, semester, and hour type (e.g. groups from different specialties attending one
+-- shared lecture), so a single lecturer_workloads assignment can cover all of them at once.
+CREATE TABLE combined_working_curriculum_items
+(
+    id BIGSERIAL PRIMARY KEY
+);
+
+CREATE TABLE combined_working_curriculum_item_members
+(
+    combined_working_curriculum_item_id BIGINT NOT NULL REFERENCES combined_working_curriculum_items (id) ON DELETE CASCADE,
+    working_curriculum_item_id          BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
+    PRIMARY KEY (combined_working_curriculum_item_id, working_curriculum_item_id)
+);
+
 -- ============================ Infrastructure: Rooms ============================
 
 CREATE TABLE rooms
@@ -201,9 +216,22 @@ CREATE TABLE time_slots
 
 CREATE TABLE lecturer_workloads
 (
-    id                         BIGSERIAL PRIMARY KEY,
-    working_curriculum_item_id BIGINT NOT NULL REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
-    lecturer_id                BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE
+    id                                   BIGSERIAL PRIMARY KEY,
+    -- Exactly one of these two is set: either a single working_curriculum_item, or a
+    -- combined_working_curriculum_item for lecturers who simultaneously teach several
+    -- working_curriculum_items (e.g. groups from different specialties) at once.
+    working_curriculum_item_id          BIGINT REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
+    combined_working_curriculum_item_id BIGINT REFERENCES combined_working_curriculum_items (id) ON DELETE CASCADE,
+    CONSTRAINT lecturer_workloads_target_check CHECK (
+        (working_curriculum_item_id IS NOT NULL) <> (combined_working_curriculum_item_id IS NOT NULL)
+    )
+);
+
+CREATE TABLE lecturer_workload_lecturers
+(
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    lecturer_id           BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
+    PRIMARY KEY (lecturer_workload_id, lecturer_id)
 );
 
 CREATE TABLE lecturer_workload_academic_groups

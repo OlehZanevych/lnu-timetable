@@ -4,8 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { LecturerPage } from './entity-pages';
 import { LecturerWorkloadList } from './lecturer-workload-list';
+import { CombinedWorkingCurriculumItemList } from './combined-working-curriculum-item-list';
 
-type DeptSection = 'info' | 'lecturers' | 'workloads';
+type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'workloads';
 
 interface Department {
   id: string;
@@ -20,7 +21,7 @@ interface Department {
 @Component({
   selector: 'app-department-page',
   templateUrl: './department-page.html',
-  imports: [RouterLink, FormsModule, LecturerPage, LecturerWorkloadList]
+  imports: [RouterLink, FormsModule, LecturerPage, LecturerWorkloadList, CombinedWorkingCurriculumItemList]
 })
 export class DepartmentDetailPage implements OnInit {
   private route = inject(ActivatedRoute);

@@ -192,11 +192,15 @@ button.danger:hover { background: #991b1b !important; }
 .wci-item-header { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline;
   font-size: 14px; color: var(--navy); padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
 .wci-item-header strong { font-family: Georgia, serif; font-size: 16px; }
+.wci-item-header > button { margin-left: auto; }
 .wci-hours-block { margin-bottom: 14px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px; }
 .wci-hours-block:last-child { margin-bottom: 0; }
 .wci-hours-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .wci-hours-header > span { font-weight: 600; color: var(--navy); }
 .wci-table { width: 100%; background: #fff; border-radius: 6px; overflow: hidden; }
+
+/* ── Combined working curriculum items (department page) ── */
+.merge-actions { display: flex; justify-content: flex-end; padding-top: 10px; }
 
 /* ── Lecturer workloads (department page): one level deeper than .wci-hours-block ── */
 .lw-record { margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }

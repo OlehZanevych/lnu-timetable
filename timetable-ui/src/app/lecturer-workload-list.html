@@ -7,6 +7,55 @@
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 
+@if (combinedItems().length > 0) {
+  <h3>Об'єднані позиції</h3>
+
+  @for (c of combinedItems(); track c.id) {
+    <div class="card wci-item-card">
+      <div class="wci-item-header">
+        <strong>{{ combinedSummary(c) }}</strong>
+      </div>
+      <div class="wci-hours-block">
+        <div class="wci-hours-header">
+          <span>Спеціальності: {{ combinedMembersLabel(c) }}</span>
+        </div>
+
+        <div class="lw-record">
+          <div class="lw-record-header">
+            <button type="button" class="ghost" (click)="openCreateCombined(c)">+ Додати навантаження</button>
+          </div>
+
+          <table class="wci-table">
+            <thead>
+              <tr>
+                <th>Викладачі</th>
+                <th>Академічні групи</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (w of c.workloads; track w.id) {
+                <tr>
+                  <td>{{ lecturerNames(w) }}</td>
+                  <td>{{ academicGroupNames(w.academicGroups) }}</td>
+                  <td class="row-actions">
+                    <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
+                    <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="muted">Навантаження ще немає.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  }
+
+  <h3>Позиції навчального плану</h3>
+}
+
 @for (group of groups(); track group.id) {
   <div class="card wci-item-card">
     <div class="wci-item-header">
@@ -32,13 +81,17 @@
               @if (isElectiveGroupCourse(group)) {
                 <span>Вибіркова дисципліна: {{ wci.course?.name || '&mdash;' }}</span>
               }
-              <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
+              @if (isMerged(wci)) {
+                <span class="muted">&#x1F517; Об'єднано з іншими спеціальностями — навантаження призначається в розділі «Об'єднані позиції» вище</span>
+              } @else {
+                <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
+              }
             </div>
 
             <table class="wci-table">
               <thead>
                 <tr>
-                  <th>Викладач</th>
+                  <th>Викладачі</th>
                   <th>Академічні групи</th>
                   @if (wci.teachingFormat === 'SEPARATELY') {
                     <th>Об'єднані групи</th>
@@ -49,7 +102,7 @@
               <tbody>
                 @for (w of wci.workloads; track w.id) {
                   <tr>
-                    <td>{{ lecturerFullName(w) }}</td>
+                    <td>{{ lecturerNames(w) }}</td>
                     <td>{{ academicGroupNames(w.academicGroups) }}</td>
                     @if (wci.teachingFormat === 'SEPARATELY') {
                       <td>{{ combinedGroupNames(w.combinedGroups) }}</td>
@@ -87,8 +140,8 @@
 
       <form (ngSubmit)="save()" class="entity-form">
         <label>
-          <span>Викладач *</span>
-          <app-search-select [options]="lecturerOptions()" [(ngModel)]="form['lecturerId']" name="lecturerId" />
+          <span>Викладачі</span>
+          <app-multi-select [options]="lecturerOptions()" [(ngModel)]="formLecturerIds" name="lecturerIds" [ngModelOptions]="{ standalone: true }" />
         </label>
         <label>
           <span>Академічні групи</span>

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for academic curriculum entities:
- * Course, CurriculumItem, CurriculumItemHours, WorkingCurriculumItem.
+ * Course, CurriculumItem, CurriculumItemHours, WorkingCurriculumItem, CombinedWorkingCurriculumItem.
  */
 @Component
 public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
@@ -18,6 +18,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
         configureCurriculumItem(s);
         configureCurriculumItemHours(s);
         configureWorkingCurriculumItem(s);
+        configureCombinedWorkingCurriculumItem(s);
     }
 
     // -------------------------------------------------------------------------
@@ -129,6 +130,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .relation("department")
             .nullableRelation("course")
             .relation("academicGroups")
+            .relation("combinedWorkingCurriculumItems")
             .relation("workloads");
 
         s.query("workingCurriculumItemConnection").entity(WorkingCurriculumItem.class).connection().orderBy("id").filter("departmentId", "department_id");
@@ -151,6 +153,34 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("deleteWorkingCurriculumItem").entity(WorkingCurriculumItem.class).delete()
             .errorStatus("WORKINGCURRICULUMITEM_NOT_FOUND", "WorkingCurriculumItem not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // CombinedWorkingCurriculumItem
+    // -------------------------------------------------------------------------
+
+    private void configureCombinedWorkingCurriculumItem(SchemaDefinition s) {
+        s.type(CombinedWorkingCurriculumItem.class)
+            .relation("workingCurriculumItems")
+            .relation("workloads");
+
+        s.query("combinedWorkingCurriculumItemConnection").entity(CombinedWorkingCurriculumItem.class).connection().orderBy("id");
+        s.query("combinedWorkingCurriculumItem").entity(CombinedWorkingCurriculumItem.class).findById();
+
+        s.mutation("createCombinedWorkingCurriculumItem").entity(CombinedWorkingCurriculumItem.class).create()
+            .manyToMany("workingCurriculumItemIds", "combined_working_curriculum_item_members", "combined_working_curriculum_item_id", "working_curriculum_item_id")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("updateCombinedWorkingCurriculumItem").entity(CombinedWorkingCurriculumItem.class).update()
+            .manyToMany("workingCurriculumItemIds", "combined_working_curriculum_item_members", "combined_working_curriculum_item_id", "working_curriculum_item_id")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("COMBINEDWORKINGCURRICULUMITEM_NOT_FOUND", "CombinedWorkingCurriculumItem not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("deleteCombinedWorkingCurriculumItem").entity(CombinedWorkingCurriculumItem.class).delete()
+            .errorStatus("COMBINEDWORKINGCURRICULUMITEM_NOT_FOUND", "CombinedWorkingCurriculumItem not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 }

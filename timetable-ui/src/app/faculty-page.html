@@ -137,7 +137,8 @@
           <label>Фільтр за кафедрою</label>
           <app-search-select [options]="depts()" [(ngModel)]="selectedDeptId" name="deptFilter" placeholder="Усі кафедри" />
         </div>
-        <app-course [filterValue]="deptFilterValue" [presets]="coursePreset" />
+        <app-course [filterValue]="deptFilterValue" [presets]="coursePreset"
+                    extraFilterParam="facultyId" [extraFilterValue]="fid" />
       }
 
       @case ('curriculumItems') {

@@ -25,17 +25,23 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureLecturerWorkload(SchemaDefinition s) {
         s.type(LecturerWorkload.class)
-            .relation("lecturer")
+            .relation("lecturers")
             .relation("academicGroups")
             .relation("combinedGroups")
-            .relation("workingCurriculumItem")
+            .nullableRelation("workingCurriculumItem")
+            .nullableRelation("combinedWorkingCurriculumItem")
             .relation("timetableEntries");
 
-        s.query("lecturerWorkloadConnection").entity(LecturerWorkload.class).connection().orderBy("id").filter("lecturerId", "lecturer_id");
+        s.query("lecturerWorkloadConnection").entity(LecturerWorkload.class).connection().orderBy("id");
         s.query("lecturerWorkload").entity(LecturerWorkload.class).findById();
 
+        // Exactly one of workingCurriculumItemId / combinedWorkingCurriculumItemId must be given
+        // (enforced by the lecturer_workloads_target_check DB constraint) — the latter is for
+        // lecturers who simultaneously teach several working curriculum items at once (e.g. a
+        // shared lecture across specialties).
         s.mutation("createLecturerWorkload").entity(LecturerWorkload.class).create()
-            .inputFields("lecturerId", "workingCurriculumItemId")
+            .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId")
+            .manyToMany("lecturerIds", "lecturer_workload_lecturers", "lecturer_workload_id", "lecturer_id")
             .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
@@ -43,7 +49,8 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturerWorkload").entity(LecturerWorkload.class).update()
-            .inputFields("lecturerId", "workingCurriculumItemId")
+            .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId")
+            .manyToMany("lecturerIds", "lecturer_workload_lecturers", "lecturer_workload_id", "lecturer_id")
             .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")

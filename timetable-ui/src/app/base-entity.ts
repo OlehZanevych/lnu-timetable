@@ -21,6 +21,24 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   private _filterValue: string | null = null;
 
   /**
+   * An additional, always-on filter argument name for the connection query (e.g. "facultyId"),
+   * combined with {@link extraFilterValue}. Unlike filterValue/meta.filterParam — which is
+   * typically an optional user-facing sub-filter — this is meant for a fixed scope the host page
+   * always wants applied (e.g. courses always scoped to the current faculty, regardless of the
+   * optional department sub-filter on the same list). Only takes effect if the entity's
+   * connection query actually declares a matching backend filter argument.
+   */
+  @Input() extraFilterParam: string | null = null;
+
+  @Input()
+  set extraFilterValue(val: string | null | undefined) {
+    this._extraFilterValue = val ?? null;
+    if (this.initialized) this.load();
+  }
+  get extraFilterValue(): string | null { return this._extraFilterValue; }
+  private _extraFilterValue: string | null = null;
+
+  /**
    * Key/value pairs pre-filled into the create form when openCreate() is called.
    * Useful for pre-selecting a parent entity (e.g. { facultyId: '1' }).
    */
@@ -67,10 +85,10 @@ export abstract class BaseEntity implements OnInit, OnChanges {
 
   private filterClause(): string {
     const m = this.meta;
-    if (m.filterParam && this._filterValue) {
-      return `, ${m.filterParam}: "${this._filterValue}"`;
-    }
-    return '';
+    const parts: string[] = [];
+    if (m.filterParam && this._filterValue) parts.push(`${m.filterParam}: "${this._filterValue}"`);
+    if (this.extraFilterParam && this._extraFilterValue) parts.push(`${this.extraFilterParam}: "${this._extraFilterValue}"`);
+    return parts.length ? `, ${parts.join(', ')}` : '';
   }
 
   private refFields(): FieldMeta[] {
