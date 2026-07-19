@@ -3,17 +3,25 @@
 export interface FieldMeta {
   name: string;            // scalar field name, or FK input field (e.g. "facultyId") for refs
   label: string;
-  type: 'text' | 'number' | 'textarea' | 'ref' | 'enum';
+  type: 'text' | 'number' | 'textarea' | 'ref' | 'enum' | 'multiref' | 'tags';
   required?: boolean;
   // enum-only:
   enumOptions?: { value: string; label: string }[];
-  // ref-only:
+  // ref/multiref-only:
   ref?: string;            // referenced entity key (single name), used to load options
-  relation?: string;       // relation field name in GraphQL (e.g. "faculty")
+  relation?: string;       // relation field name in GraphQL (e.g. "faculty"/"specialties"/"tags")
   refLabel?: string;       // scalar field on the referenced entity used as a label
   // optional parent filter (e.g. filter departments by faculty when selecting for lecturer)
   parentFilter?: { namespace: string; list: string; label: string };
+  // tags-only: scalar field on each nested row holding the tag text (e.g. "tag")
+  tagField?: string;
 }
+
+const multiref = (name: string, label: string, ref: string, relation: string, refLabel: string): FieldMeta =>
+  ({ name, label, type: 'multiref', ref, relation, refLabel });
+
+const tags = (name: string, label: string, relation: string, tagField: string): FieldMeta =>
+  ({ name, label, type: 'tags', relation, tagField });
 
 export interface EntityMeta {
   name: string;            // GraphQL type name, e.g. "Faculty"
@@ -122,7 +130,6 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'website', label: 'Веб-сайт', type: 'text' },
       { name: 'email', label: 'Ел. пошта', type: 'text' },
       { name: 'phone', label: 'Телефон', type: 'text' },
-      { name: 'info', label: 'Інформація', type: 'textarea' },
       ref('buildingId', 'Корпус', 'building', 'building', 'name')
     ]
   },
@@ -133,7 +140,6 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'abbreviation', label: 'Абревіатура', type: 'text' },
       { name: 'email', label: 'Ел. пошта', type: 'text' },
       { name: 'phone', label: 'Телефон', type: 'text' },
-      { name: 'info', label: 'Інформація', type: 'textarea' },
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name', true)
     ]
   },
@@ -153,7 +159,9 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'courseType', label: 'Тип', type: 'enum', required: true, enumOptions: COURSE_TYPE_OPTIONS },
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name'),
       ref('departmentId', 'Кафедра', 'department', 'department', 'name'),
-      ref('parentCourseId', 'Група вибіркових', 'course', 'parentCourse', 'name')
+      ref('parentCourseId', 'Група вибіркових', 'course', 'parentCourse', 'name'),
+      multiref('specialtyIds', 'Спеціальності', 'specialty', 'specialties', 'name'),
+      tags('tags', 'Теги', 'tags', 'tag')
     ]
   },
   {

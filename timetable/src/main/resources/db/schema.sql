@@ -35,8 +35,7 @@ CREATE TABLE faculties
     website      VARCHAR(128),
     email        VARCHAR(64),
     phone        VARCHAR(128),
-    building_id  BIGINT REFERENCES buildings (id) ON DELETE SET NULL,
-    info         TEXT
+    building_id  BIGINT REFERENCES buildings (id) ON DELETE SET NULL
 );
 
 CREATE TABLE departments
@@ -46,8 +45,7 @@ CREATE TABLE departments
     abbreviation VARCHAR(32) UNIQUE,
     faculty_id   BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
     email        VARCHAR(64),
-    phone        VARCHAR(64),
-    info         TEXT
+    phone        VARCHAR(64)
 );
 
 CREATE TYPE degree AS ENUM ('JUNIOR_BACHELOR', 'BACHELOR', 'MASTER', 'PHD', 'DOCTOR_OF_SCIENCE');
@@ -146,6 +144,24 @@ CREATE TABLE courses
     faculty_id       BIGINT REFERENCES faculties (id) ON DELETE SET NULL,
     department_id    BIGINT REFERENCES departments (id) ON DELETE CASCADE,
     parent_course_id BIGINT REFERENCES courses (id) ON DELETE CASCADE
+);
+
+-- Specialties a course is allowed to be taught for; scopes which courses can be picked when
+-- adding a curriculum item to a specialty's curriculum (see curriculum_items below).
+CREATE TABLE course_specialties
+(
+    course_id    BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    specialty_id BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE,
+    PRIMARY KEY (course_id, specialty_id)
+);
+
+-- Free-form labels shown after a course's name (e.g. "English-taught"), one row per tag.
+CREATE TABLE course_tags
+(
+    id        BIGSERIAL PRIMARY KEY,
+    course_id BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    tag       VARCHAR(64) NOT NULL,
+    UNIQUE (course_id, tag)
 );
 
 CREATE TYPE control_form AS ENUM ('EXAM', 'CREDIT', 'GRADED_CREDIT');

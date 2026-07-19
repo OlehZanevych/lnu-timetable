@@ -55,7 +55,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureFaculty(SchemaDefinition s) {
         s.type(Faculty.class)
-            .fields("name", "abbreviation", "website", "email", "phone", "info")
+            .fields("name", "abbreviation", "website", "email", "phone")
             .nullableRelation("building")
             .relation("departments").relation("specialties").relation("rooms");
 
@@ -63,13 +63,13 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         s.query("faculty").entity(Faculty.class).findById();
 
         s.mutation("createFaculty").entity(Faculty.class).create()
-            .inputFields("name", "abbreviation", "website", "email", "phone", "info", "buildingId")
+            .inputFields("name", "abbreviation", "website", "email", "phone", "buildingId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateFaculty").entity(Faculty.class).update()
-            .inputFields("name", "abbreviation", "website", "email", "phone", "info", "buildingId")
+            .inputFields("name", "abbreviation", "website", "email", "phone", "buildingId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("FACULTY_NOT_FOUND", "Faculty not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -86,20 +86,20 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureDepartment(SchemaDefinition s) {
         s.type(Department.class)
-            .fields("name", "abbreviation", "email", "phone", "info")
+            .fields("name", "abbreviation", "email", "phone")
             .relation("faculty").relation("lecturers").relation("courses");
 
         s.query("departmentConnection").entity(Department.class).connection().orderBy("name").filter("facultyId", "faculty_id");
         s.query("department").entity(Department.class).findById();
 
         s.mutation("createDepartment").entity(Department.class).create()
-            .inputFields("name", "abbreviation", "email", "phone", "info", "facultyId")
+            .inputFields("name", "abbreviation", "email", "phone", "facultyId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateDepartment").entity(Department.class).update()
-            .inputFields("name", "abbreviation", "email", "phone", "info", "facultyId")
+            .inputFields("name", "abbreviation", "email", "phone", "facultyId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DEPARTMENT_NOT_FOUND", "Department not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

@@ -76,6 +76,10 @@
               }
             } @else if (f.type === 'enum') {
               <app-search-select [options]="enumOptions(f)" [(ngModel)]="form[f.name]" [name]="f.name" placeholder="— не обрано —" />
+            } @else if (f.type === 'multiref') {
+              <app-multi-select [options]="options()[f.name] || []" [(ngModel)]="form[f.name]" [name]="f.name" />
+            } @else if (f.type === 'tags') {
+              <input type="text" [(ngModel)]="form[f.name]" [name]="f.name" placeholder="тег1, тег2, ..." />
             } @else if (f.type === 'textarea') {
               <textarea [(ngModel)]="form[f.name]" [name]="f.name"></textarea>
             } @else {

@@ -12,6 +12,10 @@ interface CurriculumItemHours {
   hours: number;
 }
 
+interface CourseTagRef {
+  tag: string;
+}
+
 interface CurriculumItem {
   id: string;
   semester: number;
@@ -20,6 +24,7 @@ interface CurriculumItem {
   course?: {
     id: string;
     name: string;
+    tags?: CourseTagRef[];
     faculty?: { id: string };
     department?: { id: string; faculty?: { id: string } };
   };
@@ -114,19 +119,33 @@ export class CurriculumItemList implements OnInit, OnChanges {
     });
   }
 
-  /** Reloads the course list, scoped to the current department/faculty filter (see the fields above). */
+  /**
+   * Reloads the course list, always scoped to the current specialty (via the courseConnection
+   * specialtyId filter, backed by the course_specialties table) — so only courses actually
+   * allowed for this specialty are ever offered, regardless of whether the optional
+   * faculty/department sub-filter below is also set. Each option's label includes the course's
+   * tags in parentheses (see courseLabel).
+   */
   private loadCourseOptions() {
+    if (!this.specialtyId) return;
     const deptId = this.courseDepartmentFilter();
     const facultyId = this.courseFacultyFilter();
-    const filter = deptId ? `, departmentId: "${deptId}"` : facultyId ? `, facultyId: "${facultyId}"` : '';
-    const q = `{ courses { courseConnection(limit: 1000, offset: 0${filter}) { nodes { id name } } } }`;
+    const scopeFilter = deptId ? `, departmentId: "${deptId}"` : facultyId ? `, facultyId: "${facultyId}"` : '';
+    const q = `{ courses { courseConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}"${scopeFilter}) { nodes { id name tags { tag } } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => {
-        const opts: Option[] = d.courses.courseConnection.nodes.map((c: any) => ({ id: c.id, label: `${c.name} (#${c.id})` }));
+        const opts: Option[] = d.courses.courseConnection.nodes.map((c: any) => ({ id: c.id, label: this.courseLabel(c.name, c.tags) }));
         this.courseOptions.set(opts);
       },
       error: () => {}
     });
+  }
+
+  /** "Course name (tag1, tag2)" — tags are omitted entirely (along with the parentheses) when
+   *  the course has none. Used both for the course-selection dropdown and the curriculum table. */
+  courseLabel(name: string, courseTags?: CourseTagRef[] | null): string {
+    const tagList = (courseTags ?? []).map((t) => t.tag).filter(Boolean);
+    return tagList.length ? `${name} (${tagList.join(', ')})` : name;
   }
 
   onCourseFacultyFilterChange(facultyId: string) {
@@ -146,7 +165,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
     if (!this.specialtyId) return;
     const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
       id semester controlForm ectsCredits
-      course { id name faculty { id } department { id faculty { id } } }
+      course { id name tags { tag } faculty { id } department { id faculty { id } } }
       hours { id hourType hours }
     } } } }`;
     this.gql.request(q).subscribe({

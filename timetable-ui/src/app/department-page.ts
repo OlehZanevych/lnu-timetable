@@ -14,7 +14,6 @@ interface Department {
   abbreviation?: string;
   email?: string;
   phone?: string;
-  info?: string;
   faculty: { id: string; name: string };
 }
 
@@ -40,7 +39,7 @@ export class DepartmentDetailPage implements OnInit {
   ngOnInit() { this.load(); }
 
   private load() {
-    const q = `{ departments { department(id: "${this.departmentId}") { id name abbreviation email phone info faculty { id name } } } }`;
+    const q = `{ departments { department(id: "${this.departmentId}") { id name abbreviation email phone faculty { id name } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.department.set(d.departments.department),
       error: (e) => this.error.set(e.message)
@@ -57,7 +56,6 @@ export class DepartmentDetailPage implements OnInit {
       abbreviation: d.abbreviation ?? '',
       email:        d.email        ?? '',
       phone:        d.phone        ?? '',
-      info:         d.info         ?? '',
     };
     this.editError.set('');
     this.showEditForm.set(true);
@@ -73,7 +71,7 @@ export class DepartmentDetailPage implements OnInit {
     if (!dept) return;
     // facultyId must be included in update payload (required field)
     const input: Record<string, any> = { facultyId: dept.faculty.id };
-    for (const f of ['name', 'abbreviation', 'email', 'phone', 'info']) {
+    for (const f of ['name', 'abbreviation', 'email', 'phone']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
     const q = `mutation($id: ID!, $input: DepartmentInputPayload!) { departments { updateDepartment(id: $id, department: $input) { isSuccess errorStatus } } }`;

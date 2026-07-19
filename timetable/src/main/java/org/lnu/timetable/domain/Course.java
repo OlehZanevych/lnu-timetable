@@ -3,6 +3,7 @@ package org.lnu.timetable.domain;
 import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
+import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
@@ -43,4 +44,12 @@ public class Course {
 
     @OneToMany(mappedBy = "parent_course_id")
     private List<Course> childCourses;
+
+    @Description("Specialties this course may be added to a curriculum for")
+    @ManyToMany(joinTable = "course_specialties", joinColumn = "course_id", inverseJoinColumn = "specialty_id")
+    private List<Specialty> specialties;
+
+    @Description("Free-form labels shown after the course's name, e.g. \"англійською\"")
+    @OneToMany(mappedBy = "course_id")
+    private List<CourseTag> tags;
 }

@@ -15,6 +15,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     @Override
     public void configure(SchemaDefinition s) {
         configureCourse(s);
+        configureCourseTag(s);
         configureCurriculumItem(s);
         configureCurriculumItemHours(s);
         configureWorkingCurriculumItem(s);
@@ -31,21 +32,34 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .nullableRelation("faculty")
             .nullableRelation("department")
             .nullableRelation("parentCourse")
-            .relation("childCourses");
+            .relation("childCourses")
+            .relation("specialties")
+            .relation("tags");
 
+        // specialtyId narrows the list to courses allowed for that specialty (see the
+        // course_specialties join table) — used when picking a course for a curriculum item so
+        // only courses actually permitted for the current specialty are offered, regardless of
+        // any faculty/department sub-filter also applied on the same connection.
         s.query("courseConnection").entity(Course.class).connection().orderBy("name")
             .filter("departmentId", "department_id")
-            .filter("facultyId", "faculty_id");
+            .filter("facultyId", "faculty_id")
+            .relationFilter("specialtyId",
+                "EXISTS (SELECT 1 FROM course_specialties cs " +
+                "WHERE cs.course_id = courses.id AND cs.specialty_id = :specialtyId)");
         s.query("course").entity(Course.class).findById();
 
         s.mutation("createCourse").entity(Course.class).create()
             .inputFields("name", "courseType", "departmentId", "facultyId", "parentCourseId")
+            .manyToMany("specialtyIds", "course_specialties", "course_id", "specialty_id")
+            .nestedList("tags", CourseTag.class, "courseId", "tag")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateCourse").entity(Course.class).update()
             .inputFields("name", "courseType", "departmentId", "facultyId", "parentCourseId")
+            .manyToMany("specialtyIds", "course_specialties", "course_id", "specialty_id")
+            .nestedList("tags", CourseTag.class, "courseId", "tag")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("COURSE_NOT_FOUND", "Course not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -54,6 +68,19 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("deleteCourse").entity(Course.class).delete()
             .errorStatus("COURSE_NOT_FOUND", "Course not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // CourseTag
+    // -------------------------------------------------------------------------
+
+    /**
+     * CourseTag has no standalone queries/mutations of its own — it's only ever created, updated
+     * and deleted as part of Course's create/update mutations (see the "tags" nestedList above).
+     * It still needs to be registered as a GraphQL type so Course.tags can resolve to it.
+     */
+    private void configureCourseTag(SchemaDefinition s) {
+        s.type(CourseTag.class).fields("tag");
     }
 
     // -------------------------------------------------------------------------

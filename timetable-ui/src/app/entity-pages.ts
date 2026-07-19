@@ -2,10 +2,11 @@ import { Component, Type } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { BaseEntity } from './base-entity';
 import { SearchSelect } from './search-select';
+import { MultiSelect } from './multi-select';
 import { DeptFacultySelect } from './dept-faculty-select';
 import { ENTITIES, EntityMeta } from './entities';
 
-const IMPORTS = [FormsModule, SearchSelect, DeptFacultySelect];
+const IMPORTS = [FormsModule, SearchSelect, MultiSelect, DeptFacultySelect];
 const meta = (name: string): EntityMeta => ENTITIES.find((e) => e.name === name)!;
 const TPL = './entity-page.html';
 
