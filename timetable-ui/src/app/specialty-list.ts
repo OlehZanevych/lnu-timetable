@@ -2,6 +2,7 @@ import { Component, Input, OnChanges, OnInit, inject, signal } from '@angular/co
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
 import { SearchSelect } from './search-select';
 import { DEGREE_OPTIONS, toOptions } from './entities';
 
@@ -19,6 +20,7 @@ interface Specialty {
 })
 export class SpecialtyList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   @Input() facultyId!: string;
 
@@ -26,6 +28,9 @@ export class SpecialtyList implements OnInit, OnChanges {
 
   specialties = signal<Specialty[]>([]);
   error = signal('');
+
+  canCreate = signal(false);
+  modifiableIds = signal<Set<string>>(new Set());
 
   showCreateForm = signal(false);
   createError = signal('');
@@ -35,14 +40,33 @@ export class SpecialtyList implements OnInit, OnChanges {
   editError = signal('');
   editForm: Record<string, any> = {};
 
-  ngOnInit() { this.load(); }
-  ngOnChanges() { this.load(); }
+  ngOnInit() { this.load(); this.loadPermissions(); }
+  ngOnChanges() { this.load(); this.loadPermissions(); }
+
+  canModify(s: Specialty): boolean {
+    return this.auth.isAdmin() || this.modifiableIds().has(String(s.id));
+  }
+
+  private loadPermissions() {
+    if (!this.facultyId) return;
+    if (this.auth.isAdmin()) {
+      this.canCreate.set(true);
+      return;
+    }
+    this.auth.canModifyIds('FACULTY', [this.facultyId]).subscribe((ids) => this.canCreate.set(ids.has(this.facultyId)));
+  }
 
   load() {
     if (!this.facultyId) return;
     const q = `{ specialties { specialtyConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id code name degree } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.specialties.set(d.specialties.specialtyConnection.nodes),
+      next: (d: any) => {
+        const nodes = d.specialties.specialtyConnection.nodes;
+        this.specialties.set(nodes);
+        if (!this.auth.isAdmin() && nodes.length) {
+          this.auth.canModifyIds('SPECIALTY', nodes.map((n: Specialty) => n.id)).subscribe((ids) => this.modifiableIds.set(ids));
+        }
+      },
       error: (e) => this.error.set(e.message)
     });
   }

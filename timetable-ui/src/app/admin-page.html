@@ -1,0 +1,197 @@
+<div class="page-header">
+  <div>
+    <h2>Користувачі та права доступу</h2>
+    <p class="muted">Адміністрування облікових записів, груп та дозволів на редагування</p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<!-- ── Users ── -->
+
+<h3 class="hours-title">Користувачі</h3>
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Ел. пошта</th><th>Ім'я</th><th>Прізвище</th><th>Тимч. пароль</th><th>Активний</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (u of users(); track u.id) {
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.firstName }}</td>
+          <td>{{ u.lastName }}</td>
+          <td>{{ u.mustChangePassword ? 'Так' : 'Ні' }}</td>
+          <td>{{ u.isActive ? 'Так' : 'Ні' }}</td>
+          <td class="row-actions">
+            @if (u.isActive) {
+              <button type="button" class="ghost danger" (click)="setUserActive(u, false)">Деактивувати</button>
+            } @else {
+              <button type="button" class="ghost" (click)="setUserActive(u, true)">Активувати</button>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="7" class="muted">Користувачів ще немає.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="margin-top: 14px; padding: 16px 20px;">
+  @if (createUserError()) { <p class="error">{{ createUserError() }}</p> }
+  @if (createUserSuccess()) { <p class="muted">{{ createUserSuccess() }}</p> }
+  <form (ngSubmit)="createUser()" class="entity-form">
+    <label>
+      <span>Ел. пошта *</span>
+      <input type="email" [(ngModel)]="newUser.email" name="newUserEmail" required />
+    </label>
+    <label>
+      <span>Ім'я *</span>
+      <input type="text" [(ngModel)]="newUser.firstName" name="newUserFirstName" required />
+    </label>
+    <label>
+      <span>Прізвище *</span>
+      <input type="text" [(ngModel)]="newUser.lastName" name="newUserLastName" required />
+    </label>
+    <label>
+      <span>Тимчасовий пароль *</span>
+      <input type="text" [(ngModel)]="newUser.temporaryPassword" name="newUserPassword" required minlength="8" />
+    </label>
+    <div class="actions">
+      <button type="submit">+ Створити користувача</button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Groups ── -->
+
+<h3 class="hours-title" style="margin-top: 28px;">Групи</h3>
+<div class="card">
+  <table>
+    <thead><tr><th>#</th><th>Назва</th><th>Опис</th></tr></thead>
+    <tbody>
+      @for (g of groups(); track g.id) {
+        <tr><td>{{ g.id }}</td><td>{{ g.name }}</td><td>{{ g.description || '&mdash;' }}</td></tr>
+      } @empty {
+        <tr><td colspan="3" class="muted">Груп ще немає.</td></tr>
+      }
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="margin-top: 14px; padding: 16px 20px;">
+  @if (createGroupError()) { <p class="error">{{ createGroupError() }}</p> }
+  <form (ngSubmit)="createGroup()" class="entity-form">
+    <label>
+      <span>Назва групи *</span>
+      <input type="text" [(ngModel)]="newGroup.name" name="newGroupName" required />
+    </label>
+    <label style="width: 100%">
+      <span>Опис</span>
+      <input type="text" [(ngModel)]="newGroup.description" name="newGroupDescription" />
+    </label>
+    <div class="actions">
+      <button type="submit">+ Створити групу</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="margin-top: 14px; padding: 16px 20px;">
+  @if (membershipError()) { <p class="error">{{ membershipError() }}</p> }
+  <form class="entity-form">
+    <label>
+      <span>Користувач (ID)</span>
+      <input type="text" [(ngModel)]="membership.userId" name="membershipUserId" />
+    </label>
+    <label>
+      <span>Група (ID)</span>
+      <input type="text" [(ngModel)]="membership.groupId" name="membershipGroupId" />
+    </label>
+    <div class="actions">
+      <button type="button" (click)="addToGroup()">Додати до групи</button>
+      <button type="button" class="ghost" (click)="removeFromGroup()">Видалити з групи</button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Permission grants ── -->
+
+<h3 class="hours-title" style="margin-top: 28px;">Дозволи на редагування</h3>
+<p class="muted">
+  Дозвіл, наданий на факультет/кафедру/спеціальність тощо, поширюється на всі пов'язані сутності
+  (наприклад дозвіл на факультет дає право редагувати його кафедри, спеціальності, навчальні плани,
+  навантаження викладачів тощо). Надати доступ можна лише в межах того, що ви самі можете редагувати
+  (або GLOBAL — повний доступ, лише для адміністратора).
+</p>
+
+<div class="card" style="padding: 16px 20px;">
+  @if (grantError()) { <p class="error">{{ grantError() }}</p> }
+
+  <form class="entity-form">
+    <label>
+      <span>Тип ресурсу *</span>
+      <select [(ngModel)]="grant.resourceType" name="grantResourceType">
+        @for (rt of resourceTypes; track rt) {
+          <option [value]="rt">{{ rt }}</option>
+        }
+      </select>
+    </label>
+    @if (grant.resourceType !== 'GLOBAL') {
+      <label>
+        <span>ID ресурсу *</span>
+        <input type="text" [(ngModel)]="grant.resourceId" name="grantResourceId" />
+      </label>
+    }
+    <div class="actions">
+      <button type="button" class="ghost" [disabled]="grantsLoading()" (click)="loadGrantsForSelectedResource()">
+        {{ grantsLoading() ? 'Завантаження…' : 'Переглянути дозволи' }}
+      </button>
+    </div>
+  </form>
+
+  @if (grants().length) {
+    <table style="margin-top: 12px;">
+      <thead><tr><th>Кому</th><th>Тип</th><th></th></tr></thead>
+      <tbody>
+        @for (g of grants(); track g.id) {
+          <tr>
+            <td>
+              @if (g.granteeType === 'USER') { Користувач: {{ g.user?.email }} }
+              @else { Група: {{ g.group?.name }} }
+            </td>
+            <td>{{ g.granteeType }}</td>
+            <td><button type="button" class="ghost danger" (click)="revokeGrant(g)">Відкликати</button></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <form class="entity-form" style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
+    <label>
+      <span>Кому надати *</span>
+      <select [(ngModel)]="grant.granteeType" name="grantGranteeType">
+        <option value="USER">Користувачу</option>
+        <option value="GROUP">Групі</option>
+      </select>
+    </label>
+    @if (grant.granteeType === 'USER') {
+      <label>
+        <span>Користувач (ID) *</span>
+        <input type="text" [(ngModel)]="grant.userId" name="grantUserId" />
+      </label>
+    } @else {
+      <label>
+        <span>Група (ID) *</span>
+        <input type="text" [(ngModel)]="grant.groupId" name="grantGroupId" />
+      </label>
+    }
+    <div class="actions">
+      <button type="button" (click)="submitGrant()">+ Надати дозвіл</button>
+    </div>
+  </form>
+</div>

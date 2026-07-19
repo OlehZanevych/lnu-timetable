@@ -227,6 +227,21 @@ button.danger:hover { background: #991b1b !important; }
 .class.biweekly { background: #fbf3d7; border-left-color: var(--gold); }
 .class em { color: #92400e; font-style: normal; font-size: 11px; }
 
+/* ── Login / change-password pages ── */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.login-card { width: min(420px, 100%); padding: 28px 30px; }
+.login-card h2 { margin-bottom: 4px; }
+.login-form { flex-direction: column; align-items: stretch; gap: 14px; }
+.login-form label { min-width: 0; }
+.login-form input { width: 100%; }
+.login-hint { margin-top: 16px; }
+
+/* ── Top bar user menu ── */
+.user-menu { margin-left: auto; display: flex; align-items: center; gap: 12px; color: #fff; font-size: 13px; }
+.user-menu .admin-badge { background: var(--gold); color: var(--navy); border-radius: 10px; font-size: 10px; font-weight: 700; padding: 1px 6px; }
+.user-menu button { background: transparent; border: 1px solid rgba(255,255,255,.35); color: #fff; padding: 5px 12px; font-size: 12px; }
+.user-menu button:hover { background: rgba(255,255,255,.12); }
+
 /* ── Searchable select (select2-like) ── */
 .ss { position: relative; }
 .ss-control { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: #fff; }

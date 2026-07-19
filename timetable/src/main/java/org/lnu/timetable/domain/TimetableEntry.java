@@ -4,6 +4,7 @@ import lombok.Data;
 import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
+import org.lnu.timetable.framework.annotation.PermissionParent;
 import org.lnu.timetable.framework.annotation.PgEnum;
 
 /**
@@ -12,6 +13,8 @@ import org.lnu.timetable.framework.annotation.PgEnum;
  */
 @Data
 @GraphQLEntity(table = "timetable_entries")
+@PermissionParent(value = LecturerWorkload.class, joinColumn = "workload_id")
+@PermissionParent(value = Room.class, joinColumn = "room_id")
 public class TimetableEntry {
 
     private Long id;

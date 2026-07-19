@@ -279,3 +279,82 @@ CREATE TABLE timetable_entries
     class_start_time_id BIGINT NOT NULL REFERENCES class_start_times (id) ON DELETE CASCADE,
     room_id      BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE
 );
+
+-- ============================ Authentication & authorization ============================
+--
+-- Users never self-register: an admin creates an account with a temporary password
+-- (must_change_password = TRUE), and the user is forced to set a real password on first login.
+--
+-- Permissions are entity-scoped: a grant names a resource_type (the securable entity's simple
+-- class name in UPPER_SNAKE_CASE, e.g. 'FACULTY', 'DEPARTMENT', 'WORKING_CURRICULUM_ITEM' — this
+-- mirrors org.lnu.timetable.framework.metadata.EntityMetadata#resourceType, so any entity newly
+-- annotated with @GraphQLEntity automatically becomes a valid grant target with no schema change
+-- here) plus a resource_id, OR the special resource_type 'GLOBAL' (resource_id NULL) for
+-- full-access admin grants. Modify permission on a resource cascades to its descendants along the
+-- edges declared via @PermissionParent/@PermissionJoinParent on the domain classes (see
+-- org.lnu.timetable.security.PermissionService) — this table only stores the grants themselves,
+-- not the cascade rules.
+--
+-- A grant is made either to a single user or to a group (never both); a user can belong to
+-- multiple groups, and effective permissions are the union of a user's direct grants and all of
+-- their groups' grants.
+
+CREATE TABLE users
+(
+    id                   BIGSERIAL PRIMARY KEY,
+    email                VARCHAR(255) NOT NULL UNIQUE,
+    first_name           VARCHAR(100) NOT NULL,
+    last_name            VARCHAR(100) NOT NULL,
+    password_hash        VARCHAR(255) NOT NULL,
+    must_change_password BOOLEAN      NOT NULL DEFAULT TRUE,
+    is_active            BOOLEAN      NOT NULL DEFAULT TRUE,
+    created_at           TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMP    NOT NULL DEFAULT now()
+);
+
+CREATE TABLE groups
+(
+    id          BIGSERIAL PRIMARY KEY,
+    name        VARCHAR(160) NOT NULL UNIQUE,
+    description VARCHAR(500)
+);
+
+CREATE TABLE user_groups
+(
+    user_id  BIGINT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    group_id BIGINT NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, group_id)
+);
+
+CREATE TYPE grantee_type AS ENUM ('USER', 'GROUP');
+
+CREATE TABLE permissions
+(
+    id            BIGSERIAL PRIMARY KEY,
+    grantee_type  grantee_type NOT NULL,
+    user_id       BIGINT REFERENCES users (id) ON DELETE CASCADE,
+    group_id      BIGINT REFERENCES groups (id) ON DELETE CASCADE,
+    -- Entity simple name in UPPER_SNAKE_CASE (e.g. 'FACULTY'), or 'GLOBAL' for full-access admin.
+    resource_type VARCHAR(64)  NOT NULL,
+    -- NULL only when resource_type = 'GLOBAL'.
+    resource_id   BIGINT,
+    granted_by    BIGINT REFERENCES users (id) ON DELETE SET NULL,
+    created_at    TIMESTAMP    NOT NULL DEFAULT now(),
+    CONSTRAINT permissions_grantee_check CHECK (
+        (grantee_type = 'USER' AND user_id IS NOT NULL AND group_id IS NULL) OR
+        (grantee_type = 'GROUP' AND group_id IS NOT NULL AND user_id IS NULL)
+    ),
+    CONSTRAINT permissions_resource_check CHECK (
+        (resource_type = 'GLOBAL' AND resource_id IS NULL) OR
+        (resource_type <> 'GLOBAL' AND resource_id IS NOT NULL)
+    )
+);
+
+-- A given grantee can only hold one grant per exact resource (NULLS NOT DISTINCT so the two
+-- GLOBAL rows, which both have resource_id = NULL, are still treated as duplicates of each other).
+CREATE UNIQUE INDEX permissions_unique_grant
+    ON permissions (grantee_type, COALESCE(user_id, 0), COALESCE(group_id, 0), resource_type, COALESCE(resource_id, 0));
+
+CREATE INDEX permissions_user_idx ON permissions (user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX permissions_group_idx ON permissions (group_id) WHERE group_id IS NOT NULL;
+CREATE INDEX permissions_resource_idx ON permissions (resource_type, resource_id);

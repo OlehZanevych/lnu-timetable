@@ -2,6 +2,7 @@ import { Component, Input, OnChanges, OnInit, inject, signal } from '@angular/co
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
 import { SearchSelect } from './search-select';
 import { STUDY_FORM_OPTIONS, toOptions } from './entities';
 
@@ -20,6 +21,7 @@ interface AcademicGroup {
 })
 export class AcademicGroupList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   readonly studyFormOptions = toOptions(STUDY_FORM_OPTIONS);
 
@@ -29,6 +31,9 @@ export class AcademicGroupList implements OnInit, OnChanges {
   groups = signal<AcademicGroup[]>([]);
   error = signal('');
 
+  canCreate = signal(false);
+  modifiableIds = signal<Set<string>>(new Set());
+
   showCreateForm = signal(false);
   createError = signal('');
   createForm: Record<string, any> = {};
@@ -37,18 +42,40 @@ export class AcademicGroupList implements OnInit, OnChanges {
   editError = signal('');
   editForm: Record<string, any> = {};
 
-  ngOnInit() { this.load(); }
-  ngOnChanges() { this.load(); }
+  ngOnInit() { this.load(); this.loadPermissions(); }
+  ngOnChanges() { this.load(); this.loadPermissions(); }
 
   studyFormLabel(v: string): string {
     return STUDY_FORM_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  }
+
+  canModify(g: AcademicGroup): boolean {
+    return this.auth.isAdmin() || this.modifiableIds().has(String(g.id));
+  }
+
+  private loadPermissions() {
+    if (this.auth.isAdmin()) {
+      this.canCreate.set(true);
+      return;
+    }
+    if (this.specialtyId) {
+      this.auth.canModifyIds('SPECIALTY', [this.specialtyId]).subscribe((ids) => this.canCreate.set(ids.has(this.specialtyId!)));
+    } else {
+      this.canCreate.set((this.auth.currentUser()?.permissions?.length ?? 0) > 0);
+    }
   }
 
   load() {
     const filter = this.specialtyId ? `, specialtyId: "${this.specialtyId}"` : '';
     const q = `{ academicGroups { academicGroupConnection(limit: 500${filter}) { nodes { id name courseYear studyForm studentsCount } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.groups.set(d.academicGroups.academicGroupConnection.nodes),
+      next: (d: any) => {
+        const nodes = d.academicGroups.academicGroupConnection.nodes;
+        this.groups.set(nodes);
+        if (!this.auth.isAdmin() && nodes.length) {
+          this.auth.canModifyIds('ACADEMIC_GROUP', nodes.map((n: AcademicGroup) => n.id)).subscribe((ids) => this.modifiableIds.set(ids));
+        }
+      },
       error: (e) => this.error.set(e.message)
     });
   }

@@ -11,7 +11,17 @@ public record EntityMetadata(
     String tableName,
     Map<String, EntityFieldMetadata> fields,
     List<String> selectableColumns,
-    Map<String, RelationMetadata> relations
+    Map<String, RelationMetadata> relations,
+    /**
+     * The identifier used for this entity in {@code permissions.resource_type} (the class's
+     * simple name in UPPER_SNAKE_CASE, e.g. {@code "WORKING_CURRICULUM_ITEM"}) — see
+     * {@code org.lnu.timetable.security.PermissionService}.
+     */
+    String resourceType,
+    /** FK-based permission ancestor edges declared via {@code @PermissionParent}. */
+    List<PermissionParentEdge> permissionParents,
+    /** Join-table-based permission ancestor edges declared via {@code @PermissionJoinParent}. */
+    List<PermissionJoinParentEdge> permissionJoinParents
 ) {
     public EntityFieldMetadata getField(String name) {
         return fields.get(name);

@@ -2,6 +2,8 @@ import { Directive, Input, OnChanges, OnInit, SimpleChanges, inject, signal } fr
 import { GraphqlService } from './graphql.service';
 import { EntityMeta, FieldMeta, entityBySingle, toOptions } from './entities';
 import { Option } from './search-select';
+import { AuthService } from './auth.service';
+import { toResourceType } from './resource-type';
 
 /** Shared CRUD logic for every entity page. Subclasses only provide `meta`. */
 @Directive()
@@ -62,6 +64,7 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   private _refFilters: Record<string, string> = {};
 
   protected gql = inject(GraphqlService);
+  protected auth = inject(AuthService);
 
   rows = signal<any[]>([]);
   options = signal<Record<string, Option[]>>({});
@@ -69,6 +72,20 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   showForm = signal(false);
   error = signal('');
   form: Record<string, any> = {};
+
+  /** ids (of this page's entity type) the current user is allowed to update/delete. */
+  modifiableIds = signal<Set<string>>(new Set());
+
+  /** Whether the "+ Add" control should be shown at all — a coarse, cheap heuristic (any admin or
+   *  any delegated permission at all); the actual create mutation is still authoritatively checked
+   *  server-side regardless, so this only ever hides the button, never grants access. */
+  get canShowCreate(): boolean {
+    return this.auth.isAdmin() || (this.auth.currentUser()?.permissions?.length ?? 0) > 0;
+  }
+
+  canModify(row: any): boolean {
+    return this.auth.isAdmin() || this.modifiableIds().has(String(row.id));
+  }
 
   private initialized = false;
 
@@ -107,9 +124,20 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     const filter = this.filterClause();
     const q = `{ ${m.namespace} { ${m.list}(limit: 1000, offset: 0${filter}) { nodes { ${this.selection()} } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.rows.set(d[m.namespace][m.list].nodes),
+      next: (d: any) => {
+        const nodes = d[m.namespace][m.list].nodes;
+        this.rows.set(nodes);
+        this.loadModifiablePermissions(nodes);
+      },
       error: (e) => this.error.set(e.message)
     });
+  }
+
+  /** Batched permission check for every loaded row's edit/delete buttons — see AuthService#canModifyIds. */
+  private loadModifiablePermissions(rows: any[]) {
+    if (this.auth.isAdmin() || rows.length === 0) return;
+    const resourceType = toResourceType(this.meta.name);
+    this.auth.canModifyIds(resourceType, rows.map((r) => String(r.id))).subscribe((ids) => this.modifiableIds.set(ids));
   }
 
   private loadOptions() {

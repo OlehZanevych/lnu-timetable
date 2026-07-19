@@ -5,9 +5,11 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.PermissionParent;
 
 @Data
 @GraphQLEntity(table = "students")
+@PermissionParent(value = AcademicGroup.class, joinColumn = "academic_group_id")
 public class Student {
 
     private Long id;

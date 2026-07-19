@@ -7,6 +7,8 @@ resulting schedule as a weekly grid. Styled after
 
 - Angular 21 (standalone components, **signals**, **zoneless** change detection, new `@if`/`@for`/`@switch` control flow)
 - Talks to the service over plain GraphQL-over-HTTP (`GraphqlService`, no Apollo Client dependency)
+- JWT sign-in with forced password change on first login, and permission-aware UI that hides
+  edit/delete/create controls a user isn't allowed to use — see [Authentication](#authentication)
 
 ---
 
@@ -54,12 +56,21 @@ just depends on whether it needed a bespoke layout.
 src/app/
 ├── entities.ts               # metadata for the generic CRUD tables: fields, FK refs, options
 ├── graphql.service.ts        # tiny GraphQL-over-HTTP client (POST /graphql, query + variables)
-├── base-entity.ts            # BaseEntity: shared list/create/update/delete + option loading
+├── base-entity.ts            # BaseEntity: shared list/create/update/delete + option loading,
+│                             #   now also gated by modifiableIds/canShowCreate (see Authentication)
 ├── entity-page.html          # shared table + modal-form template for the generic pages
 ├── entity-pages.ts           # thin components extending BaseEntity, one per entity, → /e/:single
 ├── search-select.ts          # SearchSelect: select2-like searchable single-value dropdown
 ├── multi-select.ts           # MultiSelect: checkbox-list dropdown for many-to-many fields
 ├── dept-faculty-select.ts    # DeptFacultySelect: faculty-filtered department picker
+├── auth.service.ts           # AuthService: session state (JWT, CurrentUser), login/logout,
+│                             #   changePassword, canModifyIds() permission lookups — see Authentication
+├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests
+├── auth.guard.ts             # authGuard (must be signed in + password changed), adminGuard
+├── resource-type.ts          # toResourceType(): entity name → backend permission resource type
+├── login-page.ts/.html       # "/login"
+├── change-password-page.ts/.html  # "/change-password" — forced after signing in with a temporary password
+├── admin-page.ts/.html       # "/admin" — user/group/permission management console (admin-only)
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
 ├── app.routes.ts             # route table (see below)
 │
@@ -238,6 +249,9 @@ All three are standalone `ControlValueAccessor` components usable with `[(ngMode
 
 | Path | Component | Notes |
 |---|---|---|
+| `/login` | `LoginPage` | the only route with no guard |
+| `/change-password` | `ChangePasswordPage` | `authGuard` only — reachable while `mustChangePassword` is set |
+| `/admin` | `AdminPage` | `authGuard` + `adminGuard` — user/group/permission management |
 | `/` | `FacultyHome` | faculty tiles, drill-down entry point |
 | `/faculty/:id` | `FacultyPage` | tabbed faculty detail |
 | `/building/:id` | `BuildingPage` | building detail |
@@ -255,6 +269,100 @@ generic-table links for entities with no dedicated page (`Building`, `ClassStart
 `AcademicDegree`). `CombinedGroup` also has no sidebar link of its own — it's only reachable
 embedded in the Faculty page's "Об'єднані групи" tab (see above), not as a standalone `/e/…`
 route.
+
+---
+
+## Authentication
+
+There is no sign-up screen anywhere — accounts are created by an administrator (`/admin`, see
+below) with a temporary password, matching the backend's no-self-registration rule.
+
+### Session state (`AuthService`)
+
+A single root-provided service, injected the same way `GraphqlService` is used everywhere else:
+
+- `token` (signal) — the JWT, persisted to `localStorage` (`lnu_timetable_token`) so a page
+  refresh doesn't sign the user out; `isAuthenticated` is just `token() !== null`.
+- `currentUser` (signal) — the result of `Query.me` (profile, `isAdmin`, `groups`,
+  `permissions`), re-fetched via `refreshMe()` after login and on app bootstrap when a token is
+  already stored. Deliberately **not** decoded from the JWT itself — the token only carries a user
+  id — so a permission change or account deactivation is reflected the moment `refreshMe()` runs
+  again, without needing a new token.
+- `login(email, password)` / `logout()` / `changePassword(current, new)` — thin wrappers around the
+  corresponding mutations.
+- `canModifyIds(resourceType, ids)` — given a batch of ids of one entity type, asks
+  `Query.canModifyResources` which of them the signed-in user may edit/delete, backed by a
+  per-`resourceType` cache (`clearModifyCache()` invalidates it, called after granting/revoking a
+  permission in the admin console) so re-rendering an already-checked list doesn't re-query.
+
+`authInterceptor` (an `HttpInterceptorFn`) attaches `Authorization: Bearer <token>` to every
+outgoing GraphQL request when a token is present.
+
+### Route guards (`auth.guard.ts`)
+
+- **`authGuard`** — redirects to `/login` (with a `redirectTo` query param) when there's no
+  signed-in user; redirects to `/change-password` when `mustChangePassword` is still set (except
+  for that route itself). Applied to every route except `/login`.
+- **`adminGuard`** — additionally requires `isAdmin`; applied only to `/admin`.
+
+### Login → forced password change
+
+`LoginPage` (`/login`) posts to `AuthService.login`, then calls `refreshMe()` before navigating —
+if the account still has `mustChangePassword` set, it's sent to `/change-password`
+(`ChangePasswordPage`) regardless of where it was headed; otherwise it lands on the original
+`redirectTo` target or `/`. `ACCOUNT_DISABLED` and invalid-credentials errors from `login` are
+surfaced as distinct messages.
+
+### Hiding UI the user can't use
+
+Every list/table in the app — both the generic `BaseEntity` tables and the hand-written
+drill-down widgets (`DepartmentList`, `SpecialtyList`, `AcademicGroupList`, etc.) — follows the
+same pattern:
+
+1. After loading a page of rows, batch-call `auth.canModifyIds(resourceType, ids)` (skipped
+   entirely for admins, who can modify everything) and store the resulting id set.
+2. `canModify(row)` (`isAdmin() || modifiableIds().has(row.id)`) gates the row's "Редагувати"/
+   "Видалити" buttons in the template.
+3. A separate, coarser check gates the "+ Додати" (create) control: for the generic tables,
+   `BaseEntity.canShowCreate` is simply "is admin, or holds *any* permission grant at all" (cheap,
+   since the real check happens server-side anyway); the drill-down list widgets do the precise
+   check instead — e.g. `DepartmentList` calls `canModifyIds('FACULTY', [facultyId])` on its own
+   parent faculty, since creating a `Department` requires modify permission on the `Faculty` it
+   would belong to (`PermissionService#canCreate` on the backend walks the same edge).
+
+`resourceType.ts`'s `toResourceType()` converts an entity's PascalCase name (`WorkingCurriculumItem`)
+to the `UPPER_SNAKE_CASE` identifier the backend's grants use (`WORKING_CURRICULUM_ITEM`) —
+mirroring `EntityMetadata#resourceType()` on the backend so the two sides never need to agree on
+a hand-maintained list.
+
+**Every hidden button is a UI convenience, not the security boundary** — the corresponding
+mutation re-checks the same permission server-side regardless (see the backend README's
+[Authentication & authorization](../timetable/README.md#authentication--authorization)); hiding a
+button just avoids a wasted round trip through a request the server would reject anyway.
+
+### Administration console (`AdminPage`, `/admin`)
+
+Reachable only to admins (sidebar link + `adminGuard`), this page covers everything the product
+spec asked an administrator to be able to do, in one screen:
+
+- **Create users** with a temporary password (shown once on screen after creation, since the
+  backend never returns a password) — the new account must change it on first login.
+- **Activate/deactivate** existing accounts.
+- **Create groups** and manage membership (add/remove a user to/from a group).
+- **Grant/revoke permissions** — pick a grantee (a user or a group), a resource type (every entity
+  in `entities.ts` plus `GLOBAL` and the curriculum/scheduling entities that only have bespoke
+  drill-down UI, e.g. `WORKING_CURRICULUM_ITEM`), and — unless the type is `GLOBAL` — a resource
+  id; `grantPermission`/`revokePermission` enforce the delegation rule server-side (you can only
+  grant a scope you already hold). Selecting a resource also lists everyone who currently has a
+  grant on it (`Query.grantsForResource`), so an admin (or anyone with modify rights on that
+  resource) can review and revoke existing access.
+
+### Seeded accounts (local dev)
+
+Matching the backend's `data.sql` (see its README for the full list): `admin@lnu.edu.ua` /
+`Admin#2026` signs in as the full `GLOBAL` administrator; `dean.fpmi@lnu.edu.ua` and
+`o.melnyk@lnu.edu.ua` (both temporary password `Temp#12345`) exercise the forced
+change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
 
 ---
 
@@ -288,3 +396,13 @@ route.
   GraphQL "bad SQL grammar" error), the backend's `schema.sql`/`data.sql` most likely haven't
   been re-applied since a recent backend change — see the backend README's [Known
   limitations](../timetable/README.md#known-limitations).
+- The JWT is kept in `localStorage`, readable by any script running on the page — acceptable for
+  this deanery-internal tool, but worth knowing if this were ever exposed more broadly (an
+  httpOnly cookie would be the safer default). There's also no proactive token-refresh or
+  expiry countdown: a token that expires mid-session just starts failing requests with an auth
+  error on the next mutation rather than warning ahead of time.
+- `BaseEntity.canShowCreate` is a coarse "has *any* permission at all" check, not a precise "can
+  create under this exact parent" check (unlike the drill-down widgets, which do check the exact
+  parent) — a user with only a narrow grant elsewhere in the system will still see the generic
+  tables' "+ Додати" button, and only find out via the server error that this particular create
+  isn't allowed.

@@ -41,7 +41,7 @@ class SchemaBuildTest {
                 new PeopleSchemaConfig(),
                 new SchedulingSchemaConfig()
             ),
-            noop
+            noop, null, null
         );
         String sdl = new SchemaPrinter().print(schema);
         System.out.println(sdl);
@@ -54,12 +54,13 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("lecturerWorkloads: LecturerWorkloadQueries"));
         assertTrue(sdl.contains("timetableEntries: TimetableEntryQueries"));
         assertTrue(sdl.contains("combinedGroups: CombinedGroupQueries"));
-        // Many-to-many relation (list) and nullable to-one relation
+        // Many-to-many relations (list)
         assertTrue(sdl.contains("academicGroups: [AcademicGroup!]"));
         assertTrue(sdl.contains("combinedGroups: [CombinedGroup!]"));
-        assertTrue(sdl.contains("academicGroup: AcademicGroup\n") || sdl.contains("academicGroup: AcademicGroup "));
-        // Non-null to-one relation
-        assertTrue(sdl.contains("lecturer: Lecturer!"));
+        // Non-null to-one relations (a Student always belongs to an AcademicGroup;
+        // a TimetableEntry always references a LecturerWorkload)
+        assertTrue(sdl.contains("academicGroup: AcademicGroup!"));
+        assertTrue(sdl.contains("workload: LecturerWorkload!"));
         // Connection shape
         assertTrue(sdl.contains("type LecturerWorkloadConnection"));
         assertTrue(sdl.contains("nodes: [LecturerWorkload!]!"));

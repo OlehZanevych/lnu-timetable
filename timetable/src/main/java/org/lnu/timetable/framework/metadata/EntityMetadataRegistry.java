@@ -18,6 +18,7 @@ import java.util.*;
 public class EntityMetadataRegistry {
 
     private final Map<Class<?>, EntityMetadata> registry = new LinkedHashMap<>();
+    private final Map<String, Class<?>> byResourceType = new LinkedHashMap<>();
 
     public EntityMetadataRegistry() {
         scanEntities("org.lnu.timetable");
@@ -31,6 +32,15 @@ public class EntityMetadataRegistry {
         return registry.values();
     }
 
+    /**
+     * Resolves a {@code permissions.resource_type} value (e.g. {@code "FACULTY"}) back to its
+     * entity class, for the authorization framework (see
+     * {@code org.lnu.timetable.security.PermissionService}). Returns {@code null} if unknown.
+     */
+    public Class<?> getEntityClassByResourceType(String resourceType) {
+        return byResourceType.get(resourceType);
+    }
+
     private void scanEntities(String basePackage) {
         var scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(GraphQLEntity.class));
@@ -41,6 +51,7 @@ public class EntityMetadataRegistry {
                 Class<?> entityClass = Class.forName(bd.getBeanClassName());
                 EntityMetadata metadata = buildMetadata(entityClass);
                 registry.put(entityClass, metadata);
+                byResourceType.put(metadata.resourceType(), entityClass);
             } catch (ClassNotFoundException e) {
                 throw new RuntimeException("Failed to load entity class: " + bd.getBeanClassName(), e);
             }
@@ -113,7 +124,20 @@ public class EntityMetadataRegistry {
             }
         }
 
-        return new EntityMetadata(entityClass, tableName, fields, selectableColumns, relations);
+        String resourceType = CaseFormat.UPPER_CAMEL.to(CaseFormat.UPPER_UNDERSCORE, entityClass.getSimpleName());
+
+        List<PermissionParentEdge> permissionParents = new ArrayList<>();
+        for (PermissionParent pp : entityClass.getAnnotationsByType(PermissionParent.class)) {
+            permissionParents.add(new PermissionParentEdge(pp.value(), pp.joinColumn(), pp.nullable()));
+        }
+        List<PermissionJoinParentEdge> permissionJoinParents = new ArrayList<>();
+        for (PermissionJoinParent pjp : entityClass.getAnnotationsByType(PermissionJoinParent.class)) {
+            permissionJoinParents.add(new PermissionJoinParentEdge(
+                pjp.value(), pjp.joinTable(), pjp.selfColumn(), pjp.parentColumn()));
+        }
+
+        return new EntityMetadata(entityClass, tableName, fields, selectableColumns, relations,
+            resourceType, permissionParents, permissionJoinParents);
     }
 
     private Class<?> getCollectionGenericType(Field field) {
