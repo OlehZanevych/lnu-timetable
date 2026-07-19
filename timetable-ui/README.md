@@ -116,6 +116,15 @@ foreign keys are `ref(...)` fields pointing at another entity for the dropdown:
 }
 ```
 
+Two more field-builder helpers cover relations `ref(...)` can't express, both used by the
+`Course` entity: `multiref(name, label, ref, relation, refLabel)` renders an
+`app-multi-select` bound to a many-to-many id-list input field (`Course.specialtyIds`, which
+specialties the course may be added to a curriculum for — see the backend's
+`.manyToMany(...)`), replacing the join-table membership wholesale on save; `tags(name, label,
+relation, tagField)` renders a plain comma-separated text input that's split/joined against a
+nested-list mutation field (`Course.tags` — see the backend's `.nestedList(...)`) — an empty
+comma-separated entry is filtered out, so "тег1, , тег2" becomes two tags, not three.
+
 `BaseEntity` (an abstract `@Directive`) builds the queries/mutations from this metadata —
 list (`{ <namespace> { <list>(limit, offset) { nodes {...} } } }`), create/update (typed
 `$input: <Name>InputPayload!`) and delete (`$id: ID!`) — and every entity page is a one-line
@@ -160,6 +169,17 @@ and composing purpose-built child-list components rather than going through `Bas
   workloads are managed per-department, not per-group.)
 
 #### Curriculum items and working curriculum items (`SpecialtyDetailPage`)
+
+The "Навчальні плани" tab (`CurriculumItemList`) lists the specialty's `CurriculumItem`s
+(semester, course, control form, ECTS, per-hour-type breakdown) with an add/edit modal whose
+**course** dropdown is always scoped to courses allowed for the current specialty — the
+`courseConnection(specialtyId: ...)` filter, backed by the `course_specialties` join table (see
+the backend README) — regardless of whether the modal's optional faculty/department sub-filter
+(`DeptFacultySelect` pattern, defaulting to the specialty's own faculty) is also set. Both this
+dropdown and the resulting curriculum table display a course's tags (`Course.tags`, set on the
+`Course` entity page — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity)
+above) after its name in parentheses, e.g. "Database Systems (англійською)"
+(`CurriculumItemList.courseLabel`).
 
 The "Робочі навчальні плани" tab of the specialty page renders, for every `CurriculumItem`:
 a header block ("Семестр 1, Дисципліна: …, Форма контролю: …, ECTS: …"), then one child block
@@ -238,7 +258,9 @@ everything else falls back to a plain text input. Saves go through the single
 All three are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
 
 - **`SearchSelect`** — select2-like single-value searchable dropdown (used for every to-one FK).
-- **`MultiSelect`** — checkbox-list dropdown with tag display, for many-to-many fields.
+- **`MultiSelect`** — checkbox-list dropdown with tag display, for many-to-many fields (both
+  hand-written pages, e.g. `academicGroupIds`, and the generic CRUD tables' `multiref` field
+  type, e.g. `Course.specialtyIds`).
 - **`DeptFacultySelect`** *(pattern)* — a faculty filter paired with a department
   `SearchSelect` whose options are filtered by the chosen faculty, defaulting to the parent
   entity's own faculty; implemented inline in `curriculum-item-list.ts` and

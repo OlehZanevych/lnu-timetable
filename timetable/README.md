@@ -96,7 +96,8 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `Faculty` | `faculties` | → building?, departments, specialties, rooms |
 | `Department` (кафедра) | `departments` | → faculty, lecturers, courses |
 | `Specialty` (спеціальність) | `specialties` | code, degree; → faculty, groups, curriculum items |
-| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options) |
+| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N specialties this course may be added to a curriculum for (`course_specialties`), 1-N tags |
+| `CourseTag` | `course_tags` | free-form label shown after the course's name (e.g. "англійською"); → course |
 | `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **specialty directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
 | `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
 | `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups, M-N combined working curriculum items |
@@ -115,7 +116,7 @@ Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all sup
 Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbreviation`,
 `departments.abbreviation`, `specialties(name, degree)`, `academic_groups.name`,
 `lecturers.email`, `curriculum_items(course_id, specialty_id, semester)`,
-`curriculum_item_hours(curriculum_item_id, hour_type)`.
+`curriculum_item_hours(curriculum_item_id, hour_type)`, `course_tags(course_id, tag)`.
 
 > **History note**: earlier versions of this service modeled a *curriculum* as its own
 > entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
@@ -168,6 +169,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `Department`, `Specialty` | `Faculty` |
 | `Room` | `Faculty`?, `Building`? |
 | `Course` | `Department`?, `Faculty`?, parent `Course`? (elective group → its options) |
+| `CourseTag` | `Course` |
 | `Lecturer` | `Department` |
 | `AcademicGroup` | `Specialty` |
 | `CombinedGroup` | any member `AcademicGroup` (via `combined_group_academic_groups`) |
