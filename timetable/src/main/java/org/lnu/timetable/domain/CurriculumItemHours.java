@@ -5,12 +5,14 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PermissionParent;
 import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
 @Data
 @GraphQLEntity(table = "curriculum_item_hours")
+@PermissionParent(value = CurriculumItem.class, joinColumn = "curriculum_item_id")
 public class CurriculumItemHours {
 
     private Long id;

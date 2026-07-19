@@ -7,6 +7,8 @@ import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PermissionJoinParent;
+import org.lnu.timetable.framework.annotation.PermissionParent;
 
 import java.util.List;
 
@@ -18,6 +20,14 @@ import java.util.List;
  */
 @Data
 @GraphQLEntity(table = "lecturer_workloads")
+@PermissionParent(value = WorkingCurriculumItem.class, joinColumn = "working_curriculum_item_id", nullable = true)
+@PermissionParent(value = CombinedWorkingCurriculumItem.class, joinColumn = "combined_working_curriculum_item_id", nullable = true)
+@PermissionJoinParent(value = Lecturer.class, joinTable = "lecturer_workload_lecturers",
+    selfColumn = "lecturer_workload_id", parentColumn = "lecturer_id")
+@PermissionJoinParent(value = AcademicGroup.class, joinTable = "lecturer_workload_academic_groups",
+    selfColumn = "lecturer_workload_id", parentColumn = "academic_group_id")
+@PermissionJoinParent(value = CombinedGroup.class, joinTable = "lecturer_workload_combined_groups",
+    selfColumn = "lecturer_workload_id", parentColumn = "combined_group_id")
 public class LecturerWorkload {
 
     private Long id;

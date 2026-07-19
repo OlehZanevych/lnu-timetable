@@ -5,7 +5,9 @@
     <h2>{{ m.label }}</h2>
     <p class="muted">{{ rows().length }} запис(ів)</p>
   </div>
-  <button type="button" (click)="openCreate()">+ Додати</button>
+  @if (canShowCreate) {
+    <button type="button" (click)="openCreate()">+ Додати</button>
+  }
 </div>
 
 @if (error() && !showForm()) {
@@ -31,8 +33,10 @@
             <td>{{ display(row, f) }}</td>
           }
           <td class="row-actions">
-            <button type="button" class="ghost" (click)="edit(row)">Редагувати</button>
-            <button type="button" class="ghost danger" (click)="remove(row)">Видалити</button>
+            @if (canModify(row)) {
+              <button type="button" class="ghost" (click)="edit(row)">Редагувати</button>
+              <button type="button" class="ghost danger" (click)="remove(row)">Видалити</button>
+            }
           </td>
         </tr>
       } @empty {

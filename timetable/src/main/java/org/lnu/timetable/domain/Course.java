@@ -6,12 +6,16 @@ import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PermissionParent;
 import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
 @Data
 @GraphQLEntity(table = "courses")
+@PermissionParent(value = Department.class, joinColumn = "department_id", nullable = true)
+@PermissionParent(value = Faculty.class, joinColumn = "faculty_id", nullable = true)
+@PermissionParent(value = Course.class, joinColumn = "parent_course_id", nullable = true)
 public class Course {
 
     private Long id;

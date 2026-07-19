@@ -6,6 +6,7 @@ import graphql.schema.idl.SchemaPrinter;
 import org.lnu.timetable.framework.config.*;
 import org.lnu.timetable.framework.metadata.*;
 import org.lnu.timetable.framework.runtime.DynamicDataFetchers;
+import org.lnu.timetable.security.AuthDataFetchers;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -33,7 +34,22 @@ public class DynamicGraphQLSchemaBuilder {
         this.metadataRegistry = metadataRegistry;
     }
 
-    public GraphQLSchema buildSchema(List<GraphQLSchemaConfig> configs, DynamicDataFetchers fetchers) {
+    /**
+     * @param fetchers               dispatches every generic, entity-metadata-driven query/mutation/relation —
+     *                               normally an authorization-checking decorator (see
+     *                               {@code org.lnu.timetable.security.AuthorizingDataFetcherProvider}) wrapping
+     *                               {@code globalPropertyFetchers}, but any {@link DataFetcherProvider} works
+     *                               (e.g. a no-op one in tests — see {@code SchemaBuildTest}).
+     * @param globalPropertyFetchers supplies the hand-rolled {@code GlobalProperty} fetchers (see
+     *                               {@link #buildGlobalPropertyTypes()}); kept as the concrete
+     *                               {@link DynamicDataFetchers} type since those three methods aren't part of
+     *                               the generic {@link DataFetcherProvider} contract.
+     * @param authFetchers           supplies the hand-rolled authentication/user/group/permission fetchers (see
+     *                               {@link #buildAuthTypes()}); deliberately bypasses {@code fetchers} entirely
+     *                               so unauthenticated operations like {@code login} stay reachable.
+     */
+    public GraphQLSchema buildSchema(List<GraphQLSchemaConfig> configs, DataFetcherProvider fetchers,
+                                      DynamicDataFetchers globalPropertyFetchers, AuthDataFetchers authFetchers) {
         SchemaDefinition schemaDef = collectSchemaDefinition(configs);
         buildAllTypes(schemaDef);
 
@@ -42,7 +58,8 @@ public class DynamicGraphQLSchemaBuilder {
 
         GraphQLObjectType queryType = buildQueryType(queriesByEntity);
         GraphQLObjectType mutationType = buildMutationType(mutationsByEntity);
-        GraphQLCodeRegistry codeRegistry = buildCodeRegistry(schemaDef, queriesByEntity, mutationsByEntity, fetchers);
+        GraphQLCodeRegistry codeRegistry = buildCodeRegistry(schemaDef, queriesByEntity, mutationsByEntity,
+            fetchers, globalPropertyFetchers, authFetchers);
 
         return assembleSchema(queryType, mutationType, codeRegistry);
     }
@@ -62,6 +79,7 @@ public class DynamicGraphQLSchemaBuilder {
     private void buildAllTypes(SchemaDefinition schemaDef) {
         builtTypes.put("ConnectionPageInfo", buildPageInfoType());
         buildGlobalPropertyTypes();
+        buildAuthTypes();
 
         for (TypeDefinition typeDef : schemaDef.getTypes()) {
             buildObjectType(typeDef);
@@ -113,6 +131,7 @@ public class DynamicGraphQLSchemaBuilder {
 
         addApolloFederationServiceField(builder);
         addGlobalPropertyQueryField(builder);
+        addAuthQueryFields(builder);
 
         return builder.build();
     }
@@ -149,6 +168,7 @@ public class DynamicGraphQLSchemaBuilder {
         }
 
         addGlobalPropertyMutationField(builder);
+        addAuthMutationFields(builder);
 
         return builder.build();
     }
@@ -157,7 +177,9 @@ public class DynamicGraphQLSchemaBuilder {
             SchemaDefinition schemaDef,
             Map<Class<?>, List<QueryDefinition>> queriesByEntity,
             Map<Class<?>, List<MutationDefinition>> mutationsByEntity,
-            DynamicDataFetchers fetchers) {
+            DataFetcherProvider fetchers,
+            DynamicDataFetchers globalPropertyFetchers,
+            AuthDataFetchers authFetchers) {
 
         GraphQLCodeRegistry.Builder codeRegistry = GraphQLCodeRegistry.newCodeRegistry();
 
@@ -165,7 +187,12 @@ public class DynamicGraphQLSchemaBuilder {
         registerQueryFetchers(codeRegistry, queriesByEntity, fetchers);
         registerMutationFetchers(codeRegistry, mutationsByEntity, fetchers);
         registerRelationFetchers(codeRegistry, schemaDef.getTypes(), fetchers);
-        registerGlobalPropertyFetchers(codeRegistry, fetchers);
+        if (globalPropertyFetchers != null) {
+            registerGlobalPropertyFetchers(codeRegistry, globalPropertyFetchers);
+        }
+        if (authFetchers != null) {
+            registerAuthFetchers(codeRegistry, authFetchers);
+        }
 
         return codeRegistry.build();
     }
@@ -347,6 +374,215 @@ public class DynamicGraphQLSchemaBuilder {
     private void addGlobalPropertyMutationField(GraphQLObjectType.Builder mutationBuilder) {
         mutationBuilder.field(newFieldDefinition().name("globalProperties")
             .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("GlobalPropertyMutations"))));
+    }
+
+    /**
+     * Hand-rolled schema for authentication and user/group/permission management (see
+     * {@code org.lnu.timetable.security.AuthDataFetchers}). Like {@link #buildGlobalPropertyTypes()},
+     * this bypasses the reflective entity-metadata system entirely — a {@code User}'s password hash
+     * must never be reachable through the fully-generic query/mutation machinery, and operations
+     * like {@code login} or {@code grantPermission} don't fit the generic id-keyed CRUD shape.
+     */
+    private void buildAuthTypes() {
+        GraphQLObjectType userType = newObject().name("User")
+            .field(newFieldDefinition().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .field(newFieldDefinition().name("email").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("firstName").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("mustChangePassword").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("isActive").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("groups").type(GraphQLNonNull.nonNull(
+                GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))))
+            .build();
+        builtTypes.put("User", userType);
+
+        GraphQLObjectType groupType = newObject().name("Group")
+            .field(newFieldDefinition().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .field(newFieldDefinition().name("name").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("description").type(GraphQLString))
+            .field(newFieldDefinition().name("members").type(GraphQLNonNull.nonNull(
+                GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("User"))))))
+            .build();
+        builtTypes.put("Group", groupType);
+
+        GraphQLObjectType permissionGrantType = newObject().name("PermissionGrant")
+            .field(newFieldDefinition().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .field(newFieldDefinition().name("granteeType").type(GraphQLNonNull.nonNull(GraphQLString))
+                .description("USER or GROUP"))
+            .field(newFieldDefinition().name("user").type(GraphQLTypeReference.typeRef("User")))
+            .field(newFieldDefinition().name("group").type(GraphQLTypeReference.typeRef("Group")))
+            .field(newFieldDefinition().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString))
+                .description("The entity type this grant covers (e.g. FACULTY), or GLOBAL for full admin access"))
+            .field(newFieldDefinition().name("resourceId").type(GraphQLID))
+            .field(newFieldDefinition().name("resourceLabel").type(GraphQLString)
+                .description("Best-effort human-readable label for the target resource"))
+            .field(newFieldDefinition().name("grantedBy").type(GraphQLTypeReference.typeRef("User")))
+            .build();
+        builtTypes.put("PermissionGrant", permissionGrantType);
+
+        GraphQLObjectType currentUserType = newObject().name("CurrentUser")
+            .field(newFieldDefinition().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .field(newFieldDefinition().name("email").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("firstName").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .field(newFieldDefinition().name("mustChangePassword").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("isAdmin").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("groups").type(GraphQLNonNull.nonNull(
+                GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))))
+            .field(newFieldDefinition().name("permissions").type(GraphQLNonNull.nonNull(
+                GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("PermissionGrant"))))))
+            .build();
+        builtTypes.put("CurrentUser", currentUserType);
+
+        GraphQLEnumType loginErrorEnum = newEnum().name("LoginErrorStatus")
+            .value("INVALID_CREDENTIALS", "INVALID_CREDENTIALS", "Unknown email or wrong password")
+            .value("ACCOUNT_DISABLED", "ACCOUNT_DISABLED", "The account has been deactivated")
+            .build();
+        builtEnumTypes.put("LoginErrorStatus", loginErrorEnum);
+
+        builtTypes.put("LoginResponse", newObject().name("LoginResponse")
+            .field(newFieldDefinition().name("isSuccess").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("token").type(GraphQLString))
+            .field(newFieldDefinition().name("mustChangePassword").type(GraphQLBoolean))
+            .field(newFieldDefinition().name("errorStatus").type(GraphQLTypeReference.typeRef("LoginErrorStatus")))
+            .build());
+
+        GraphQLEnumType changePasswordErrorEnum = newEnum().name("ChangePasswordErrorStatus")
+            .value("INVALID_CURRENT_PASSWORD", "INVALID_CURRENT_PASSWORD", "Current password doesn't match")
+            .value("WEAK_PASSWORD", "WEAK_PASSWORD", "New password is too short (minimum 8 characters)")
+            .build();
+        builtEnumTypes.put("ChangePasswordErrorStatus", changePasswordErrorEnum);
+
+        builtTypes.put("ChangePasswordResponse", newObject().name("ChangePasswordResponse")
+            .field(newFieldDefinition().name("isSuccess").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("errorStatus").type(GraphQLTypeReference.typeRef("ChangePasswordErrorStatus")))
+            .build());
+
+        GraphQLEnumType createUserErrorEnum = newEnum().name("CreateUserErrorStatus")
+            .value("DUPLICATE_EMAIL", "DUPLICATE_EMAIL", "A user with this email already exists")
+            .build();
+        builtEnumTypes.put("CreateUserErrorStatus", createUserErrorEnum);
+
+        builtTypes.put("CreateUserResponse", newObject().name("CreateUserResponse")
+            .field(newFieldDefinition().name("isSuccess").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("data").type(GraphQLTypeReference.typeRef("User")))
+            .field(newFieldDefinition().name("errorStatus").type(GraphQLTypeReference.typeRef("CreateUserErrorStatus")))
+            .build());
+
+        GraphQLEnumType createGroupErrorEnum = newEnum().name("CreateGroupErrorStatus")
+            .value("DUPLICATE_NAME", "DUPLICATE_NAME", "A group with this name already exists")
+            .build();
+        builtEnumTypes.put("CreateGroupErrorStatus", createGroupErrorEnum);
+
+        builtTypes.put("CreateGroupResponse", newObject().name("CreateGroupResponse")
+            .field(newFieldDefinition().name("isSuccess").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("data").type(GraphQLTypeReference.typeRef("Group")))
+            .field(newFieldDefinition().name("errorStatus").type(GraphQLTypeReference.typeRef("CreateGroupErrorStatus")))
+            .build());
+
+        builtTypes.put("SimpleResponse", newObject().name("SimpleResponse")
+            .field(newFieldDefinition().name("isSuccess").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("errorStatus").type(GraphQLString))
+            .build());
+    }
+
+    private void addAuthQueryFields(GraphQLObjectType.Builder queryBuilder) {
+        queryBuilder.field(newFieldDefinition().name("me").type(GraphQLTypeReference.typeRef("CurrentUser"))
+            .description("The signed-in user, or null if not authenticated"));
+        queryBuilder.field(newFieldDefinition().name("users")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("User")))))
+            .description("Administrator-only: all user accounts"));
+        queryBuilder.field(newFieldDefinition().name("groups")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))));
+        queryBuilder.field(newFieldDefinition().name("canModifyResources")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLID))))
+            .description("Given a resource type and a list of candidate ids, returns the subset the caller may modify")
+            .argument(newArgument().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("resourceIds").type(GraphQLNonNull.nonNull(
+                GraphQLList.list(GraphQLNonNull.nonNull(GraphQLID))))));
+        queryBuilder.field(newFieldDefinition().name("grantsForResource")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("PermissionGrant")))))
+            .description("Lists who currently has modify access granted directly on this resource; requires the " +
+                "caller to already be able to manage grants on it themselves (see grantPermission)")
+            .argument(newArgument().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("resourceId").type(GraphQLID)));
+    }
+
+    private void addAuthMutationFields(GraphQLObjectType.Builder mutationBuilder) {
+        mutationBuilder.field(newFieldDefinition().name("login").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("LoginResponse")))
+            .argument(newArgument().name("email").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("password").type(GraphQLNonNull.nonNull(GraphQLString))));
+
+        mutationBuilder.field(newFieldDefinition().name("changePassword").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("ChangePasswordResponse")))
+            .argument(newArgument().name("currentPassword").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("newPassword").type(GraphQLNonNull.nonNull(GraphQLString))));
+
+        mutationBuilder.field(newFieldDefinition().name("createUser").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("CreateUserResponse")))
+            .description("Administrator-only: creates a user with a temporary password they must change on first login")
+            .argument(newArgument().name("email").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("firstName").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("temporaryPassword").type(GraphQLNonNull.nonNull(GraphQLString))));
+
+        mutationBuilder.field(newFieldDefinition().name("setUserActive").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .description("Administrator-only: activates or deactivates a user account")
+            .argument(newArgument().name("userId").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .argument(newArgument().name("active").type(GraphQLNonNull.nonNull(GraphQLBoolean))));
+
+        mutationBuilder.field(newFieldDefinition().name("createGroup").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("CreateGroupResponse")))
+            .description("Administrator-only")
+            .argument(newArgument().name("name").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("description").type(GraphQLString)));
+
+        mutationBuilder.field(newFieldDefinition().name("addUserToGroup").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .description("Administrator-only")
+            .argument(newArgument().name("userId").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .argument(newArgument().name("groupId").type(GraphQLNonNull.nonNull(GraphQLID))));
+
+        mutationBuilder.field(newFieldDefinition().name("removeUserFromGroup").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .description("Administrator-only")
+            .argument(newArgument().name("userId").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .argument(newArgument().name("groupId").type(GraphQLNonNull.nonNull(GraphQLID))));
+
+        mutationBuilder.field(newFieldDefinition().name("grantPermission").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .description("Grants modify access on a resource to a user or group; requires the caller to already " +
+                "be able to modify that resource themselves (or be an administrator)")
+            .argument(newArgument().name("granteeType").type(GraphQLNonNull.nonNull(GraphQLString)).description("USER or GROUP"))
+            .argument(newArgument().name("userId").type(GraphQLID))
+            .argument(newArgument().name("groupId").type(GraphQLID))
+            .argument(newArgument().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("resourceId").type(GraphQLID).description("Omit (null) only when resourceType is GLOBAL")));
+
+        mutationBuilder.field(newFieldDefinition().name("revokePermission").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .argument(newArgument().name("permissionId").type(GraphQLNonNull.nonNull(GraphQLID))));
+    }
+
+    private void registerAuthFetchers(GraphQLCodeRegistry.Builder codeRegistry, AuthDataFetchers fetchers) {
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "me"), fetchers.me());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "users"), fetchers.users());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "groups"), fetchers.groups());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "canModifyResources"), fetchers.canModifyResources());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "grantsForResource"), fetchers.grantsForResource());
+
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "login"), fetchers.login());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "changePassword"), fetchers.changePassword());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "createUser"), fetchers.createUser());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "setUserActive"), fetchers.setUserActive());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "createGroup"), fetchers.createGroup());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "addUserToGroup"), fetchers.addUserToGroup());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "removeUserFromGroup"), fetchers.removeUserFromGroup());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "grantPermission"), fetchers.grantPermission());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "revokePermission"), fetchers.revokePermission());
+
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("User", "groups"), fetchers.userGroupsField());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Group", "members"), fetchers.groupMembersField());
+        // Note: CurrentUser.groups/permissions are pre-resolved directly into the map returned by
+        // AuthDataFetchers#me() (no extra round trip needed), so no explicit fetcher is registered
+        // for them here — the default PropertyDataFetcher reads them straight off that map.
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("PermissionGrant", "user"), fetchers.grantUserField());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("PermissionGrant", "group"), fetchers.grantGroupField());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("PermissionGrant", "grantedBy"), fetchers.grantGrantedByField());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("PermissionGrant", "resourceLabel"), fetchers.grantResourceLabelField());
     }
 
     private void buildObjectType(TypeDefinition typeDef) {

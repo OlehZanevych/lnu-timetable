@@ -6,6 +6,19 @@
       <span>Система формування розкладу занять</span>
     </div>
   </div>
+
+  @if (auth.isAuthenticated()) {
+    <div class="user-menu">
+      @if (auth.currentUser(); as u) {
+        <span>{{ u.firstName }} {{ u.lastName }}</span>
+        @if (u.isAdmin) {
+          <span class="admin-badge">АДМІН</span>
+        }
+      }
+      <a routerLink="/change-password" style="color:#fff">Пароль</a>
+      <button type="button" (click)="logout()">Вийти</button>
+    </div>
+  }
 </header>
 
 <div class="layout">
@@ -20,6 +33,11 @@
     <a [routerLink]="['/e', 'classStartTime']" routerLinkActive="active">Часи початку занять</a>
     <a [routerLink]="['/e', 'academicDegree']" routerLinkActive="active">Наукові ступені</a>
     <a routerLink="/global-properties" routerLinkActive="active">Глобальні властивості</a>
+
+    @if (auth.isAdmin()) {
+      <h3>Адміністрування</h3>
+      <a routerLink="/admin" routerLinkActive="active">Користувачі та права</a>
+    }
   </nav>
   <main class="content">
     <router-outlet />

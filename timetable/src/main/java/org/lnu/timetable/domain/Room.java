@@ -5,10 +5,13 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.PermissionParent;
 import org.lnu.timetable.framework.annotation.PgEnum;
 
 @Data
 @GraphQLEntity(table = "rooms")
+@PermissionParent(value = Faculty.class, joinColumn = "faculty_id", nullable = true)
+@PermissionParent(value = Building.class, joinColumn = "building_id", nullable = true)
 public class Room {
 
     private Long id;

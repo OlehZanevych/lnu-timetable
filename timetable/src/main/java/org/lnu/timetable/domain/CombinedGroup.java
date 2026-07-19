@@ -5,11 +5,14 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.PermissionJoinParent;
 
 import java.util.List;
 
 @Data
 @GraphQLEntity(table = "combined_groups")
+@PermissionJoinParent(value = AcademicGroup.class, joinTable = "combined_group_academic_groups",
+    selfColumn = "combined_group_id", parentColumn = "academic_group_id")
 public class CombinedGroup {
 
     private Long id;

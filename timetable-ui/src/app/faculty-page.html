@@ -9,7 +9,7 @@
       <p class="muted">{{ f?.abbreviation }}</p>
     </div>
     <div class="faculty-header-actions">
-      @if (activeSection() === 'info') {
+      @if (activeSection() === 'info' && canModifyFaculty()) {
         <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
       }
     </div>
@@ -47,7 +47,9 @@
             <div>
               <h2>Інформація про факультет</h2>
             </div>
-            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+            @if (canModifyFaculty()) {
+              <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+            }
           </div>
           <div class="card info-card">
             <table class="info-table">

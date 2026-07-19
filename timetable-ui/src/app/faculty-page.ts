@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
 import { SearchSelect, Option } from './search-select';
 import { DepartmentList } from './department-list';
 import { SpecialtyList } from './specialty-list';
@@ -51,8 +52,13 @@ export class FacultyPage implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private gql = inject(GraphqlService);
+  auth = inject(AuthService);
 
   readonly facultyId: string = this.route.snapshot.paramMap.get('id')!;
+
+  /** Whether the current user may edit/delete this Faculty (edit/delete buttons in the template
+   *  are gated on this — see AuthService#canModifyIds). */
+  canModifyFaculty = signal(false);
 
   faculty = signal<Faculty | null>(null);
   error = signal('');
@@ -83,6 +89,11 @@ export class FacultyPage implements OnInit {
     this.loadDepts();
     this.loadSpecs();
     this.loadBuildings();
+    if (this.auth.isAdmin()) {
+      this.canModifyFaculty.set(true);
+    } else {
+      this.auth.canModifyIds('FACULTY', [this.facultyId]).subscribe((ids) => this.canModifyFaculty.set(ids.has(this.facultyId)));
+    }
   }
 
   sectionsForGroup(group: string): SectionDef[] {

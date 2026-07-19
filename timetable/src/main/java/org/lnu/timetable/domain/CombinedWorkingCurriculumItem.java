@@ -4,6 +4,7 @@ import lombok.Data;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PermissionJoinParent;
 
 import java.util.List;
 
@@ -15,6 +16,8 @@ import java.util.List;
  */
 @Data
 @GraphQLEntity(table = "combined_working_curriculum_items")
+@PermissionJoinParent(value = WorkingCurriculumItem.class, joinTable = "combined_working_curriculum_item_members",
+    selfColumn = "combined_working_curriculum_item_id", parentColumn = "working_curriculum_item_id")
 public class CombinedWorkingCurriculumItem {
 
     private Long id;
