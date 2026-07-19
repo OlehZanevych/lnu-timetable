@@ -10,7 +10,6 @@ interface Department {
   abbreviation?: string;
   email?: string;
   phone?: string;
-  info?: string;
 }
 
 @Component({
@@ -59,7 +58,7 @@ export class DepartmentList implements OnInit, OnChanges {
 
   load() {
     if (!this.facultyId) return;
-    const q = `{ departments { departmentConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name abbreviation email phone info } } } }`;
+    const q = `{ departments { departmentConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name abbreviation email phone } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => {
         const nodes = d.departments.departmentConnection.nodes;
@@ -87,7 +86,7 @@ export class DepartmentList implements OnInit, OnChanges {
 
   saveCreate() {
     const input: Record<string, any> = { facultyId: this.facultyId };
-    for (const f of ['name', 'abbreviation', 'email', 'phone', 'info']) {
+    for (const f of ['name', 'abbreviation', 'email', 'phone']) {
       if (this.createForm[f]) input[f] = this.createForm[f];
     }
     const q = `mutation($input: DepartmentInputPayload!) { departments { createDepartment(department: $input) { isSuccess errorStatus } } }`;
@@ -109,7 +108,6 @@ export class DepartmentList implements OnInit, OnChanges {
       abbreviation: dept.abbreviation ?? '',
       email:        dept.email        ?? '',
       phone:        dept.phone        ?? '',
-      info:         dept.info         ?? '',
     };
     this.editError.set('');
     this.editingDept.set(dept);
@@ -124,7 +122,7 @@ export class DepartmentList implements OnInit, OnChanges {
     const dept = this.editingDept();
     if (!dept) return;
     const input: Record<string, any> = { facultyId: this.facultyId };
-    for (const f of ['name', 'abbreviation', 'email', 'phone', 'info']) {
+    for (const f of ['name', 'abbreviation', 'email', 'phone']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
     const q = `mutation($id: ID!, $input: DepartmentInputPayload!) { departments { updateDepartment(id: $id, department: $input) { isSuccess errorStatus } } }`;

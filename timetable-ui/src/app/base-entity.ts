@@ -108,15 +108,24 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     return parts.length ? `, ${parts.join(', ')}` : '';
   }
 
+  /** Single-value ref fields AND many-to-many multiref fields — both are backed by an options
+   *  list loaded from the referenced entity (see loadOptions). */
   private refFields(): FieldMeta[] {
-    return this.meta.fields.filter((f) => f.type === 'ref');
+    return this.meta.fields.filter((f) => f.type === 'ref' || f.type === 'multiref');
+  }
+
+  private tagFields(): FieldMeta[] {
+    return this.meta.fields.filter((f) => f.type === 'tags');
   }
 
   private selection(): string {
-    const scalars = this.meta.fields.filter((f) => f.type !== 'ref' && f.type !== 'enum').map((f) => f.name);
+    const scalars = this.meta.fields
+      .filter((f) => f.type !== 'ref' && f.type !== 'enum' && f.type !== 'multiref' && f.type !== 'tags')
+      .map((f) => f.name);
     const enums = this.meta.fields.filter((f) => f.type === 'enum').map((f) => f.name);
     const relations = this.refFields().map((f) => `${f.relation} { id ${f.refLabel} }`);
-    return ['id', ...scalars, ...enums, ...relations].join(' ');
+    const tagRelations = this.tagFields().map((f) => `${f.relation} { id ${f.tagField} }`);
+    return ['id', ...scalars, ...enums, ...relations, ...tagRelations].join(' ');
   }
 
   load() {
@@ -187,6 +196,8 @@ export abstract class BaseEntity implements OnInit, OnChanges {
 
   display(row: any, f: FieldMeta): any {
     if (f.type === 'ref') return row[f.relation!] ? `${row[f.relation!][f.refLabel!]} (#${row[f.relation!].id})` : '—';
+    if (f.type === 'multiref') return (row[f.relation!] ?? []).map((x: any) => x[f.refLabel!]).join(', ') || '—';
+    if (f.type === 'tags') return (row[f.relation!] ?? []).map((x: any) => x[f.tagField!]).join(', ') || '—';
     if (f.type === 'enum') {
       const opt = f.enumOptions?.find((o) => o.value === row[f.name]);
       return opt ? opt.label : (row[f.name] ?? '—');
@@ -204,7 +215,10 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     this.editingId.set(row.id);
     this.form = {};
     for (const f of this.meta.fields) {
-      this.form[f.name] = f.type === 'ref' ? (row[f.relation!]?.id ?? '') : (row[f.name] ?? '');
+      if (f.type === 'ref') this.form[f.name] = row[f.relation!]?.id ?? '';
+      else if (f.type === 'multiref') this.form[f.name] = (row[f.relation!] ?? []).map((x: any) => String(x.id));
+      else if (f.type === 'tags') this.form[f.name] = (row[f.relation!] ?? []).map((x: any) => x[f.tagField!]).join(', ');
+      else this.form[f.name] = row[f.name] ?? '';
     }
     this.error.set('');
     this.showForm.set(true);
@@ -222,6 +236,24 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     const isUpdate = this.editingId() !== null;
     for (const f of this.meta.fields) {
       const v = this.form[f.name];
+
+      // Many-to-many id lists and tag lists are always sent in full (an empty array clears the
+      // relation) rather than following the generic "omit when empty" rule below — see
+      // MutationDefinition#manyToMany / #nestedList: omitting the field entirely leaves existing
+      // rows untouched, which isn't what a cleared multi-select/tag input in the form means.
+      if (f.type === 'multiref') {
+        input[f.name] = Array.isArray(v) ? v : [];
+        continue;
+      }
+      if (f.type === 'tags') {
+        input[f.name] = String(v ?? '')
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .map((tag) => ({ [f.tagField!]: tag }));
+        continue;
+      }
+
       const empty = v === undefined || v === null || v === '';
       if (empty) {
         // Editing an existing row: send an explicit null for cleared optional fields (e.g.

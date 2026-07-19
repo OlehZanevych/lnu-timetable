@@ -90,12 +90,6 @@
                     } @else { &mdash; }
                   </td>
                 </tr>
-                @if (f.info) {
-                  <tr>
-                    <th>Опис</th>
-                    <td class="info-text">{{ f.info }}</td>
-                  </tr>
-                }
               </tbody>
             </table>
           </div>
@@ -185,10 +179,6 @@
         <label>
           <span>Веб-сайт</span>
           <input type="text" [(ngModel)]="editForm['website']" name="website" />
-        </label>
-        <label>
-          <span>Опис</span>
-          <textarea [(ngModel)]="editForm['info']" name="info"></textarea>
         </label>
         <label>
           <span>Корпус</span>

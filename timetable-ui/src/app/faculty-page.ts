@@ -24,7 +24,6 @@ interface Faculty {
   phone: string;
   email: string;
   website: string;
-  info: string;
   building?: { id: string; name: string; address?: string };
 }
 
@@ -122,7 +121,7 @@ export class FacultyPage implements OnInit {
   }
 
   private loadFaculty() {
-    const q = `{ faculties { faculty(id: "${this.facultyId}") { id name abbreviation phone email website info building { id name address } } } }`;
+    const q = `{ faculties { faculty(id: "${this.facultyId}") { id name abbreviation phone email website building { id name address } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.faculty.set(d.faculties.faculty),
       error: (e) => this.error.set(e.message)
@@ -166,7 +165,7 @@ export class FacultyPage implements OnInit {
     this.editForm = {
       name: f.name ?? '', abbreviation: f.abbreviation ?? '',
       email: f.email ?? '', phone: f.phone ?? '',
-      website: f.website ?? '', info: f.info ?? '',
+      website: f.website ?? '',
       buildingId: f.building?.id ?? '',
     };
     this.editError.set('');
@@ -177,7 +176,7 @@ export class FacultyPage implements OnInit {
 
   saveEdit() {
     const input: Record<string, any> = {};
-    for (const f of ['name', 'abbreviation', 'email', 'phone', 'website', 'info', 'buildingId']) {
+    for (const f of ['name', 'abbreviation', 'email', 'phone', 'website', 'buildingId']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
     const q = `mutation($id: ID!, $input: FacultyInputPayload!) { faculties { updateFaculty(id: $id, faculty: $input) { isSuccess errorStatus } } }`;

@@ -19,7 +19,6 @@
         <th>Абревіатура</th>
         <th>Ел. пошта</th>
         <th>Телефон</th>
-        <th>Інформація</th>
         <th></th>
       </tr>
     </thead>
@@ -31,7 +30,6 @@
           <td>{{ d.abbreviation || '&mdash;' }}</td>
           <td>{{ d.email || '&mdash;' }}</td>
           <td>{{ d.phone || '&mdash;' }}</td>
-          <td class="cell-info">{{ d.info || '&mdash;' }}</td>
           <td class="row-actions">
             @if (canModify(d)) {
               <button type="button" class="ghost" (click)="openEdit(d)">Редагувати</button>
@@ -40,7 +38,7 @@
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="7" class="muted">Кафедр ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="6" class="muted">Кафедр ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>
@@ -72,10 +70,6 @@
         <label>
           <span>Телефон</span>
           <input type="text" [(ngModel)]="createForm['phone']" name="phone" />
-        </label>
-        <label style="width: 100%">
-          <span>Інформація</span>
-          <textarea [(ngModel)]="createForm['info']" name="info"></textarea>
         </label>
         <div class="actions">
           <button type="submit">Створити</button>
@@ -112,10 +106,6 @@
         <label>
           <span>Телефон</span>
           <input type="text" [(ngModel)]="editForm['phone']" name="phone" />
-        </label>
-        <label style="width: 100%">
-          <span>Інформація</span>
-          <textarea [(ngModel)]="editForm['info']" name="info"></textarea>
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

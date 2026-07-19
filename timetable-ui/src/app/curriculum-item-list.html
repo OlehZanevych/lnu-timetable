@@ -26,7 +26,7 @@
         <tr>
           <td>{{ item.id }}</td>
           <td>{{ item.semester }}</td>
-          <td>{{ item.course?.name || '&mdash;' }}</td>
+          <td>{{ item.course ? courseLabel(item.course.name, item.course.tags) : '&mdash;' }}</td>
           <td>{{ controlFormLabel(item.controlForm) }}</td>
           <td>{{ item.ectsCredits ?? '&mdash;' }}</td>
           <td>

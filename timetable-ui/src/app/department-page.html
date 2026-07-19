@@ -61,9 +61,6 @@
                 @if (d.email) { <a [href]="'mailto:' + d.email">{{ d.email }}</a> } @else { &mdash; }
               </td></tr>
               <tr><th>Телефон</th><td>{{ d.phone || '&mdash;' }}</td></tr>
-              @if (d.info) {
-                <tr><th>Інформація</th><td class="info-text">{{ d.info }}</td></tr>
-              }
             </tbody>
           </table>
         </div>
@@ -114,10 +111,6 @@
         <label>
           <span>Телефон</span>
           <input type="text" [(ngModel)]="editForm['phone']" name="phone" />
-        </label>
-        <label style="width: 100%">
-          <span>Інформація</span>
-          <textarea [(ngModel)]="editForm['info']" name="info"></textarea>
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

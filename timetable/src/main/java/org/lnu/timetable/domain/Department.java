@@ -29,9 +29,6 @@ public class Department {
     @Nullable
     private String phone;
 
-    @Nullable
-    private String info;
-
     @ManyToOne(joinColumn = "faculty_id")
     private Faculty faculty;
 

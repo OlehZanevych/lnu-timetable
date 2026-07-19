@@ -37,9 +37,6 @@ public class Faculty {
     @ManyToOne(joinColumn = "building_id")
     private Building building;
 
-    @Nullable
-    private String info;
-
     @OneToMany(mappedBy = "faculty_id")
     private List<Department> departments;
 
