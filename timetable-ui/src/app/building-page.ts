@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
+import { ROOM_KIND_OPTIONS, toOptions } from './entities';
 
 type BuildingSection = 'info' | 'rooms';
 
@@ -35,6 +36,7 @@ export class BuildingPage implements OnInit {
   private gql = inject(GraphqlService);
 
   readonly buildingId: string = this.route.snapshot.paramMap.get('id')!;
+  readonly roomKindOptions = toOptions(ROOM_KIND_OPTIONS);
 
   building = signal<Building | null>(null);
   error = signal('');
@@ -59,6 +61,10 @@ export class BuildingPage implements OnInit {
   ngOnInit() {
     this.loadBuilding();
     this.loadFaculties();
+  }
+
+  roomKindLabel(v: string | undefined): string {
+    return ROOM_KIND_OPTIONS.find((o) => o.value === v)?.label ?? (v || '');
   }
 
   // ── Data loading ──────────────────────────────────────────────────────────

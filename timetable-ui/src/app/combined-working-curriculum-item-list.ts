@@ -79,16 +79,12 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
 
   private rawItems = signal<RawItem[]>([]);
-  private allCombined = signal<CombinedItem[]>([]);
+  /** Existing combined items with at least one member belonging to this department — filtered
+   *  server-side (see loadCombined) via the departmentIds relation filter on
+   *  combinedWorkingCurriculumItemConnection. */
+  existingCombined = signal<CombinedItem[]>([]);
   error = signal('');
   actionError = signal('');
-
-  private deptItemIds = computed(() => new Set(this.rawItems().map((i) => i.id)));
-
-  /** Existing combined items with at least one member belonging to this department. */
-  existingCombined = computed(() =>
-    this.allCombined().filter((c) => c.workingCurriculumItems.some((w) => this.deptItemIds().has(w.id)))
-  );
 
   /** Proposed merge groups, built from the department's not-yet-combined working curriculum items. */
   proposals = computed(() => this.buildProposals(this.rawItems()));
@@ -131,7 +127,8 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
   }
 
   private loadCombined() {
-    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0) { nodes {
+    if (!this.departmentId) return;
+    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0, departmentIds: ["${this.departmentId}"]) { nodes {
       id
       workingCurriculumItems {
         id
@@ -143,7 +140,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
       }
     } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.allCombined.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes),
+      next: (d: any) => this.existingCombined.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
   }

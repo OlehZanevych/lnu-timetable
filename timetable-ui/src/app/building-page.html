@@ -88,7 +88,7 @@
                 <td>{{ room.number }}</td>
                 <td>{{ room.name || '&mdash;' }}</td>
                 <td>{{ room.capacity ?? '&mdash;' }}</td>
-                <td>{{ room.kind || '&mdash;' }}</td>
+                <td>{{ roomKindLabel(room.kind) || '&mdash;' }}</td>
                 <td>{{ room.faculty?.name || '&mdash;' }}</td>
                 <td class="row-actions">
                   <button type="button" class="ghost" (click)="openEditRoom(room)">Редагувати</button>
@@ -167,7 +167,7 @@
         </label>
         <label>
           <span>Тип</span>
-          <input type="text" [(ngModel)]="roomForm['kind']" name="kind" />
+          <app-search-select [options]="roomKindOptions" [(ngModel)]="roomForm['kind']" name="kind" />
         </label>
         <label>
           <span>Факультет</span>

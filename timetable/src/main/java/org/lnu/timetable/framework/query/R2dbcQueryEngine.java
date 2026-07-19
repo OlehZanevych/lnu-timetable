@@ -5,12 +5,12 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Builds and executes optimized SQL queries that select only the requested columns.
@@ -23,6 +23,16 @@ public class R2dbcQueryEngine {
 
     /** An equality filter applied as a WHERE clause to list/count queries. */
     public record Filter(String column, Object value) {}
+
+    /**
+     * A raw SQL boolean condition applied as a WHERE clause to list/count queries, for filters that
+     * can't be expressed as a direct column equality (see {@link
+     * org.lnu.timetable.framework.config.QueryDefinition.RelationFilter}). {@code condition} already
+     * contains the {@code :bindName} placeholder; {@code value} is bound under that name as-is (a
+     * plain scalar for a single-value filter, or a {@code Long[]} for a list filter used with
+     * {@code = ANY(:bindName)}).
+     */
+    public record RawFilter(String bindName, String condition, Object value) {}
 
     /**
      * Wraps a value destined for a column backed by a native Postgres enum type (see
@@ -61,12 +71,17 @@ public class R2dbcQueryEngine {
 
     public Flux<Map<String, Object>> selectList(String table, List<Col> cols, String orderByColumn,
                                                 int limit, long offset, List<Filter> filters) {
+        return selectList(table, cols, orderByColumn, limit, offset, filters, List.of());
+    }
+
+    public Flux<Map<String, Object>> selectList(String table, List<Col> cols, String orderByColumn,
+                                                int limit, long offset, List<Filter> filters, List<RawFilter> rawFilters) {
         StringBuilder sql = new StringBuilder("SELECT ").append(projection(cols)).append(" FROM ").append(table);
-        appendWhere(sql, filters);
+        appendWhere(sql, filters, rawFilters);
         if (orderByColumn != null) sql.append(" ORDER BY ").append(orderByColumn);
         sql.append(" LIMIT ").append(limit);
         if (offset != 0) sql.append(" OFFSET ").append(offset);
-        return bindFilters(db.sql(sql.toString()), filters).map(row -> mapRow(row, cols)).all();
+        return bindFilters(db.sql(sql.toString()), filters, rawFilters).map(row -> mapRow(row, cols)).all();
     }
 
     public Flux<Map<String, Object>> selectWhere(String table, List<Col> cols, String whereColumn, Object value, String orderByColumn) {
@@ -83,10 +98,14 @@ public class R2dbcQueryEngine {
     }
 
     public Mono<Long> countWhere(String table, List<Filter> filters) {
-        if (filters.isEmpty()) return count(table);
+        return countWhere(table, filters, List.of());
+    }
+
+    public Mono<Long> countWhere(String table, List<Filter> filters, List<RawFilter> rawFilters) {
+        if (filters.isEmpty() && rawFilters.isEmpty()) return count(table);
         StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM ").append(table);
-        appendWhere(sql, filters);
-        return bindFilters(db.sql(sql.toString()), filters)
+        appendWhere(sql, filters, rawFilters);
+        return bindFilters(db.sql(sql.toString()), filters, rawFilters)
             .map(row -> ((Number) row.get(0)).longValue()).one();
     }
 
@@ -170,6 +189,23 @@ public class R2dbcQueryEngine {
         return spec.bind("idValue", id).fetch().rowsUpdated();
     }
 
+    /**
+     * Updates rows of {@code table} matching {@code whereColumn} = {@code whereValue}. Unlike
+     * {@link #update}, which always keys off an {@code id} column, this supports entities whose
+     * primary key is something else (e.g. {@code global_properties}, keyed by {@code name}).
+     */
+    public Mono<Long> updateWhere(String table, LinkedHashMap<String, Object> columnValues, String whereColumn, Object whereValue) {
+        String assignments = columnValues.entrySet().stream()
+            .map(e -> e.getKey() + " = :" + e.getKey() + castSuffix(e.getValue()))
+            .collect(Collectors.joining(", "));
+        String sql = "UPDATE " + table + " SET " + assignments + " WHERE " + whereColumn + " = :whereValue";
+        DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
+        for (var e : columnValues.entrySet()) {
+            spec = bindValue(spec, e.getKey(), e.getValue());
+        }
+        return spec.bind("whereValue", whereValue).fetch().rowsUpdated();
+    }
+
     /** Returns a Postgres {@code ::type} cast suffix for values wrapped in {@link EnumValue}, otherwise empty. */
     private String castSuffix(Object value) {
         return value instanceof EnumValue ev ? "::" + ev.pgType() : "";
@@ -203,17 +239,24 @@ public class R2dbcQueryEngine {
         return db.sql(sql).bind("a", joinValue).bind("b", inverseValue).fetch().rowsUpdated();
     }
 
-    private void appendWhere(StringBuilder sql, List<Filter> filters) {
-        if (filters.isEmpty()) return;
-        String conditions = IntStream.range(0, filters.size())
-            .mapToObj(i -> filters.get(i).column() + " = :f" + i)
-            .collect(Collectors.joining(" AND "));
-        sql.append(" WHERE ").append(conditions);
+    private void appendWhere(StringBuilder sql, List<Filter> filters, List<RawFilter> rawFilters) {
+        if (filters.isEmpty() && rawFilters.isEmpty()) return;
+        List<String> conditions = new ArrayList<>();
+        for (int i = 0; i < filters.size(); i++) {
+            conditions.add(filters.get(i).column() + " = :f" + i);
+        }
+        for (RawFilter rf : rawFilters) {
+            conditions.add(rf.condition());
+        }
+        sql.append(" WHERE ").append(String.join(" AND ", conditions));
     }
 
-    private DatabaseClient.GenericExecuteSpec bindFilters(DatabaseClient.GenericExecuteSpec spec, List<Filter> filters) {
+    private DatabaseClient.GenericExecuteSpec bindFilters(DatabaseClient.GenericExecuteSpec spec, List<Filter> filters, List<RawFilter> rawFilters) {
         for (int i = 0; i < filters.size(); i++) {
             spec = spec.bind("f" + i, filters.get(i).value());
+        }
+        for (RawFilter rf : rawFilters) {
+            spec = spec.bind(rf.bindName(), rf.value());
         }
         return spec;
     }

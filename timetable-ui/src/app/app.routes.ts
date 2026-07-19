@@ -8,6 +8,7 @@ import { BuildingPage } from './building-page';
 import { DepartmentDetailPage } from './department-page';
 import { SpecialtyDetailPage } from './specialty-page';
 import { AcademicGroupDetailPage } from './academic-group-page';
+import { GlobalPropertiesPage } from './global-properties-page';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', component: FacultyHome },
@@ -17,6 +18,7 @@ export const routes: Routes = [
   { path: 'specialty/:id', component: SpecialtyDetailPage },
   { path: 'academic-group/:id', component: AcademicGroupDetailPage },
   { path: 'timetable', component: Timetable },
+  { path: 'global-properties', component: GlobalPropertiesPage },
   // /e/building is handled by BuildingHome, not the generic entity table
   { path: 'e/building', component: BuildingHome },
   // All other entity pages (generic CRUD tables)

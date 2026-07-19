@@ -202,6 +202,18 @@ button.danger:hover { background: #991b1b !important; }
 /* ── Combined working curriculum items (department page) ── */
 .merge-actions { display: flex; justify-content: flex-end; padding-top: 10px; }
 
+/* ── Faculty schedule builder (faculty page) ── */
+/* .card clips overflow for its rounded corners, which also clips the app-search-select dropdown
+   menu (position: absolute) whenever it opens near the bottom of a block — override it here so the
+   day/time-slot/room menus can overflow past the card edge instead of being cut off / hidden. */
+.tt-block { overflow: visible; }
+.tt-block.unscheduled { border-left: 4px solid #d97706; }
+.tt-block:not(.unscheduled) { border-left: 4px solid #16a34a; }
+.tt-block .badge { background: #eef2f9; color: var(--navy); font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+.tt-block-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.tt-block-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 180px; }
+.tt-block-form .actions { display: flex; gap: 8px; margin-left: auto; }
+
 /* ── Lecturer workloads (department page): one level deeper than .wci-hours-block ── */
 .lw-record { margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
 .lw-record:last-child { margin-bottom: 0; }

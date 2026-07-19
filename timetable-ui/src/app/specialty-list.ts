@@ -2,6 +2,8 @@ import { Component, Input, OnChanges, OnInit, inject, signal } from '@angular/co
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
+import { SearchSelect } from './search-select';
+import { DEGREE_OPTIONS, toOptions } from './entities';
 
 interface Specialty {
   id: string;
@@ -13,12 +15,14 @@ interface Specialty {
 @Component({
   selector: 'app-specialty-list',
   templateUrl: './specialty-list.html',
-  imports: [FormsModule, RouterLink]
+  imports: [FormsModule, RouterLink, SearchSelect]
 })
 export class SpecialtyList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
 
   @Input() facultyId!: string;
+
+  readonly degreeOptions = toOptions(DEGREE_OPTIONS);
 
   specialties = signal<Specialty[]>([]);
   error = signal('');
@@ -41,6 +45,10 @@ export class SpecialtyList implements OnInit, OnChanges {
       next: (d: any) => this.specialties.set(d.specialties.specialtyConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
+  }
+
+  degreeLabel(v: string): string {
+    return this.degreeOptions.find((o) => o.id === v)?.label ?? v;
   }
 
   // ── Create ────────────────────────────────────────────────────────────────

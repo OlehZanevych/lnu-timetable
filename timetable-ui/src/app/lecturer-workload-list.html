@@ -30,6 +30,7 @@
               <tr>
                 <th>Викладачі</th>
                 <th>Академічні групи</th>
+                <th>Тривалість</th>
                 <th></th>
               </tr>
             </thead>
@@ -38,13 +39,14 @@
                 <tr>
                   <td>{{ lecturerNames(w) }}</td>
                   <td>{{ academicGroupNames(w.academicGroups) }}</td>
+                  <td>{{ w.durationHours }} год.</td>
                   <td class="row-actions">
                     <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
                     <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="3" class="muted">Навантаження ще немає.</td></tr>
+                <tr><td colspan="4" class="muted">Навантаження ще немає.</td></tr>
               }
             </tbody>
           </table>
@@ -81,11 +83,7 @@
               @if (isElectiveGroupCourse(group)) {
                 <span>Вибіркова дисципліна: {{ wci.course?.name || '&mdash;' }}</span>
               }
-              @if (isMerged(wci)) {
-                <span class="muted">&#x1F517; Об'єднано з іншими спеціальностями — навантаження призначається в розділі «Об'єднані позиції» вище</span>
-              } @else {
-                <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
-              }
+              <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
             </div>
 
             <table class="wci-table">
@@ -96,6 +94,7 @@
                   @if (wci.teachingFormat === 'SEPARATELY') {
                     <th>Об'єднані групи</th>
                   }
+                  <th>Тривалість</th>
                   <th></th>
                 </tr>
               </thead>
@@ -107,13 +106,14 @@
                     @if (wci.teachingFormat === 'SEPARATELY') {
                       <td>{{ combinedGroupNames(w.combinedGroups) }}</td>
                     }
+                    <td>{{ w.durationHours }} год.</td>
                     <td class="row-actions">
                       <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
                       <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
                     </td>
                   </tr>
                 } @empty {
-                  <tr><td [attr.colspan]="wci.teachingFormat === 'SEPARATELY' ? 4 : 3" class="muted">Навантаження ще немає.</td></tr>
+                  <tr><td [attr.colspan]="wci.teachingFormat === 'SEPARATELY' ? 5 : 4" class="muted">Навантаження ще немає.</td></tr>
                 }
               </tbody>
             </table>
@@ -153,6 +153,11 @@
             <app-multi-select [options]="combinedGroupOptions()" [(ngModel)]="formCombinedGroupIds" name="combinedGroupIds" [ngModelOptions]="{ standalone: true }" />
           </label>
         }
+        <label>
+          <span>Тривалість заняття</span>
+          <app-search-select [options]="durationHoursSelectOptions" [(ngModel)]="formDurationHours"
+                              name="durationHours" [ngModelOptions]="{ standalone: true }" />
+        </label>
 
         <div class="actions">
           <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>

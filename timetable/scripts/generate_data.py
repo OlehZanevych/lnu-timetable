@@ -102,11 +102,11 @@ out.append("INSERT INTO rooms (id, number, building, capacity, kind, faculty_id)
 out.append(vals([(str(i + 1), q(str(100 + i)), q(f"Building {i % 3 + 1}"), str(30 + (i % 4) * 30), q(KINDS[i % 3]), str(i % FACS + 1)) for i in range(A)]))
 out.append(f"SELECT setval('rooms_id_seq', {A});\n")
 
-# Time slots (6)
-slots = [("08:30","09:50"),("10:10","11:30"),("11:50","13:10"),("13:30","14:50"),("15:05","16:25"),("16:40","18:00")]
-out.append("INSERT INTO time_slots (id, ordinal, start_time, end_time) VALUES")
-out.append(vals([(str(i + 1), str(i + 1), q(slots[i][0]), q(slots[i][1])) for i in range(6)]))
-out.append("SELECT setval('time_slots_id_seq', 6);\n")
+# Class start times (6)
+slots = ["08:30","10:10","11:50","13:30","15:05","16:40"]
+out.append("INSERT INTO class_start_times (id, ordinal, start_time) VALUES")
+out.append(vals([(str(i + 1), str(i + 1), q(slots[i])) for i in range(6)]))
+out.append("SELECT setval('class_start_times_id_seq', 6);\n")
 
 # Combined groups: dedup multi-group requirement audiences
 combined = {}            # sorted tuple of group ids -> combined_group_id
@@ -149,7 +149,7 @@ out.append(f"SELECT setval('lecturer_workloads_id_seq', {len(wl)});\n")
 te = []
 for rid, s in sorted(sched.items()):
     te.append((str(rid + 1), str(int(s["day"]) + 1), q(PARITY[s["freq"]]), str(rid + 1), str(int(s["slot"]) + 1), str(int(s["room"]) + 1)))
-out.append("INSERT INTO timetable_entries (id, day_of_week, week_parity, workload_id, time_slot_id, room_id) VALUES")
+out.append("INSERT INTO timetable_entries (id, day_of_week, week_parity, workload_id, class_start_time_id, room_id) VALUES")
 out.append(vals(te))
 out.append(f"SELECT setval('timetable_entries_id_seq', {len(te)});\n")
 

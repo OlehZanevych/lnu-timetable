@@ -100,8 +100,8 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
 | `CombinedGroup` (об'єднана група) | `combined_groups` | M-N academic groups (electives) |
 | `Room` (аудиторія) | `rooms` | capacity, kind; → faculty? |
-| `TimeSlot` (пара) | `time_slots` | ordinal, start/end time |
-| `TimetableEntry` (**the schedule / "gene"**) | `timetable_entries` | dayOfWeek, weekParity; → workload, timeSlot, room |
+| `ClassStartTime` (пара) | `class_start_times` | ordinal, start time (end time is derived from the workload's duration) |
+| `TimetableEntry` (**the schedule / "gene"**) | `timetable_entries` | dayOfWeek, weekParity; → workload, classStartTime, room |
 | `AcademicDegree` | `academic_degrees` | name, abbreviation, level; → lecturers |
 
 Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all supported.

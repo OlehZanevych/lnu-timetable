@@ -7,6 +7,7 @@ import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PgEnum;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ public class AcademicGroup {
     @Description("Year of study (рік навчання), 1..6")
     private Integer courseYear;
 
+    @PgEnum("study_form")
     @Description("Study form: FULL_TIME or PART_TIME")
     private String studyForm;
 

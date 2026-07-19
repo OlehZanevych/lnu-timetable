@@ -9,7 +9,9 @@
       <p class="muted">{{ f?.abbreviation }}</p>
     </div>
     <div class="faculty-header-actions">
-      <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+      @if (activeSection() === 'info') {
+        <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+      }
     </div>
   </div>
 </div>
@@ -157,6 +159,10 @@
 
       @case ('workloads') {
         <app-lecturer-workload />
+      }
+
+      @case ('timetable') {
+        <app-faculty-timetable-list [facultyId]="fid" />
       }
 
     }

@@ -1,6 +1,19 @@
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 
+-- ============================ Global properties ============================
+
+CREATE TYPE property_type AS ENUM ('INTEGER', 'DECIMAL', 'STRING', 'BOOLEAN', 'ENUM');
+
+-- Generic system-wide configuration store (name/type/value triples). `value` is always stored as
+-- text; `type` tells consumers how to parse it.
+CREATE TABLE global_properties
+(
+    name  VARCHAR(100) PRIMARY KEY,
+    type  property_type NOT NULL,
+    value VARCHAR(255)  NOT NULL
+);
+
 -- ============================ Infrastructure: Buildings ============================
 
 CREATE TABLE buildings
@@ -76,12 +89,14 @@ CREATE TABLE lecturers
     department_id        BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE
 );
 
+CREATE TYPE study_form AS ENUM ('FULL_TIME', 'PART_TIME');
+
 CREATE TABLE academic_groups
 (
     id             BIGSERIAL PRIMARY KEY,
     name           VARCHAR(32) NOT NULL UNIQUE,
     course_year    INTEGER     NOT NULL,
-    study_form     VARCHAR(16) NOT NULL,
+    study_form     study_form  NOT NULL,
     students_count INTEGER,
     specialty_id   BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE
 );
@@ -193,6 +208,8 @@ CREATE TABLE combined_working_curriculum_item_members
 
 -- ============================ Infrastructure: Rooms ============================
 
+CREATE TYPE room_kind AS ENUM ('LECTURE_HALL', 'COMPUTER_LAB', 'SEMINAR_ROOM');
+
 CREATE TABLE rooms
 (
     id          BIGSERIAL PRIMARY KEY,
@@ -200,16 +217,17 @@ CREATE TABLE rooms
     number      VARCHAR(32) NOT NULL,
     name        VARCHAR(96),
     capacity    INTEGER,
-    kind        VARCHAR(32),
+    kind        room_kind,
     faculty_id  BIGINT REFERENCES faculties (id) ON DELETE SET NULL
 );
 
-CREATE TABLE time_slots
+-- Stores only the possible start times a class can begin at; the end of a class is derived from
+-- the workload's duration_hours and the academic_hour_duration_minutes global property.
+CREATE TABLE class_start_times
 (
     id         BIGSERIAL PRIMARY KEY,
     ordinal    INTEGER     NOT NULL UNIQUE,
-    start_time VARCHAR(8)  NOT NULL,
-    end_time   VARCHAR(8)  NOT NULL
+    start_time VARCHAR(8)  NOT NULL
 );
 
 -- ============================ Workload (class requirements) & timetable ============================
@@ -222,6 +240,8 @@ CREATE TABLE lecturer_workloads
     -- working_curriculum_items (e.g. groups from different specialties) at once.
     working_curriculum_item_id          BIGINT REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
     combined_working_curriculum_item_id BIGINT REFERENCES combined_working_curriculum_items (id) ON DELETE CASCADE,
+    -- Duration of each class for this workload, in academic hours (1 lesson = 1-4 academic hours).
+    duration_hours                      INTEGER NOT NULL DEFAULT 2 CHECK (duration_hours BETWEEN 1 AND 4),
     CONSTRAINT lecturer_workloads_target_check CHECK (
         (working_curriculum_item_id IS NOT NULL) <> (combined_working_curriculum_item_id IS NOT NULL)
     )
@@ -248,12 +268,14 @@ CREATE TABLE lecturer_workload_combined_groups
     PRIMARY KEY (lecturer_workload_id, combined_group_id)
 );
 
+CREATE TYPE week_parity AS ENUM ('WEEKLY', 'NUMERATOR', 'DENOMINATOR');
+
 CREATE TABLE timetable_entries
 (
     id           BIGSERIAL PRIMARY KEY,
     day_of_week  INTEGER     NOT NULL,
-    week_parity  VARCHAR(16) NOT NULL,
+    week_parity  week_parity NOT NULL,
     workload_id  BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
-    time_slot_id BIGINT NOT NULL REFERENCES time_slots (id) ON DELETE CASCADE,
+    class_start_time_id BIGINT NOT NULL REFERENCES class_start_times (id) ON DELETE CASCADE,
     room_id      BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE
 );

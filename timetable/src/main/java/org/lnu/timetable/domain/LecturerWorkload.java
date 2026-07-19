@@ -1,6 +1,7 @@
 package org.lnu.timetable.domain;
 
 import lombok.Data;
+import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
@@ -42,6 +43,9 @@ public class LecturerWorkload {
     @Nullable
     @ManyToOne(joinColumn = "combined_working_curriculum_item_id")
     private CombinedWorkingCurriculumItem combinedWorkingCurriculumItem;
+
+    @Description("Duration of each class for this workload, in academic hours (1-4)")
+    private Integer durationHours;
 
     @OneToMany(mappedBy = "workload_id")
     private List<TimetableEntry> timetableEntries;

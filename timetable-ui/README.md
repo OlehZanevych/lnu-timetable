@@ -108,9 +108,9 @@ export class CoursePage extends BaseEntity { meta = meta('Course'); }
 `entity-pages.ts` currently registers 16 such pages (`academicDegree`, `faculty`,
 `department`, `specialty`, `course`, `curriculumItem`, `curriculumItemHours`,
 `workingCurriculumItem`, `lecturer`, `lecturerWorkload`, `student`, `academicGroup`,
-`combinedGroup`, `room`, `timeSlot`, `timetableEntry`), each routed at `/e/:single`. These are
+`combinedGroup`, `room`, `classStartTime`, `timetableEntry`), each routed at `/e/:single`. These are
 the fallback / power-user screens — useful for bulk edits or entities without a dedicated
-drill-down page (`Room`, `TimeSlot`, `CombinedGroup`, `AcademicDegree`, `LecturerWorkload`,
+drill-down page (`Room`, `ClassStartTime`, `CombinedGroup`, `AcademicDegree`, `LecturerWorkload`,
 `TimetableEntry`).
 
 ### Hierarchical drill-down pages
@@ -175,7 +175,7 @@ All three are standalone `ControlValueAccessor` components usable with `[(ngMode
 
 The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад")
 plus a flat "Загальне" group of generic-table links for entities with no dedicated page
-(`Building`, `TimeSlot`, `CombinedGroup`, `AcademicDegree`).
+(`Building`, `ClassStartTime`, `CombinedGroup`, `AcademicDegree`).
 
 ---
 

@@ -5,8 +5,8 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 
 @Data
-@GraphQLEntity(table = "time_slots")
-public class TimeSlot {
+@GraphQLEntity(table = "class_start_times")
+public class ClassStartTime {
 
     private Long id;
 
@@ -15,7 +15,4 @@ public class TimeSlot {
 
     @Description("Start time, e.g. 08:30")
     private String startTime;
-
-    @Description("End time, e.g. 09:50")
-    private String endTime;
 }

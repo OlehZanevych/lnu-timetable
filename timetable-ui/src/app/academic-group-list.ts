@@ -2,6 +2,8 @@ import { Component, Input, OnChanges, OnInit, inject, signal } from '@angular/co
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
+import { SearchSelect } from './search-select';
+import { STUDY_FORM_OPTIONS, toOptions } from './entities';
 
 interface AcademicGroup {
   id: string;
@@ -14,10 +16,12 @@ interface AcademicGroup {
 @Component({
   selector: 'app-academic-group-list',
   templateUrl: './academic-group-list.html',
-  imports: [FormsModule, RouterLink]
+  imports: [FormsModule, RouterLink, SearchSelect]
 })
 export class AcademicGroupList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+
+  readonly studyFormOptions = toOptions(STUDY_FORM_OPTIONS);
 
   /** When provided, list is scoped to this specialty and new groups are pre-assigned to it. */
   @Input() specialtyId: string | null = null;
@@ -35,6 +39,10 @@ export class AcademicGroupList implements OnInit, OnChanges {
 
   ngOnInit() { this.load(); }
   ngOnChanges() { this.load(); }
+
+  studyFormLabel(v: string): string {
+    return STUDY_FORM_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  }
 
   load() {
     const filter = this.specialtyId ? `, specialtyId: "${this.specialtyId}"` : '';
