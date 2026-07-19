@@ -157,34 +157,6 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'CurriculumItem', label: 'Позиції навч. плану', single: 'curriculumItem', namespace: 'curriculumItems', list: 'curriculumItemConnection', filterParam: 'specialtyId',
-    fields: [
-      { name: 'semester', label: 'Семестр', type: 'number', required: true },
-      { name: 'controlForm', label: 'Форма контролю', type: 'enum', required: true, enumOptions: CONTROL_FORM_OPTIONS },
-      { name: 'ectsCredits', label: 'ECTS', type: 'number' },
-      ref('specialtyId', 'Спеціальність', 'specialty', 'specialty', 'name', true),
-      ref('courseId', 'Дисципліна', 'course', 'course', 'name', true)
-    ]
-  },
-  {
-    name: 'CurriculumItemHours', label: 'Год. позиції навч. плану', single: 'curriculumItemHours', namespace: 'curriculumItemHourss', list: 'curriculumItemHoursConnection', filterParam: 'curriculumItemId',
-    fields: [
-      { name: 'hourType', label: 'Тип годин', type: 'enum', required: true, enumOptions: HOUR_TYPE_OPTIONS },
-      { name: 'hours', label: 'Годин', type: 'number', required: true },
-      ref('curriculumItemId', 'Позиція навч. плану', 'curriculumItem', 'curriculumItem', 'semester', true)
-    ]
-  },
-  {
-    name: 'WorkingCurriculumItem', label: 'Позиції РНП', single: 'workingCurriculumItem', namespace: 'workingCurriculumItems', list: 'workingCurriculumItemConnection', filterParam: 'departmentId',
-    fields: [
-      { name: 'lecturerCount', label: 'К-сть викладачів', type: 'number', required: true },
-      { name: 'teachingFormat', label: 'Формат викладання', type: 'enum', required: true, enumOptions: TEACHING_FORMAT_OPTIONS },
-      ref('curriculumItemHoursId', 'Год. позиції', 'curriculumItemHours', 'curriculumItemHours', 'hourType', true),
-      ref('departmentId', 'Кафедра', 'department', 'department', 'name', true),
-      ref('courseId', 'Вибіркова дисципліна', 'course', 'course', 'name')
-    ]
-  },
-  {
     name: 'AcademicDegree', label: 'Наукові ступені', single: 'academicDegree', namespace: 'academicDegrees', list: 'academicDegreeConnection',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
@@ -213,17 +185,6 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'maxHoursPerWeek', label: 'Макс. год./тижд.', type: 'number' },
       { name: 'departmentId', label: 'Кафедра', type: 'ref', ref: 'department', relation: 'department', refLabel: 'name', required: true,
         parentFilter: { namespace: 'faculties', list: 'facultyConnection', label: 'Факультет' } }
-    ]
-  },
-  {
-    name: 'LecturerWorkload', label: 'Навантаження', single: 'lecturerWorkload', namespace: 'lecturerWorkloads', list: 'lecturerWorkloadConnection',
-    fields: [
-      ref('workingCurriculumItemId', 'Позиція РНП', 'workingCurriculumItem', 'workingCurriculumItem', 'teachingFormat', true),
-      { name: 'durationHours', label: 'Тривалість заняття (акад. год.)', type: 'number', required: true }
-      // Викладачі / Академічні групи / Об'єднані групи are many-to-many now (lecturerIds/
-      // academicGroupIds/combinedGroupIds) and are managed on the department's "Навантаження
-      // викладачів" subpage instead — the generic single-select ref field here can't represent
-      // a multi-valued relation.
     ]
   },
   {

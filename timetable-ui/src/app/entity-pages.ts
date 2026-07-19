@@ -15,11 +15,7 @@ const TPL = './entity-page.html';
 @Component({ selector: 'app-department', templateUrl: TPL, imports: IMPORTS }) export class DepartmentPage extends BaseEntity { meta = meta('Department'); }
 @Component({ selector: 'app-specialty', templateUrl: TPL, imports: IMPORTS }) export class SpecialtyPage extends BaseEntity { meta = meta('Specialty'); }
 @Component({ selector: 'app-course', templateUrl: TPL, imports: IMPORTS }) export class CoursePage extends BaseEntity { meta = meta('Course'); }
-@Component({ selector: 'app-curriculum-item', templateUrl: TPL, imports: IMPORTS }) export class CurriculumItemPage extends BaseEntity { meta = meta('CurriculumItem'); }
-@Component({ selector: 'app-curriculum-item-hours', templateUrl: TPL, imports: IMPORTS }) export class CurriculumItemHoursPage extends BaseEntity { meta = meta('CurriculumItemHours'); }
-@Component({ selector: 'app-working-curriculum-item', templateUrl: TPL, imports: IMPORTS }) export class WorkingCurriculumItemPage extends BaseEntity { meta = meta('WorkingCurriculumItem'); }
 @Component({ selector: 'app-lecturer', templateUrl: TPL, imports: IMPORTS }) export class LecturerPage extends BaseEntity { meta = meta('Lecturer'); }
-@Component({ selector: 'app-lecturer-workload', templateUrl: TPL, imports: IMPORTS }) export class LecturerWorkloadPage extends BaseEntity { meta = meta('LecturerWorkload'); }
 @Component({ selector: 'app-student', templateUrl: TPL, imports: IMPORTS }) export class StudentPage extends BaseEntity { meta = meta('Student'); }
 @Component({ selector: 'app-academic-group', templateUrl: TPL, imports: IMPORTS }) export class AcademicGroupPage extends BaseEntity { meta = meta('AcademicGroup'); }
 @Component({ selector: 'app-combined-group', templateUrl: TPL, imports: IMPORTS }) export class CombinedGroupPage extends BaseEntity { meta = meta('CombinedGroup'); }
@@ -34,14 +30,9 @@ export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
   { single: 'department', component: DepartmentPage },
   { single: 'specialty', component: SpecialtyPage },
   { single: 'course', component: CoursePage },
-  { single: 'curriculumItem', component: CurriculumItemPage },
-  { single: 'curriculumItemHours', component: CurriculumItemHoursPage },
-  { single: 'workingCurriculumItem', component: WorkingCurriculumItemPage },
   { single: 'lecturer', component: LecturerPage },
-  { single: 'lecturerWorkload', component: LecturerWorkloadPage },
   { single: 'student', component: StudentPage },
   { single: 'academicGroup', component: AcademicGroupPage },
-  { single: 'combinedGroup', component: CombinedGroupPage },
   { single: 'room', component: RoomPage },
   { single: 'classStartTime', component: ClassStartTimePage },
   { single: 'timetableEntry', component: TimetableEntryPage }

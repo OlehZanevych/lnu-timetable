@@ -7,17 +7,12 @@ import { DepartmentList } from './department-list';
 import { SpecialtyList } from './specialty-list';
 import { AcademicGroupList } from './academic-group-list';
 import { FacultyTimetableList } from './faculty-timetable-list';
-import {
-  RoomPage,
-  CoursePage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
-  LecturerWorkloadPage, StudentPage, CombinedGroupPage
-} from './entity-pages';
+import { RoomPage, CoursePage, CombinedGroupPage } from './entity-pages';
 
 export type FacultySection =
   | 'info'
   | 'departments' | 'specialties' | 'rooms'
-  | 'courses' | 'curriculumItems' | 'curriculumItemHours' | 'workingCurriculumItems'
-  | 'workloads' | 'timetable' | 'students' | 'academicGroups' | 'combinedGroups';
+  | 'courses' | 'timetable' | 'academicGroups' | 'combinedGroups';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
 
@@ -37,14 +32,9 @@ const SECTIONS: SectionDef[] = [
   { key: 'departments',            label: 'Кафедри',              group: 'Структура' },
   { key: 'specialties',            label: 'Спеціальності',        group: 'Структура' },
   { key: 'rooms',                  label: 'Аудиторії',            group: 'Структура' },
-  { key: 'students',               label: 'Студенти',             group: 'Люди та групи' },
   { key: 'academicGroups',         label: 'Академічні групи',     group: 'Люди та групи' },
   { key: 'combinedGroups',         label: "Об'єднані групи",      group: 'Люди та групи' },
   { key: 'courses',                label: 'Дисципліни',           group: 'Навчальні плани' },
-  { key: 'curriculumItems',        label: 'Позиції навч. плану',  group: 'Навчальні плани' },
-  { key: 'curriculumItemHours',    label: 'Год. позиції',         group: 'Навчальні плани' },
-  { key: 'workingCurriculumItems', label: 'Позиції РНП',          group: 'Навчальні плани' },
-  { key: 'workloads',              label: 'Навантаження',         group: 'Розклад' },
   { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад' },
 ];
 
@@ -54,9 +44,7 @@ const SECTIONS: SectionDef[] = [
   imports: [
     RouterLink, FormsModule, SearchSelect,
     DepartmentList, SpecialtyList, AcademicGroupList, FacultyTimetableList,
-    RoomPage,
-    CoursePage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
-    LecturerWorkloadPage, StudentPage, CombinedGroupPage
+    RoomPage, CoursePage, CombinedGroupPage
   ]
 })
 export class FacultyPage implements OnInit {
