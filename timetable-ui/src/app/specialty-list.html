@@ -25,7 +25,7 @@
           <td>{{ s.id }}</td>
           <td>{{ s.code }}</td>
           <td>{{ s.name }}</td>
-          <td>{{ s.degree }}</td>
+          <td>{{ degreeLabel(s.degree) }}</td>
           <td class="row-actions">
             <button type="button" class="ghost" (click)="openEdit(s)">Редагувати</button>
             <a [routerLink]="['/specialty', s.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
@@ -59,7 +59,7 @@
         </label>
         <label>
           <span>Ступінь *</span>
-          <input type="text" [(ngModel)]="createForm['degree']" name="degree" required />
+          <app-search-select [options]="degreeOptions" [(ngModel)]="createForm['degree']" name="degree" />
         </label>
         <div class="actions">
           <button type="submit">Створити</button>
@@ -91,7 +91,7 @@
         </label>
         <label>
           <span>Ступінь *</span>
-          <input type="text" [(ngModel)]="editForm['degree']" name="degree" required />
+          <app-search-select [options]="degreeOptions" [(ngModel)]="editForm['degree']" name="degree" />
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

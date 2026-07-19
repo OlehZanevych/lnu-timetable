@@ -133,7 +133,22 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .relation("combinedWorkingCurriculumItems")
             .relation("workloads");
 
-        s.query("workingCurriculumItemConnection").entity(WorkingCurriculumItem.class).connection().orderBy("id").filter("departmentId", "department_id");
+        // working_curriculum_items has no faculty_id of its own — it's only known via its
+        // department — so this is an EXISTS subquery through departments rather than a plain column
+        // filter (see QueryDefinition.RelationFilter; same approach used for
+        // combinedWorkingCurriculumItemConnection's facultyId filter).
+        // semesterParity ('ODD'/'EVEN') filters by the parity of the linked curriculum item's
+        // semester (1,3,5.. vs 2,4,6..) — also an EXISTS subquery, through curriculum_item_hours.
+        s.query("workingCurriculumItemConnection").entity(WorkingCurriculumItem.class).connection().orderBy("id")
+            .filter("departmentId", "department_id")
+            .relationFilter("facultyId",
+                "EXISTS (SELECT 1 FROM departments d " +
+                "WHERE d.id = working_curriculum_items.department_id AND d.faculty_id = :facultyId)")
+            .relationFilterString("semesterParity",
+                "EXISTS (SELECT 1 FROM curriculum_item_hours cih " +
+                "JOIN curriculum_items ci ON ci.id = cih.curriculum_item_id " +
+                "WHERE cih.id = working_curriculum_items.curriculum_item_hours_id " +
+                "AND ((:semesterParity = 'ODD' AND ci.semester % 2 = 1) OR (:semesterParity = 'EVEN' AND ci.semester % 2 = 0)))");
         s.query("workingCurriculumItem").entity(WorkingCurriculumItem.class).findById();
 
         s.mutation("createWorkingCurriculumItem").entity(WorkingCurriculumItem.class).create()
@@ -165,7 +180,29 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .relation("workingCurriculumItems")
             .relation("workloads");
 
-        s.query("combinedWorkingCurriculumItemConnection").entity(CombinedWorkingCurriculumItem.class).connection().orderBy("id");
+        // combined_working_curriculum_items has no department_id/faculty_id of its own — a combined
+        // item's departments/faculty are only known via its members' working_curriculum_items, so
+        // these filters are EXISTS subqueries through the member join table rather than plain column
+        // filters (see QueryDefinition.RelationFilter).
+        s.query("combinedWorkingCurriculumItemConnection").entity(CombinedWorkingCurriculumItem.class).connection().orderBy("id")
+            .relationFilterList("departmentIds",
+                "EXISTS (SELECT 1 FROM combined_working_curriculum_item_members m " +
+                "JOIN working_curriculum_items w ON w.id = m.working_curriculum_item_id " +
+                "WHERE m.combined_working_curriculum_item_id = combined_working_curriculum_items.id " +
+                "AND w.department_id = ANY(:departmentIds))")
+            .relationFilter("facultyId",
+                "EXISTS (SELECT 1 FROM combined_working_curriculum_item_members m " +
+                "JOIN working_curriculum_items w ON w.id = m.working_curriculum_item_id " +
+                "JOIN departments d ON d.id = w.department_id " +
+                "WHERE m.combined_working_curriculum_item_id = combined_working_curriculum_items.id " +
+                "AND d.faculty_id = :facultyId)")
+            .relationFilterString("semesterParity",
+                "EXISTS (SELECT 1 FROM combined_working_curriculum_item_members m " +
+                "JOIN working_curriculum_items w ON w.id = m.working_curriculum_item_id " +
+                "JOIN curriculum_item_hours cih ON cih.id = w.curriculum_item_hours_id " +
+                "JOIN curriculum_items ci ON ci.id = cih.curriculum_item_id " +
+                "WHERE m.combined_working_curriculum_item_id = combined_working_curriculum_items.id " +
+                "AND ((:semesterParity = 'ODD' AND ci.semester % 2 = 1) OR (:semesterParity = 'EVEN' AND ci.semester % 2 = 0)))");
         s.query("combinedWorkingCurriculumItem").entity(CombinedWorkingCurriculumItem.class).findById();
 
         s.mutation("createCombinedWorkingCurriculumItem").entity(CombinedWorkingCurriculumItem.class).create()

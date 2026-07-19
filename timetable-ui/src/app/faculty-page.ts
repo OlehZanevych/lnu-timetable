@@ -6,6 +6,7 @@ import { SearchSelect, Option } from './search-select';
 import { DepartmentList } from './department-list';
 import { SpecialtyList } from './specialty-list';
 import { AcademicGroupList } from './academic-group-list';
+import { FacultyTimetableList } from './faculty-timetable-list';
 import {
   RoomPage,
   CoursePage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
@@ -16,7 +17,7 @@ export type FacultySection =
   | 'info'
   | 'departments' | 'specialties' | 'rooms'
   | 'courses' | 'curriculumItems' | 'curriculumItemHours' | 'workingCurriculumItems'
-  | 'workloads' | 'students' | 'academicGroups' | 'combinedGroups';
+  | 'workloads' | 'timetable' | 'students' | 'academicGroups' | 'combinedGroups';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
 
@@ -44,6 +45,7 @@ const SECTIONS: SectionDef[] = [
   { key: 'curriculumItemHours',    label: 'Год. позиції',         group: 'Навчальні плани' },
   { key: 'workingCurriculumItems', label: 'Позиції РНП',          group: 'Навчальні плани' },
   { key: 'workloads',              label: 'Навантаження',         group: 'Розклад' },
+  { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад' },
 ];
 
 @Component({
@@ -51,7 +53,7 @@ const SECTIONS: SectionDef[] = [
   templateUrl: './faculty-page.html',
   imports: [
     RouterLink, FormsModule, SearchSelect,
-    DepartmentList, SpecialtyList, AcademicGroupList,
+    DepartmentList, SpecialtyList, AcademicGroupList, FacultyTimetableList,
     RoomPage,
     CoursePage, CurriculumItemPage, CurriculumItemHoursPage, WorkingCurriculumItemPage,
     LecturerWorkloadPage, StudentPage, CombinedGroupPage

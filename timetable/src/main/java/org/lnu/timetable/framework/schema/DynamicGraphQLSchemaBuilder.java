@@ -5,6 +5,7 @@ import graphql.schema.*;
 import graphql.schema.idl.SchemaPrinter;
 import org.lnu.timetable.framework.config.*;
 import org.lnu.timetable.framework.metadata.*;
+import org.lnu.timetable.framework.runtime.DynamicDataFetchers;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -32,7 +33,7 @@ public class DynamicGraphQLSchemaBuilder {
         this.metadataRegistry = metadataRegistry;
     }
 
-    public GraphQLSchema buildSchema(List<GraphQLSchemaConfig> configs, DataFetcherProvider fetchers) {
+    public GraphQLSchema buildSchema(List<GraphQLSchemaConfig> configs, DynamicDataFetchers fetchers) {
         SchemaDefinition schemaDef = collectSchemaDefinition(configs);
         buildAllTypes(schemaDef);
 
@@ -60,6 +61,7 @@ public class DynamicGraphQLSchemaBuilder {
 
     private void buildAllTypes(SchemaDefinition schemaDef) {
         builtTypes.put("ConnectionPageInfo", buildPageInfoType());
+        buildGlobalPropertyTypes();
 
         for (TypeDefinition typeDef : schemaDef.getTypes()) {
             buildObjectType(typeDef);
@@ -110,6 +112,7 @@ public class DynamicGraphQLSchemaBuilder {
         }
 
         addApolloFederationServiceField(builder);
+        addGlobalPropertyQueryField(builder);
 
         return builder.build();
     }
@@ -145,6 +148,8 @@ public class DynamicGraphQLSchemaBuilder {
             builder.field(newFieldDefinition().name(fieldName).type(mutationsType).build());
         }
 
+        addGlobalPropertyMutationField(builder);
+
         return builder.build();
     }
 
@@ -152,7 +157,7 @@ public class DynamicGraphQLSchemaBuilder {
             SchemaDefinition schemaDef,
             Map<Class<?>, List<QueryDefinition>> queriesByEntity,
             Map<Class<?>, List<MutationDefinition>> mutationsByEntity,
-            DataFetcherProvider fetchers) {
+            DynamicDataFetchers fetchers) {
 
         GraphQLCodeRegistry.Builder codeRegistry = GraphQLCodeRegistry.newCodeRegistry();
 
@@ -160,6 +165,7 @@ public class DynamicGraphQLSchemaBuilder {
         registerQueryFetchers(codeRegistry, queriesByEntity, fetchers);
         registerMutationFetchers(codeRegistry, mutationsByEntity, fetchers);
         registerRelationFetchers(codeRegistry, schemaDef.getTypes(), fetchers);
+        registerGlobalPropertyFetchers(codeRegistry, fetchers);
 
         return codeRegistry.build();
     }
@@ -250,6 +256,21 @@ public class DynamicGraphQLSchemaBuilder {
         }
     }
 
+    /**
+     * Registers fetchers for the hand-rolled GlobalProperty query/mutation fields (see {@link
+     * #buildGlobalPropertyTypes()}). {@code fetchers} is the concrete {@link DynamicDataFetchers}
+     * (not the generic {@link DataFetcherProvider} interface) because these methods aren't part of
+     * that interface — they're one-off additions for the one entity that doesn't fit the generic,
+     * id-keyed CRUD model.
+     */
+    private void registerGlobalPropertyFetchers(GraphQLCodeRegistry.Builder codeRegistry, DynamicDataFetchers fetchers) {
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "globalProperties"), fetchers.namespace());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyQueries", "list"), fetchers.globalPropertyList());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyQueries", "globalProperty"), fetchers.globalProperty());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "globalProperties"), fetchers.namespace());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyMutations", "updateGlobalProperty"), fetchers.updateGlobalProperty());
+    }
+
     // -------------------------------------------------------------------------
     // Type builders
     // -------------------------------------------------------------------------
@@ -263,6 +284,69 @@ public class DynamicGraphQLSchemaBuilder {
             .field(newFieldDefinition().name("hasNextPage").type(GraphQLNonNull.nonNull(GraphQLBoolean))
                 .description("Flag that indicates whether there are more nodes"))
             .build();
+    }
+
+    /**
+     * Hand-rolled schema for {@code global_properties}: a generic name/type/value settings table,
+     * keyed by {@code name} rather than the conventional numeric {@code id} the rest of this builder
+     * assumes (see {@link #buildObjectType}, which always adds an {@code id: ID!} field). Since the
+     * reflective entity-metadata system can't represent that, these types, and the query/mutation
+     * root fields that expose them (see {@link #addGlobalPropertyQueryField} /
+     * {@link #addGlobalPropertyMutationField}), are built directly instead of going through {@code
+     * SchemaDefinition}/{@code TypeDefinition} — mirroring how {@code ConnectionPageInfo} and the
+     * Apollo Federation {@code _service} field are hand-added above.
+     */
+    private void buildGlobalPropertyTypes() {
+        GraphQLObjectType globalPropertyType = newObject().name("GlobalProperty")
+            .field(newFieldDefinition().name("name").type(GraphQLNonNull.nonNull(GraphQLID))
+                .description("Property name (primary key)"))
+            .field(newFieldDefinition().name("type").type(GraphQLNonNull.nonNull(GraphQLString))
+                .description("How to interpret value: INTEGER, DECIMAL, STRING, BOOLEAN or ENUM"))
+            .field(newFieldDefinition().name("value").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .build();
+        builtTypes.put("GlobalProperty", globalPropertyType);
+
+        GraphQLObjectType globalPropertyQueries = newObject().name("GlobalPropertyQueries")
+            .field(newFieldDefinition().name("list")
+                .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("GlobalProperty"))))))
+            .field(newFieldDefinition().name("globalProperty")
+                .type(GraphQLTypeReference.typeRef("GlobalProperty"))
+                .argument(newArgument().name("name").type(GraphQLNonNull.nonNull(GraphQLID))))
+            .build();
+        builtTypes.put("GlobalPropertyQueries", globalPropertyQueries);
+
+        GraphQLEnumType errorStatusEnum = newEnum().name("UpdateGlobalPropertyErrorStatus")
+            .value("GLOBALPROPERTY_NOT_FOUND", "GLOBALPROPERTY_NOT_FOUND", "Property not found")
+            .value("INVALID_VALUE", "INVALID_VALUE", "Value doesn't match the property's declared type")
+            .value("INTERNAL_SERVER_ERROR", "INTERNAL_SERVER_ERROR", "Unexpected server error")
+            .build();
+        builtEnumTypes.put("UpdateGlobalPropertyErrorStatus", errorStatusEnum);
+
+        GraphQLObjectType updateResponse = newObject().name("UpdateGlobalPropertyResponse")
+            .field(newFieldDefinition().name("isSuccess").type(GraphQLNonNull.nonNull(GraphQLBoolean))
+                .description("Flag that indicates whether the operation was successful"))
+            .field(newFieldDefinition().name("errorStatus").type(GraphQLTypeReference.typeRef("UpdateGlobalPropertyErrorStatus"))
+                .description("Indicates the type of error"))
+            .build();
+        builtTypes.put("UpdateGlobalPropertyResponse", updateResponse);
+
+        GraphQLObjectType globalPropertyMutations = newObject().name("GlobalPropertyMutations")
+            .field(newFieldDefinition().name("updateGlobalProperty")
+                .type(GraphQLTypeReference.typeRef("UpdateGlobalPropertyResponse"))
+                .argument(newArgument().name("name").type(GraphQLNonNull.nonNull(GraphQLID)))
+                .argument(newArgument().name("value").type(GraphQLNonNull.nonNull(GraphQLString))))
+            .build();
+        builtTypes.put("GlobalPropertyMutations", globalPropertyMutations);
+    }
+
+    private void addGlobalPropertyQueryField(GraphQLObjectType.Builder queryBuilder) {
+        queryBuilder.field(newFieldDefinition().name("globalProperties")
+            .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("GlobalPropertyQueries"))));
+    }
+
+    private void addGlobalPropertyMutationField(GraphQLObjectType.Builder mutationBuilder) {
+        mutationBuilder.field(newFieldDefinition().name("globalProperties")
+            .type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("GlobalPropertyMutations"))));
     }
 
     private void buildObjectType(TypeDefinition typeDef) {
@@ -438,6 +522,14 @@ public class DynamicGraphQLSchemaBuilder {
                         .defaultValueProgrammatic(queryDef.getDefaultOffset()));
                 for (QueryDefinition.FilterParam fp : queryDef.getFilters()) {
                     connectionField.argument(newArgument().name(fp.paramName()).type(GraphQLID)); // nullable
+                }
+                for (QueryDefinition.RelationFilter rf : queryDef.getRelationFilters()) {
+                    GraphQLInputType argType = switch (rf.argType()) {
+                        case ID_LIST -> GraphQLList.list(GraphQLNonNull.nonNull(GraphQLID));
+                        case STRING -> GraphQLString;
+                        case ID -> GraphQLID;
+                    };
+                    connectionField.argument(newArgument().name(rf.paramName()).type(argType)); // nullable
                 }
                 yield connectionField.build();
             }

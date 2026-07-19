@@ -1,9 +1,9 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
-import { Option } from './search-select';
+import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
-import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS } from './entities';
+import { CONTROL_FORM_OPTIONS, DURATION_HOURS_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
 
 interface GroupRef {
   id: string;
@@ -19,6 +19,7 @@ interface LecturerRef {
 
 interface Workload {
   id: string;
+  durationHours: number;
   lecturers: LecturerRef[];
   academicGroups: GroupRef[];
   combinedGroups: GroupRef[];
@@ -31,8 +32,8 @@ interface WorkingItem {
   course?: { id: string; name: string } | null;
   academicGroups: GroupRef[];
   workloads: Workload[];
-  /** Non-empty when this item has been merged into a combined_working_curriculum_item — its
-   *  workload is then assigned at the combined level instead (see the section above the tree). */
+  /** Non-empty when this item has been merged into a combined_working_curriculum_item — such
+   *  items are excluded from the tree (see buildGroups) and shown only in the section above it. */
   combinedWorkingCurriculumItems: { id: string }[];
   curriculumItemHours: {
     id: string;
@@ -99,15 +100,14 @@ const HOUR_TYPE_ORDER = ['LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK'];
  * assign lecturers (with their academic/combined groups) under each one.
  *
  * Working curriculum items that have been merged into a combined_working_curriculum_item (see the
- * "Об'єднані позиції РНП" subpage) are handled separately, in a dedicated section above the tree:
- * their workload is assigned once against the combined item (covering every merged specialty at
- * once) rather than per individual item, so their tree row shows a note instead of the usual
- * "+ Додати навантаження" button.
+ * "Об'єднані позиції РНП" subpage) are handled separately, in a dedicated section above the tree,
+ * and excluded from the tree itself to avoid showing the same assignment twice: their workload is
+ * assigned once against the combined item, covering every merged specialty at once.
  */
 @Component({
   selector: 'app-lecturer-workload-list',
   templateUrl: './lecturer-workload-list.html',
-  imports: [FormsModule, MultiSelect]
+  imports: [FormsModule, MultiSelect, SearchSelect]
 })
 export class LecturerWorkloadList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
@@ -117,9 +117,17 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
   readonly TEACHING_FORMAT_OPTIONS = TEACHING_FORMAT_OPTIONS;
+  readonly DURATION_HOURS_OPTIONS = DURATION_HOURS_OPTIONS;
+  readonly durationHoursSelectOptions: Option[] = toOptions(DURATION_HOURS_OPTIONS);
+
+  /** default_class_duration_hours global property — pre-filled as formDurationHours when creating
+   *  a new workload (see openCreate/openCreateCombined and loadDefaultDurationHours). */
+  private defaultDurationHours = signal('2');
 
   private rawItems = signal<WorkingItem[]>([]);
-  private allCombined = signal<CombinedItem[]>([]);
+  /** Combined items with at least one member belonging to this department — filtered server-side
+   *  (see loadCombined) via the departmentIds relation filter on combinedWorkingCurriculumItemConnection. */
+  combinedItems = signal<CombinedItem[]>([]);
   error = signal('');
 
   lecturerOptions = signal<Option[]>([]);
@@ -128,19 +136,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   /** The working curriculum items for this department, grouped for display (see interfaces above). */
   groups = computed(() => this.buildGroups(this.rawItems()));
 
-  private deptItemIds = computed(() => new Set(this.rawItems().map((i) => i.id)));
-
-  /** Combined items with at least one member belonging to this department. */
-  combinedItems = computed(() =>
-    this.allCombined().filter((c) => c.workingCurriculumItems.some((m) => this.deptItemIds().has(m.id)))
-  );
-
   showForm = signal(false);
   editingId = signal<string | null>(null);
   formError = signal('');
   formLecturerIds: string[] = [];
   formAcademicGroupIds: string[] = [];
   formCombinedGroupIds: string[] = [];
+  formDurationHours = '2';
 
   /** Academic-group options for the modal: the specific working curriculum item's own groups. */
   activeAcademicGroupOptions = signal<Option[]>([]);
@@ -159,6 +161,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   ngOnInit() {
     this.initialized = true;
     this.loadCombinedGroupOptions();
+    this.loadDefaultDurationHours();
     if (this.departmentId) {
       this.loadLecturerOptions();
       this.loadAll();
@@ -194,6 +197,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       }
       workloads {
         id
+        durationHours
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
@@ -206,7 +210,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   private loadCombined() {
-    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0) { nodes {
+    if (!this.departmentId) return;
+    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0, departmentIds: ["${this.departmentId}"]) { nodes {
       id
       workingCurriculumItems {
         id
@@ -218,20 +223,25 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       }
       workloads {
         id
+        durationHours
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
       }
     } } } }`;
     this.gql.request(q).subscribe({
-      next: (d: any) => this.allCombined.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes),
+      next: (d: any) => this.combinedItems.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
   }
 
   private buildGroups(items: WorkingItem[]): CurriculumItemGroup[] {
     const byItem = new Map<string, CurriculumItemGroup>();
+    // Items already merged into a combined_working_curriculum_item are managed exclusively in the
+    // "Об'єднані позиції" section above, so leaving them out here avoids showing the same
+    // assignment twice (and curriculum items whose every item is merged simply don't appear).
     for (const wci of items) {
+      if (this.isMerged(wci)) continue;
       const ci = wci.curriculumItemHours.curriculumItem;
       let group = byItem.get(ci.id);
       if (!group) {
@@ -264,6 +274,17 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       next: (d: any) => {
         const opts: Option[] = d.lecturers.lecturerConnection.nodes.map((l: any) => ({ id: l.id, label: this.lecturerName(l) }));
         this.lecturerOptions.set(opts);
+      },
+      error: () => {}
+    });
+  }
+
+  private loadDefaultDurationHours() {
+    const q = `{ globalProperties { globalProperty(name: "default_class_duration_hours") { value } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => {
+        const value = d.globalProperties.globalProperty?.value;
+        if (value) this.defaultDurationHours.set(value);
       },
       error: () => {}
     });
@@ -313,8 +334,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     return (w.lecturers ?? []).map((l) => this.lecturerName(l)).join(', ') || '—';
   }
 
-  /** True once this working curriculum item has been merged into a combined item (see above). */
-  isMerged(wci: WorkingItem): boolean {
+  /** True once this working curriculum item has been merged into a combined item — such items are
+   *  excluded from the tree in buildGroups() and shown only in the "Об'єднані позиції" section. */
+  private isMerged(wci: WorkingItem): boolean {
     return (wci.combinedWorkingCurriculumItems ?? []).length > 0;
   }
 
@@ -354,6 +376,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = [];
     this.formAcademicGroupIds = [];
     this.formCombinedGroupIds = [];
+    this.formDurationHours = this.defaultDurationHours();
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -367,6 +390,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = (w.lecturers ?? []).map((l) => l.id);
     this.formAcademicGroupIds = (w.academicGroups ?? []).map((g) => g.id);
     this.formCombinedGroupIds = (w.combinedGroups ?? []).map((g) => g.id);
+    this.formDurationHours = String(w.durationHours);
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -385,6 +409,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = [];
     this.formAcademicGroupIds = [];
     this.formCombinedGroupIds = [];
+    this.formDurationHours = this.defaultDurationHours();
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -398,6 +423,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = (w.lecturers ?? []).map((l) => l.id);
     this.formAcademicGroupIds = (w.academicGroups ?? []).map((g) => g.id);
     this.formCombinedGroupIds = [];
+    this.formDurationHours = String(w.durationHours);
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -420,6 +446,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       // Combined groups only make sense for SEPARATELY items; force-clear them otherwise so
       // switching a working curriculum item back to TOGETHER also drops any stale assignment.
       combinedGroupIds: this.canUseCombinedGroups() ? this.formCombinedGroupIds : [],
+      durationHours: Number(this.formDurationHours),
     };
     // Exactly one of these two is sent, matching whichever entry point (single item or combined
     // item) the modal was opened from.

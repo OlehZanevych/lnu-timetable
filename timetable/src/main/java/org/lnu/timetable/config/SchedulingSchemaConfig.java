@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for scheduling entities:
- * LecturerWorkload, TimeSlot, TimetableEntry.
+ * LecturerWorkload, ClassStartTime, TimetableEntry.
  */
 @Component
 public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
@@ -15,7 +15,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     @Override
     public void configure(SchemaDefinition s) {
         configureLecturerWorkload(s);
-        configureTimeSlot(s);
+        configureClassStartTime(s);
         configureTimetableEntry(s);
     }
 
@@ -25,6 +25,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureLecturerWorkload(SchemaDefinition s) {
         s.type(LecturerWorkload.class)
+            .fields("durationHours")
             .relation("lecturers")
             .relation("academicGroups")
             .relation("combinedGroups")
@@ -40,7 +41,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
         // lecturers who simultaneously teach several working curriculum items at once (e.g. a
         // shared lecture across specialties).
         s.mutation("createLecturerWorkload").entity(LecturerWorkload.class).create()
-            .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId")
+            .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId", "durationHours")
             .manyToMany("lecturerIds", "lecturer_workload_lecturers", "lecturer_workload_id", "lecturer_id")
             .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
@@ -49,7 +50,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturerWorkload").entity(LecturerWorkload.class).update()
-            .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId")
+            .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId", "durationHours")
             .manyToMany("lecturerIds", "lecturer_workload_lecturers", "lecturer_workload_id", "lecturer_id")
             .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
@@ -64,29 +65,29 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     }
 
     // -------------------------------------------------------------------------
-    // TimeSlot
+    // ClassStartTime
     // -------------------------------------------------------------------------
 
-    private void configureTimeSlot(SchemaDefinition s) {
-        s.type(TimeSlot.class)
-            .fields("ordinal", "startTime", "endTime");
+    private void configureClassStartTime(SchemaDefinition s) {
+        s.type(ClassStartTime.class)
+            .fields("ordinal", "startTime");
 
-        s.query("timeSlotConnection").entity(TimeSlot.class).connection().orderBy("ordinal");
-        s.query("timeSlot").entity(TimeSlot.class).findById();
+        s.query("classStartTimeConnection").entity(ClassStartTime.class).connection().orderBy("ordinal");
+        s.query("classStartTime").entity(ClassStartTime.class).findById();
 
-        s.mutation("createTimeSlot").entity(TimeSlot.class).create()
-            .inputFields("ordinal", "startTime", "endTime")
+        s.mutation("createClassStartTime").entity(ClassStartTime.class).create()
+            .inputFields("ordinal", "startTime")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
-        s.mutation("updateTimeSlot").entity(TimeSlot.class).update()
-            .inputFields("ordinal", "startTime", "endTime")
-            .errorStatus("TIMESLOT_NOT_FOUND", "TimeSlot not found")
+        s.mutation("updateClassStartTime").entity(ClassStartTime.class).update()
+            .inputFields("ordinal", "startTime")
+            .errorStatus("CLASSSTARTTIME_NOT_FOUND", "ClassStartTime not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
-        s.mutation("deleteTimeSlot").entity(TimeSlot.class).delete()
-            .errorStatus("TIMESLOT_NOT_FOUND", "TimeSlot not found")
+        s.mutation("deleteClassStartTime").entity(ClassStartTime.class).delete()
+            .errorStatus("CLASSSTARTTIME_NOT_FOUND", "ClassStartTime not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 
@@ -97,19 +98,19 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     private void configureTimetableEntry(SchemaDefinition s) {
         s.type(TimetableEntry.class)
             .fields("dayOfWeek", "weekParity")
-            .relation("workload").relation("timeSlot").relation("room");
+            .relation("workload").relation("classStartTime").relation("room");
 
         s.query("timetableEntryConnection").entity(TimetableEntry.class).connection().orderBy("dayOfWeek").filter("workloadId", "workload_id");
         s.query("timetableEntry").entity(TimetableEntry.class).findById();
 
         s.mutation("createTimetableEntry").entity(TimetableEntry.class).create()
-            .inputFields("dayOfWeek", "weekParity", "workloadId", "timeSlotId", "roomId")
+            .inputFields("dayOfWeek", "weekParity", "workloadId", "classStartTimeId", "roomId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateTimetableEntry").entity(TimetableEntry.class).update()
-            .inputFields("dayOfWeek", "weekParity", "workloadId", "timeSlotId", "roomId")
+            .inputFields("dayOfWeek", "weekParity", "workloadId", "classStartTimeId", "roomId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("TIMETABLEENTRY_NOT_FOUND", "TimetableEntry not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")

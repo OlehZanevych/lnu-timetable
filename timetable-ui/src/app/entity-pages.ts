@@ -24,7 +24,7 @@ const TPL = './entity-page.html';
 @Component({ selector: 'app-academic-group', templateUrl: TPL, imports: IMPORTS }) export class AcademicGroupPage extends BaseEntity { meta = meta('AcademicGroup'); }
 @Component({ selector: 'app-combined-group', templateUrl: TPL, imports: IMPORTS }) export class CombinedGroupPage extends BaseEntity { meta = meta('CombinedGroup'); }
 @Component({ selector: 'app-room', templateUrl: TPL, imports: IMPORTS }) export class RoomPage extends BaseEntity { meta = meta('Room'); }
-@Component({ selector: 'app-time-slot', templateUrl: TPL, imports: IMPORTS }) export class TimeSlotPage extends BaseEntity { meta = meta('TimeSlot'); }
+@Component({ selector: 'app-class-start-time', templateUrl: TPL, imports: IMPORTS }) export class ClassStartTimePage extends BaseEntity { meta = meta('ClassStartTime'); }
 @Component({ selector: 'app-timetable-entry', templateUrl: TPL, imports: IMPORTS }) export class TimetableEntryPage extends BaseEntity { meta = meta('TimetableEntry'); }
 
 /** single key -> component, used to generate routes. */
@@ -43,6 +43,6 @@ export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
   { single: 'academicGroup', component: AcademicGroupPage },
   { single: 'combinedGroup', component: CombinedGroupPage },
   { single: 'room', component: RoomPage },
-  { single: 'timeSlot', component: TimeSlotPage },
+  { single: 'classStartTime', component: ClassStartTimePage },
   { single: 'timetableEntry', component: TimetableEntryPage }
 ];

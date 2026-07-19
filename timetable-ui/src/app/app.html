@@ -17,9 +17,10 @@
 
     <h3>Загальне</h3>
     <a [routerLink]="['/e', 'building']" routerLinkActive="active">Корпуси</a>
-    <a [routerLink]="['/e', 'timeSlot']" routerLinkActive="active">Часові слоти</a>
+    <a [routerLink]="['/e', 'classStartTime']" routerLinkActive="active">Часи початку занять</a>
     <a [routerLink]="['/e', 'combinedGroup']" routerLinkActive="active">Об'єднані групи</a>
     <a [routerLink]="['/e', 'academicDegree']" routerLinkActive="active">Наукові ступені</a>
+    <a routerLink="/global-properties" routerLinkActive="active">Глобальні властивості</a>
   </nav>
   <main class="content">
     <router-outlet />

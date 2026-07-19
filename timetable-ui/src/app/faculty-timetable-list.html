@@ -1,0 +1,74 @@
+<div class="page-header">
+  <div>
+    <h2>Формування розкладу</h2>
+    <p class="muted">{{ blocks().length }} занять · неспланованих: {{ unscheduledCount() }}</p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+@if (actionError()) { <p class="error">{{ actionError() }}</p> }
+
+<div class="section-filter">
+  <label>Семестр</label>
+  <app-search-select [options]="SEMESTER_PARITY_OPTIONS" [ngModel]="selectedSemesterParity()"
+                      (ngModelChange)="onParityChange($event)"
+                      name="semesterParity" [ngModelOptions]="{ standalone: true }" />
+</div>
+
+@for (b of blocks(); track b.key) {
+  <div class="card wci-item-card tt-block" [class.unscheduled]="b.dayOfWeek == null">
+    <div class="wci-item-header">
+      <strong>Дисципліна: {{ b.courseName }}</strong>
+      <span>Тип заняття: {{ hourTypeLabel(b.hourType) }}</span>
+      @if (b.isBiweekly) {
+        <span class="badge">через тиждень</span>
+      }
+    </div>
+
+    <div class="lw-record">
+      <div class="lw-record-header">
+        <span>Академічні групи: {{ groupNames(b) }}</span>
+        <span>Викладачі: {{ lecturerNamesLabel(b) }}</span>
+      </div>
+
+      <div class="tt-block-form">
+        <label>
+          <span>День тижня</span>
+          <app-search-select [options]="DAY_OF_WEEK_OPTIONS" [(ngModel)]="formState[b.key].dayOfWeek"
+                              [name]="b.key + '-day'" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Час початку</span>
+          <app-search-select [options]="classStartTimeOptions()" [(ngModel)]="formState[b.key].classStartTimeId"
+                              [name]="b.key + '-slot'" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        @if (computedEndTime(b); as endTime) {
+          <span class="muted">Закінчення: {{ endTime }}</span>
+        }
+        <label>
+          <span>Аудиторія</span>
+          <app-search-select [options]="roomOptions()" [(ngModel)]="formState[b.key].roomId"
+                              [name]="b.key + '-room'" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        @if (b.isBiweekly) {
+          <label>
+            <span>Парність тижня</span>
+            <app-search-select [options]="BIWEEKLY_PARITY_OPTIONS" [(ngModel)]="formState[b.key].weekParity"
+                                [name]="b.key + '-parity'" [ngModelOptions]="{ standalone: true }" />
+          </label>
+        }
+
+        <div class="actions">
+          <button type="button" [disabled]="!canSave(b)" (click)="save(b)">
+            {{ b.entryId ? 'Зберегти' : 'Запланувати' }}
+          </button>
+          @if (b.entryId) {
+            <button type="button" class="ghost danger" (click)="remove(b)">Скасувати</button>
+          }
+        </div>
+      </div>
+    </div>
+  </div>
+} @empty {
+  <p class="muted">Для цього факультету ще немає навантажень, що потребують розкладу.</p>
+}

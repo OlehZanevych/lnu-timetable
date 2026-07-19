@@ -26,7 +26,7 @@
           <td>{{ g.id }}</td>
           <td>{{ g.name }}</td>
           <td>{{ g.courseYear }}</td>
-          <td>{{ g.studyForm }}</td>
+          <td>{{ studyFormLabel(g.studyForm) }}</td>
           <td>{{ g.studentsCount ?? '&mdash;' }}</td>
           <td class="row-actions">
             <button type="button" class="ghost" (click)="openEdit(g)">Редагувати</button>
@@ -61,7 +61,7 @@
         </label>
         <label>
           <span>Форма навчання *</span>
-          <input type="text" [(ngModel)]="createForm['studyForm']" name="studyForm" required />
+          <app-search-select [options]="studyFormOptions" [(ngModel)]="createForm['studyForm']" name="studyForm" />
         </label>
         <label>
           <span>Кількість студентів</span>
@@ -97,7 +97,7 @@
         </label>
         <label>
           <span>Форма навчання *</span>
-          <input type="text" [(ngModel)]="editForm['studyForm']" name="studyForm" required />
+          <app-search-select [options]="studyFormOptions" [(ngModel)]="editForm['studyForm']" name="studyForm" />
         </label>
         <label>
           <span>Кількість студентів</span>

@@ -5,6 +5,7 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.PgEnum;
 
 @Data
 @GraphQLEntity(table = "rooms")
@@ -22,6 +23,7 @@ public class Room {
     private Integer capacity;
 
     @Nullable
+    @PgEnum("room_kind")
     @Description("Room kind: LECTURE_HALL, COMPUTER_LAB, SEMINAR_ROOM")
     private String kind;
 

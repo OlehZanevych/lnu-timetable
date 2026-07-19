@@ -79,17 +79,29 @@ public class DynamicDataFetchers implements DataFetcherProvider {
                 }
             }
 
+            List<R2dbcQueryEngine.RawFilter> rawFilters = new ArrayList<>();
+            for (QueryDefinition.RelationFilter rf : def.getRelationFilters()) {
+                Object val = env.getArgument(rf.paramName());
+                if (val == null) continue;
+                Object bound = switch (rf.argType()) {
+                    case ID_LIST -> coerceLongArray((List<?>) val);
+                    case STRING -> val;
+                    case ID -> coerce(val, Long.class);
+                };
+                rawFilters.add(new R2dbcQueryEngine.RawFilter(rf.paramName(), rf.condition(), bound));
+            }
+
             SelectedField nodesField = immediate(env.getSelectionSet(), "nodes");
             boolean pageInfoSelected = immediate(env.getSelectionSet(), "pageInfo") != null;
 
             if (nodesField == null) {
-                return engine.countWhere(md.tableName(), filters)
+                return engine.countWhere(md.tableName(), filters, rawFilters)
                     .map(total -> connection(null, pageInfo(total, limit + offset)))
                     .toFuture();
             }
 
             List<Col> cols = resolveCols(md, nodesField.getSelectionSet());
-            return engine.selectList(md.tableName(), cols, columnOf(md, def.getOrderBy()), limit, offset, filters)
+            return engine.selectList(md.tableName(), cols, columnOf(md, def.getOrderBy()), limit, offset, filters, rawFilters)
                 .collectList()
                 .flatMap(nodes -> {
                     if (!pageInfoSelected) {
@@ -98,11 +110,76 @@ public class DynamicDataFetchers implements DataFetcherProvider {
                     if (nodes.size() < limit) {
                         return Mono.just(connection(nodes, pageInfo(offset + nodes.size(), -1)));
                     }
-                    return engine.countWhere(md.tableName(), filters)
+                    return engine.countWhere(md.tableName(), filters, rawFilters)
                         .map(total -> connection(nodes, pageInfo(total, limit + offset)));
                 })
                 .toFuture();
         };
+    }
+
+    // --- global properties (hand-rolled: name-keyed, not id-keyed — see DynamicGraphQLSchemaBuilder
+    // #buildGlobalPropertyTypes for why this can't go through the generic entity-metadata system) ---
+
+    private static final String GLOBAL_PROPERTIES_TABLE = "global_properties";
+    private static final List<Col> GLOBAL_PROPERTY_COLS =
+        List.of(new Col("name", "name"), new Col("type", "type"), new Col("value", "value"));
+
+    public DataFetcher<?> globalPropertyList() {
+        return env -> engine.selectList(GLOBAL_PROPERTIES_TABLE, GLOBAL_PROPERTY_COLS, "name", 1000, 0, List.of())
+            .collectList()
+            .toFuture();
+    }
+
+    public DataFetcher<?> globalProperty() {
+        return env -> {
+            String name = env.getArgument("name");
+            // .next() on the Flux completes empty (not an error) when there's no matching row,
+            // matching GraphQL's usual nullable-single-lookup semantics.
+            return engine.selectWhere(GLOBAL_PROPERTIES_TABLE, GLOBAL_PROPERTY_COLS, "name", name, null)
+                .next()
+                .toFuture();
+        };
+    }
+
+    public DataFetcher<?> updateGlobalProperty() {
+        return env -> {
+            String name = env.getArgument("name");
+            String value = env.getArgument("value");
+            return engine.selectWhere(GLOBAL_PROPERTIES_TABLE, GLOBAL_PROPERTY_COLS, "name", name, null)
+                .next()
+                .flatMap(row -> {
+                    String type = (String) row.get("type");
+                    if (!isValidPropertyValue(type, value)) {
+                        return Mono.just(globalPropertyResult(false, "INVALID_VALUE"));
+                    }
+                    LinkedHashMap<String, Object> cols = new LinkedHashMap<>();
+                    cols.put("value", value);
+                    return engine.updateWhere(GLOBAL_PROPERTIES_TABLE, cols, "name", name)
+                        .map(rows -> globalPropertyResult(true, null));
+                })
+                .switchIfEmpty(Mono.just(globalPropertyResult(false, "GLOBALPROPERTY_NOT_FOUND")))
+                .onErrorResume(e -> Mono.just(globalPropertyResult(false, "INTERNAL_SERVER_ERROR")))
+                .toFuture();
+        };
+    }
+
+    /** Light validation of a proposed value against the property's declared type — doesn't apply to
+     *  STRING/ENUM, which accept any non-blank text (there's no enum-of-allowed-values metadata). */
+    private boolean isValidPropertyValue(String type, String value) {
+        if (value == null || value.isBlank()) return false;
+        return switch (type) {
+            case "INTEGER" -> value.matches("-?\\d+");
+            case "DECIMAL" -> value.matches("-?\\d+(\\.\\d+)?");
+            case "BOOLEAN" -> value.equals("true") || value.equals("false");
+            default -> true;
+        };
+    }
+
+    private Map<String, Object> globalPropertyResult(boolean isSuccess, String errorStatus) {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("isSuccess", isSuccess);
+        if (errorStatus != null) response.put("errorStatus", errorStatus);
+        return response;
     }
 
     @Override
@@ -513,6 +590,12 @@ public class DynamicDataFetchers implements DataFetcherProvider {
     }
 
     // --- conversion utils ---
+
+    /** Coerces a GraphQL {@code [ID!]} argument value to a {@code Long[]}, for binding to a
+     *  {@code = ANY(:param)} raw relation filter condition (see {@link QueryDefinition.RelationFilter}). */
+    private Long[] coerceLongArray(List<?> values) {
+        return values.stream().map(v -> (Long) coerce(v, Long.class)).toArray(Long[]::new);
+    }
 
     private Object coerce(Object value, Class<?> type) {
         if (value == null) return null;

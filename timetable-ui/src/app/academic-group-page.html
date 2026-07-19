@@ -7,7 +7,7 @@
   <div class="faculty-header-title">
     <div>
       <h2>{{ g?.name ?? '&#x2026;' }}</h2>
-      @if (g) { <p class="muted">{{ g.studyForm }}, {{ g.courseYear }} курс</p> }
+      @if (g) { <p class="muted">{{ studyFormLabel(g.studyForm) }}, {{ g.courseYear }} курс</p> }
     </div>
   </div>
 </div>
@@ -56,7 +56,7 @@
                 </tr>
                 <tr><th>Назва</th><td>{{ g.name }}</td></tr>
                 <tr><th>Курс</th><td>{{ g.courseYear }}</td></tr>
-                <tr><th>Форма навчання</th><td>{{ g.studyForm }}</td></tr>
+                <tr><th>Форма навчання</th><td>{{ studyFormLabel(g.studyForm) }}</td></tr>
                 <tr><th>Кількість студентів</th><td>{{ g.studentsCount ?? '&mdash;' }}</td></tr>
               </tbody>
             </table>
@@ -94,7 +94,7 @@
         </label>
         <label>
           <span>Форма навчання *</span>
-          <input type="text" [(ngModel)]="editForm['studyForm']" name="studyForm" required />
+          <app-search-select [options]="studyFormOptions" [(ngModel)]="editForm['studyForm']" name="studyForm" />
         </label>
         <label>
           <span>Кількість студентів</span>

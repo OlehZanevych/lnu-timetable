@@ -16,16 +16,16 @@
   <tbody>
     @for (s of slots(); track s.ordinal) {
       <tr>
-        <th class="slot">{{ s.ordinal }}<br /><small>{{ s.startTime }}–{{ s.endTime }}</small></th>
+        <th class="slot">{{ s.ordinal }}<br /><small>{{ s.startTime }}</small></th>
         @for (d of days; track d) {
           <td>
             @for (e of cell(s.ordinal, d); track e.id) {
               <div class="class" [class.biweekly]="e.weekParity !== 'WEEKLY'">
-                <strong>{{ e.workload.course?.name }}</strong>
-                <span>{{ e.workload.classType }} · {{ audience(e) }}</span>
+                <strong>{{ courseName(e) }}</strong>
+                <span>{{ s.startTime }}–{{ endTime(e) }} · {{ audience(e) }}</span>
                 <span>{{ lecturerNames(e) }} · room {{ e.room.number }}</span>
                 @if (e.weekParity !== 'WEEKLY') {
-                  <em>{{ e.weekParity }}</em>
+                  <em>{{ weekParityLabel(e.weekParity) }}</em>
                 }
               </div>
             }

@@ -3,6 +3,8 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { StudentPage } from './entity-pages';
+import { SearchSelect } from './search-select';
+import { STUDY_FORM_OPTIONS, toOptions } from './entities';
 
 type GroupSection = 'info' | 'students';
 
@@ -18,13 +20,14 @@ interface AcademicGroup {
 @Component({
   selector: 'app-academic-group-page',
   templateUrl: './academic-group-page.html',
-  imports: [RouterLink, FormsModule, StudentPage]
+  imports: [RouterLink, FormsModule, StudentPage, SearchSelect]
 })
 export class AcademicGroupDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
   private gql = inject(GraphqlService);
 
   readonly groupId: string = this.route.snapshot.paramMap.get('id')!;
+  readonly studyFormOptions = toOptions(STUDY_FORM_OPTIONS);
 
   group = signal<AcademicGroup | null>(null);
   error = signal('');
@@ -48,6 +51,10 @@ export class AcademicGroupDetailPage implements OnInit {
   }
 
   ngOnInit() { this.load(); }
+
+  studyFormLabel(v: string): string {
+    return STUDY_FORM_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  }
 
   private load() {
     const q = `{ academicGroups { academicGroup(id: "${this.groupId}") { id name courseYear studyForm studentsCount specialty { id name faculty { id name } } } } }`;

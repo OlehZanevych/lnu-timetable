@@ -32,7 +32,7 @@ const ref = (name: string, label: string, ref: string, relation: string, refLabe
 export const toOptions = (opts: { value: string; label: string }[]): { id: string; label: string }[] =>
   opts.map((o) => ({ id: o.value, label: o.label }));
 
-const DEGREE_OPTIONS = [
+export const DEGREE_OPTIONS = [
   { value: 'JUNIOR_BACHELOR', label: 'Молодший бакалавр' },
   { value: 'BACHELOR',        label: 'Бакалавр' },
   { value: 'MASTER',          label: 'Магістр' },
@@ -67,6 +67,41 @@ export const HOUR_TYPE_OPTIONS = [
 export const TEACHING_FORMAT_OPTIONS = [
   { value: 'TOGETHER',   label: 'Разом' },
   { value: 'SEPARATELY', label: 'Окремо' }
+];
+
+export const STUDY_FORM_OPTIONS = [
+  { value: 'FULL_TIME', label: 'Денна' },
+  { value: 'PART_TIME', label: 'Заочна' }
+];
+
+export const ROOM_KIND_OPTIONS = [
+  { value: 'LECTURE_HALL', label: 'Лекційна аудиторія' },
+  { value: 'COMPUTER_LAB', label: "Комп'ютерний клас" },
+  { value: 'SEMINAR_ROOM', label: 'Семінарська аудиторія' }
+];
+
+export const WEEK_PARITY_OPTIONS = [
+  { value: 'WEEKLY',      label: 'Щотижня' },
+  { value: 'NUMERATOR',   label: 'Чисельник' },
+  { value: 'DENOMINATOR', label: 'Знаменник' }
+];
+
+/** Day of week values match timetable_entries.day_of_week: 1 = Monday .. 6 = Saturday. */
+export const DAY_OF_WEEK_OPTIONS = [
+  { value: '1', label: 'Понеділок' },
+  { value: '2', label: 'Вівторок' },
+  { value: '3', label: 'Середа' },
+  { value: '4', label: 'Четвер' },
+  { value: '5', label: "П'ятниця" },
+  { value: '6', label: 'Субота' }
+];
+
+/** Duration of a class, in academic hours. Matches lecturer_workloads.duration_hours (1-4). */
+export const DURATION_HOURS_OPTIONS = [
+  { value: '1', label: '1 год.' },
+  { value: '2', label: '2 год.' },
+  { value: '3', label: '3 год.' },
+  { value: '4', label: '4 год.' }
 ];
 
 export const ENTITIES: EntityMeta[] = [
@@ -183,7 +218,8 @@ export const ENTITIES: EntityMeta[] = [
   {
     name: 'LecturerWorkload', label: 'Навантаження', single: 'lecturerWorkload', namespace: 'lecturerWorkloads', list: 'lecturerWorkloadConnection',
     fields: [
-      ref('workingCurriculumItemId', 'Позиція РНП', 'workingCurriculumItem', 'workingCurriculumItem', 'teachingFormat', true)
+      ref('workingCurriculumItemId', 'Позиція РНП', 'workingCurriculumItem', 'workingCurriculumItem', 'teachingFormat', true),
+      { name: 'durationHours', label: 'Тривалість заняття (акад. год.)', type: 'number', required: true }
       // Викладачі / Академічні групи / Об'єднані групи are many-to-many now (lecturerIds/
       // academicGroupIds/combinedGroupIds) and are managed on the department's "Навантаження
       // викладачів" subpage instead — the generic single-select ref field here can't represent
@@ -205,7 +241,7 @@ export const ENTITIES: EntityMeta[] = [
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'courseYear', label: 'Курс', type: 'number', required: true },
-      { name: 'studyForm', label: 'Форма навчання', type: 'text', required: true },
+      { name: 'studyForm', label: 'Форма навчання', type: 'enum', required: true, enumOptions: STUDY_FORM_OPTIONS },
       { name: 'studentsCount', label: 'Студентів', type: 'number' },
       ref('specialtyId', 'Спеціальність', 'specialty', 'specialty', 'name', true)
     ]
@@ -223,26 +259,25 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'number', label: 'Номер', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text' },
       { name: 'capacity', label: 'Місткість', type: 'number' },
-      { name: 'kind', label: 'Тип', type: 'text' },
+      { name: 'kind', label: 'Тип', type: 'enum', enumOptions: ROOM_KIND_OPTIONS },
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name'),
       ref('buildingId', 'Корпус', 'building', 'building', 'name')
     ]
   },
   {
-    name: 'TimeSlot', label: 'Часові слоти', single: 'timeSlot', namespace: 'timeSlots', list: 'timeSlotConnection',
+    name: 'ClassStartTime', label: 'Часи початку занять', single: 'classStartTime', namespace: 'classStartTimes', list: 'classStartTimeConnection',
     fields: [
       { name: 'ordinal', label: 'Порядковий №', type: 'number', required: true },
-      { name: 'startTime', label: 'Початок', type: 'text', required: true },
-      { name: 'endTime', label: 'Кінець', type: 'text', required: true }
+      { name: 'startTime', label: 'Початок', type: 'text', required: true }
     ]
   },
   {
     name: 'TimetableEntry', label: 'Записи розкладу', single: 'timetableEntry', namespace: 'timetableEntries', list: 'timetableEntryConnection',
     fields: [
       { name: 'dayOfWeek', label: 'День (1-6)', type: 'number', required: true },
-      { name: 'weekParity', label: 'Тиждень', type: 'text', required: true },
+      { name: 'weekParity', label: 'Тиждень', type: 'enum', required: true, enumOptions: WEEK_PARITY_OPTIONS },
       ref('workloadId', 'Навантаження', 'workload', 'workload', 'id', true),
-      ref('timeSlotId', 'Часовий слот', 'timeSlot', 'timeSlot', 'startTime', true),
+      ref('classStartTimeId', 'Час початку', 'classStartTime', 'classStartTime', 'startTime', true),
       ref('roomId', 'Аудиторія', 'room', 'room', 'number', true)
     ]
   }
