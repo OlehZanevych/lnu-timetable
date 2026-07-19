@@ -63,20 +63,30 @@ src/app/
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
 ├── app.routes.ts             # route table (see below)
 │
-├── faculty-home.ts           # "/" — faculty tiles (drill-down entry point)
-├── faculty-page.ts/.html     # "/faculty/:id" — faculty detail with tabbed sections
-├── building-home.ts          # "/building" home — building tiles
-├── building-page.ts/.html    # "/building/:id" — building detail (faculties, rooms)
-├── department-page.ts/.html  # "/department/:id" — department detail (lecturers, courses)
-├── specialty-page.ts/.html   # "/specialty/:id" — specialty detail (curricula, groups)
-├── academic-group-page.ts/.html  # "/academic-group/:id" — group detail (students, workloads)
-├── department-list.ts        # child-list widget: departments within a faculty
-├── specialty-list.ts         # child-list widget: specialties within a faculty
-├── academic-group-list.ts    # child-list widget: academic groups within a specialty
-├── curriculum-item-list.ts   # child-list widget: curriculum items (semester/course/ECTS/hours)
-├── working-curriculum-list.ts# child-list widget: working curriculum items under each hours block
+├── faculty-home.ts/.html         # "/" — faculty tiles (drill-down entry point)
+├── faculty-page.ts/.html         # "/faculty/:id" — faculty detail with tabbed sections
+├── building-home.ts/.html        # "/e/building" — building tiles
+├── building-page.ts/.html        # "/building/:id" — building detail (rooms)
+├── department-page.ts/.html      # "/department/:id" — department detail (lecturers, combined
+│                                 #   working curriculum items, lecturer workloads)
+├── specialty-page.ts/.html       # "/specialty/:id" — specialty detail (curricula, groups)
+├── academic-group-page.ts/.html  # "/academic-group/:id" — group detail (students)
+├── department-list.ts/.html          # child-list widget: departments within a faculty
+├── specialty-list.ts/.html           # child-list widget: specialties within a faculty
+├── academic-group-list.ts/.html      # child-list widget: academic groups within a specialty
+├── curriculum-item-list.ts/.html     # child-list widget: curriculum items (semester/course/ECTS/hours)
+├── working-curriculum-list.ts/.html  # child-list widget: working curriculum items under each hours block
+├── combined-working-curriculum-item-list.ts/.html  # department tab: propose/manage merges of
+│                                                    #   working curriculum items into a shared
+│                                                    #   CombinedWorkingCurriculumItem
+├── lecturer-workload-list.ts/.html   # department tab: assign lecturers/groups/duration to each
+│                                     #   working (or combined) curriculum item — "Навантаження викладачів"
+├── faculty-timetable-list.ts/.html   # faculty tab: auto-generates schedulable blocks from
+│                                     #   workload hours and assigns day/start-time/room —
+│                                     #   "Формування розкладу" (see below)
+├── global-properties-page.ts/.html   # "/global-properties" — edit the global_properties settings
 │
-└── timetable.ts/.html        # "/timetable" — weekly grid (days × time slots)
+└── timetable.ts/.html        # "/timetable" — read-only weekly grid (days × class start times)
 ```
 
 ### Generic CRUD tables (`entities.ts` / `BaseEntity`)
@@ -125,14 +135,18 @@ and composing purpose-built child-list components rather than going through `Bas
 - **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
   tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
   info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, academic groups,
-  combined groups (`CombinedGroupPage`), courses, and schedule building (`FacultyTimetableList`).
-- **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): faculties housed
-  in the building, rooms.
-- **`DepartmentDetailPage`** (`/department/:id`): lecturers, courses owned by the department.
-- **`SpecialtyDetailPage`** (`/specialty/:id`): academic groups, curriculum items
-  (`CurriculumItemList`) and, per curriculum item, its hour blocks and working curriculum
-  items (`WorkingCurriculumList`) — see below.
-- **`AcademicGroupDetailPage`** (`/academic-group/:id`): students, workloads for the group.
+  combined groups (`CombinedGroupPage`), courses, and schedule building (`FacultyTimetableList`,
+  see below).
+- **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): info + rooms
+  (each room shows/edits its own faculty; there's no separate "faculties in this building" tab).
+- **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
+  items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), and lecturer
+  workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below).
+- **`SpecialtyDetailPage`** (`/specialty/:id`): info, curriculum items (`CurriculumItemList`
+  tab) and, in a separate tab, working curriculum items (`WorkingCurriculumList`) per hour
+  block — see below — plus academic groups (`AcademicGroupList`).
+- **`AcademicGroupDetailPage`** (`/academic-group/:id`): info, students. (No workload tab here —
+  workloads are managed per-department, not per-group.)
 
 #### Curriculum items and working curriculum items (`SpecialtyDetailPage`)
 
@@ -149,6 +163,64 @@ per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours 
   many-to-many mutation field), and
 - when the curriculum item's course is an `ELECTIVE_GROUP`, an extra **elective course**
   dropdown scoped to that group's child courses.
+
+#### Lecturer workloads (`LecturerWorkloadList`, department "Навантаження викладачів" tab)
+
+Pre-loads every `WorkingCurriculumItem` delivered by the department (with its curriculum item /
+hours context), grouped semester → discipline → hour-type → working-curriculum-item, and lets
+the user assign, per item, a `LecturerWorkload`: lecturers (`MultiSelect`), academic groups
+(`MultiSelect`, scoped to the item's own groups), combined groups (`MultiSelect`, only shown
+when the item's `teachingFormat` is `SEPARATELY` — "together" has nothing to combine), and a
+**duration** (`SearchSelect` over 1–4 academic hours) that defaults from the
+`default_class_duration_hours` global property when creating a new workload, or from the
+workload's own stored value when editing one. Working curriculum items already merged into a
+`CombinedWorkingCurriculumItem` (see below) are excluded from this tree — assigning a workload to
+one of those covers every merged item at once, so they're handled in a dedicated section above
+the tree instead, using the same modal (`openCreateCombined`/`openEditCombined`) with the
+available academic groups widened to the union across every merged member.
+
+#### Merging working curriculum items (`CombinedWorkingCurriculumItemList`, department "Об'єднані позиції РНП" tab)
+
+Finds every `WorkingCurriculumItem` belonging to the department that **isn't** already merged
+into a `CombinedWorkingCurriculumItem`, groups the candidates that share course + semester +
+hour type + hours (these are the ones a single lecturer could plausibly teach together as one
+shared class, e.g. the same lecture required by two specialties), and proposes merging each
+group into a new combined item via the `workingCurriculumItemIds` many-to-many mutation field —
+after which it shows up in `LecturerWorkloadList`'s "Об'єднані позиції" section instead of the
+plain tree.
+
+#### Building the schedule (`FacultyTimetableList`, faculty "Формування розкладу" tab)
+
+Auto-generates one schedulable **block** per class session required by every `LecturerWorkload`
+delivered by the faculty's departments, and lets the user assign each block a day of week, class
+start time and room (plus week parity for biweekly blocks), creating/updating/deleting the
+corresponding `TimetableEntry`.
+
+- A **semester parity** picker (ODD/EVEN) scopes which working/combined curriculum items are
+  considered, defaulting to the `current_semester_parity` global property; changing it re-fetches
+  from `workingCurriculumItemConnection`/`combinedWorkingCurriculumItemConnection` with the
+  `facultyId` + `semesterParity` relation filters described in the backend README, so the
+  frontend never has to fetch the whole system and filter client-side.
+- **Block count** — how many weekly-recurring classes a workload's `curriculumItemHours.hours`
+  requires — is `hours / (semester_duration_weeks × workload.durationHours)` (both the semester
+  length and the per-class duration are configurable per-workload/global-property values, not
+  hardcoded); a remainder of at least half a weekly class becomes one additional class held every
+  other week (`NUMERATOR`/`DENOMINATOR` week parity).
+- Each block shows a computed **end time** — `startTime + durationHours ×
+  academic_hour_duration_minutes` — once a class start time is chosen, since `ClassStartTime`
+  only stores possible start times, not a fixed end time.
+- Blocks are keyed by position (`workloadId::wk|bi::index`) so an in-progress, not-yet-saved
+  selection survives the reload that follows scheduling a different block, and sorted with every
+  unscheduled block first, then by day → start-time ordinal → parity → course name.
+
+#### Global settings (`GlobalPropertiesPage`, `/global-properties`)
+
+Lists every row of the backend's `global_properties` table (name/type/value) with an inline
+editable value: `INTEGER`/`DECIMAL` types render a number input, `current_semester_parity`
+(the only `ENUM`-typed property today) gets a dedicated ODD/EVEN `SearchSelect` since
+`global_properties` carries no allowed-values metadata to derive that generically from, and
+everything else falls back to a plain text input. Saves go through the single
+`updateGlobalProperty(name, value)` mutation described in the backend README.
 
 ### Reusable form controls
 
@@ -173,12 +245,16 @@ All three are standalone `ControlValueAccessor` components usable with `[(ngMode
 | `/specialty/:id` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
 | `/academic-group/:id` | `AcademicGroupDetailPage` | group detail |
 | `/timetable` | `Timetable` | weekly grid |
+| `/global-properties` | `GlobalPropertiesPage` | system-wide settings editor |
 | `/e/building` | `BuildingHome` | building tiles (overrides the generic table for this entity) |
-| `/e/:single` | generic `entity-pages.ts` component | one per remaining entity |
+| `/e/:single` | generic `entity-pages.ts` component | one per remaining entity — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
 
-The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад")
-plus a flat "Загальне" group of generic-table links for entities with no dedicated page
-(`Building`, `ClassStartTime`, `AcademicDegree`).
+The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад"),
+the global settings page ("Глобальні властивості"), plus a flat "Загальне" group of
+generic-table links for entities with no dedicated page (`Building`, `ClassStartTime`,
+`AcademicDegree`). `CombinedGroup` also has no sidebar link of its own — it's only reachable
+embedded in the Faculty page's "Об'єднані групи" tab (see above), not as a standalone `/e/…`
+route.
 
 ---
 
@@ -200,14 +276,15 @@ plus a flat "Загальне" group of generic-table links for entities with no
   matching the backend — only `WorkingCurriculumItem ↔ AcademicGroup` has been wired up with
   an editable multi-select so far; seed `CombinedGroup` membership via the service's
   `data.sql`.
-- `timetable.ts` requests `workload { classType course { name } … }`, but the current
-  `LecturerWorkload` GraphQL type only exposes `lecturer`, `academicGroup`, `combinedGroup`,
-  `workingCurriculumItem` and `timetableEntries` — there's no `classType` scalar or direct
-  `course` relation. The timetable grid's per-cell subject/type label is stale relative to the
-  backend schema and needs to be reworked to read the class/course from
-  `workingCurriculumItem` instead.
+- The schedule builder (`FacultyTimetableList`) matches each already-scheduled `TimetableEntry`
+  back to a generated block **by position**, not by any stored identity, and re-derives the
+  block count from `hours / (semesterDurationWeeks × durationHours)` on every load. Changing
+  `semester_duration_weeks` or a workload's `durationHours` *after* some of its classes are
+  already scheduled can shift how many weekly/biweekly blocks that workload generates, so
+  previously-scheduled entries may line up with a different position than before — review the
+  affected workload's blocks after either change.
 - Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
-- The `CurriculumItemHours` entity's generic-table namespace is `curriculumItemHourss`
-  (naive `+s` pluralization of a name already ending in "s") — cosmetic only, doesn't affect
-  the dedicated `CurriculumItemList`/`WorkingCurriculumList` pages which don't go through
-  `entities.ts`.
+- If a request fails with a Postgres "column ... does not exist" (wrapped as a generic
+  GraphQL "bad SQL grammar" error), the backend's `schema.sql`/`data.sql` most likely haven't
+  been re-applied since a recent backend change — see the backend README's [Known
+  limitations](../timetable/README.md#known-limitations).

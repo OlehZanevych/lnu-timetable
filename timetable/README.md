@@ -93,9 +93,10 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options) |
 | `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **specialty directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
 | `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
-| `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups |
+| `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups, M-N combined working curriculum items |
+| `CombinedWorkingCurriculumItem` | `combined_working_curriculum_items` | pure M-N hub, no scalar fields of its own; bundles several `WorkingCurriculumItem`s that share course/semester/hour-type (e.g. one shared lecture across specialties) so one `LecturerWorkload` can cover all of them at once; → M-N working curriculum items, workloads |
 | `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads |
-| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | → lecturer, academicGroup?, combinedGroup?, workingCurriculumItem, timetable entries |
+| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → M-N lecturers, M-N academicGroups, M-N combinedGroups, *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
 | `Student` | `students` | → academic group |
 | `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
 | `CombinedGroup` (об'єднана група) | `combined_groups` | M-N academic groups (electives) |
@@ -114,6 +115,26 @@ Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbrevia
 > entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
 > it. Since a specialty only ever has one curriculum, that indirection was removed —
 > `CurriculumItem` now references `Specialty` directly via `specialty_id`.
+
+### `global_properties` — outside the entity framework
+
+`global_properties` (`name` VARCHAR **primary key**, `type` a `property_type` enum, `value`
+VARCHAR) is a generic name/type/value store for system-wide settings — currently
+`academic_hour_duration_minutes`, `semester_duration_weeks`, `current_semester_parity`
+(`ODD`/`EVEN`) and `default_class_duration_hours`. It deliberately has **no** annotated
+`GlobalProperty` domain class: the whole framework (`EntityMetadataRegistry`,
+`DynamicGraphQLSchemaBuilder`, `DynamicDataFetchers`, `R2dbcQueryEngine.selectOne`/`insert`/
+`update`/`delete`) hardcodes the assumption that every entity has a `Long id` primary key, which
+a `String`-keyed table can't satisfy. Rather than generalize that assumption across every
+existing entity, the `GlobalProperty`/`GlobalPropertyQueries`/`GlobalPropertyMutations` GraphQL
+types and their `list` / `globalProperty(name)` / `updateGlobalProperty(name, value)` fields are
+hand-built directly in `DynamicGraphQLSchemaBuilder.buildGlobalPropertyTypes()` and wired to
+hand-written fetchers in `DynamicDataFetchers` (`globalPropertyList()`, `globalProperty()`,
+`updateGlobalProperty()`), following the same escape-hatch pattern already used for
+`ConnectionPageInfo` and the Apollo Federation `_service` field. `R2dbcQueryEngine.updateWhere(table,
+columnValues, whereColumn, whereValue)` — an `update()` variant keyed by an arbitrary column
+instead of the conventional `id` — was added specifically to make `updateGlobalProperty` possible
+without touching the generic `update()`/`selectOne()` methods every other entity relies on.
 
 ---
 
@@ -208,6 +229,35 @@ On create, one join row is inserted per incoming id. On update, if the field is 
 of the parent's existing join rows are deleted and replaced with one row per incoming id
 (omit the field entirely to leave membership untouched).
 
+**Filtering by a related table's column** — a plain `.filter(paramName, column)` only works
+for a column that lives directly on the entity's own table. `CombinedWorkingCurriculumItem`
+has no `department_id`/`faculty_id`/semester of its own — those only exist on its *members'*
+`working_curriculum_items` — so filtering its connection by faculty, a list of departments, or
+semester parity needs an `EXISTS (...)` subquery instead. `QueryDefinition.relationFilter(paramName,
+condition)` / `.relationFilterList(...)` / `.relationFilterString(...)` declare exactly that: a
+named, nullable GraphQL argument (exposed as `ID`, `[ID!]`, or `String` respectively) bound into a
+raw SQL condition supplied by the caller:
+
+```java
+s.query("combinedWorkingCurriculumItemConnection").entity(CombinedWorkingCurriculumItem.class).connection()
+    .relationFilterList("departmentIds",
+        "EXISTS (SELECT 1 FROM combined_working_curriculum_item_members m " +
+        "JOIN working_curriculum_items w ON w.id = m.working_curriculum_item_id " +
+        "WHERE m.combined_working_curriculum_item_id = combined_working_curriculum_items.id " +
+        "AND w.department_id = ANY(:departmentIds))")
+    .relationFilterString("semesterParity", /* … an EXISTS through curriculum_item_hours/curriculum_items … */ "");
+```
+
+`condition` references the entity's own table unaliased (queries select from it without an
+alias) and contains a named bind placeholder matching `paramName`. `R2dbcQueryEngine.RawFilter`
+carries these alongside the plain `Filter` records through `selectList`/`countWhere`, and
+`ID_LIST` arguments are bound as a `Long[]` for `= ANY(:paramName)`. The same mechanism now backs
+`facultyId` filtering on both `workingCurriculumItemConnection` and
+`combinedWorkingCurriculumItemConnection` (through their department), and `semesterParity`
+filtering on both (through `curriculum_items.semester`), so the frontend's schedule builder can
+ask the database for "everything this faculty needs to schedule this semester" in two queries
+instead of fetching every working curriculum item in the system and filtering client-side.
+
 ### Generated GraphQL shape
 
 Queries/mutations are grouped per entity, matching the original deanery API:
@@ -282,6 +332,25 @@ schema and the queries you send are unchanged; only the number of SQL round trip
 
 ## Known limitations
 
+- **`schema.sql`/`data.sql` are applied manually, not on startup.** Unlike a Flyway/Liquibase
+  setup, nothing re-runs them when the app boots — see [Database setup](#database-setup). After
+  pulling a change that touches either file, you must re-run both against your local database
+  yourself, or requests against the new/changed columns fail with a Postgres "column ... does
+  not exist" error (surfaced as a generic `BadSqlGrammarException` / "bad SQL grammar" message,
+  which doesn't make the real cause obvious).
+- The entity framework hardcodes a `Long id` primary key for every entity (`EntityMetadataRegistry`,
+  the GraphQL `id: ID!` field, `R2dbcQueryEngine.selectOne`/`insert`/`update`/`delete`). The one
+  table that doesn't fit — `global_properties`, keyed by `name` — is handled by a fully hand-rolled
+  schema/fetcher slice instead of a generic generalization; see [global_properties — outside the
+  entity framework](#global_properties--outside-the-entity-framework). A second string-keyed (or
+  composite-keyed) entity would need the same treatment, not a `@GraphQLEntity` annotation.
+- `lecturer_workloads.duration_hours` has a `CHECK (duration_hours BETWEEN 1 AND 4)` constraint,
+  but a violation surfaces through the generic mutation error-mapping as `LECTURERWORKLOAD_NOT_FOUND`
+  rather than something naming the real problem: `DynamicDataFetchers`' generic error handler maps
+  any `DataIntegrityViolationException` (which is also what a foreign-key violation throws) to
+  whichever declared error status *contains* the substring `"NOT_FOUND"`, and doesn't distinguish a
+  CHECK-constraint failure from a missing related row. In practice this is only reachable by
+  bypassing the UI (which only offers 1–4 via a select), so the impact is limited to direct API use.
 - Not every many-to-many relation is wired for mutation yet — `CombinedGroup ↔
   AcademicGroup` membership is queryable but still read-only through the generated
   mutations (seed it via `data.sql` or direct SQL). `WorkingCurriculumItem ↔ AcademicGroup`
