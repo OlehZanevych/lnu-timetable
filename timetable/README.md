@@ -9,6 +9,8 @@ at startup.
 
 - `groupId` `org.lnu`, `artifactId` `timetable`, root package `org.lnu.timetable`
 - Spring Boot 4.0.6, Java 25, WebFlux, Spring for GraphQL, R2DBC (PostgreSQL)
+- JWT authentication + entity-scoped, cascading "modify" permissions for users/groups — see
+  [Authentication & authorization](#authentication--authorization)
 
 ---
 
@@ -70,6 +72,10 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home mvn spring-
 - Apollo Federation `_service { sdl }` is served for schema introspection by gateways
 - A permissive `CorsFilter` allows any origin/method — fine for local dev, tighten before
   deploying anywhere public
+- Every operation except `login` requires an `Authorization: Bearer <jwt>` header — sign in via
+  `mutation { login(email: "admin@lnu.edu.ua", password: "Admin#2026") { token } }` and pass the
+  returned token, or see [Authentication & authorization](#authentication--authorization) for the
+  full seeded credential list
 
 Run tests (schema assembly):
 ```bash
@@ -136,6 +142,51 @@ columnValues, whereColumn, whereValue)` — an `update()` variant keyed by an ar
 instead of the conventional `id` — was added specifically to make `updateGlobalProperty` possible
 without touching the generic `update()`/`selectOne()` methods every other entity relies on.
 
+### `users` / `groups` / `permissions` — outside the entity framework
+
+Like `global_properties`, the four auth tables have no `@GraphQLEntity` domain class — a `User`'s
+`password_hash` must never be reachable through the fully-generic, selection-set-driven query
+machinery, so `User`/`Group`/`PermissionGrant` are hand-built GraphQL types with hand-written
+fetchers instead (see [Authentication & authorization](#authentication--authorization) below).
+
+| Table | Notes |
+|---|---|
+| `users` | email (unique), first/last name, BCrypt `password_hash`, `must_change_password`, `is_active` |
+| `groups` | name (unique), description |
+| `user_groups` | `(user_id, group_id)` — a user may belong to any number of groups |
+| `permissions` | a single grant: `grantee_type` (`USER`/`GROUP`) + exactly one of `user_id`/`group_id`, `resource_type` + `resource_id` (or `resource_type = 'GLOBAL'` with a `NULL` id for full admin access), `granted_by` |
+
+### Permission cascade annotations on domain entities
+
+Most domain classes carry class-level `@PermissionParent`/`@PermissionJoinParent` annotations
+(see [Authentication & authorization](#authentication--authorization)) declaring which ancestor
+entity a "modify" grant cascades down from. The resulting graph:
+
+| Entity | Cascades down from (any one path is sufficient) |
+|---|---|
+| `Faculty` | `Building`? |
+| `Department`, `Specialty` | `Faculty` |
+| `Room` | `Faculty`?, `Building`? |
+| `Course` | `Department`?, `Faculty`?, parent `Course`? (elective group → its options) |
+| `Lecturer` | `Department` |
+| `AcademicGroup` | `Specialty` |
+| `CombinedGroup` | any member `AcademicGroup` (via `combined_group_academic_groups`) |
+| `Student` | `AcademicGroup` |
+| `CurriculumItem` | `Specialty`, `Course` |
+| `CurriculumItemHours` | `CurriculumItem` |
+| `WorkingCurriculumItem` | `Department`, `CurriculumItemHours`, elective `Course`? |
+| `CombinedWorkingCurriculumItem` | any member `WorkingCurriculumItem` (via `combined_working_curriculum_item_members`) |
+| `LecturerWorkload` | `WorkingCurriculumItem`?, `CombinedWorkingCurriculumItem`?, any linked `Lecturer`/`AcademicGroup`/`CombinedGroup` (join tables) |
+| `TimetableEntry` | `LecturerWorkload`, `Room` |
+| `Building`, `AcademicDegree`, `ClassStartTime` | *(none — top-level; only an administrator can create/modify these)* |
+
+`?` marks a `nullable = true` edge (the FK may be unset, in which case that path just doesn't
+apply). Following these edges upward from any row yields the full set of resources whose grant
+would cover it — e.g. a grant on a `Faculty` covers its `Department`s, `Specialty`s, `Room`s,
+`Course`s, and — by walking further — every `Lecturer`, `AcademicGroup`, `CurriculumItem`,
+`WorkingCurriculumItem`, `LecturerWorkload` and `TimetableEntry` beneath them, exactly matching the
+cascade the product spec asked for.
+
 ---
 
 ## The framework
@@ -143,9 +194,11 @@ without touching the generic `update()`/`selectOne()` methods every other entity
 ```
 org.lnu.timetable.framework
 ├── annotation/    @GraphQLEntity, @Description, @Nullable, @PgEnum,
-│                  @OneToOne, @OneToMany, @ManyToOne, @ManyToMany
+│                  @OneToOne, @OneToMany, @ManyToOne, @ManyToMany,
+│                  @PermissionParent(s), @PermissionJoinParent(s) — see below
 ├── metadata/      EntityMetadataRegistry — scans @GraphQLEntity at startup,
-│                  builds EntityMetadata (fields, columns, types, relations)
+│                  builds EntityMetadata (fields, columns, types, relations,
+│                  resourceType, permissionParents, permissionJoinParents)
 ├── config/        GraphQLSchemaConfig + DSL: SchemaDefinition, TypeDefinition,
 │                  QueryDefinition, MutationDefinition (create/update/delete,
 │                  plus .nestedList(...) and .manyToMany(...) — see below)
@@ -158,6 +211,8 @@ org.lnu.timetable.framework
 └── runtime/       DynamicDataFetchers (query/connection/mutation/relation,
                    with per-request DataLoader batching), DynamicGraphQlConfiguration
                    (exposes the GraphQlSource bean)
+
+org.lnu.timetable.security   — authentication/authorization; see below
 ```
 
 ### Define an entity
@@ -284,6 +339,130 @@ SELECT id AS "id", name AS "name" FROM faculties WHERE id = $1
 
 ---
 
+## Authentication & authorization
+
+Users never self-register. An administrator creates an account (`createUser`) with a temporary
+password; the account is forced to change it (`must_change_password = TRUE`) before it can do
+anything else. Authentication is a stateless JWT (`io.jsonwebtoken`/jjwt) carrying only the user
+id as its subject — no roles or permissions are baked into the token, so revoking a user's access
+(deactivating the account, or removing a permission grant) takes effect on their *next* request
+rather than waiting for the token to expire. Passwords are hashed with BCrypt
+(`spring-security-crypto` only — this project does **not** pull in full Spring Security, since
+authorization here is entity-scoped rather than the role/URL-based model that framework is built
+around).
+
+### Request flow
+
+1. `AuthenticationGraphQlInterceptor` (a `WebGraphQlInterceptor`) reads the `Authorization: Bearer
+   <jwt>` header of every request, resolves it to a `Principal` (id, email, name,
+   `mustChangePassword`) via `JwtService`/`PermissionRepository`, and places it on the GraphQL
+   context. A missing/invalid/expired token simply leaves the request anonymous rather than
+   rejecting it outright — this keeps `login` reachable through the same `/graphql` endpoint,
+   while every other field enforces its own requirement.
+2. `AuthorizingDataFetcherProvider` wraps the generic `DynamicDataFetchers` and is the
+   `DataFetcherProvider` actually wired into `DynamicGraphQLSchemaBuilder` (via
+   `DynamicGraphQlConfiguration`) — the schema builder itself has no authorization awareness.
+   It enforces two rules for every reflectively-generated query/mutation:
+   - any operation requires a signed-in caller (reads are open to any authenticated user);
+   - `create`/`update`/`delete` mutations additionally require "modify" permission on the target
+     (or, for creates, on whichever declared parent the new row is being attached to) — see
+     `PermissionService` below.
+3. Hand-rolled operations (`login`, `me`, `changePassword`, `createUser`, group/permission
+   management) bypass this decorator entirely — they're wired directly in
+   `DynamicGraphQLSchemaBuilder.buildAuthTypes()`/`registerAuthFetchers()`, the same escape-hatch
+   pattern used for `GlobalProperty` (see above), so a `User`'s password hash is never reachable
+   through the generic, selection-set-driven machinery.
+
+### The permission model
+
+A grant (`permissions` table) names a `resource_type` — an entity's simple class name in
+`UPPER_SNAKE_CASE`, e.g. `FACULTY`, derived the same way both sides of the stack independently
+compute it (`EntityMetadata#resourceType()` on the backend via Guava's `CaseFormat`, `toResourceType()`
+in the frontend) — plus a `resource_id`, or the special `resource_type = 'GLOBAL'` (`resource_id`
+`NULL`) for full-access admin grants. "Modify" permission on a resource means update, delete, *and*
+the right to create new child rows underneath it (and to modify those children in turn) — exactly
+the cascade the product spec asked for (e.g. a grant on a `Faculty` also covers its `Department`s,
+`Specialty`s, `Room`s, `Course`s, and transitively everything beneath those).
+
+That cascade is declared, not hardcoded, via two repeatable class-level annotations in
+`org.lnu.timetable.framework.annotation`:
+
+```java
+@GraphQLEntity(table = "departments")
+@PermissionParent(value = Faculty.class, joinColumn = "faculty_id")
+public class Department { ... }
+
+@GraphQLEntity(table = "combined_groups")
+@PermissionJoinParent(value = AcademicGroup.class,
+    joinTable = "combined_group_academic_groups",
+    selfColumn = "combined_group_id", parentColumn = "academic_group_id")
+public class CombinedGroup { ... }
+```
+
+`@PermissionParent` covers a direct foreign key on the entity's own table; `@PermissionJoinParent`
+covers an ancestor reached through a many-to-many join table (e.g. a `LecturerWorkload` is also
+covered by a grant on any `Lecturer` assigned to it). Either may be repeated
+(`@PermissionParents`/`@PermissionJoinParents`) when an entity has more than one path to an
+ancestor — coverage through *any one* declared path is enough. See [Permission cascade
+annotations on domain entities](#permission-cascade-annotations-on-domain-entities) above for the
+full graph as actually declared across the domain model.
+
+`PermissionService` (`org.lnu.timetable.security`) is the central decision point:
+
+- `canModify(userId, entityClass, id)` walks **up** from the row (cheaper than walking down from
+  every grant) along the declared edges, up to a depth of 15 (`MAX_DEPTH`, guarding against an
+  accidental annotation cycle), collecting every ancestor `(resourceType, id)` pair reachable —
+  then checks whether the user (directly, or via any group they belong to) holds a grant on any
+  one of them, or a `GLOBAL` grant.
+- `canCreate(userId, entityClass, input)` does the same starting from whichever
+  `@PermissionParent` foreign keys are present in the proposed input, since the row doesn't exist
+  yet to walk up from. An entity with no applicable parent reference in the input (e.g. a
+  top-level `Building`, or an optional-FK entity created with none of its FKs set) can then only be
+  created by an administrator.
+- `canManageGrantsOn(userId, resourceType, resourceId)` is the delegation rule: **you can only
+  grant (or revoke) access to a scope you already hold yourself.** A user with modify permission
+  on a `Faculty` can grant that same `Faculty` — or anything beneath it — to another user or
+  group; they cannot grant access to an unrelated faculty, or promote anyone to `GLOBAL`
+  admin unless they're a `GLOBAL` admin themselves.
+
+### GraphQL API
+
+| Field | Kind | Notes |
+|---|---|---|
+| `login(email, password)` | mutation | returns a JWT + whether the account must change its password |
+| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin`, groups, effective permissions), or `null` |
+| `changePassword(currentPassword, newPassword)` | mutation | minimum 8 characters; clears `mustChangePassword` |
+| `createUser(email, firstName, lastName, temporaryPassword)` | mutation | **admin-only**; the created account must change its password on first login |
+| `setUserActive(userId, active)` | mutation | **admin-only**; deactivates/reactivates an account |
+| `users` | query | **admin-only**; all accounts |
+| `createGroup(name, description)`, `addUserToGroup`/`removeUserFromGroup` | mutation | **admin-only** group management |
+| `groups` | query | any authenticated user |
+| `grantPermission(granteeType, userId\|groupId, resourceType, resourceId)` | mutation | delegatable — see `canManageGrantsOn` above |
+| `revokePermission(permissionId)` | mutation | same delegation check, resolved from the grant's own resource |
+| `canModifyResources(resourceType, resourceIds)` | query | given candidate ids of one type, returns the subset the caller may modify — what the frontend uses to hide edit/delete buttons |
+| `grantsForResource(resourceType, resourceId)` | query | lists who currently has access on a resource; requires the caller to already be able to manage grants there |
+
+All admin-only fields fail with a `GraphQlAuthException` for non-admins; unauthenticated calls to
+anything except `login` fail the same way with "You must be signed in to do this."
+
+### Configuration & seed data
+
+`app.security.jwt-secret` (≥32 bytes for HS256) and `app.security.jwt-ttl-minutes` (default 720 =
+12 hours) live in `application.properties`. The checked-in secret is a generated dev-only value —
+**override it before deploying anywhere real** (e.g. via `SPRING_APPLICATION_JSON` or an
+environment variable).
+
+`data.sql` seeds two groups ("Деканат ФПМіІ", "Завідувачі кафедр") and three accounts for local
+testing:
+
+| Email | Password | Role |
+|---|---|---|
+| `admin@lnu.edu.ua` | `Admin#2026` | `GLOBAL` admin grant, no forced password change |
+| `dean.fpmi@lnu.edu.ua` | `Temp#12345` | member of "Деканат ФПМіІ" (holds a `FACULTY` grant); must change password on first login |
+| `o.melnyk@lnu.edu.ua` | `Temp#12345` | direct `DEPARTMENT` grant; must change password on first login |
+
+---
+
 ## Avoiding N+1 queries (DataLoader batching)
 
 Because a GraphQL relation field's data fetcher is invoked **once per parent row**, a naive
@@ -361,3 +540,17 @@ schema and the queries you send are unchanged; only the number of SQL round trip
   namespace `curriculumItemHourss` (double s) rather than something more natural.
 - Connections are offset/limit only (`pageInfo.total` / `hasNextPage` / `nextPageOffset`) —
   no cursor-based pagination.
+- **JWTs are stateless and not revocable individually.** `login` issues a token valid for
+  `app.security.jwt-ttl-minutes` (default 12h); there's no refresh-token flow, and no server-side
+  session to invalidate on logout — a leaked token keeps working until it expires. Deactivating
+  the account (`setUserActive`) or revoking a permission grant takes effect immediately on the
+  *next* request, but the token itself remains "valid" until it expires.
+- Only one permission level exists: **modify** (update + delete + create/modify children). There's
+  no separate read-restriction — any authenticated user can query any entity; permission grants
+  only govern which edit/delete buttons the frontend shows and which mutations succeed.
+- `grantsForResource` requires already knowing the exact `resourceType`/`resourceId` to audit — 
+  there's no single query that lists every grant in the system across all resource types.
+- The ancestor-closure check in `PermissionService.ancestryOf` walks the permission graph with one
+  SQL round trip per edge (via sequential/parallel reactive composition, capped at depth 15) rather
+  than a single recursive CTE. Fine at this project's scale; a much larger entity graph or
+  permission volume would want that consolidated into one query.
