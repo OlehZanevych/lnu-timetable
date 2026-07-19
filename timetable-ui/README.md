@@ -105,13 +105,17 @@ subclass rendered through the shared `entity-page.html` (table + modal form):
 export class CoursePage extends BaseEntity { meta = meta('Course'); }
 ```
 
-`entity-pages.ts` currently registers 16 such pages (`academicDegree`, `faculty`,
-`department`, `specialty`, `course`, `curriculumItem`, `curriculumItemHours`,
-`workingCurriculumItem`, `lecturer`, `lecturerWorkload`, `student`, `academicGroup`,
-`combinedGroup`, `room`, `classStartTime`, `timetableEntry`), each routed at `/e/:single`. These are
+`entity-pages.ts` currently registers 11 such pages (`academicDegree`, `faculty`,
+`department`, `specialty`, `course`, `lecturer`, `student`, `academicGroup`,
+`room`, `classStartTime`, `timetableEntry`), each routed at `/e/:single`. These are
 the fallback / power-user screens — useful for bulk edits or entities without a dedicated
-drill-down page (`Room`, `ClassStartTime`, `CombinedGroup`, `AcademicDegree`, `LecturerWorkload`,
-`TimetableEntry`).
+drill-down page (`Room`, `ClassStartTime`, `AcademicDegree`, `TimetableEntry`). `CombinedGroupPage`
+(the same `BaseEntity` table) is also registered as a component but not routed standalone — it's
+embedded directly as the Faculty page's "Об'єднані групи" tab instead. `CurriculumItem`,
+`CurriculumItemHours`, `WorkingCurriculumItem` and `LecturerWorkload` have no generic page at all;
+they're managed exclusively through the hand-written drill-down pages below
+(`SpecialtyDetailPage`'s working-curriculum-items tab and the department's "Навантаження
+викладачів" tab, via `LecturerWorkloadList`).
 
 ### Hierarchical drill-down pages
 
@@ -120,9 +124,8 @@ and composing purpose-built child-list components rather than going through `Bas
 
 - **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
   tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
-  info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, students,
-  academic groups, combined groups, courses, curriculum items, curriculum item hours, working
-  curriculum items, workloads.
+  info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, academic groups,
+  combined groups (`CombinedGroupPage`), courses, and schedule building (`FacultyTimetableList`).
 - **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): faculties housed
   in the building, rooms.
 - **`DepartmentDetailPage`** (`/department/:id`): lecturers, courses owned by the department.
@@ -175,7 +178,7 @@ All three are standalone `ControlValueAccessor` components usable with `[(ngMode
 
 The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад")
 plus a flat "Загальне" group of generic-table links for entities with no dedicated page
-(`Building`, `ClassStartTime`, `CombinedGroup`, `AcademicDegree`).
+(`Building`, `ClassStartTime`, `AcademicDegree`).
 
 ---
 

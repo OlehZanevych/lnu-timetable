@@ -116,10 +116,6 @@
 
       <!-- ── People & Groups ── -->
 
-      @case ('students') {
-        <app-student />
-      }
-
       @case ('academicGroups') {
         <div class="section-filter">
           <label>Фільтр за спеціальністю</label>
@@ -143,23 +139,7 @@
                     extraFilterParam="facultyId" [extraFilterValue]="fid" />
       }
 
-      @case ('curriculumItems') {
-        <app-curriculum-item />
-      }
-
-      @case ('curriculumItemHours') {
-        <app-curriculum-item-hours />
-      }
-
-      @case ('workingCurriculumItems') {
-        <app-working-curriculum-item />
-      }
-
       <!-- ── Scheduling ── -->
-
-      @case ('workloads') {
-        <app-lecturer-workload />
-      }
 
       @case ('timetable') {
         <app-faculty-timetable-list [facultyId]="fid" />
