@@ -1,0 +1,4 @@
+# Crawl artefacts — regenerate with scrape_lnu.py / build_sql.py
+.cache/
+__pycache__/
+*.log

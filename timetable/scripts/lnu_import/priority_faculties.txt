@@ -1,0 +1,10 @@
+# Faculty websites processed first, in this order.
+# Everything else follows in the order it appears on
+# https://lnu.edu.ua/structure/faculties
+# One host per line; blank lines and "#" comments are ignored.
+
+ami.lnu.edu.ua
+new.mmf.lnu.edu.ua
+electronics.lnu.edu.ua
+physics.lnu.edu.ua
+econom.lnu.edu.ua

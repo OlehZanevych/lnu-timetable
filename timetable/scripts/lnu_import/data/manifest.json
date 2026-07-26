@@ -1,0 +1,50 @@
+{
+ "generated_at": "2026-07-26T14:49:00Z",
+ "source": "https://lnu.edu.ua/structure/faculties",
+ "counts": {
+  "buildings": 14,
+  "faculties": 19,
+  "departments": 140,
+  "lecturers": 2153,
+  "specialties": 71,
+  "curricula": 109,
+  "courses": 2958
+ },
+ "http": {
+  "cache_hits": 2,
+  "downloads": 5797,
+  "failures": 0,
+  "offline_misses": 0
+ },
+ "warnings": [
+  "ami.lnu.edu.ua: employee page unreachable https://ami.lnu.edu.ua/employee/zhuk",
+  "new.mmf.lnu.edu.ua: no curriculum table parsed at https://new.mmf.lnu.edu.ua/academics/bachelor/math",
+  "new.mmf.lnu.edu.ua: no curriculum table parsed at https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-education",
+  "econom.lnu.edu.ua: employee page unreachable https://econom.lnu.edu.ua/employee/korkuna-o-p",
+  "econom.lnu.edu.ua: employee page unreachable https://econom.lnu.edu.ua/employee/yavdoshchyna-t-p",
+  "bioweb.lnu.edu.ua: employee page unreachable https://bioweb.lnu.edu.ua/employee/ivanets-o-r",
+  "bioweb.lnu.edu.ua: employee page unreachable https://bioweb.lnu.edu.ua/employee/koltun-i-o",
+  "bioweb.lnu.edu.ua: employee page unreachable https://bioweb.lnu.edu.ua/employee/ljesnik-v-v",
+  "bioweb.lnu.edu.ua: employee page unreachable https://bioweb.lnu.edu.ua/employee/tymkiv-i-p",
+  "bioweb.lnu.edu.ua: no curriculum table parsed at https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biotehnology",
+  "bioweb.lnu.edu.ua: no curriculum table parsed at https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biology-education",
+  "bioweb.lnu.edu.ua: no curriculum table parsed at https://bioweb.lnu.edu.ua/academics/master/curriculum-biology-education",
+  "lingua.lnu.edu.ua: employee page unreachable https://lingua.lnu.edu.ua/employee/zhovniruk-zoryana-lvivna",
+  "clio.lnu.edu.ua: employee page unreachable https://clio.lnu.edu.ua/employee/kacharaba-stepan-petrovych",
+  "clio.lnu.edu.ua: employee page unreachable https://clio.lnu.edu.ua/employee/kachmar-v-m",
+  "kultart.lnu.edu.ua: employee page unreachable https://kultart.lnu.edu.ua/employee/litovchenko-olena-andriivna",
+  "intrel.lnu.edu.ua: employee page unreachable https://intrel.lnu.edu.ua/employee/myhajlyak-iryna-volodymyrivna",
+  "intrel.lnu.edu.ua: employee page unreachable https://intrel.lnu.edu.ua/employee/horin-nataliya-viktorivna",
+  "intrel.lnu.edu.ua: employee page unreachable https://intrel.lnu.edu.ua/employee/ohinok-solomiya-vasylivna",
+  "intrel.lnu.edu.ua: employee page unreachable https://intrel.lnu.edu.ua/employee/trofymchuk-anna-pavlivna",
+  "intrel.lnu.edu.ua: employee page unreachable https://intrel.lnu.edu.ua/employee/kopych-roman-ivanovych",
+  "pedagogy.lnu.edu.ua: crawl failed (ValueError: Invalid IPv6 URL)",
+  "philology.lnu.edu.ua: no curriculum table parsed at https://philology.lnu.edu.ua/academics/bachelor/curriculum-ukrajinska-mova-ta-literatura",
+  "filos.lnu.edu.ua: employee page unreachable https://filos.lnu.edu.ua/employee/8000",
+  "filos.lnu.edu.ua: employee page unreachable https://filos.lnu.edu.ua/employee/8007",
+  "filos.lnu.edu.ua: employee page unreachable https://filos.lnu.edu.ua/employee/8014",
+  "filos.lnu.edu.ua: no curriculum table parsed at https://filos.lnu.edu.ua/academics/master/curriculum-psycology",
+  "law.lnu.edu.ua: employee page unreachable https://law.lnu.edu.ua/employee/denkovych-olha-ivanivna",
+  "law.lnu.edu.ua: employee page unreachable https://law.lnu.edu.ua/employee/marin-oleksandr-kostyantynovych"
+ ]
+}

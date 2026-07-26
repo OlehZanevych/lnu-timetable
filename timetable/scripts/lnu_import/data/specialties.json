@@ -1,0 +1,1115 @@
+[
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "014.09",
+  "name": "Середня освіта (Інформатика)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-education",
+    "title": "014.09 Середня освіта (Інформатика)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "113",
+  "name": "Прикладна математика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-applied-mathematics",
+    "title": "113 Прикладна математика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "F3",
+  "name": "(122) Комп`ютерні науки ОПП Інформатика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-computer-sciences",
+    "title": "F3 (122) Комп`ютерні науки ОПП Інформатика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "F4",
+  "name": "(124) Системний аналіз",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-system-analysis",
+    "title": "F4 (124) Системний аналіз",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "F5",
+  "name": "(125) Кібербезпека та захист інформації",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-cybersecurity",
+    "title": "F5 (125) Кібербезпека та захист інформації",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "014",
+  "name": "Середня освіта (інформатика)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master",
+    "title": "014 Середня освіта (інформатика)",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master-z",
+    "title": "014 Середня освіта (інформатика). Заочна форма",
+    "study_form": "PART_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "F1",
+  "name": "Прикладна математика (1,4)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-applied-mathematics-master",
+    "title": "F1 Прикладна математика (1,4)",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-applied-mathematics-master2",
+    "title": "F1 Прикладна математика (1,9)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "122",
+  "name": "Комп'ютерні науки",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-computer-science-master",
+    "title": "122 Комп'ютерні науки",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "124",
+  "name": "Системний аналіз",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-system-analysis-master",
+    "title": "124 Системний аналіз",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "125",
+  "name": "Кібербезпека та захист інформації",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-cybersecurity-master",
+    "title": "125 Кібербезпека та захист інформації",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "E7",
+  "name": "Математика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/math",
+    "title": "E7 Математика",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-computer-algebra",
+    "title": "E7 Комп'ютерна алгебра, криптологія та теорія ігор",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-math-economics",
+    "title": "E7 Математика. Економетрика та дослідження операцій",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-comp-analysis",
+    "title": "E7 Аналіз математичних моделей",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-fin-math",
+    "title": "E7 Математика. Актуарна математика та керування ризиками",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "E8",
+  "name": "Статистичний аналіз даних (Statistics and Data Science)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-statistics-analysis",
+    "title": "E8 Статистичний аналіз даних (Statistics and Data Science)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "A4",
+  "name": "Середня освіта (Математика)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-education",
+    "title": "A4 Середня освіта (Математика)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "F1",
+  "name": "Математичне моделювання та комп'ютерна механіка",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-math-simulation",
+    "title": "F1 Математичне моделювання та комп'ютерна механіка",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "E8",
+  "name": "Статистика. Статистичний аналіз даних",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-datascience",
+    "title": "E8 Статистика. Статистичний аналіз даних",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "E7",
+  "name": "Математика",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/master/e7-matematyka",
+    "title": "E7 Математика",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-financial-math",
+    "title": "E7 Математика. Актуарна та фінансова математика",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-math-economics",
+    "title": "E7 Математика. Економетрика і теорія ігор",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "F1",
+  "name": "Прикладна математика. Інформаційні технології моделювання механічних процесів і систем",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-theoretical-mechanics",
+    "title": "F1 Прикладна математика. Інформаційні технології моделювання механічних процесів і систем",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "F2",
+  "name": "ОПП Інженерія програмного забезпечення",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-software-engineering",
+    "title": "F2 ОПП Інженерія програмного забезпечення",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "F3",
+  "name": "ОПП Комп'ютерні науки",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-computer-technologies-2018",
+    "title": "F3 ОПП Комп'ютерні науки",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "F6",
+  "name": "ОПП Інформаційні системи і технології",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-it-technologies",
+    "title": "F6 ОПП Інформаційні системи і технології",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "G5",
+  "name": "ОПП Електроніка та комп'ютерні системи",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/bachelor/navchalnyy-plan-elektronika-ta-komp-iuterni-systemy",
+    "title": "G5 ОПП Електроніка та комп'ютерні системи",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "G7",
+  "name": "ОПП Сенсорні і діагностичні електронні системи",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-micro-and-nanotechnics",
+    "title": "G7 ОПП Сенсорні і діагностичні електронні системи",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "122",
+  "name": "( F3) ОП Комп'ютерні науки",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/master/curriculum-computer-technologies-2017",
+    "title": "122 ( F3) ОП Комп'ютерні науки",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "electronics.lnu.edu.ua",
+  "code": "176",
+  "name": "( G5) ОП Пристрої та матеріали сенсорної електроніки",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://electronics.lnu.edu.ua/academics/master/curriculum-micro-and-nanotechnics",
+    "title": "176 ( G5) ОП Пристрої та матеріали сенсорної електроніки",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "Е1",
+  "name": "Біологія та біохімія",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biology",
+    "title": "Е1 Біологія та біохімія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "G21",
+  "name": "Біотехнології та біоінженерія",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biotehnology",
+    "title": "G21 Біотехнології та біоінженерія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "Е2",
+  "name": "Екологія",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-ecology",
+    "title": "Е2 - Екологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "014.05",
+  "name": "Середня освіта/Біологія та здоров'я людини",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biology-education",
+    "title": "014.05 Середня освіта/Біологія та здоров'я людини",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "Е1",
+  "name": "Біологія та біохімія",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/master/curriculum-biology-biochemistry",
+    "title": "Е1 Біологія та біохімія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "Е2",
+  "name": "Екологія",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/master/curriculum-ecology",
+    "title": "Е2 - Екологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "bioweb.lnu.edu.ua",
+  "code": "A4.05",
+  "name": "Середня освіта (Біологія та здоров'я людини)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://bioweb.lnu.edu.ua/academics/master/curriculum-biology-education",
+    "title": "A4.05 Середня освіта (Біологія та здоров'я людини)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "geology.lnu.edu.ua",
+  "code": "Е4",
+  "name": "Науки про Землю",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://geology.lnu.edu.ua/academics/bachelor/curriculum-earth-sciences",
+    "title": "Е4 Науки про Землю",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://geology.lnu.edu.ua/academics/bachelor/curriculum-environmental-studies",
+    "title": "Е4 Науки про Землю",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://geology.lnu.edu.ua/academics/bachelor/curriculum-earth-sciences-resources",
+    "title": "Е4 Науки про Землю",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "014.03",
+  "name": "«Середня освіта (Історія та громадянська освіта)»",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-history-and-civics",
+    "title": "014.03 «Середня освіта (Історія та громадянська освіта)»",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-history-education",
+    "title": "014.03 «Середня освіта (Історія)»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "027",
+  "name": "«Музеєзнавство, пам'яткознавство»",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-museology-monument-studies",
+    "title": "027 «Музеєзнавство, пам'яткознавство»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "032",
+  "name": "«Історія та археологія»",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-history-and-archaeology",
+    "title": "032 «Історія та археологія»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "054",
+  "name": "«Соціологія, Бізнес-соціологія»",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-business-sociology",
+    "title": "054 «Соціологія, Бізнес-соціологія»",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-applied-sociology",
+    "title": "054 «Соціологія, Прикладна соціологія»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "014.03",
+  "name": "«Середня освіта (Історія та громадянська освіта)»",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/master/curriculum-history-and-civics",
+    "title": "014.03 «Середня освіта (Історія та громадянська освіта)»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "032",
+  "name": "«Історія та археологія»",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/master/curriculum-history-and-archaeology",
+    "title": "032 «Історія та археологія»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "clio.lnu.edu.ua",
+  "code": "054",
+  "name": "«Соціологія»",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://clio.lnu.edu.ua/academics/master/curriculum-sociology",
+    "title": "054 «Соціологія»",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "014.13",
+  "name": "Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-music-art-education",
+    "title": "014.13 Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "024",
+  "name": "Хореографія, В6 Перформативні мистецтва (Хореографія)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-choreography",
+    "title": "024 Хореографія, В6 Перформативні мистецтва (Хореографія)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "026",
+  "name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-theatre-and-cinema",
+    "title": "026 Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-theater-of-dolls",
+    "title": "026 Сценічне мистецтво (Акторське мистецтво театру ляльок), В6 Перформативні мистецтва (Акторське мистецтво театру ляльок)",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/theatre-studies",
+    "title": "026 Сценічне мистецтво (Театрознавство), В6 Перформативні мистецтва (Театрознавство)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "В6",
+  "name": "Перформативні мистецтва, В6.01 Сценічне мистецтво",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/stsenichne-mystetstvo-rezhyserske-mystetstvo-teatroznavstvo",
+    "title": "В6 Перформативні мистецтва, В6.01 Сценічне мистецтво",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "028",
+  "name": "Менеджмент соціокультурної діяльності",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-management-of-art",
+    "title": "028 Менеджмент соціокультурної діяльності",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "029",
+  "name": "Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/navchalnyy-plan-029-informatsiyna-bibliotechna-ta-arkhivna-sprava",
+    "title": "029 Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "025",
+  "name": "Музичне мистецтво, В5 Музичне мистецтво",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-025-muzychne-mystetstvo-khorove-dyryhuvannia",
+    "title": "025 Музичне мистецтво, В5 Музичне мистецтво",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "В1",
+  "name": "Аудіовізуальне мистецтво та медіавиробництво (Продюсерство аудіовізуального мистецтва та медіавиробництво)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-audiovisual-art-and-media-productions",
+    "title": "В1 Аудіовізуальне мистецтво та медіавиробництво (Продюсерство аудіовізуального мистецтва та медіавиробництво)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "014.13",
+  "name": "Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-music-art-education",
+    "title": "014.13 Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "024",
+  "name": "Хореографія, В6 Перформативні мистецтва (Хореографія)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-choreography",
+    "title": "024 Хореографія, В6 Перформативні мистецтва (Хореографія)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "025",
+  "name": "Музичне мистецтво (Музикознавство), В5 Музичне мистецтво (Музикознавство)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-music-art",
+    "title": "025 Музичне мистецтво (Музикознавство), В5 Музичне мистецтво (Музикознавство)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "026",
+  "name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-theatre-and-cinema",
+    "title": "026 Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/theatre-studies",
+    "title": "026 Сценічне мистецтво (Театрознавство), В6 Перформативні мистецтва (Театрознавство)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "028",
+  "name": "Менеджмент соціокультурної діяльності",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-management-of-art",
+    "title": "028 Менеджмент соціокультурної діяльності",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "kultart.lnu.edu.ua",
+  "code": "029",
+  "name": "Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-library-studies",
+    "title": "029 Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "А4.01",
+  "name": "Середня освіта (Українська мова і література)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-serednia-osvita",
+    "title": "А4.01 Середня освіта (Українська мова і література)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "В11.01",
+  "name": "Українська мова та література",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-ukrajinska-mova-ta-literatura",
+    "title": "В11.01 Українська мова та література",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-ukrainska-mova-iak-inozemna",
+    "title": "В11.01 Українська мова та література, українська мова як іноземна",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-literary-art",
+    "title": "В11.01 Літературна творчість",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "В11.09",
+  "name": "Фольклористика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-folklore-studies",
+    "title": "В11.09 Фольклористика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "В11",
+  "name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-polska-mova-ta-literatura",
+    "title": "В11.033 Слов'янські мови та літератури (переклад включно), перша - польська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-bolharska-mova-ta-literatura",
+    "title": "В11.032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-serbska-mova-ta-literatura",
+    "title": "В11.035 Слов'янські мови та літератури (переклад включно), перша - сербська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-slovatska-mova-ta-literatura",
+    "title": "В11.036 Слов'янські мови та літератури (переклад включно), перша - словацька",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-slovenska-mova-ta-literatura",
+    "title": "В11.039 Слов'янські мови та літератури (переклад включно), перша - словенська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-khorvatska-mova-ta-literatura",
+    "title": "В11.037 Слов'янські мови та літератури (переклад включно), перша - хорватська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-cheska-mova-ta-literatura",
+    "title": "В11.038 Слов'янські мови та літератури (переклад включно), перша - чеська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-arabska-mova-ta-literatura",
+    "title": "В11.060 Східні мови та літератури (переклад включно), перша - арабська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-kytayska-mova-ta-literatura",
+    "title": "В11.065 Східні мови та літератури (переклад включно), перша - китайська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-perska-mova-ta-literatura",
+    "title": "В11.067 Східні мови та літератури (переклад включно), перша - перська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-turetska-mova-ta-literatura",
+    "title": "В11.068 Східні мови та літератури (переклад включно), перша - турецька",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-yaponska-mova-ta-literatura",
+    "title": "В11.069 Східні мови та літератури (переклад включно), перша - японська",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "В11.10",
+  "name": "Прикладна лінгвістика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-applied-linguistics",
+    "title": "В11.10 Прикладна лінгвістика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "В11.01",
+  "name": "Українська мова та література",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-ukrajinska-mova-ta-literatura",
+    "title": "В11.01 Українська мова та література",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-literaturna-tvorchist",
+    "title": "В11.01 Літературна творчість",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-folklore",
+    "title": "В11.01 Українська мова та література. Фольклористика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "В11",
+  "name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-bolharska-mova-ta-literatura",
+    "title": "В11.032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-polska-mova-ta-literatura",
+    "title": "В11.033 Слов'янські мови та літератури (переклад включно), перша - польська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-serbska-mova-ta-literatura",
+    "title": "В11.035 Слов'янські мови та літератури (переклад включно), перша - сербська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-slovatska-mova-ta-literatura",
+    "title": "В11.036 Слов'янські мови та літератури (переклад включно), перша - словацька",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-khorvatska-mova-ta-literatura",
+    "title": "В11.037 Слов'янські мови та літератури (переклад включно), перша - хорватська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-cheska-mova-ta-literatura",
+    "title": "В11.038 Слов'янські мови та літератури (переклад включно), перша - чеська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-slovenska-mova-ta-literatura",
+    "title": "В11.039 Слов'янські мови та літератури (переклад включно), перша - словенська",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "B11",
+  "name": "067 Східні мови та літератури (переклад включно), перша - перська",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-perska-mova-ta-literatura",
+    "title": "B11.067 Східні мови та літератури (переклад включно), перша - перська",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-kytayska-mova-ta-literatura",
+    "title": "B11.068 “Східні мови та літератури (переклад включно), перша - китайська”",
+    "study_form": "FULL_TIME"
+   },
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-yaponska-mova-ta-literatura",
+    "title": "B11.069 “Східні мови та літератури (переклад включно), перша - японська",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "035.10",
+  "name": "Прикладна лінгвістика",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-prykladna-lingvistyka",
+    "title": "035.10 Прикладна лінгвістика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "philology.lnu.edu.ua",
+  "code": "А4.01",
+  "name": "Середня освіта (Українська мова і література)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://philology.lnu.edu.ua/academics/master/curriculum-serednia-osvita",
+    "title": "А4.01 Середня освіта (Українська мова і література)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "С2",
+  "name": "Політологія",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-politology",
+    "title": "С2 Політологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "С4",
+  "name": "Психологія(денна форма навчання)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-psycology",
+    "title": "С4 Психологія(денна форма навчання)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "033",
+  "name": "Філософія",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-philosophy",
+    "title": "033 Філософія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "034",
+  "name": "Культурологія",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-culture-studies",
+    "title": "034 Культурологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "052",
+  "name": "Політологія",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/master/curriculum-politology",
+    "title": "052 Політологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "053",
+  "name": "Психологія",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/master/curriculum-psycology",
+    "title": "053 Психологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "033",
+  "name": "Філософія",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/master/curriculum-philosophy",
+    "title": "033 Філософія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "filos.lnu.edu.ua",
+  "code": "034",
+  "name": "Культурологія",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://filos.lnu.edu.ua/academics/master/curriculum-culture-studies",
+    "title": "034 Культурологія",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ }
+]
