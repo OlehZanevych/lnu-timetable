@@ -170,7 +170,7 @@ CREATE TABLE curriculum_items
     id           BIGSERIAL PRIMARY KEY,
     semester     INTEGER      NOT NULL,
     control_form control_form NOT NULL,
-    ects_credits INTEGER,
+    ects_credits INTEGER      NOT NULL,
     specialty_id BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE,
     course_id    BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
     UNIQUE (course_id, specialty_id, semester)
