@@ -1,0 +1,24 @@
+{
+ "generated_at": "2026-07-26T13:11:22Z",
+ "source": "https://lnu.edu.ua/structure/faculties",
+ "counts": {
+  "buildings": 2,
+  "faculties": 3,
+  "departments": 3,
+  "lecturers": 8,
+  "specialties": 4,
+  "curricula": 4,
+  "courses": 11
+ },
+ "http": {
+  "cache_hits": 0,
+  "downloads": 0,
+  "failures": 0,
+  "offline_misses": 5
+ },
+ "warnings": [
+  "Priority site 'electronics.lnu.edu.ua' is not listed on https://lnu.edu.ua/structure/faculties; skipped",
+  "Priority site 'physics.lnu.edu.ua' is not listed on https://lnu.edu.ua/structure/faculties; skipped",
+  "econom.lnu.edu.ua: no departments page at https://econom.lnu.edu.ua/about/departments"
+ ]
+}

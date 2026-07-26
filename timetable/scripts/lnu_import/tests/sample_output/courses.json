@@ -1,0 +1,511 @@
+[
+ {
+  "name": "Алгебра та геометрія",
+  "course_type": "MANDATORY",
+  "department_text": "алгебри, топології та основ математики",
+  "department_key": "алгебри топології та основ математики",
+  "plan": [
+   {
+    "semester": 1,
+    "ects_credits": 5,
+    "control_form": "EXAM"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМі-11",
+     "ПМі-12",
+     "ПМо-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://new.mmf.lnu.edu.ua/employee/brydun",
+      "label": "доцент Бридун В. Л."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМі-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://new.mmf.lnu.edu.ua/employee/brydun",
+      "label": "доцент Бридун В. Л."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМі-12"
+    ],
+    "lecturers": [
+     {
+      "url": "https://new.mmf.lnu.edu.ua/employee/maksymyk-k-m",
+      "label": "Максимик К. М."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМо-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://new.mmf.lnu.edu.ua/employee/brydun",
+      "label": "доцент Бридун В. Л."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/alhebra-ta-heometriia-2",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Програмування",
+  "course_type": "MANDATORY",
+  "department_text": "програмування",
+  "department_key": "програмування",
+  "plan": [
+   {
+    "semester": 1,
+    "ects_credits": 6,
+    "control_form": "EXAM"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМо-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/yaroshko",
+      "label": "доцент Ярошко С. А."
+     }
+    ]
+   },
+   {
+    "hour_type": "LAB",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМо-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/kostiv",
+      "label": "Костів В. Я."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/prohramuvannia",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Методика навчання інформатики",
+  "course_type": "MANDATORY",
+  "department_text": "програмування",
+  "department_key": "програмування",
+  "plan": [
+   {
+    "semester": 7,
+    "ects_credits": 4,
+    "control_form": "EXAM"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 7,
+    "hours": 32,
+    "groups": [
+     "ПМо-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/yaroshko",
+      "label": "доцент Ярошко С. А."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 7,
+    "hours": 16,
+    "groups": [
+     "ПМо-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/kostiv",
+      "label": "Костів В. Я."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/metodyka-navchannia",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Динамічні моделі та методи прийняття рішень",
+  "course_type": "ELECTIVE",
+  "department_text": "дискретного аналізу та інтелектуальних систем",
+  "department_key": "дискретного аналізу та інтелектуальних систем",
+  "plan": [
+   {
+    "semester": 7,
+    "ects_credits": 3,
+    "control_form": "CREDIT"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 7,
+    "hours": 16,
+    "groups": [
+     "ПМі-41",
+     "ПМо-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/prytula",
+      "label": "професор Притула М. М."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 7,
+    "hours": 16,
+    "groups": [
+     "ПМі-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/prytula",
+      "label": "професор Притула М. М."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 7,
+    "hours": 16,
+    "groups": [
+     "ПМо-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/kvasnytsia",
+      "label": "доцент Квасниця Г. А."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/dynamichni-modeli",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Моделювання економіко-екологічних процесів",
+  "course_type": "ELECTIVE",
+  "department_text": "дискретного аналізу та інтелектуальних систем",
+  "department_key": "дискретного аналізу та інтелектуальних систем",
+  "plan": [
+   {
+    "semester": 7,
+    "ects_credits": 3,
+    "control_form": "CREDIT"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 7,
+    "hours": 16,
+    "groups": [
+     "ПМі-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/prytula",
+      "label": "професор Притула М. М."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/modeliuvannia-protsesiv",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Чисельні методи",
+  "course_type": "MANDATORY",
+  "department_text": "програмування",
+  "department_key": "програмування",
+  "plan": [
+   {
+    "semester": 1,
+    "ects_credits": 5,
+    "control_form": "EXAM"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМі-11",
+     "ПМі-12"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/litynskyi",
+      "label": "доцент Літинський С. В."
+     }
+    ]
+   },
+   {
+    "hour_type": "LAB",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМі-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/litynskyi",
+      "label": "доцент Літинський С. В."
+     }
+    ]
+   },
+   {
+    "hour_type": "LAB",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "ПМі-12"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/kostiv",
+      "label": "Костів В. Я."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/chyselni-metody",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Рівняння математичної фізики",
+  "course_type": "MANDATORY",
+  "department_text": "дискретного аналізу та інтелектуальних систем",
+  "department_key": "дискретного аналізу та інтелектуальних систем",
+  "plan": [
+   {
+    "semester": 7,
+    "ects_credits": 4,
+    "control_form": "EXAM"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 7,
+    "hours": 32,
+    "groups": [
+     "ПМі-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/kvasnytsia",
+      "label": "доцент Квасниця Г. А."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 7,
+    "hours": 16,
+    "groups": [
+     "ПМі-41"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/stojko-t-i",
+      "label": "Стойко Т. І."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/rivniannia-matfizyky",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Курсова робота",
+  "course_type": "COURSE_WORK",
+  "department_text": "програмування",
+  "department_key": "програмування",
+  "plan": [
+   {
+    "semester": 2,
+    "ects_credits": 3,
+    "control_form": "GRADED_CREDIT"
+   }
+  ],
+  "classes": [],
+  "url": "https://ami.lnu.edu.ua/course/kursova-robota-so",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Динамічна теорія інформації",
+  "course_type": "ELECTIVE",
+  "department_text": "дискретного аналізу та інтелектуальних систем",
+  "department_key": "дискретного аналізу та інтелектуальних систем",
+  "plan": [
+   {
+    "semester": 2,
+    "ects_credits": 4,
+    "control_form": "CREDIT"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 2,
+    "hours": 32,
+    "groups": [
+     "ПМом-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/prytula",
+      "label": "професор Притула М. М."
+     }
+    ]
+   },
+   {
+    "hour_type": "LAB",
+    "semester": 2,
+    "hours": 32,
+    "groups": [
+     "ПМом-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/stojko-t-i",
+      "label": "Стойко Т. І."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/dynamichna-teoriia-informatsii-so",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Моделі статистичного навчання",
+  "course_type": "ELECTIVE",
+  "department_text": "дискретного аналізу та інтелектуальних систем",
+  "department_key": "дискретного аналізу та інтелектуальних систем",
+  "plan": [
+   {
+    "semester": 2,
+    "ects_credits": 4,
+    "control_form": "CREDIT"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 2,
+    "hours": 32,
+    "groups": [
+     "ПМом-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://ami.lnu.edu.ua/employee/kvasnytsia",
+      "label": "доцент Квасниця Г. А."
+     }
+    ]
+   }
+  ],
+  "url": "https://ami.lnu.edu.ua/course/modeli-statystychnoho-navchannia-so",
+  "faculty_host": "ami.lnu.edu.ua",
+  "reachable": true
+ },
+ {
+  "name": "Лінійна алгебра",
+  "course_type": "MANDATORY",
+  "department_text": "алгебри, топології та основ математики",
+  "department_key": "алгебри топології та основ математики",
+  "plan": [
+   {
+    "semester": 1,
+    "ects_credits": 5,
+    "control_form": "EXAM"
+   }
+  ],
+  "classes": [
+   {
+    "hour_type": "LECTURE",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "Мат-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://new.mmf.lnu.edu.ua/employee/brydun",
+      "label": "доцент Бридун В. Л."
+     }
+    ]
+   },
+   {
+    "hour_type": "PRACTICAL",
+    "semester": 1,
+    "hours": 32,
+    "groups": [
+     "Мат-11"
+    ],
+    "lecturers": [
+     {
+      "url": "https://new.mmf.lnu.edu.ua/employee/maksymyk-k-m",
+      "label": "Максимик К. М."
+     }
+    ]
+   }
+  ],
+  "url": "https://new.mmf.lnu.edu.ua/course/linijna-alhebra",
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "reachable": true
+ }
+]

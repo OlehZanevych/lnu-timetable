@@ -1,0 +1,388 @@
+{
+ "buildings": [
+  {
+   "name": "Корпус на вул. Університетська 1",
+   "address": "вул. Університетська 1",
+   "city": "Львів",
+   "postal_code": "79000"
+  },
+  {
+   "name": "Корпус на вул. Драгоманова, 50",
+   "address": "вул. Драгоманова, 50",
+   "city": "Львів",
+   "postal_code": "79005"
+  },
+  {
+   "name": "Корпус на вул. Кирила і Мефодія, 8",
+   "address": "вул. Кирила і Мефодія, 8",
+   "city": "Львів",
+   "postal_code": "79005"
+  },
+  {
+   "name": "Корпус на проспект Свободи, 18",
+   "address": "проспект Свободи, 18",
+   "city": "Львів",
+   "postal_code": "79008"
+  },
+  {
+   "name": "Корпус на вул. Грушевського, 4",
+   "address": "вул. Грушевського, 4",
+   "city": "Львів",
+   "postal_code": "79005"
+  },
+  {
+   "name": "Корпус на вул. Дорошенка, 41",
+   "address": "вул. Дорошенка, 41",
+   "city": "Львів",
+   "postal_code": "79000"
+  },
+  {
+   "name": "Корпус на вул. Михайла Грушевського, 4",
+   "address": "вул. Михайла Грушевського, 4",
+   "city": "Львів",
+   "postal_code": "79005"
+  },
+  {
+   "name": "Корпус на вул. Генерала Чупринки, 49",
+   "address": "вул. Генерала Чупринки, 49",
+   "city": "Львів",
+   "postal_code": "79044"
+  },
+  {
+   "name": "Корпус на вул. Валова,18",
+   "address": "вул. Валова,18",
+   "city": "Львів",
+   "postal_code": "79008"
+  },
+  {
+   "name": "Корпус на вул. Січових Стрільців, 19",
+   "address": "вул. Січових Стрільців, 19",
+   "city": "Львів",
+   "postal_code": "79000"
+  },
+  {
+   "name": "Корпус на вул. Туган-Барановського, 7",
+   "address": "вул. Туган-Барановського, 7",
+   "city": "Львів",
+   "postal_code": "79000"
+  },
+  {
+   "name": "Корпус на вул. Коперника, 3",
+   "address": "вул. Коперника, 3",
+   "city": "Львів",
+   "postal_code": "79000"
+  },
+  {
+   "name": "Корпус на вул. Кирила і Мефодія, 6",
+   "address": "вул. Кирила і Мефодія, 6",
+   "city": "Львів",
+   "postal_code": "79005"
+  },
+  {
+   "name": "Корпус на вул. Січових Стрільців, 14",
+   "address": "вул. Січових Стрільців, 14",
+   "city": "Львів",
+   "postal_code": "79000"
+  }
+ ],
+ "faculties": [
+  {
+   "order": 1,
+   "name": "Факультет прикладної математики та інформатики",
+   "abbreviation": "ФПМіІ",
+   "website": "https://ami.lnu.edu.ua",
+   "host": "ami.lnu.edu.ua",
+   "email": "ami@lnu.edu.ua",
+   "phone": "(+38 032) 274-01-80; 239-41-86",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 8,
+    "lecturers": 132,
+    "specialties": 10,
+    "courses": 503
+   }
+  },
+  {
+   "order": 2,
+   "name": "Механіко-математичний факультет",
+   "abbreviation": "ММФ",
+   "website": "https://new.mmf.lnu.edu.ua",
+   "host": "new.mmf.lnu.edu.ua",
+   "email": "dmmf@lnu.edu.ua",
+   "phone": "(+38 032) 260-00-09; 239-41-74; 239-47-43",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 6,
+    "lecturers": 81,
+    "specialties": 7,
+    "courses": 367
+   }
+  },
+  {
+   "order": 3,
+   "name": "Факультет електроніки та комп'ютерних технологій",
+   "abbreviation": "ФЕКТ",
+   "website": "https://electronics.lnu.edu.ua",
+   "host": "electronics.lnu.edu.ua",
+   "email": "electronics.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 261-14-91; 239-47-24; 239-41-82",
+   "building_name": "Корпус на вул. Драгоманова, 50",
+   "stats": {
+    "departments": 6,
+    "lecturers": 111,
+    "specialties": 7,
+    "courses": 326
+   }
+  },
+  {
+   "order": 4,
+   "name": "Фізичний факультет",
+   "abbreviation": "ФзФ",
+   "website": "https://physics.lnu.edu.ua",
+   "host": "physics.lnu.edu.ua",
+   "email": "physics.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 239-41-16",
+   "building_name": "Корпус на вул. Кирила і Мефодія, 8",
+   "stats": {
+    "departments": 6,
+    "lecturers": 64,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 5,
+   "name": "Економічний факультет",
+   "abbreviation": "ЕкФ",
+   "website": "https://econom.lnu.edu.ua",
+   "host": "econom.lnu.edu.ua",
+   "email": "edean@lnu.edu.ua",
+   "phone": "(+38 032) 239-41-68",
+   "building_name": "Корпус на проспект Свободи, 18",
+   "stats": {
+    "departments": 13,
+    "lecturers": 192,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 6,
+   "name": "Біологічний факультет",
+   "abbreviation": "БФ",
+   "website": "https://bioweb.lnu.edu.ua",
+   "host": "bioweb.lnu.edu.ua",
+   "email": "biolog@lnu.edu.ua",
+   "phone": "(+38 032) 274-03-72; 239-41-53",
+   "building_name": "Корпус на вул. Грушевського, 4",
+   "stats": {
+    "departments": 9,
+    "lecturers": 71,
+    "specialties": 7,
+    "courses": 66
+   }
+  },
+  {
+   "order": 7,
+   "name": "Географічний факультет",
+   "abbreviation": "ГеогФ",
+   "website": "https://geography.lnu.edu.ua",
+   "host": "geography.lnu.edu.ua",
+   "email": "geography.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 239 46 46; 239 41 62",
+   "building_name": "Корпус на вул. Дорошенка, 41",
+   "stats": {
+    "departments": 9,
+    "lecturers": 106,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 8,
+   "name": "Геологічний факультет",
+   "abbreviation": "ГеолФ",
+   "website": "https://geology.lnu.edu.ua",
+   "host": "geology.lnu.edu.ua",
+   "email": "geology.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 239-41-56",
+   "building_name": "Корпус на вул. Михайла Грушевського, 4",
+   "stats": {
+    "departments": 4,
+    "lecturers": 25,
+    "specialties": 1,
+    "courses": 25
+   }
+  },
+  {
+   "order": 9,
+   "name": "Факультет журналістики",
+   "abbreviation": "ФЖ",
+   "website": "https://journ.lnu.edu.ua",
+   "host": "journ.lnu.edu.ua",
+   "email": "journft@lnu.edu.ua",
+   "phone": "(+38 032) 239-47-51",
+   "building_name": "Корпус на вул. Генерала Чупринки, 49",
+   "stats": {
+    "departments": 6,
+    "lecturers": 67,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 10,
+   "name": "Факультет іноземних мов",
+   "abbreviation": "ФІМ",
+   "website": "https://lingua.lnu.edu.ua",
+   "host": "lingua.lnu.edu.ua",
+   "email": "lingua.faculty@lnu.edu.ua",
+   "phone": "(+ 38 032) 239-47-16",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 9,
+    "lecturers": 321,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 11,
+   "name": "Історичний факультет",
+   "abbreviation": "ІФ",
+   "website": "https://clio.lnu.edu.ua",
+   "host": "clio.lnu.edu.ua",
+   "email": "clio@lnu.edu.ua",
+   "phone": "(+38 032) 261-03-28",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 9,
+    "lecturers": 75,
+    "specialties": 7,
+    "courses": 284
+   }
+  },
+  {
+   "order": 12,
+   "name": "Факультет культури і мистецтв",
+   "abbreviation": "ФКМ",
+   "website": "https://kultart.lnu.edu.ua",
+   "host": "kultart.lnu.edu.ua",
+   "email": "fkultart@lnu.edu.ua",
+   "phone": "(+38 032) 239-41-97",
+   "building_name": "Корпус на вул. Валова,18",
+   "stats": {
+    "departments": 6,
+    "lecturers": 152,
+    "specialties": 14,
+    "courses": 409
+   }
+  },
+  {
+   "order": 13,
+   "name": "Факультет міжнародних відносин",
+   "abbreviation": "ФМВ",
+   "website": "https://intrel.lnu.edu.ua",
+   "host": "intrel.lnu.edu.ua",
+   "email": "intrel.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 272-79-73; 239-44-20; 239-47-48",
+   "building_name": "Корпус на вул. Січових Стрільців, 19",
+   "stats": {
+    "departments": 9,
+    "lecturers": 133,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 14,
+   "name": "Факультет педагогічної освіти",
+   "abbreviation": "ФПО",
+   "website": "https://pedagogy.lnu.edu.ua",
+   "host": "pedagogy.lnu.edu.ua",
+   "email": "pedagogy.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 239-42-30",
+   "building_name": "Корпус на вул. Туган-Барановського, 7"
+  },
+  {
+   "order": 15,
+   "name": "Факультет управління фінансами та бізнесу",
+   "abbreviation": "ФУФБ",
+   "website": "https://financial.lnu.edu.ua",
+   "host": "financial.lnu.edu.ua",
+   "email": "financial.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 235-64-50; 235-86-54",
+   "building_name": "Корпус на вул. Коперника, 3",
+   "stats": {
+    "departments": 6,
+    "lecturers": 67,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 16,
+   "name": "Філологічний факультет",
+   "abbreviation": "ФлФ",
+   "website": "https://philology.lnu.edu.ua",
+   "host": "philology.lnu.edu.ua",
+   "email": "philology.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 255-41-33; 239-41-58; 239-41-88",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 9,
+    "lecturers": 151,
+    "specialties": 10,
+    "courses": 780
+   }
+  },
+  {
+   "order": 17,
+   "name": "Філософський факультет",
+   "abbreviation": "ФсФ",
+   "website": "https://filos.lnu.edu.ua",
+   "host": "filos.lnu.edu.ua",
+   "email": "dfilos@lnu.edu.ua",
+   "phone": "(+ 38 032) 239-45-79",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 6,
+    "lecturers": 116,
+    "specialties": 8,
+    "courses": 198
+   }
+  },
+  {
+   "order": 18,
+   "name": "Хімічний факультет",
+   "abbreviation": "ХФ",
+   "website": "https://chem.lnu.edu.ua",
+   "host": "chem.lnu.edu.ua",
+   "email": "chemdek@lnu.edu.ua",
+   "phone": "(+38 032) 260-03-91; 239-45-10",
+   "building_name": "Корпус на вул. Кирила і Мефодія, 6",
+   "stats": {
+    "departments": 5,
+    "lecturers": 55,
+    "specialties": 0,
+    "courses": 0
+   }
+  },
+  {
+   "order": 19,
+   "name": "Юридичний факультет",
+   "abbreviation": "ЮФ",
+   "website": "https://law.lnu.edu.ua",
+   "host": "law.lnu.edu.ua",
+   "email": "law.faculty@lnu.edu.ua",
+   "phone": "(+38 032) 239-41-02",
+   "building_name": "Корпус на вул. Січових Стрільців, 14",
+   "stats": {
+    "departments": 9,
+    "lecturers": 175,
+    "specialties": 0,
+    "courses": 0
+   }
+  }
+ ]
+}

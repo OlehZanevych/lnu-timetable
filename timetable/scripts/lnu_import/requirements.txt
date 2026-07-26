@@ -1,0 +1,7 @@
+# Stage 1 (scrape_lnu.py)
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0            # optional but much faster; html.parser is used if absent
+
+# Verification (validate_sql.py) — optional
+pglast>=6.0          # real PostgreSQL grammar check of the generated data.sql

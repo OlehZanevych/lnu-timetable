@@ -1,0 +1,206 @@
+[
+ {
+  "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-education",
+  "faculty_host": "ami.lnu.edu.ua",
+  "specialty_code": "014.09",
+  "specialty_name": "Середня освіта (Інформатика)",
+  "specialty_degree": "BACHELOR",
+  "study_form": "FULL_TIME",
+  "semesters": [
+   {
+    "semester": 1,
+    "rows": [
+     {
+      "kind": "course",
+      "name": "Алгебра та геометрія",
+      "course_url": "https://ami.lnu.edu.ua/course/alhebra-ta-heometriia-2",
+      "hours": {
+       "LECTURE": 32,
+       "PRACTICAL": 32
+      },
+      "control_form": "EXAM"
+     },
+     {
+      "kind": "course",
+      "name": "Програмування",
+      "course_url": "https://ami.lnu.edu.ua/course/prohramuvannia",
+      "hours": {
+       "LECTURE": 32,
+       "LAB": 32
+      },
+      "control_form": "EXAM"
+     }
+    ]
+   },
+   {
+    "semester": 7,
+    "rows": [
+     {
+      "kind": "course",
+      "name": "Методика навчання інформатики",
+      "course_url": "https://ami.lnu.edu.ua/course/metodyka-navchannia",
+      "hours": {
+       "LECTURE": 32,
+       "PRACTICAL": 16
+      },
+      "control_form": "EXAM"
+     },
+     {
+      "kind": "elective_group",
+      "label": "Дисципліна на вибір 1",
+      "options": [
+       {
+        "name": "Динамічні моделі та методи прийняття рішень",
+        "course_url": "https://ami.lnu.edu.ua/course/dynamichni-modeli"
+       },
+       {
+        "name": "Моделювання економіко-екологічних процесів",
+        "course_url": "https://ami.lnu.edu.ua/course/modeliuvannia-protsesiv"
+       }
+      ],
+      "hours": {
+       "LECTURE": 16,
+       "PRACTICAL": 16
+      },
+      "control_form": "CREDIT"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-applied-mathematics",
+  "faculty_host": "ami.lnu.edu.ua",
+  "specialty_code": "113",
+  "specialty_name": "Прикладна математика",
+  "specialty_degree": "BACHELOR",
+  "study_form": "FULL_TIME",
+  "semesters": [
+   {
+    "semester": 1,
+    "rows": [
+     {
+      "kind": "course",
+      "name": "Алгебра та геометрія",
+      "course_url": "https://ami.lnu.edu.ua/course/alhebra-ta-heometriia-2",
+      "hours": {
+       "LECTURE": 32,
+       "PRACTICAL": 32
+      },
+      "control_form": "EXAM"
+     },
+     {
+      "kind": "course",
+      "name": "Чисельні методи",
+      "course_url": "https://ami.lnu.edu.ua/course/chyselni-metody",
+      "hours": {
+       "LECTURE": 32,
+       "LAB": 32
+      },
+      "control_form": "EXAM"
+     }
+    ]
+   },
+   {
+    "semester": 7,
+    "rows": [
+     {
+      "kind": "course",
+      "name": "Рівняння математичної фізики",
+      "course_url": "https://ami.lnu.edu.ua/course/rivniannia-matfizyky",
+      "hours": {
+       "LECTURE": 32,
+       "PRACTICAL": 16
+      },
+      "control_form": "EXAM"
+     },
+     {
+      "kind": "elective_group",
+      "label": "Дисципліна на вибір 1",
+      "options": [
+       {
+        "name": "Динамічні моделі та методи прийняття рішень",
+        "course_url": "https://ami.lnu.edu.ua/course/dynamichni-modeli"
+       },
+       {
+        "name": "Моделювання економіко-екологічних процесів",
+        "course_url": "https://ami.lnu.edu.ua/course/modeliuvannia-protsesiv"
+       }
+      ],
+      "hours": {
+       "LECTURE": 16,
+       "PRACTICAL": 16
+      },
+      "control_form": "CREDIT"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master",
+  "faculty_host": "ami.lnu.edu.ua",
+  "specialty_code": "014",
+  "specialty_name": "Середня освіта (інформатика)",
+  "specialty_degree": "MASTER",
+  "study_form": "FULL_TIME",
+  "semesters": [
+   {
+    "semester": 2,
+    "rows": [
+     {
+      "kind": "course",
+      "name": "Курсова робота",
+      "course_url": "https://ami.lnu.edu.ua/course/kursova-robota-so",
+      "hours": {},
+      "control_form": "GRADED_CREDIT"
+     },
+     {
+      "kind": "elective_group",
+      "label": "Дисципліна на вибір 1",
+      "options": [
+       {
+        "name": "Динамічна теорія інформації",
+        "course_url": "https://ami.lnu.edu.ua/course/dynamichna-teoriia-informatsii-so"
+       },
+       {
+        "name": "Моделі статистичного навчання",
+        "course_url": "https://ami.lnu.edu.ua/course/modeli-statystychnoho-navchannia-so"
+       }
+      ],
+      "hours": {
+       "LECTURE": 32,
+       "LAB": 32
+      },
+      "control_form": "CREDIT"
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-mathematics",
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "specialty_code": "111",
+  "specialty_name": "Математика",
+  "specialty_degree": "BACHELOR",
+  "study_form": "FULL_TIME",
+  "semesters": [
+   {
+    "semester": 1,
+    "rows": [
+     {
+      "kind": "course",
+      "name": "Лінійна алгебра",
+      "course_url": "https://new.mmf.lnu.edu.ua/course/linijna-alhebra",
+      "hours": {
+       "LECTURE": 32,
+       "PRACTICAL": 32
+      },
+      "control_form": "EXAM"
+     }
+    ]
+   }
+  ]
+ }
+]

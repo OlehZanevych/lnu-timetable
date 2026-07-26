@@ -1,0 +1,54 @@
+[
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "014.09",
+  "name": "Середня освіта (Інформатика)",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-education",
+    "title": "014.09 Середня освіта (Інформатика)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "113",
+  "name": "Прикладна математика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-applied-mathematics",
+    "title": "113 Прикладна математика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "ami.lnu.edu.ua",
+  "code": "014",
+  "name": "Середня освіта (інформатика)",
+  "degree": "MASTER",
+  "curricula": [
+   {
+    "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master",
+    "title": "014 Середня освіта (інформатика)",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ },
+ {
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "code": "111",
+  "name": "Математика",
+  "degree": "BACHELOR",
+  "curricula": [
+   {
+    "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-mathematics",
+    "title": "111 Математика",
+    "study_form": "FULL_TIME"
+   }
+  ]
+ }
+]

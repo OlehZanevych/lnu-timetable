@@ -1,0 +1,66 @@
+{
+ "buildings": [
+  {
+   "name": "Корпус на вул. Університетська 1",
+   "address": "вул. Університетська 1",
+   "city": "Львів",
+   "postal_code": "79000"
+  },
+  {
+   "name": "Корпус на проспект Свободи, 18",
+   "address": "проспект Свободи, 18",
+   "city": "Львів",
+   "postal_code": "79008"
+  }
+ ],
+ "faculties": [
+  {
+   "order": 1,
+   "name": "Факультет прикладної математики та інформатики",
+   "abbreviation": "ФПМіІ",
+   "website": "https://ami.lnu.edu.ua",
+   "host": "ami.lnu.edu.ua",
+   "email": "ami@lnu.edu.ua",
+   "phone": "(+38 032) 274-01-80; 239-41-86",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 2,
+    "lecturers": 6,
+    "specialties": 3,
+    "courses": 10
+   }
+  },
+  {
+   "order": 2,
+   "name": "Механіко-математичний факультет",
+   "abbreviation": "ММФ",
+   "website": "https://new.mmf.lnu.edu.ua",
+   "host": "new.mmf.lnu.edu.ua",
+   "email": "dmmf@lnu.edu.ua",
+   "phone": "(+38 032) 260-00-09; 239-41-74",
+   "building_name": "Корпус на вул. Університетська 1",
+   "stats": {
+    "departments": 1,
+    "lecturers": 2,
+    "specialties": 1,
+    "courses": 1
+   }
+  },
+  {
+   "order": 3,
+   "name": "Економічний факультет",
+   "abbreviation": "ЕкФ",
+   "website": "https://econom.lnu.edu.ua",
+   "host": "econom.lnu.edu.ua",
+   "email": "edean@lnu.edu.ua",
+   "phone": "(+38 032) 239-41-68",
+   "building_name": "Корпус на проспект Свободи, 18",
+   "stats": {
+    "departments": 0,
+    "lecturers": 0,
+    "specialties": 0,
+    "courses": 0
+   }
+  }
+ ]
+}

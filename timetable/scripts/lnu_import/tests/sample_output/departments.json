@@ -1,0 +1,44 @@
+[
+ {
+  "url": "https://ami.lnu.edu.ua/department/discrete-analysis-intelligent-system",
+  "faculty_host": "ami.lnu.edu.ua",
+  "name": "Кафедра дискретного аналізу та інтелектуальних систем",
+  "match_key": "дискретного аналізу та інтелектуальних систем",
+  "abbreviation": "КДАІС",
+  "email": "kdais@lnu.edu.ua",
+  "phone": "(032) 239-42-11",
+  "staff_urls": [
+   "https://ami.lnu.edu.ua/employee/prytula",
+   "https://ami.lnu.edu.ua/employee/kvasnytsia",
+   "https://ami.lnu.edu.ua/employee/stojko-t-i",
+   "https://ami.lnu.edu.ua/employee/yanchynska"
+  ]
+ },
+ {
+  "url": "https://ami.lnu.edu.ua/department/programming",
+  "faculty_host": "ami.lnu.edu.ua",
+  "name": "Кафедра програмування",
+  "match_key": "програмування",
+  "abbreviation": "КП",
+  "email": "programming.dep.ami@lnu.edu.ua",
+  "phone": "(032) 239-47-57",
+  "staff_urls": [
+   "https://ami.lnu.edu.ua/employee/yaroshko",
+   "https://ami.lnu.edu.ua/employee/litynskyi",
+   "https://ami.lnu.edu.ua/employee/kostiv"
+  ]
+ },
+ {
+  "url": "https://new.mmf.lnu.edu.ua/department/algebra-topology",
+  "faculty_host": "new.mmf.lnu.edu.ua",
+  "name": "Кафедра алгебри, топології та основ математики",
+  "match_key": "алгебри топології та основ математики",
+  "abbreviation": "КАТОМ",
+  "email": "algebra.dep@lnu.edu.ua",
+  "phone": "(032) 239-41-74",
+  "staff_urls": [
+   "https://new.mmf.lnu.edu.ua/employee/brydun",
+   "https://new.mmf.lnu.edu.ua/employee/maksymyk-k-m"
+  ]
+ }
+]
