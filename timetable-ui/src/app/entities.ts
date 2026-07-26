@@ -73,16 +73,20 @@ export const CONTROL_FORM_OPTIONS = [
   { value: 'GRADED_CREDIT', label: 'Диф. залік' }
 ];
 
+/** Order matches the hour_type enum in schema.sql, which is also the DB sort order. */
 export const HOUR_TYPE_OPTIONS = [
   { value: 'LECTURE',          label: 'Лекції' },
   { value: 'PRACTICAL',        label: 'Практичні' },
   { value: 'LAB',              label: 'Лабораторні' },
+  { value: 'CONSULTATION',     label: 'Консультації' },
+  { value: 'ASSESSMENT',       label: 'Контрольні заходи' },
   { value: 'INDEPENDENT_WORK', label: 'Самостійна робота' }
 ];
 
 export const TEACHING_FORMAT_OPTIONS = [
-  { value: 'TOGETHER',   label: 'Разом' },
-  { value: 'SEPARATELY', label: 'Окремо' }
+  { value: 'TOGETHER',     label: 'Разом' },
+  { value: 'SEPARATELY',   label: 'Окремо' },
+  { value: 'INDIVIDUALLY', label: 'Індивідуально з кожним студентом' }
 ];
 
 export const STUDY_FORM_OPTIONS = [

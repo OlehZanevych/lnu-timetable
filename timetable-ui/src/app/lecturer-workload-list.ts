@@ -91,7 +91,8 @@ interface CurriculumItemGroup {
   hoursGroups: HoursGroup[];
 }
 
-const HOUR_TYPE_ORDER = ['LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK'];
+/** Must stay in step with the hour_type enum in schema.sql (unknown types sort last). */
+const HOUR_TYPE_ORDER = ['LECTURE', 'PRACTICAL', 'LAB', 'CONSULTATION', 'ASSESSMENT', 'INDEPENDENT_WORK'];
 
 /**
  * Lecturer workload input for a department: pre-loads every working curriculum item already

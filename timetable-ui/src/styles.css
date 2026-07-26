@@ -205,6 +205,49 @@ button.danger:hover { background: #991b1b !important; }
 .wci-hours-header > span { font-weight: 600; color: var(--navy); }
 .wci-table { width: 100%; background: #fff; border-radius: 6px; overflow: hidden; }
 
+/* ── Curriculum editor (specialty page): course > semester > hours, edited inline ── */
+.ce-toolbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 16px; }
+.ce-search { display: flex; flex-direction: column; gap: 4px; font-size: 12px; min-width: 280px; }
+.ce-search input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.ce-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--navy); padding-bottom: 8px; }
+
+/* .card clips overflow for its rounded corners, which would also clip the app-search-select
+   dropdowns used inside every block here (same reason .tt-block overrides it below). */
+.ce-course-card { padding: 16px 20px; margin-bottom: 16px; overflow: visible; }
+.ce-course-header { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline;
+  padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.ce-course-header strong { font-family: Georgia, serif; font-size: 16px; color: var(--navy); }
+.ce-course-header > button { margin-left: auto; }
+.ce-badge-empty { background: #fbf3d7; color: #92400e; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+.ce-course-empty { display: block; font-size: 13px; }
+
+.ce-item-block { margin-bottom: 14px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px;
+  border-left: 3px solid transparent; }
+.ce-item-block:last-child { margin-bottom: 0; }
+.ce-item-block.dirty { border-left-color: var(--gold); background: #fdfaef; }
+.ce-item-header { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; margin-bottom: 10px; }
+.ce-item-header > span:first-child { font-weight: 600; color: var(--navy); }
+.ce-item-header > button { margin-left: auto; }
+.ce-item-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.ce-item-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; min-width: 190px; }
+.ce-item-form input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+
+.ce-hours-block { margin-top: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.ce-hours-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ce-hours-header > span:first-child { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--gold); font-weight: 700; }
+.ce-hours-hint { font-size: 11px; }
+.ce-hours-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.ce-hours-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; flex: 1; min-width: 150px; }
+.ce-hours-row input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.ce-hours-row input::placeholder { color: #a5b0bd; font-style: italic; }
+/* A field whose value would drop an hours row that currently exists on the server. */
+.ce-hours-row label.will-delete input { border-color: #b91c1c; background: #fef4f4; }
+.ce-hours-flag { color: #b91c1c; font-style: normal; font-size: 10px; margin-left: 4px;
+  text-transform: uppercase; letter-spacing: .03em; }
+
+.ce-item-actions { display: flex; gap: 8px; margin-top: 12px; }
+
 /* ── Combined working curriculum items (department page) ── */
 .merge-actions { display: flex; justify-content: flex-end; padding-top: 10px; }
 

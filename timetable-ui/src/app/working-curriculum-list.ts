@@ -73,8 +73,12 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   readonly TEACHING_FORMAT_OPTIONS = TEACHING_FORMAT_OPTIONS;
   readonly TEACHING_FORMAT_SELECT_OPTIONS = toOptions(TEACHING_FORMAT_OPTIONS);
 
-  /** Робочі навчальні плани only make sense for taught hour types — not independent work. */
-  private readonly ADDABLE_HOUR_TYPES = new Set(['LECTURE', 'PRACTICAL', 'LAB']);
+  /**
+   * Робочі навчальні плани only make sense for hour types a lecturer actually delivers.
+   * Consultations and assessment work qualify (INDIVIDUALLY exists precisely for the former);
+   * INDEPENDENT_WORK is the student's own time and has no lecturer assigned to it.
+   */
+  private readonly ADDABLE_HOUR_TYPES = new Set(['LECTURE', 'PRACTICAL', 'LAB', 'CONSULTATION', 'ASSESSMENT']);
 
   items = signal<CurriculumItemNode[]>([]);
   error = signal('');
