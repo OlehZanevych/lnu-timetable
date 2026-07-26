@@ -3,8 +3,12 @@
 export interface FieldMeta {
   name: string;            // scalar field name, or FK input field (e.g. "facultyId") for refs
   label: string;
-  type: 'text' | 'number' | 'textarea' | 'ref' | 'enum' | 'multiref' | 'tags';
+  type: 'text' | 'number' | 'textarea' | 'ref' | 'enum' | 'multiref' | 'tags' | 'time';
   required?: boolean;
+  // time-only: hour dropdown bounds and the minute dropdown's step, in minutes
+  minHour?: number;
+  maxHour?: number;
+  minuteStep?: number;
   // enum-only:
   enumOptions?: { value: string; label: string }[];
   // ref/multiref-only:
@@ -22,6 +26,10 @@ const multiref = (name: string, label: string, ref: string, relation: string, re
 
 const tags = (name: string, label: string, relation: string, tagField: string): FieldMeta =>
   ({ name, label, type: 'tags', relation, tagField });
+
+/** An "HH:mm" string edited through an hour + minute dropdown pair (see app-time-select). */
+const time = (name: string, label: string, required = false, minHour = 6, maxHour = 21, minuteStep = 5): FieldMeta =>
+  ({ name, label, type: 'time', required, minHour, maxHour, minuteStep });
 
 export interface EntityMeta {
   name: string;            // GraphQL type name, e.g. "Faculty"
@@ -237,7 +245,7 @@ export const ENTITIES: EntityMeta[] = [
     name: 'ClassStartTime', label: 'Часи початку занять', single: 'classStartTime', namespace: 'classStartTimes', list: 'classStartTimeConnection',
     fields: [
       { name: 'ordinal', label: 'Порядковий №', type: 'number', required: true },
-      { name: 'startTime', label: 'Початок', type: 'text', required: true }
+      time('startTime', 'Початок', true)
     ]
   },
   {

@@ -57,7 +57,6 @@ CREATE TABLE specialties
     name          VARCHAR(160) NOT NULL,
     degree        degree       NOT NULL,
     faculty_id    BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
-    UNIQUE (code, degree),
     UNIQUE (name, degree)
 );
 
