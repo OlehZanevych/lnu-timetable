@@ -4,9 +4,10 @@ import { BaseEntity } from './base-entity';
 import { SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { DeptFacultySelect } from './dept-faculty-select';
+import { TimeSelect } from './time-select';
 import { ENTITIES, EntityMeta } from './entities';
 
-const IMPORTS = [FormsModule, SearchSelect, MultiSelect, DeptFacultySelect];
+const IMPORTS = [FormsModule, SearchSelect, MultiSelect, DeptFacultySelect, TimeSelect];
 const meta = (name: string): EntityMeta => ENTITIES.find((e) => e.name === name)!;
 const TPL = './entity-page.html';
 

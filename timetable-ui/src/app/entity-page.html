@@ -78,6 +78,14 @@
               <app-search-select [options]="enumOptions(f)" [(ngModel)]="form[f.name]" [name]="f.name" placeholder="— не обрано —" />
             } @else if (f.type === 'multiref') {
               <app-multi-select [options]="options()[f.name] || []" [(ngModel)]="form[f.name]" [name]="f.name" />
+            } @else if (f.type === 'time') {
+              <app-time-select
+                [minHour]="f.minHour ?? 6"
+                [maxHour]="f.maxHour ?? 21"
+                [minuteStep]="f.minuteStep ?? 5"
+                [required]="!!f.required"
+                [(ngModel)]="form[f.name]"
+                [name]="f.name" />
             } @else if (f.type === 'tags') {
               <input type="text" [(ngModel)]="form[f.name]" [name]="f.name" placeholder="тег1, тег2, ..." />
             } @else if (f.type === 'textarea') {
