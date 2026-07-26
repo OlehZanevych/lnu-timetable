@@ -53,6 +53,11 @@
         }
       }
 
+      <!-- ── Curriculum editor ── -->
+      @case ('curriculaEditor') {
+        <app-curriculum-editor [specialtyId]="specialtyId" />
+      }
+
       <!-- ── Curricula ── -->
       @case ('curricula') {
         <app-curriculum-item-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />

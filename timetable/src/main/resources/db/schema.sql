@@ -176,7 +176,10 @@ CREATE TABLE curriculum_items
     UNIQUE (course_id, specialty_id, semester)
 );
 
-CREATE TYPE hour_type AS ENUM ('LECTURE', 'PRACTICAL', 'LAB', 'INDEPENDENT_WORK');
+-- Ordered as they should appear in a plan: contact teaching, then the contact work around it
+-- (consultations, assessment), then the student's own work. Enum order is also sort order —
+-- curriculumItemHoursConnection sorts by hour_type, which Postgres orders by declaration.
+CREATE TYPE hour_type AS ENUM ('LECTURE', 'PRACTICAL', 'LAB', 'CONSULTATION', 'ASSESSMENT', 'INDEPENDENT_WORK');
 
 CREATE TABLE curriculum_item_hours
 (
@@ -187,7 +190,11 @@ CREATE TABLE curriculum_item_hours
     UNIQUE (curriculum_item_id, hour_type)
 );
 
-CREATE TYPE teaching_format AS ENUM ('TOGETHER', 'SEPARATELY');
+-- TOGETHER    - one lecturer takes all the item's groups at once (a shared lecture stream)
+-- SEPARATELY  - the item's groups are split between lecturers, each taking whole groups
+-- INDIVIDUALLY - a lecturer works one-to-one with each student (e.g. coursework consultations),
+--               so the workload scales with student count rather than with group count
+CREATE TYPE teaching_format AS ENUM ('TOGETHER', 'SEPARATELY', 'INDIVIDUALLY');
 
 CREATE TABLE working_curriculum_items
 (

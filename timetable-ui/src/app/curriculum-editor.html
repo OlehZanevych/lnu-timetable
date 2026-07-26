@@ -1,0 +1,110 @@
+<div class="page-header">
+  <div>
+    <h2>Редагування навчальних планів</h2>
+    <p class="muted">
+      {{ plannedCount() }} із {{ blocks().length }} дисциплін заплановано
+      @if (visibleBlocks().length !== blocks().length) {
+        &middot; показано {{ visibleBlocks().length }}
+      }
+    </p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="ce-toolbar">
+  <label class="ce-search">
+    <span>Пошук дисципліни</span>
+    <input type="text" [ngModel]="courseFilter()" (ngModelChange)="courseFilter.set($event)"
+           name="courseFilter" placeholder="назва дисципліни&hellip;" />
+  </label>
+  <label class="ce-check">
+    <input type="checkbox" [ngModel]="onlyPlanned()" (ngModelChange)="onlyPlanned.set($event)" name="onlyPlanned" />
+    <span>лише заплановані</span>
+  </label>
+</div>
+
+@for (block of visibleBlocks(); track block.courseId) {
+  <div class="card ce-course-card">
+    <div class="ce-course-header">
+      <strong>{{ block.label }}</strong>
+      @if (block.items().length === 0) {
+        <span class="ce-badge-empty">без позицій плану</span>
+      }
+      <button type="button" class="ghost" [disabled]="!canAddItem(block)" (click)="addItem(block)">+ Семестр</button>
+    </div>
+
+    @for (item of block.items(); track item.key) {
+      <div class="ce-item-block" [class.dirty]="item.dirty()">
+        <div class="ce-item-header">
+          <span>{{ itemTitle(item) }}</span>
+          <span class="muted">Всього годин: {{ totalHours(item) }}</span>
+          <button type="button" class="ghost danger" [disabled]="item.saving()" (click)="removeItem(block, item)">
+            {{ item.id ? 'Видалити' : 'Прибрати' }}
+          </button>
+        </div>
+
+        @if (item.error()) { <p class="error">{{ item.error() }}</p> }
+
+        <div class="ce-item-form">
+          <label>
+            <span>Семестр *</span>
+            <app-search-select [options]="semesterOptions(block, item)" placeholder="— не обрано —"
+                               [ngModel]="item.semester()" (ngModelChange)="setField(item, 'semester', $event)"
+                               [name]="'semester_' + item.key" [ngModelOptions]="{ standalone: true }" />
+          </label>
+          <label>
+            <span>Форма контролю *</span>
+            <app-search-select [options]="CONTROL_FORM_SELECT_OPTIONS" placeholder="— не обрано —"
+                               [ngModel]="item.controlForm()" (ngModelChange)="setField(item, 'controlForm', $event)"
+                               [name]="'controlForm_' + item.key" [ngModelOptions]="{ standalone: true }" />
+          </label>
+          <label>
+            <span>ECTS</span>
+            <input type="number" min="0" placeholder="не задано"
+                   [ngModel]="item.ectsCredits()" (ngModelChange)="setField(item, 'ectsCredits', $event)"
+                   [name]="'ects_' + item.key" [ngModelOptions]="{ standalone: true }" />
+          </label>
+        </div>
+
+        <div class="ce-hours-block">
+          <div class="ce-hours-header">
+            <span>Години за видами робіт</span>
+            <span class="muted ce-hours-hint">порожнє поле або 0 &mdash; вид роботи не задано</span>
+          </div>
+
+          <div class="ce-hours-row">
+            @for (row of item.hours; track row.hourType) {
+              <label [class.will-delete]="willDelete(row)">
+                <span>
+                  {{ row.label }}
+                  @if (willDelete(row)) { <em class="ce-hours-flag">буде вилучено</em> }
+                </span>
+                <input type="number" min="0" placeholder="не задано"
+                       [ngModel]="row.hours()" (ngModelChange)="setHours(item, row, $event)"
+                       [name]="'hours_' + item.key + '_' + row.hourType" [ngModelOptions]="{ standalone: true }" />
+              </label>
+            }
+          </div>
+        </div>
+
+        <div class="ce-item-actions">
+          <button type="button" [disabled]="!item.dirty() || item.saving()" (click)="save(block, item)">
+            {{ item.saving() ? 'Збереження&hellip;' : (item.id ? 'Зберегти' : 'Створити') }}
+          </button>
+          @if (item.dirty()) {
+            <button type="button" class="ghost" [disabled]="item.saving()" (click)="revertItem(block, item)">Скасувати</button>
+          }
+        </div>
+      </div>
+    } @empty {
+      <p class="muted ce-course-empty">Позицій навчального плану для цієї дисципліни ще немає.</p>
+    }
+  </div>
+} @empty {
+  <p class="muted">
+    @if (loading()) { Завантаження&hellip; }
+    @else if (blocks().length) { Жодна дисципліна не відповідає фільтру. }
+    @else { Для цієї спеціальності ще не призначено жодної дисципліни. }
+  </p>
+}
