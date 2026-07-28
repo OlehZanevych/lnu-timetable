@@ -89,31 +89,57 @@
             <table class="wci-table">
               <thead>
                 <tr>
-                  <th>Викладачі</th>
-                  <th>Академічні групи</th>
-                  @if (wci.teachingFormat === 'SEPARATELY') {
-                    <th>Об'єднані групи</th>
+                  @if (isIndividuallyItem(wci)) {
+                    <th>Викладач</th>
+                    <th>Студент</th>
+                  } @else {
+                    <th>Викладачі</th>
+                    <th>Академічні групи</th>
+                    @if (wci.teachingFormat === 'SEPARATELY') {
+                      <th>Об'єднані групи</th>
+                    }
                   }
-                  <th>Тривалість</th>
+                  @if (!isIndividuallyItem(wci)) {
+                    <th>Тривалість</th>
+                  }
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 @for (w of wci.workloads; track w.id) {
                   <tr>
-                    <td>{{ lecturerNames(w) }}</td>
-                    <td>{{ academicGroupNames(w.academicGroups) }}</td>
-                    @if (wci.teachingFormat === 'SEPARATELY') {
-                      <td>{{ combinedGroupNames(w.combinedGroups) }}</td>
+                    @if (isIndividuallyItem(wci)) {
+                      <td>
+                        @for (pair of pairRows(w); track $index) {
+                          <div class="lw-pair-line">{{ pair.lecturer }}</div>
+                        } @empty {
+                          <span class="muted">&mdash;</span>
+                        }
+                      </td>
+                      <td>
+                        @for (pair of pairRows(w); track $index) {
+                          <div class="lw-pair-line">{{ pair.student }}</div>
+                        } @empty {
+                          <span class="muted">&mdash;</span>
+                        }
+                      </td>
+                    } @else {
+                      <td>{{ lecturerNames(w) }}</td>
+                      <td>{{ academicGroupNames(w.academicGroups) }}</td>
+                      @if (wci.teachingFormat === 'SEPARATELY') {
+                        <td>{{ combinedGroupNames(w.combinedGroups) }}</td>
+                      }
                     }
-                    <td>{{ w.durationHours }} год.</td>
+                    @if (!isIndividuallyItem(wci)) {
+                      <td>{{ w.durationHours }} год.</td>
+                    }
                     <td class="row-actions">
                       <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
                       <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
                     </td>
                   </tr>
                 } @empty {
-                  <tr><td [attr.colspan]="wci.teachingFormat === 'SEPARATELY' ? 5 : 4" class="muted">Навантаження ще немає.</td></tr>
+                  <tr><td [attr.colspan]="workloadColumns(wci)" class="muted">Навантаження ще немає.</td></tr>
                 }
               </tbody>
             </table>
@@ -139,25 +165,60 @@
       @if (formError()) { <p class="error">{{ formError() }}</p> }
 
       <form (ngSubmit)="save()" class="entity-form">
-        <label>
-          <span>Викладачі</span>
-          <app-multi-select [options]="lecturerOptions()" [(ngModel)]="formLecturerIds" name="lecturerIds" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        <label>
-          <span>Академічні групи</span>
-          <app-multi-select [options]="activeAcademicGroupOptions()" [(ngModel)]="formAcademicGroupIds" name="academicGroupIds" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        @if (canUseCombinedGroups()) {
+        @if (isIndividually()) {
+          <div class="lw-pairs">
+            <div class="lw-pairs-header">
+              <span>Викладачі та студенти</span>
+              <button type="button" class="ghost" [disabled]="!canAddPair()" (click)="addPair()">+ Додати пару</button>
+            </div>
+            <p class="muted lw-pairs-hint">
+              Заняття проводяться індивідуально з кожним студентом, тому замість академічних груп
+              вказуються пари «викладач &mdash; студент».
+            </p>
+
+            @for (pair of formPairs(); track pair.key) {
+              <div class="lw-pair-row">
+                <label>
+                  <span>Викладач *</span>
+                  <app-search-select [options]="lecturerOptions()" placeholder="&mdash; не обрано &mdash;"
+                                     [ngModel]="pair.lecturerId" (ngModelChange)="setPairLecturer(pair, $event)"
+                                     [name]="'pairLecturer_' + pair.key" [ngModelOptions]="{ standalone: true }" />
+                </label>
+                <label>
+                  <span>Студент *</span>
+                  <app-search-select [options]="studentOptionsFor(pair)" placeholder="&mdash; не обрано &mdash;"
+                                     [ngModel]="pair.studentId" (ngModelChange)="setPairStudent(pair, $event)"
+                                     [name]="'pairStudent_' + pair.key" [ngModelOptions]="{ standalone: true }" />
+                </label>
+                <button type="button" class="ghost danger" (click)="removePair(pair)">&#x2715;</button>
+              </div>
+            } @empty {
+              <p class="muted lw-pairs-empty">Пар ще немає &mdash; натисніть &laquo;Додати пару&raquo;.</p>
+            }
+          </div>
+        } @else {
           <label>
-            <span>Об'єднані групи</span>
-            <app-multi-select [options]="combinedGroupOptions()" [(ngModel)]="formCombinedGroupIds" name="combinedGroupIds" [ngModelOptions]="{ standalone: true }" />
+            <span>Викладачі</span>
+            <app-multi-select [options]="lecturerOptions()" [(ngModel)]="formLecturerIds" name="lecturerIds" [ngModelOptions]="{ standalone: true }" />
+          </label>
+          <label>
+            <span>Академічні групи</span>
+            <app-multi-select [options]="activeAcademicGroupOptions()" [(ngModel)]="formAcademicGroupIds" name="academicGroupIds" [ngModelOptions]="{ standalone: true }" />
+          </label>
+          @if (canUseCombinedGroups()) {
+            <label>
+              <span>Об'єднані групи</span>
+              <app-multi-select [options]="combinedGroupOptions()" [(ngModel)]="formCombinedGroupIds" name="combinedGroupIds" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          }
+        }
+        @if (!isIndividually()) {
+          <label>
+            <span>Тривалість заняття</span>
+            <app-search-select [options]="durationHoursSelectOptions" [(ngModel)]="formDurationHours"
+                                name="durationHours" [ngModelOptions]="{ standalone: true }" />
           </label>
         }
-        <label>
-          <span>Тривалість заняття</span>
-          <app-search-select [options]="durationHoursSelectOptions" [(ngModel)]="formDurationHours"
-                              name="durationHours" [ngModelOptions]="{ standalone: true }" />
-        </label>
 
         <div class="actions">
           <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>

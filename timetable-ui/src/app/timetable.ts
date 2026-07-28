@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { GraphqlService } from './graphql.service';
 import { WEEK_PARITY_OPTIONS } from './entities';
+import { compareUk } from './sort';
 
 interface CourseRef {
   course?: { id: string; name: string } | null;
@@ -79,7 +80,7 @@ export class Timetable {
     for (const cg of e.workload.combinedGroups ?? []) {
       for (const g of cg.academicGroups ?? []) byName.set(g.name, g.name);
     }
-    return [...byName.values()].sort((a, b) => a.localeCompare(b)).join(', ');
+    return [...byName.values()].sort(compareUk).join(', ');
   }
 
   lecturerNames(e: Entry): string {

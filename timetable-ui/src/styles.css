@@ -269,6 +269,21 @@ button.danger:hover { background: #991b1b !important; }
 .lw-record-header { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin-bottom: 8px; font-size: 13px; color: var(--navy); }
 .lw-record-header button { margin-left: auto; }
 
+/* ── Lecturer<->student pairs (INDIVIDUALLY workloads) ── */
+/* One line per pairing. The "Викладач" and "Студент" cells render the same list side by side, so
+   both must use identical line metrics for row N to stay level with row N across the two columns. */
+.lw-pair-line { font-size: 13px; line-height: 1.5; white-space: nowrap; }
+.lw-pair-line + .lw-pair-line { margin-top: 2px; }
+.lw-pairs { width: 100%; padding: 12px 14px; background: #f7f9fc; border-radius: 8px; }
+.lw-pairs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.lw-pairs-header > span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--gold); font-weight: 700; }
+.lw-pairs-hint { font-size: 12px; margin: 0 0 10px; }
+.lw-pairs-empty { font-size: 13px; margin: 0; }
+.lw-pair-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 8px; }
+.lw-pair-row:last-child { margin-bottom: 0; }
+.lw-pair-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; flex: 1; min-width: 200px; }
+
 /* ── Timetable grid ── */
 .timetable td { width: 16%; }
 .timetable .slot { background: #eef2f9; white-space: nowrap; color: var(--navy); }

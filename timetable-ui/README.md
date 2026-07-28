@@ -52,6 +52,15 @@ different purposes:
 Both talk to the same backend through the same `GraphqlService`; which one a given screen uses
 just depends on whether it needed a bespoke layout.
 
+> **The app is zoneless** (Angular 21's default — there is no `zone.js` dependency and no
+> `provideZonelessChangeDetection()` call needed). Change detection is driven by signal reads and
+> by template event bindings, *not* by monkey-patched async APIs. In practice that means a
+> component holding editable state in a plain mutable object may not re-render when that object is
+> mutated. Widgets whose state is a flat form bound with `[(ngModel)]` are fine, because the
+> control-value-accessor's own event binding marks the view dirty; anything holding a *tree* of
+> editable rows should make each editable value its own `WritableSignal` and replace arrays
+> immutably. `CurriculumEditor` is the worked example of that pattern.
+
 ```
 src/app/
 ├── entities.ts               # metadata for the generic CRUD tables: fields, FK refs, options
@@ -62,7 +71,9 @@ src/app/
 ├── entity-pages.ts           # thin components extending BaseEntity, one per entity, → /e/:single
 ├── search-select.ts          # SearchSelect: select2-like searchable single-value dropdown
 ├── multi-select.ts           # MultiSelect: checkbox-list dropdown for many-to-many fields
+├── time-select.ts            # TimeSelect: hour + minute dropdown pair bound to one "HH:mm" string
 ├── dept-faculty-select.ts    # DeptFacultySelect: faculty-filtered department picker
+├── sort.ts                   # compareUk(): the one Ukrainian-alphabet string comparator
 ├── auth.service.ts           # AuthService: session state (JWT, CurrentUser), login/logout,
 │                             #   changePassword, canModifyIds() permission lookups — see Authentication
 ├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests
@@ -85,6 +96,8 @@ src/app/
 ├── department-list.ts/.html          # child-list widget: departments within a faculty
 ├── specialty-list.ts/.html           # child-list widget: specialties within a faculty
 ├── academic-group-list.ts/.html      # child-list widget: academic groups within a specialty
+├── curriculum-editor.ts/.html        # specialty tab: course-first inline curriculum editor —
+│                                     #   "Редагування планів" (see below)
 ├── curriculum-item-list.ts/.html     # child-list widget: curriculum items (semester/course/ECTS/hours)
 ├── working-curriculum-list.ts/.html  # child-list widget: working curriculum items under each hours block
 ├── combined-working-curriculum-item-list.ts/.html  # department tab: propose/manage merges of
@@ -125,6 +138,14 @@ relation, tagField)` renders a plain comma-separated text input that's split/joi
 nested-list mutation field (`Course.tags` — see the backend's `.nestedList(...)`) — an empty
 comma-separated entry is filtered out, so "тег1, , тег2" becomes two tags, not three.
 
+A `time(name, label, required, minHour, maxHour, minuteStep)` helper declares an `"HH:mm"` string
+edited through `TimeSelect`'s hour + minute dropdowns instead of a free-text box — used by
+`ClassStartTime.startTime`, where only valid slot times should be enterable. Because the form is
+metadata-driven, any future time field gets the same widget for free.
+
+Field order in `fields[]` drives **both** the table columns and the modal form, so reordering one
+reorders the other — `Student` is listed Прізвище → Ім'я → По батькові for that reason.
+
 `BaseEntity` (an abstract `@Directive`) builds the queries/mutations from this metadata —
 list (`{ <namespace> { <list>(limit, offset) { nodes {...} } } }`), create/update (typed
 `$input: <Name>InputPayload!`) and delete (`$id: ID!`) — and every entity page is a one-line
@@ -156,17 +177,50 @@ and composing purpose-built child-list components rather than going through `Bas
   tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
   info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, academic groups,
   combined groups (`CombinedGroupPage`), courses, and schedule building (`FacultyTimetableList`,
-  see below).
+  see below). Every list on this page is scoped to the faculty, including the two that have no
+  `faculty_id` of their own: "Академічні групи" passes `[facultyId]` alongside its optional
+  specialty sub-filter (so clearing that sub-filter means "all specialties *of this faculty*",
+  not "every group in the university"), and "Об'єднані групи" passes the same scope to the
+  generic table through `extraFilterParam`/`extraFilterValue` — both backed by the
+  `facultyId` relation filters described in the backend README.
 - **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): info + rooms
   (each room shows/edits its own faculty; there's no separate "faculties in this building" tab).
 - **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
   items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), and lecturer
   workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below).
-- **`SpecialtyDetailPage`** (`/specialty/:id`): info, curriculum items (`CurriculumItemList`
-  tab) and, in a separate tab, working curriculum items (`WorkingCurriculumList`) per hour
-  block — see below — plus academic groups (`AcademicGroupList`).
+- **`SpecialtyDetailPage`** (`/specialty/:id`): info, the course-first curriculum editor
+  (`CurriculumEditor`, "Редагування планів"), curriculum items (`CurriculumItemList`,
+  "Навчальні плани") and, in a separate tab, working curriculum items (`WorkingCurriculumList`)
+  per hour block — all three see below — plus academic groups (`AcademicGroupList`).
 - **`AcademicGroupDetailPage`** (`/academic-group/:id`): info, students. (No workload tab here —
   workloads are managed per-department, not per-group.)
+
+#### Editing a curriculum course-first (`CurriculumEditor`, specialty "Редагування планів" tab)
+
+The same `curriculum_items` rows as the tab below it, inverted: one block per **course** the
+specialty is allowed to teach (`courseConnection(specialtyId:)`, backed by `course_specialties`),
+each holding its semester blocks, each of those holding a row per hour type. Courses with no
+curriculum items yet are listed too — sorted to the top alphabetically — so gaps in the plan are
+visible rather than merely absent, which a table of existing rows cannot show. Everything is edited
+inline, one save per semester block, rather than through a modal.
+
+- **Ordering** — courses sort by their lowest semester, ties broken by course name; semester blocks
+  sort by semester. Unplanned courses come first.
+- **No duplicate semesters** — the semester dropdown only offers values no sibling block already
+  uses, and `save()` re-checks (two new blocks can both be unsaved at once), with
+  `UNIQUE (course_id, specialty_id, semester)` as the backstop.
+- **Hours** — a fixed row per hour type, always shown. A blank or `0` field means "not set": it is
+  omitted from the nested `hours` list, which is what makes the backend *delete* an existing row
+  (see the backend's `.nestedList(...)` reconciliation). A field that would drop a stored row is
+  flagged "буде вилучено" before you save, since clearing a box is otherwise a silent deletion.
+- **Concurrent edits** — saving one course reloads only that block, preserving unsaved edits
+  elsewhere on the page.
+- A course-name filter and a "лише заплановані" toggle keep the page usable: a specialty can have
+  200+ courses.
+
+Editable state is a signal per field (see the zoneless note above), which is also what makes
+sibling blocks re-render when a neighbour changes — a block reading `sibling.semester()` while
+computing its own dropdown options registers as a consumer of that signal.
 
 #### Curriculum items and working curriculum items (`SpecialtyDetailPage`)
 
@@ -189,7 +243,8 @@ per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours 
 - an optional **faculty filter** (defaults to the specialty's own faculty) that narrows the
   **department** dropdown (`DeptFacultySelect` pattern, reused from `CurriculumItemList`'s
   own faculty→department cascade),
-  - lecturer count, teaching format (`TEACHING_FORMAT_OPTIONS`: Разом/Окремо),
+  - lecturer count, teaching format (`TEACHING_FORMAT_OPTIONS`: Разом / Окремо / Індивідуально з
+    кожним студентом),
 - an **academic groups** multi-select (`MultiSelect`, backed by the `academicGroupIds`
   many-to-many mutation field), and
 - when the curriculum item's course is an `ELECTIVE_GROUP`, an extra **elective course**
@@ -204,7 +259,26 @@ the user assign, per item, a `LecturerWorkload`: lecturers (`MultiSelect`), acad
 when the item's `teachingFormat` is `SEPARATELY` — "together" has nothing to combine), and a
 **duration** (`SearchSelect` over 1–4 academic hours) that defaults from the
 `default_class_duration_hours` global property when creating a new workload, or from the
-workload's own stored value when editing one. Working curriculum items already merged into a
+workload's own stored value when editing one.
+
+When the item's `teachingFormat` is **`INDIVIDUALLY`** (a coursework consultation, say) the modal
+swaps shape entirely: the group pickers, the lecturer multi-select and the duration field all
+disappear, replaced by an add/remove list of **викладач + студент** pairs written through
+`LecturerWorkload.studentAssignments` (see the backend's `lecturer_workload_students`). Three
+details follow from the model rather than being cosmetic:
+
+- `lecturerIds` is *derived* from the distinct lecturers in the pairs, so `lecturers` can never
+  disagree with who actually supervises whom;
+- `academicGroupIds` is force-cleared for individual items and `studentAssignments` force-cleared
+  for group ones, so switching an item's format never leaves half a stale assignment behind;
+- each student dropdown excludes students another pair already claims, making
+  `UNIQUE (lecturer_workload_id, student_id)` unreachable through the UI.
+
+Duration is not offered because individual work is always one academic hour per student
+(`INDIVIDUAL_DURATION_HOURS`), sent implicitly; the workload table drops its "Тривалість" column
+for those items and shows "Викладач"/"Студент" as two aligned columns instead. Candidate students
+come from the item's own academic groups, fetched in one round trip via aliased
+`studentConnection` calls (that connection takes a single `academicGroupId`). Working curriculum items already merged into a
 `CombinedWorkingCurriculumItem` (see below) are excluded from this tree — assigning a workload to
 one of those covers every merged item at once, so they're handled in a dedicated section above
 the tree instead, using the same modal (`openCreateCombined`/`openEditCombined`) with the
@@ -255,17 +329,43 @@ everything else falls back to a plain text input. Saves go through the single
 
 ### Reusable form controls
 
-All three are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
+All are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
 
 - **`SearchSelect`** — select2-like single-value searchable dropdown (used for every to-one FK).
 - **`MultiSelect`** — checkbox-list dropdown with tag display, for many-to-many fields (both
   hand-written pages, e.g. `academicGroupIds`, and the generic CRUD tables' `multiref` field
   type, e.g. `Course.specialtyIds`).
+- **`TimeSelect`** — an hour dropdown (6–21 by default) and a minute dropdown (00–55, step 5)
+  bound to a single `"HH:mm"` string, so only valid slot times can be entered. It emits a value
+  only once both halves are chosen, and keeps an already-stored off-grid value (an imported
+  `07:07`, say) selectable rather than dropping it from the list — opening an edit form must never
+  silently rewrite what is in the database. Used by the `'time'` field type in `entities.ts`.
 - **`DeptFacultySelect`** *(pattern)* — a faculty filter paired with a department
   `SearchSelect` whose options are filtered by the chosen faculty, defaulting to the parent
   entity's own faculty; implemented inline in `curriculum-item-list.ts` and
   `working-curriculum-list.ts` via a `filteredDepartmentOptions` computed signal rather than
   as a single shared component.
+
+### Ukrainian sorting (`sort.ts`)
+
+Every alphabetical sort in the UI goes through `compareUk` from `sort.ts` — never
+`String.prototype.localeCompare` directly:
+
+```ts
+const collator = new Intl.Collator('uk');
+export const compareUk = (a, b) => collator.compare(a ?? '', b ?? '');
+```
+
+`localeCompare(b)` with no locale uses the *browser's* locale, so the same list comes out ordered
+differently for a user running an English UI than a Ukrainian one — and the English ordering is
+wrong for Ukrainian text, sorting `Ґ` before `Г` where Ukrainian puts it after. Pinning the locale
+keeps the order identical for everyone and matches how the database sorts, since `schema.sql`
+declares the same alphabet on its text columns via `COLLATE ukrainian` (see the backend README's
+*Text collation*). This matters wherever the UI re-sorts what the API returned: if the two
+disagreed, a client-side sort would visibly reshuffle a list the server had already ordered.
+
+A shared `Intl.Collator` is also markedly faster than a `localeCompare` call per comparison, which
+is noticeable on the larger lists (a specialty can have 200+ courses).
 
 ### Routes (`app.routes.ts`)
 
@@ -414,6 +514,21 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   previously-scheduled entries may line up with a different position than before — review the
   affected workload's blocks after either change.
 - Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
+  `CurriculumEditor` renders a block per course of the specialty, which can be 240 of them on the
+  largest — hence its name filter and "лише заплановані" toggle rather than pagination.
+- **`students` is empty in the checked-in `data.sql`** apart from one seeded group, so anything
+  keyed on students looks broken when it isn't: the `INDIVIDUALLY` workload UI shows an empty
+  student dropdown, and the academic-group "Студенти" tab shows an empty table, for every group
+  that has no rows.
+- The `INDIVIDUALLY` pairing UI offers only students of the working curriculum item's own academic
+  groups. That is the right default, but a consultation supervised for a student outside those
+  groups can't be recorded through it.
+- Adding a value to `HOUR_TYPE_OPTIONS`/`TEACHING_FORMAT_OPTIONS` in `entities.ts` is not enough on
+  its own — the value must also exist in the backing Postgres enum, and a few places hold their own
+  copy of the ordering or of which values are meaningful: `HOUR_TYPE_ORDER` in
+  `lecturer-workload-list.ts` (an `indexOf` lookup, so an unlisted type sorts *first*, not last)
+  and `ADDABLE_HOUR_TYPES` in `working-curriculum-list.ts` (which hour types can carry a working
+  curriculum item at all).
 - If a request fails with a Postgres "column ... does not exist" (wrapped as a generic
   GraphQL "bad SQL grammar" error), the backend's `schema.sql`/`data.sql` most likely haven't
   been re-applied since a recent backend change — see the backend README's [Known

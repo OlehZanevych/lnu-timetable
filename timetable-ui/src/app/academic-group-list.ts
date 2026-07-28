@@ -28,6 +28,13 @@ export class AcademicGroupList implements OnInit, OnChanges {
   /** When provided, list is scoped to this specialty and new groups are pre-assigned to it. */
   @Input() specialtyId: string | null = null;
 
+  /**
+   * When provided, list is scoped to the groups of this faculty's specialties. Combines with
+   * specialtyId: the faculty page passes both, so clearing its specialty sub-filter narrows to
+   * "every group of this faculty" rather than widening to every group in the university.
+   */
+  @Input() facultyId: string | null = null;
+
   groups = signal<AcademicGroup[]>([]);
   error = signal('');
 
@@ -60,13 +67,20 @@ export class AcademicGroupList implements OnInit, OnChanges {
     }
     if (this.specialtyId) {
       this.auth.canModifyIds('SPECIALTY', [this.specialtyId]).subscribe((ids) => this.canCreate.set(ids.has(this.specialtyId!)));
+    } else if (this.facultyId) {
+      // No specialty picked, so a new group has nothing to attach to — creating is only offered
+      // once the sub-filter narrows to one specialty (see the specialtyId branch above).
+      this.canCreate.set(false);
     } else {
       this.canCreate.set((this.auth.currentUser()?.permissions?.length ?? 0) > 0);
     }
   }
 
   load() {
-    const filter = this.specialtyId ? `, specialtyId: "${this.specialtyId}"` : '';
+    const parts: string[] = [];
+    if (this.specialtyId) parts.push(`specialtyId: "${this.specialtyId}"`);
+    if (this.facultyId) parts.push(`facultyId: "${this.facultyId}"`);
+    const filter = parts.length ? `, ${parts.join(', ')}` : '';
     const q = `{ academicGroups { academicGroupConnection(limit: 500${filter}) { nodes { id name courseYear studyForm studentsCount } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => {

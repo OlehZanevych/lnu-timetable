@@ -4,6 +4,7 @@ import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
+import { compareUk } from './sort';
 
 /** Highest semester offerable in a plan. curriculum_items.semester is a plain INTEGER, so this is
  *  a UI-side bound only — 11 is the largest value present in real data (PhD plans). */
@@ -219,7 +220,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
   }
 
   private compareNames(a: CourseBlock, b: CourseBlock): number {
-    return a.name.localeCompare(b.name, 'uk');
+    return compareUk(a.name, b.name);
   }
 
   /** Lowest semester among a course's items, or null when it has none. */

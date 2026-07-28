@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
 import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
+import { compareUk } from './sort';
 
 /** Semester parity — ODD/EVEN — matching curriculum_items.semester (1,3,5.. vs 2,4,6..). Options for
  *  the "current_semester_parity" global property are also enumerated here (see global-properties-page.ts). */
@@ -328,7 +329,7 @@ export class FacultyTimetableList implements OnInit, OnChanges {
     for (const cg of w.combinedGroups ?? []) {
       for (const g of cg.academicGroups ?? []) byId.set(g.id, g.name);
     }
-    return Array.from(byId.values()).sort((a, b) => a.localeCompare(b));
+    return Array.from(byId.values()).sort(compareUk);
   }
 
   /**
@@ -448,12 +449,12 @@ export class FacultyTimetableList implements OnInit, OnChanges {
     const scheduled = blocks.filter((b) => b.dayOfWeek != null);
     const unscheduled = blocks.filter((b) => b.dayOfWeek == null);
 
-    unscheduled.sort((a, b) => a.courseName.localeCompare(b.courseName));
+    unscheduled.sort((a, b) => compareUk(a.courseName, b.courseName));
     scheduled.sort((a, b) =>
       (a.dayOfWeek! - b.dayOfWeek!) ||
       (this.classStartTimeOrdinal(a.classStartTimeId) - this.classStartTimeOrdinal(b.classStartTimeId)) ||
       (parityOrder.indexOf(a.weekParity) - parityOrder.indexOf(b.weekParity)) ||
-      a.courseName.localeCompare(b.courseName)
+      compareUk(a.courseName, b.courseName)
     );
 
     // Unscheduled blocks are displayed from the beginning, ahead of every scheduled one.
