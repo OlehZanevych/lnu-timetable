@@ -15,6 +15,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     @Override
     public void configure(SchemaDefinition s) {
         configureLecturerWorkload(s);
+        configureLecturerWorkloadStudent(s);
         configureClassStartTime(s);
         configureTimetableEntry(s);
     }
@@ -29,6 +30,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .relation("lecturers")
             .relation("academicGroups")
             .relation("combinedGroups")
+            .relation("studentAssignments")
             .nullableRelation("workingCurriculumItem")
             .nullableRelation("combinedWorkingCurriculumItem")
             .relation("timetableEntries");
@@ -45,6 +47,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .manyToMany("lecturerIds", "lecturer_workload_lecturers", "lecturer_workload_id", "lecturer_id")
             .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
+            .nestedList("studentAssignments", LecturerWorkloadStudent.class, "lecturerWorkloadId", "lecturerId", "studentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
@@ -54,6 +57,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .manyToMany("lecturerIds", "lecturer_workload_lecturers", "lecturer_workload_id", "lecturer_id")
             .manyToMany("academicGroupIds", "lecturer_workload_academic_groups", "lecturer_workload_id", "academic_group_id")
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
+            .nestedList("studentAssignments", LecturerWorkloadStudent.class, "lecturerWorkloadId", "lecturerId", "studentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURERWORKLOAD_NOT_FOUND", "LecturerWorkload not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -62,6 +66,22 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("deleteLecturerWorkload").entity(LecturerWorkload.class).delete()
             .errorStatus("LECTURERWORKLOAD_NOT_FOUND", "LecturerWorkload not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // LecturerWorkloadStudent
+    // -------------------------------------------------------------------------
+
+    /**
+     * LecturerWorkloadStudent has no standalone queries/mutations of its own — pairings are only
+     * ever created, updated and deleted as part of LecturerWorkload's create/update mutations (see
+     * the "studentAssignments" nestedList above). It still needs to be registered as a GraphQL type
+     * so LecturerWorkload.studentAssignments can resolve to it.
+     */
+    private void configureLecturerWorkloadStudent(SchemaDefinition s) {
+        s.type(LecturerWorkloadStudent.class)
+            .relation("lecturer")
+            .relation("student");
     }
 
     // -------------------------------------------------------------------------

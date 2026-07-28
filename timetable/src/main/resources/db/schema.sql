@@ -1,6 +1,19 @@
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
 
+-- ============================ Collation ============================
+
+-- The database itself is very likely C.UTF-8 (the default on most installs), which sorts text by
+-- raw byte value. For Cyrillic that is wrong in a way that is immediately visible: 'І' is U+0406
+-- and 'А' is U+0410, so every surname starting with І/Ї/Є sorts *before* А. Declaring the columns
+-- people actually read as COLLATE ukrainian fixes ORDER BY everywhere at once, without needing the
+-- database to be recreated with a Ukrainian locale and without any application-side sorting hints.
+--
+-- Requires a Postgres built with ICU (standard from v15 on). If ICU is unavailable, substitute
+--     CREATE COLLATION ukrainian (provider = libc, locale = 'uk_UA.utf8');
+-- which needs that locale generated on the host.
+CREATE COLLATION ukrainian (provider = icu, locale = 'uk-UA');
+
 -- ============================ Global properties ============================
 
 CREATE TYPE property_type AS ENUM ('INTEGER', 'DECIMAL', 'STRING', 'BOOLEAN', 'ENUM');
@@ -19,9 +32,9 @@ CREATE TABLE global_properties
 CREATE TABLE buildings
 (
     id          BIGSERIAL PRIMARY KEY,
-    name        VARCHAR(120) NOT NULL UNIQUE,
-    address     VARCHAR(160),
-    city        VARCHAR(64),
+    name        VARCHAR(120) COLLATE ukrainian NOT NULL UNIQUE,
+    address     VARCHAR(160) COLLATE ukrainian,
+    city        VARCHAR(64)  COLLATE ukrainian,
     postal_code VARCHAR(10)
 );
 
@@ -30,8 +43,8 @@ CREATE TABLE buildings
 CREATE TABLE faculties
 (
     id           BIGSERIAL PRIMARY KEY,
-    name         VARCHAR(160) NOT NULL UNIQUE,
-    abbreviation VARCHAR(32) UNIQUE,
+    name         VARCHAR(160) COLLATE ukrainian NOT NULL UNIQUE,
+    abbreviation VARCHAR(32)  COLLATE ukrainian UNIQUE,
     website      VARCHAR(128),
     email        VARCHAR(64),
     phone        VARCHAR(128),
@@ -41,8 +54,8 @@ CREATE TABLE faculties
 CREATE TABLE departments
 (
     id           BIGSERIAL PRIMARY KEY,
-    name         VARCHAR(160) NOT NULL UNIQUE,
-    abbreviation VARCHAR(32) UNIQUE,
+    name         VARCHAR(160) COLLATE ukrainian NOT NULL UNIQUE,
+    abbreviation VARCHAR(32)  COLLATE ukrainian UNIQUE,
     faculty_id   BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
     email        VARCHAR(64),
     phone        VARCHAR(64)
@@ -53,8 +66,8 @@ CREATE TYPE degree AS ENUM ('JUNIOR_BACHELOR', 'BACHELOR', 'MASTER', 'PHD', 'DOC
 CREATE TABLE specialties
 (
     id            BIGSERIAL PRIMARY KEY,
-    code          VARCHAR(16)  NOT NULL,
-    name          VARCHAR(160) NOT NULL,
+    code          VARCHAR(16)  COLLATE ukrainian NOT NULL,
+    name          VARCHAR(160) COLLATE ukrainian NOT NULL,
     degree        degree       NOT NULL,
     faculty_id    BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
     UNIQUE (name, degree)
@@ -65,8 +78,8 @@ CREATE TABLE specialties
 CREATE TABLE academic_degrees
 (
     id           BIGSERIAL PRIMARY KEY,
-    name         VARCHAR(100) NOT NULL UNIQUE,
-    abbreviation VARCHAR(20),
+    name         VARCHAR(100) COLLATE ukrainian NOT NULL UNIQUE,
+    abbreviation VARCHAR(20)  COLLATE ukrainian,
     level        INTEGER      NOT NULL
 );
 
@@ -75,9 +88,9 @@ CREATE TYPE lecturer_position AS ENUM ('ASSISTANT', 'TEACHER', 'SENIOR_LECTURER'
 CREATE TABLE lecturers
 (
     id                   BIGSERIAL PRIMARY KEY,
-    first_name           VARCHAR(64)       NOT NULL,
-    middle_name          VARCHAR(64),
-    last_name            VARCHAR(64)       NOT NULL,
+    first_name           VARCHAR(64)  COLLATE ukrainian NOT NULL,
+    middle_name          VARCHAR(64)  COLLATE ukrainian,
+    last_name            VARCHAR(64)  COLLATE ukrainian NOT NULL,
     email                VARCHAR(64) UNIQUE,
     position             lecturer_position,
     academic_degree_id   BIGINT REFERENCES academic_degrees (id) ON DELETE SET NULL,
@@ -91,7 +104,7 @@ CREATE TYPE study_form AS ENUM ('FULL_TIME', 'PART_TIME');
 CREATE TABLE academic_groups
 (
     id             BIGSERIAL PRIMARY KEY,
-    name           VARCHAR(32) NOT NULL UNIQUE,
+    name           VARCHAR(32) COLLATE ukrainian NOT NULL UNIQUE,
     course_year    INTEGER     NOT NULL,
     study_form     study_form  NOT NULL,
     students_count INTEGER,
@@ -101,8 +114,8 @@ CREATE TABLE academic_groups
 CREATE TABLE combined_groups
 (
     id      BIGSERIAL PRIMARY KEY,
-    name    VARCHAR(64) NOT NULL UNIQUE,
-    purpose VARCHAR(200)
+    name    VARCHAR(64)  COLLATE ukrainian NOT NULL UNIQUE,
+    purpose VARCHAR(200) COLLATE ukrainian
 );
 
 CREATE TABLE combined_group_academic_groups
@@ -115,8 +128,9 @@ CREATE TABLE combined_group_academic_groups
 CREATE TABLE students
 (
     id                 BIGSERIAL PRIMARY KEY,
-    first_name         VARCHAR(64) NOT NULL,
-    last_name          VARCHAR(64) NOT NULL,
+    first_name         VARCHAR(64) COLLATE ukrainian NOT NULL,
+    middle_name        VARCHAR(64) COLLATE ukrainian,
+    last_name          VARCHAR(64) COLLATE ukrainian NOT NULL,
     email              VARCHAR(64),
     record_book_number VARCHAR(32),
     academic_group_id  BIGINT NOT NULL REFERENCES academic_groups (id) ON DELETE CASCADE
@@ -138,7 +152,7 @@ CREATE TYPE course_type AS ENUM (
 CREATE TABLE courses
 (
     id               BIGSERIAL PRIMARY KEY,
-    name             VARCHAR(200) NOT NULL,
+    name             VARCHAR(200) COLLATE ukrainian NOT NULL,
     course_type      course_type  NOT NULL DEFAULT 'MANDATORY',
     faculty_id       BIGINT REFERENCES faculties (id) ON DELETE SET NULL,
     department_id    BIGINT REFERENCES departments (id) ON DELETE CASCADE,
@@ -159,7 +173,7 @@ CREATE TABLE course_tags
 (
     id        BIGSERIAL PRIMARY KEY,
     course_id BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
-    tag       VARCHAR(64) NOT NULL,
+    tag       VARCHAR(64) COLLATE ukrainian NOT NULL,
     UNIQUE (course_id, tag)
 );
 
@@ -236,8 +250,8 @@ CREATE TABLE rooms
 (
     id          BIGSERIAL PRIMARY KEY,
     building_id BIGINT REFERENCES buildings (id) ON DELETE SET NULL,
-    number      VARCHAR(32) NOT NULL,
-    name        VARCHAR(96),
+    number      VARCHAR(32) COLLATE ukrainian NOT NULL,
+    name        VARCHAR(96) COLLATE ukrainian,
     capacity    INTEGER,
     kind        room_kind,
     faculty_id  BIGINT REFERENCES faculties (id) ON DELETE SET NULL
@@ -288,6 +302,23 @@ CREATE TABLE lecturer_workload_combined_groups
     lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
     combined_group_id    BIGINT NOT NULL REFERENCES combined_groups (id) ON DELETE CASCADE,
     PRIMARY KEY (lecturer_workload_id, combined_group_id)
+);
+
+-- Lecturer<->student pairings for a workload whose working curriculum item is taught
+-- INDIVIDUALLY (e.g. coursework consultations): instead of assigning academic groups, each
+-- student is paired with the lecturer supervising them.
+--
+-- Unlike the join tables above this needs its own surrogate id: the two foreign keys are only
+-- meaningful together, so it is written as a nested child list on LecturerWorkload's mutations,
+-- and that reconciliation matches and deletes child rows by id.
+CREATE TABLE lecturer_workload_students
+(
+    id                   BIGSERIAL PRIMARY KEY,
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    lecturer_id          BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
+    student_id           BIGINT NOT NULL REFERENCES students (id) ON DELETE CASCADE,
+    -- Within one workload a student has exactly one supervising lecturer.
+    UNIQUE (lecturer_workload_id, student_id)
 );
 
 CREATE TYPE week_parity AS ENUM ('WEEKLY', 'NUMERATOR', 'DENOMINATOR');

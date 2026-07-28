@@ -1,6 +1,7 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { GraphqlService } from './graphql.service';
 import { HOUR_TYPE_OPTIONS } from './entities';
+import { compareUk } from './sort';
 
 interface GroupRef {
   id: string;
@@ -162,7 +163,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
     }
 
     const groups = Array.from(byKey.values()).filter((g) => g.items.length >= 2);
-    groups.sort((a, b) => a.semester - b.semester || a.course.name.localeCompare(b.course.name));
+    groups.sort((a, b) => a.semester - b.semester || compareUk(a.course.name, b.course.name));
     return groups;
   }
 

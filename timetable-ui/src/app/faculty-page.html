@@ -117,11 +117,11 @@
           <label>Фільтр за спеціальністю</label>
           <app-search-select [options]="specs()" [(ngModel)]="selectedSpecId" name="specFilter" placeholder="Усі спеціальності" />
         </div>
-        <app-academic-group-list [specialtyId]="specFilterValue" />
+        <app-academic-group-list [facultyId]="facultyId" [specialtyId]="specFilterValue" />
       }
 
       @case ('combinedGroups') {
-        <app-combined-group />
+        <app-combined-group extraFilterParam="facultyId" [extraFilterValue]="facultyId" />
       }
 
       <!-- ── Curricula ── -->

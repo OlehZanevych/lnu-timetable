@@ -86,20 +86,20 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureStudent(SchemaDefinition s) {
         s.type(Student.class)
-            .fields("firstName", "lastName", "email", "recordBookNumber")
+            .fields("firstName", "middleName", "lastName", "email", "recordBookNumber")
             .relation("academicGroup");
 
         s.query("studentConnection").entity(Student.class).connection().orderBy("lastName").filter("academicGroupId", "academic_group_id");
         s.query("student").entity(Student.class).findById();
 
         s.mutation("createStudent").entity(Student.class).create()
-            .inputFields("firstName", "lastName", "email", "recordBookNumber", "academicGroupId")
+            .inputFields("firstName", "middleName", "lastName", "email", "recordBookNumber", "academicGroupId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateStudent").entity(Student.class).update()
-            .inputFields("firstName", "lastName", "email", "recordBookNumber", "academicGroupId")
+            .inputFields("firstName", "middleName", "lastName", "email", "recordBookNumber", "academicGroupId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("STUDENT_NOT_FOUND", "Student not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -119,7 +119,15 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
             .fields("name", "courseYear", "studyForm", "studentsCount")
             .relation("specialty").relation("students").relation("combinedGroups");
 
-        s.query("academicGroupConnection").entity(AcademicGroup.class).connection().orderBy("name").filter("specialtyId", "specialty_id");
+        // academic_groups has no faculty_id of its own — a group's faculty is only known through
+        // its specialty — so facultyId is an EXISTS subquery rather than a plain column filter
+        // (see QueryDefinition.RelationFilter; same approach as workingCurriculumItemConnection's
+        // facultyId, which reaches its faculty through departments).
+        s.query("academicGroupConnection").entity(AcademicGroup.class).connection().orderBy("name")
+            .filter("specialtyId", "specialty_id")
+            .relationFilter("facultyId",
+                "EXISTS (SELECT 1 FROM specialties sp " +
+                "WHERE sp.id = academic_groups.specialty_id AND sp.faculty_id = :facultyId)");
         s.query("academicGroup").entity(AcademicGroup.class).findById();
 
         s.mutation("createAcademicGroup").entity(AcademicGroup.class).create()
@@ -149,7 +157,15 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
             .fields("name", "purpose")
             .relation("academicGroups").relation("workloads");
 
-        s.query("combinedGroupConnection").entity(CombinedGroup.class).connection().orderBy("name");
+        // A combined group has no faculty of its own — its faculty is whatever its member academic
+        // groups' specialties belong to. EXISTS gives "any member belongs to this faculty", so a
+        // group spanning two faculties shows up under both, which is the point of combining them.
+        s.query("combinedGroupConnection").entity(CombinedGroup.class).connection().orderBy("name")
+            .relationFilter("facultyId",
+                "EXISTS (SELECT 1 FROM combined_group_academic_groups cga " +
+                "JOIN academic_groups ag ON ag.id = cga.academic_group_id " +
+                "JOIN specialties sp ON sp.id = ag.specialty_id " +
+                "WHERE cga.combined_group_id = combined_groups.id AND sp.faculty_id = :facultyId)");
         s.query("combinedGroup").entity(CombinedGroup.class).findById();
 
         s.mutation("createCombinedGroup").entity(CombinedGroup.class).create()

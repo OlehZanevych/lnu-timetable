@@ -16,6 +16,9 @@ public class Student {
 
     private String firstName;
 
+    @Nullable
+    private String middleName;
+
     private String lastName;
 
     @Nullable

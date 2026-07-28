@@ -210,8 +210,11 @@ export const ENTITIES: EntityMeta[] = [
   {
     name: 'Student', label: 'Студенти', single: 'student', namespace: 'students', list: 'studentConnection', filterParam: 'academicGroupId',
     fields: [
-      { name: 'firstName', label: "Ім'я", type: 'text', required: true },
+      // Surname first, matching how students are listed on paper (and how studentConnection
+      // already sorts them). Field order here drives both the table columns and the form.
       { name: 'lastName', label: 'Прізвище', type: 'text', required: true },
+      { name: 'firstName', label: "Ім'я", type: 'text', required: true },
+      { name: 'middleName', label: 'По батькові', type: 'text' },
       { name: 'email', label: 'Ел. пошта', type: 'text' },
       { name: 'recordBookNumber', label: '№ залік. книжки', type: 'text' },
       ref('academicGroupId', 'Академічна група', 'academicGroup', 'academicGroup', 'name', true)

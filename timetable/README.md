@@ -99,12 +99,13 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N specialties this course may be added to a curriculum for (`course_specialties`), 1-N tags |
 | `CourseTag` | `course_tags` | free-form label shown after the course's name (e.g. "англійською"); → course |
 | `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **specialty directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
-| `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
+| `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/CONSULTATION/ASSESSMENT/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
 | `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups, M-N combined working curriculum items |
 | `CombinedWorkingCurriculumItem` | `combined_working_curriculum_items` | pure M-N hub, no scalar fields of its own; bundles several `WorkingCurriculumItem`s that share course/semester/hour-type (e.g. one shared lecture across specialties) so one `LecturerWorkload` can cover all of them at once; → M-N working curriculum items, workloads |
 | `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads |
-| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → M-N lecturers, M-N academicGroups, M-N combinedGroups, *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
-| `Student` | `students` | → academic group |
+| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → M-N lecturers, M-N academicGroups, M-N combinedGroups, 1-N studentAssignments (INDIVIDUALLY only), *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
+| `LecturerWorkloadStudent` | `lecturer_workload_students` | one lecturer↔student pairing of an `INDIVIDUALLY`-taught workload; no standalone queries/mutations — written through `LecturerWorkload`'s `studentAssignments` nested list; → workload, lecturer, student |
+| `Student` | `students` | first/middle/last name (по батькові optional), record book number; → academic group |
 | `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
 | `CombinedGroup` (об'єднана група) | `combined_groups` | M-N academic groups (electives) |
 | `Room` (аудиторія) | `rooms` | capacity, kind; → faculty? |
@@ -116,12 +117,69 @@ Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all sup
 Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbreviation`,
 `departments.abbreviation`, `specialties(name, degree)`, `academic_groups.name`,
 `lecturers.email`, `curriculum_items(course_id, specialty_id, semester)`,
-`curriculum_item_hours(curriculum_item_id, hour_type)`, `course_tags(course_id, tag)`.
+`curriculum_item_hours(curriculum_item_id, hour_type)`, `course_tags(course_id, tag)`,
+`lecturer_workload_students(lecturer_workload_id, student_id)` (within one workload a student has
+exactly one supervising lecturer).
 
 > **History note**: earlier versions of this service modeled a *curriculum* as its own
 > entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
 > it. Since a specialty only ever has one curriculum, that indirection was removed —
 > `CurriculumItem` now references `Specialty` directly via `specialty_id`.
+
+### Enumerated columns
+
+Native Postgres `ENUM` types back most classifier columns (see `@PgEnum` below). Two carry
+ordering significance beyond their values, because `ORDER BY` on an enum column sorts by
+*declaration* order, not alphabetically:
+
+| Type | Values (in declaration order) |
+|---|---|
+| `hour_type` | `LECTURE`, `PRACTICAL`, `LAB`, `CONSULTATION`, `ASSESSMENT`, `INDEPENDENT_WORK` |
+| `teaching_format` | `TOGETHER`, `SEPARATELY`, `INDIVIDUALLY` |
+| `control_form` | `EXAM`, `CREDIT`, `GRADED_CREDIT` |
+| `course_type` | `MANDATORY`, `ELECTIVE_GROUP`, `ELECTIVE`, `OPTIONAL`, `INTERNSHIP`, `COURSE_PROJECT`, `COURSE_WORK`, `QUALIFICATION_WORK` |
+| `week_parity` | `WEEKLY`, `NUMERATOR`, `DENOMINATOR` |
+| `study_form`, `degree`, `lecturer_position`, `room_kind`, `property_type` | see `schema.sql` |
+
+`hour_type` is declared "contact teaching, then the contact work around it, then the student's own
+time" precisely so `curriculumItemHoursConnection` (`.orderBy("hourType")`) lists an item's hours in
+that reading order. Adding a value to an existing enum in a *populated* database therefore needs
+`ALTER TYPE … ADD VALUE … AFTER '<existing>'` rather than a plain append, or the new value sorts
+last regardless of where `schema.sql` declares it.
+
+`teaching_format` decides how a `LecturerWorkload` is assigned:
+
+- `TOGETHER` — one lecturer takes all the item's groups at once (a shared lecture stream);
+- `SEPARATELY` — the groups are split between lecturers, each taking whole groups (this is the only
+  format for which "об'єднані групи" apply);
+- `INDIVIDUALLY` — a lecturer works one-to-one with each student (coursework consultations, say), so
+  the workload carries explicit `lecturer_workload_students` pairings instead of academic groups,
+  and its duration is always a single academic hour per student.
+
+### Text collation
+
+The database is very likely created with the `C.UTF-8` locale (the default on most installs), which
+sorts text by raw byte value. For Cyrillic that is wrong in an immediately visible way: `І` is
+U+0406 and `А` is U+0410, so every surname starting with І/Ї/Є sorts *before* А. `schema.sql`
+therefore declares a named collation once and attaches it to the columns people actually read:
+
+```sql
+CREATE COLLATION ukrainian (provider = icu, locale = 'uk-UA');
+...
+last_name  VARCHAR(64) COLLATE ukrainian NOT NULL,
+```
+
+Because the collation lives on the *column*, a plain `ORDER BY last_name` — which is all the
+generated SQL ever emits — sorts correctly, and any future `.orderBy(...)` on one of those columns
+is right by default with no framework changes. It is applied to the name-like columns of
+`buildings`, `faculties`, `departments`, `specialties`, `academic_degrees`, `lecturers`,
+`academic_groups`, `combined_groups`, `students`, `courses`, `course_tags` and `rooms`, and
+deliberately **not** to e-mail/phone/website/postal codes, record book numbers or the auth tables.
+
+Requires a Postgres built with ICU (standard from v15); `schema.sql` carries a comment with the
+`provider = libc, locale = 'uk_UA.utf8'` fallback. ICU collations are deterministic, so `UNIQUE`
+indexes on collated columns keep working unchanged. The frontend pins the same alphabet
+client-side — see its README's *Ukrainian sorting*.
 
 ### `global_properties` — outside the entity framework
 
@@ -179,6 +237,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `WorkingCurriculumItem` | `Department`, `CurriculumItemHours`, elective `Course`? |
 | `CombinedWorkingCurriculumItem` | any member `WorkingCurriculumItem` (via `combined_working_curriculum_item_members`) |
 | `LecturerWorkload` | `WorkingCurriculumItem`?, `CombinedWorkingCurriculumItem`?, any linked `Lecturer`/`AcademicGroup`/`CombinedGroup` (join tables) |
+| `LecturerWorkloadStudent` | `LecturerWorkload` |
 | `TimetableEntry` | `LecturerWorkload`, `Room` |
 | `Building`, `AcademicDegree`, `ClassStartTime` | *(none — top-level; only an administrator can create/modify these)* |
 
@@ -314,6 +373,25 @@ carries these alongside the plain `Filter` records through `selectList`/`countWh
 filtering on both (through `curriculum_items.semester`), so the frontend's schedule builder can
 ask the database for "everything this faculty needs to schedule this semester" in two queries
 instead of fetching every working curriculum item in the system and filtering client-side.
+
+The same mechanism scopes the two "people" connections to a faculty, neither of which has a
+`faculty_id` column of its own:
+
+| Connection | Argument | Reached through |
+|---|---|---|
+| `academicGroupConnection` | `facultyId` | `academic_groups.specialty_id → specialties.faculty_id` |
+| `combinedGroupConnection` | `facultyId` | `combined_group_academic_groups → academic_groups → specialties.faculty_id` |
+| `workingCurriculumItemConnection` | `facultyId`, `semesterParity` | `working_curriculum_items.department_id → departments.faculty_id`; `curriculum_item_hours → curriculum_items.semester` |
+| `combinedWorkingCurriculumItemConnection` | `facultyId`, `departmentIds`, `semesterParity` | member `working_curriculum_items` |
+
+`combinedGroupConnection`'s `facultyId` matches when **any** member academic group belongs to the
+faculty, so a combined group spanning two faculties appears under both — which is the point of
+combining them. `EXISTS` (rather than a join in the filter) is also what keeps a group with several
+matching members from being returned more than once.
+
+Filter arguments compose: the frontend's faculty page passes `facultyId` *and* an optional
+`specialtyId`, so clearing its specialty sub-filter narrows to "every group of this faculty"
+instead of widening to every group in the university.
 
 ### Generated GraphQL shape
 
@@ -511,6 +589,47 @@ schema and the queries you send are unchanged; only the number of SQL round trip
 
 ---
 
+## Repository layout
+
+```
+timetable/
+├── pom.xml
+├── src/main/java/org/lnu/timetable/
+│   ├── TimetableApplication.java
+│   ├── config/       the four GraphQLSchemaConfig classes — Organization, Curriculum,
+│   │                 People, Scheduling — which are the whole "API definition"
+│   ├── domain/       annotated POJOs, one per @GraphQLEntity table
+│   ├── framework/    the config-driven engine (see The framework above)
+│   ├── security/     JWT + PermissionService (see Authentication & authorization)
+│   ├── controller/   IndexController — only redirects / to Apollo Sandbox
+│   └── filter/       CorsFilter
+├── src/main/resources/
+│   ├── application.properties
+│   └── db/
+│       ├── schema.sql     DDL; starts with DROP SCHEMA public CASCADE
+│       └── data.sql       full pg_dump-style seed (real LNU structure)
+├── src/test/java/…/SchemaBuildTest.java   assembles the whole GraphQL schema and
+│                                          asserts on the printed SDL — the fastest
+│                                          check that a schema-config change is valid
+└── scripts/
+    ├── reset_db.sh        drop + re-apply schema.sql then data.sql (reads connection
+    │                      details from application.properties)
+    ├── backup_data.sh     dump the current database back out over data.sql
+    ├── renumber_ids.sh    compact id sequences in data.sql after manual editing
+    ├── generate_data.py   synthetic seed generator (predates the real-data import)
+    └── lnu_import/        two-stage real-data pipeline: scrape_lnu.py crawls
+                           lnu.edu.ua into data/*.json, build_sql.py turns that into
+                           generated/data.sql, validate_sql.py checks it independently.
+                           Has its own README.
+```
+
+Because `schema.sql`/`data.sql` are applied by hand (see [Known
+limitations](#known-limitations)), `scripts/reset_db.sh` is the usual way to pick up a schema
+change: it is a one-command equivalent of the two `psql` invocations in [Database
+setup](#database-setup).
+
+---
+
 ## Known limitations
 
 - **`schema.sql`/`data.sql` are applied manually, not on startup.** Unlike a Flyway/Liquibase
@@ -518,7 +637,16 @@ schema and the queries you send are unchanged; only the number of SQL round trip
   pulling a change that touches either file, you must re-run both against your local database
   yourself, or requests against the new/changed columns fail with a Postgres "column ... does
   not exist" error (surfaced as a generic `BadSqlGrammarException` / "bad SQL grammar" message,
-  which doesn't make the real cause obvious).
+  which doesn't make the real cause obvious). `scripts/reset_db.sh` does both steps in one
+  command. Note that this makes every schema change destructive by default: a change that only
+  *adds* a column or an enum value can be applied in place with `ALTER TABLE`/`ALTER TYPE`
+  instead, but nothing in the repo tracks which of those you have already run.
+- **The `ukrainian` collation needs a Postgres built with ICU** (standard from v15). On a build
+  without it, `schema.sql` fails at `CREATE COLLATION` — substitute the `provider = libc,
+  locale = 'uk_UA.utf8'` variant noted at that line, which in turn needs that locale generated
+  on the host. Collation is part of the column definition, so an existing database does not pick
+  it up until it is rebuilt (or each column is `ALTER`ed); until then, Cyrillic still sorts by
+  byte value. See [Text collation](#text-collation).
 - The entity framework hardcodes a `Long id` primary key for every entity (`EntityMetadataRegistry`,
   the GraphQL `id: ID!` field, `R2dbcQueryEngine.selectOne`/`insert`/`update`/`delete`). The one
   table that doesn't fit — `global_properties`, keyed by `name` — is handled by a fully hand-rolled
@@ -547,6 +675,12 @@ schema and the queries you send are unchanged; only the number of SQL round trip
   session to invalidate on logout — a leaked token keeps working until it expires. Deactivating
   the account (`setUserActive`) or revoking a permission grant takes effect immediately on the
   *next* request, but the token itself remains "valid" until it expires.
+- `lecturer_workload_students` is only meaningful when the workload's working curriculum item is
+  `INDIVIDUALLY`-taught, but nothing in the database enforces that: the pairings hang off
+  `lecturer_workloads`, whose teaching format is two hops away (via `curriculum_item_hours` →
+  `working_curriculum_items`), so a `TOGETHER` workload could be given pairings through the API.
+  The frontend force-clears them whenever the format is anything else; a CHECK constraint can't
+  express the rule without a trigger or a denormalized column.
 - Only one permission level exists: **modify** (update + delete + create/modify children). There's
   no separate read-restriction — any authenticated user can query any entity; permission grants
   only govern which edit/delete buttons the frontend shows and which mutations succeed.

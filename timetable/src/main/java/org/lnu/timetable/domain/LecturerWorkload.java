@@ -54,6 +54,14 @@ public class LecturerWorkload {
     @ManyToOne(joinColumn = "combined_working_curriculum_item_id")
     private CombinedWorkingCurriculumItem combinedWorkingCurriculumItem;
 
+    /**
+     * Lecturer&harr;student pairings, used only when the underlying working curriculum item is
+     * taught INDIVIDUALLY; empty for TOGETHER/SEPARATELY items, which assign academic groups
+     * instead. Written exclusively through this entity's create/update mutations.
+     */
+    @OneToMany(mappedBy = "lecturer_workload_id")
+    private List<LecturerWorkloadStudent> studentAssignments;
+
     @Description("Duration of each class for this workload, in academic hours (1-4)")
     private Integer durationHours;
 
