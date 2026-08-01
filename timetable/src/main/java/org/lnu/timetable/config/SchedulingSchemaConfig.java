@@ -16,6 +16,8 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     public void configure(SchemaDefinition s) {
         configureLecturerWorkload(s);
         configureLecturerWorkloadStudent(s);
+        configureLecturerWorkloadCandidate(s);
+        configureLecturerWorkloadCandidateConstraint(s);
         configureClassStartTime(s);
         configureTimetableEntry(s);
     }
@@ -31,6 +33,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .relation("academicGroups")
             .relation("combinedGroups")
             .relation("studentAssignments")
+            .relation("candidates")
             .nullableRelation("workingCurriculumItem")
             .nullableRelation("combinedWorkingCurriculumItem")
             .relation("timetableEntries");
@@ -82,6 +85,55 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
         s.type(LecturerWorkloadStudent.class)
             .relation("lecturer")
             .relation("student");
+    }
+
+    // -------------------------------------------------------------------------
+    // LecturerWorkloadCandidate
+    // -------------------------------------------------------------------------
+
+    /**
+     * Unlike the other children of LecturerWorkload, a candidate has children of its own (its
+     * student-count limits), and the framework's nested lists only go one level deep — so a
+     * candidate is written through its own mutations, carrying `constraints` as *its* nested list,
+     * rather than through LecturerWorkload's input payload. That also keeps a single writer for
+     * these rows: a nested list on the workload would reconcile (and delete) candidates behind the
+     * back of the mutations below.
+     */
+    private void configureLecturerWorkloadCandidate(SchemaDefinition s) {
+        s.type(LecturerWorkloadCandidate.class)
+            .fields("desirability")
+            .relation("lecturer")
+            .relation("constraints");
+
+        s.mutation("createLecturerWorkloadCandidate").entity(LecturerWorkloadCandidate.class).create()
+            .inputFields("lecturerWorkloadId", "lecturerId", "desirability")
+            .nestedList("constraints", LecturerWorkloadCandidateConstraint.class,
+                "lecturerWorkloadCandidateId", "constraintType", "value")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("updateLecturerWorkloadCandidate").entity(LecturerWorkloadCandidate.class).update()
+            .inputFields("lecturerWorkloadId", "lecturerId", "desirability")
+            .nestedList("constraints", LecturerWorkloadCandidateConstraint.class,
+                "lecturerWorkloadCandidateId", "constraintType", "value")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("LECTURERWORKLOADCANDIDATE_NOT_FOUND", "LecturerWorkloadCandidate not found")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("deleteLecturerWorkloadCandidate").entity(LecturerWorkloadCandidate.class).delete()
+            .errorStatus("LECTURERWORKLOADCANDIDATE_NOT_FOUND", "LecturerWorkloadCandidate not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    /**
+     * Registered so LecturerWorkloadCandidate.constraints resolves; written only through the
+     * `constraints` nested list above.
+     */
+    private void configureLecturerWorkloadCandidateConstraint(SchemaDefinition s) {
+        s.type(LecturerWorkloadCandidateConstraint.class)
+            .fields("constraintType", "value");
     }
 
     // -------------------------------------------------------------------------

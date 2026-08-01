@@ -202,7 +202,6 @@ export const ENTITIES: EntityMeta[] = [
         ]
       },
       ref('academicDegreeId', 'Наук. ступінь', 'academicDegree', 'academicDegree', 'name'),
-      { name: 'maxHoursPerWeek', label: 'Макс. год./тижд.', type: 'number' },
       { name: 'departmentId', label: 'Кафедра', type: 'ref', ref: 'department', relation: 'department', refLabel: 'name', required: true,
         parentFilter: { namespace: 'faculties', list: 'facultyConnection', label: 'Факультет' } }
     ]

@@ -1,10 +1,12 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, DURATION_HOURS_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
 import { compareUk } from './sort';
+import { GenIssue, GenLecturer, GenResult, GenWorkload, generateWorkloads } from './workload-generator';
 
 interface GroupRef {
   id: string;
@@ -33,6 +35,35 @@ interface StudentAssignment {
   student: StudentRef;
 }
 
+/** MIN_STUDENTS / MAX_STUDENTS on a candidate — only used by INDIVIDUALLY-taught items. */
+interface CandidateConstraintRef { id: string; constraintType: string; value: number }
+
+/** A lecturer who could deliver a workload, with how desirable that would be (1..100). */
+interface CandidateRef {
+  id: string;
+  lecturer: LecturerRef;
+  desirability: number;
+  constraints: CandidateConstraintRef[];
+}
+
+/** One row of the candidate roster in the modal; a blank score means "not a candidate". */
+interface CandidateRow {
+  lecturerId: string;
+  lecturerLabel: string;
+  /** Existing lecturer_workload_candidates row id, or null. */
+  id: string | null;
+  desirability: string;
+  /** Desired number of students (MIN_STUDENTS); '' when unset. INDIVIDUALLY items only. */
+  minStudents: string;
+  /** Hard ceiling on students (MAX_STUDENTS); '' when unset. INDIVIDUALLY items only. */
+  maxStudents: string;
+  /** Row ids of the two limits, so an update reuses them instead of re-inserting. */
+  minStudentsId: string | null;
+  maxStudentsId: string | null;
+  /** Snapshot of the four editable values as loaded, so save can skip untouched candidates. */
+  original: string;
+}
+
 interface Workload {
   id: string;
   durationHours: number;
@@ -41,15 +72,22 @@ interface Workload {
   combinedGroups: GroupRef[];
   /** Populated only for INDIVIDUALLY items; empty for TOGETHER/SEPARATELY ones. */
   studentAssignments: StudentAssignment[];
+  /** Who could deliver this workload, and how desirable each option is. */
+  candidates: CandidateRef[];
 }
 
-/** A lecturer<->student pair being edited in the modal. */
-interface PairDraft {
-  key: number;
-  /** Existing lecturer_workload_students row id, or null for a pair added in this session. */
+/**
+ * One row of the INDIVIDUALLY modal: a student of the working curriculum item's academic groups,
+ * with the lecturer supervising them. Every candidate student gets a row whether or not anyone is
+ * assigned yet — filling a roster in is far quicker than adding pairs one at a time — so an empty
+ * `lecturerId` simply means "not assigned" and is skipped on save.
+ */
+interface StudentRow {
+  studentId: string;
+  studentLabel: string;
+  /** Existing lecturer_workload_students row id, or null when this student has no pairing yet. */
   id: string | null;
   lecturerId: string;
-  studentId: string;
 }
 
 interface WorkingItem {
@@ -180,15 +218,22 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   formDurationHours = '2';
 
   /**
-   * Lecturer<->student pairs, used instead of academic groups when the item is taught
-   * INDIVIDUALLY. Held in a signal and replaced (never mutated in place) so adding, removing or
-   * editing a pair re-renders — this app runs zoneless, so a mutated plain array wouldn't.
+   * The student roster shown instead of academic groups when the item is taught INDIVIDUALLY:
+   * every student of the item's groups, each with a lecturer picker. Held in a signal and replaced
+   * (never mutated in place) so an edit re-renders — this app runs zoneless, so a mutated plain
+   * array wouldn't.
    */
-  formPairs = signal<PairDraft[]>([]);
-  private nextPairKey = 1;
+  formStudentRows = signal<StudentRow[]>([]);
 
-  /** Students of the active item's academic groups — the candidates a pair can point at. */
-  activeStudentOptions = signal<Option[]>([]);
+  /** True while the roster is being fetched, so the modal can say so instead of looking empty. */
+  loadingStudents = signal(false);
+
+  /**
+   * Candidate pool for the workload being edited: every lecturer of the department, each with a
+   * desirability score. Blank means "not a candidate", so the roster doubles as the picker.
+   */
+  formCandidates = signal<CandidateRow[]>([]);
+
 
   /** Academic-group options for the modal: the specific working curriculum item's own groups. */
   activeAcademicGroupOptions = signal<Option[]>([]);
@@ -199,6 +244,26 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
    * teaches together (TOGETHER) there's nothing to combine, so only academic groups apply.
    */
   activeTeachingFormat = signal<string | null>(null);
+
+  // ── Automatic generation ────────────────────────────────────────────────
+  /** 'gaps' fills only missing/short assignments; 'all' reassigns the whole department. */
+  genMode = signal<'gaps' | 'all'>('gaps');
+  /** The proposed plan, held until the user applies or discards it — generation never writes directly. */
+  genResult = signal<GenResult | null>(null);
+  genRunning = signal(false);
+  genApplying = signal(false);
+  genError = signal('');
+  /** Lecturer constraints + the annual default, loaded once per department for the generator. */
+  private genLecturers = signal<GenLecturer[]>([]);
+  private defaultMaxHoursPerYear = signal<number | null>(null);
+  /** workloadId -> the students of its item's groups, for INDIVIDUALLY distribution. */
+  private studentsByWorkload = new Map<string, string[]>();
+  /**
+   * workloadId -> its current durationHours. LecturerWorkloadInputPayload declares durationHours
+   * non-null (the domain field carries no @Nullable), so an update that only means to change the
+   * lecturers must still echo it or the mutation is rejected before it reaches the resolver.
+   */
+  private durationByWorkload = new Map<string, number>();
 
   private activeWorkingCurriculumItemId: string | null = null;
   private activeCombinedWorkingCurriculumItemId: string | null = null;
@@ -224,6 +289,32 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   private loadAll() {
     this.loadItems();
     this.loadCombined();
+    this.loadGeneratorInputs();
+    this.genResult.set(null);   // any plan is stale once the tree reloads
+  }
+
+  /** Lecturer constraints and the global hour default — only needed by the generator. */
+  private loadGeneratorInputs() {
+    if (!this.departmentId) return;
+    const q = `{
+      lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes {
+        id firstName middleName lastName workloadConstraints { constraintType value }
+      } } }
+      globalProperties { globalProperty(name: "default_max_hours_per_year") { value } }
+    }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => {
+        this.genLecturers.set(d.lecturers.lecturerConnection.nodes.map((n: any) => ({
+          id: n.id,
+          name: this.lecturerName(n),
+          constraints: Object.fromEntries((n.workloadConstraints ?? []).map((c: any) => [c.constraintType, c.value]))
+        })));
+        const raw = d.globalProperties.globalProperty?.value;
+        const parsed = raw != null ? Number(raw) : NaN;
+        this.defaultMaxHoursPerYear.set(Number.isFinite(parsed) ? parsed : null);
+      },
+      error: () => {}
+    });
   }
 
   private loadItems() {
@@ -252,6 +343,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
           lecturer { id firstName middleName lastName }
           student { id firstName middleName lastName academicGroup { id name } }
         }
+        candidates { id desirability lecturer { id firstName middleName lastName } constraints { id constraintType value } }
       }
     } } } }`;
     this.gql.request(q).subscribe({
@@ -278,6 +370,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
+        candidates { id desirability lecturer { id firstName middleName lastName } constraints { id constraintType value } }
       }
     } } } }`;
     this.gql.request(q).subscribe({
@@ -342,13 +435,28 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   /**
-   * Loads the students of the given academic groups in one round trip (one aliased
-   * studentConnection per group — the connection only takes a single academicGroupId), then
-   * deduplicates by id in case a student somehow appears under two of them.
+   * Builds the roster for the INDIVIDUALLY modal: every student of the given academic groups, in
+   * one round trip (one aliased studentConnection per group — the connection only takes a single
+   * academicGroupId), deduplicated by id in case a student appears under two of them, and merged
+   * with whatever pairings the workload being edited already has.
+   *
+   * A pairing whose student is no longer in any of those groups (they changed group after the
+   * assignment was made, say) is appended rather than dropped, so opening the form never silently
+   * deletes it.
    */
-  private loadStudentOptions(groups: GroupRef[]) {
+  private loadStudentRows(groups: GroupRef[], existing: StudentAssignment[]) {
+    const assigned = new Map<string, StudentAssignment>();
+    for (const a of existing ?? []) {
+      if (a.student?.id) assigned.set(a.student.id, a);
+    }
+
     const list = groups ?? [];
-    if (!list.length) { this.activeStudentOptions.set([]); return; }
+    if (!list.length) {
+      this.formStudentRows.set(this.orphanRows(assigned, new Set()));
+      return;
+    }
+
+    this.loadingStudents.set(true);
     const parts = list
       .map((g, i) => `g${i}: studentConnection(limit: 500, offset: 0, academicGroupId: "${g.id}") { nodes { id firstName middleName lastName academicGroup { id name } } }`)
       .join(' ');
@@ -358,13 +466,78 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         for (const key of Object.keys(d.students ?? {})) {
           for (const n of d.students[key]?.nodes ?? []) byId.set(n.id, n);
         }
-        const opts = Array.from(byId.values())
-          .map((st) => ({ id: st.id, label: this.studentName(st) }))
-          .sort((a, b) => compareUk(a.label, b.label));
-        this.activeStudentOptions.set(opts);
+        const rows: StudentRow[] = Array.from(byId.values())
+          .map((st) => {
+            const a = assigned.get(st.id);
+            return {
+              studentId: st.id,
+              studentLabel: this.studentName(st),
+              id: a?.id ?? null,
+              lecturerId: a?.lecturer?.id ?? ''
+            };
+          })
+          .sort((a, b) => compareUk(a.studentLabel, b.studentLabel));
+        this.formStudentRows.set([...rows, ...this.orphanRows(assigned, new Set(byId.keys()))]);
+        this.loadingStudents.set(false);
       },
-      error: () => this.activeStudentOptions.set([])
+      error: () => {
+        this.formStudentRows.set(this.orphanRows(assigned, new Set()));
+        this.loadingStudents.set(false);
+      }
     });
+  }
+
+  /** Rows for already-assigned students who aren't in the item's groups any more. */
+  /**
+   * Builds the candidate roster from the department's lecturers, pre-filling the scores this
+   * workload already has. A candidate who is no longer in the department keeps their row rather
+   * than being silently dropped on the next save.
+   */
+  private buildCandidateRows(existing: CandidateRef[]) {
+    const byLecturer = new Map<string, CandidateRef>();
+    for (const c of existing ?? []) {
+      if (c.lecturer?.id) byLecturer.set(c.lecturer.id, c);
+    }
+    const known = new Set<string>();
+    const rows: CandidateRow[] = this.lecturerOptions().map((o) => {
+      known.add(o.id);
+      return this.toCandidateRow(o.id, o.label, byLecturer.get(o.id));
+    });
+    const orphans: CandidateRow[] = Array.from(byLecturer.values())
+      .filter((c) => !known.has(c.lecturer.id))
+      .map((c) => this.toCandidateRow(c.lecturer.id, this.lecturerName(c.lecturer), c));
+    this.formCandidates.set([...rows, ...orphans]);
+  }
+
+  private toCandidateRow(lecturerId: string, lecturerLabel: string, c?: CandidateRef): CandidateRow {
+    const limit = (type: string) => (c?.constraints ?? []).find((x) => x.constraintType === type);
+    const min = limit('MIN_STUDENTS');
+    const max = limit('MAX_STUDENTS');
+    const row: CandidateRow = {
+      lecturerId,
+      lecturerLabel,
+      id: c?.id ?? null,
+      desirability: c?.desirability != null ? String(c.desirability) : '',
+      minStudents: min?.value != null ? String(min.value) : '',
+      maxStudents: max?.value != null ? String(max.value) : '',
+      minStudentsId: min?.id ?? null,
+      maxStudentsId: max?.id ?? null,
+      original: ''
+    };
+    row.original = candidateSnapshot(row);
+    return row;
+  }
+
+  private orphanRows(assigned: Map<string, StudentAssignment>, known: Set<string>): StudentRow[] {
+    return Array.from(assigned.values())
+      .filter((a) => a.student?.id && !known.has(a.student.id))
+      .map((a) => ({
+        studentId: a.student.id,
+        studentLabel: this.studentName(a.student),
+        id: a.id,
+        lecturerId: a.lecturer?.id ?? ''
+      }))
+      .sort((a, b) => compareUk(a.studentLabel, b.studentLabel));
   }
 
   private loadCombinedGroupOptions() {
@@ -482,8 +655,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = [];
     this.formAcademicGroupIds = [];
     this.formCombinedGroupIds = [];
-    this.formPairs.set([]);
-    this.loadStudentOptions(this.isIndividuallyItem(wci) ? wci.academicGroups : []);
+    this.loadStudentRows(this.isIndividuallyItem(wci) ? wci.academicGroups : [], []);
+    this.buildCandidateRows([]);
     this.formDurationHours = this.isIndividuallyItem(wci) ? INDIVIDUAL_DURATION_HOURS : this.defaultDurationHours();
     this.formError.set('');
     this.showForm.set(true);
@@ -498,13 +671,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = (w.lecturers ?? []).map((l) => l.id);
     this.formAcademicGroupIds = (w.academicGroups ?? []).map((g) => g.id);
     this.formCombinedGroupIds = (w.combinedGroups ?? []).map((g) => g.id);
-    this.formPairs.set((w.studentAssignments ?? []).map((a) => ({
-      key: this.nextPairKey++,
-      id: a.id,
-      lecturerId: a.lecturer?.id ?? '',
-      studentId: a.student?.id ?? ''
-    })));
-    this.loadStudentOptions(this.isIndividuallyItem(wci) ? wci.academicGroups : []);
+    this.loadStudentRows(this.isIndividuallyItem(wci) ? wci.academicGroups : [], w.studentAssignments ?? []);
+    this.buildCandidateRows(w.candidates ?? []);
     this.formDurationHours = this.isIndividuallyItem(wci) ? INDIVIDUAL_DURATION_HOURS : String(w.durationHours);
     this.formError.set('');
     this.showForm.set(true);
@@ -524,8 +692,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = [];
     this.formAcademicGroupIds = [];
     this.formCombinedGroupIds = [];
-    this.formPairs.set([]);
-    this.activeStudentOptions.set([]);
+    this.formStudentRows.set([]);
+    this.buildCandidateRows([]);
     this.formDurationHours = this.defaultDurationHours();
     this.formError.set('');
     this.showForm.set(true);
@@ -540,8 +708,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formLecturerIds = (w.lecturers ?? []).map((l) => l.id);
     this.formAcademicGroupIds = (w.academicGroups ?? []).map((g) => g.id);
     this.formCombinedGroupIds = [];
-    this.formPairs.set([]);
-    this.activeStudentOptions.set([]);
+    this.formStudentRows.set([]);
+    this.buildCandidateRows(w.candidates ?? []);
     this.formDurationHours = String(w.durationHours);
     this.formError.set('');
     this.showForm.set(true);
@@ -565,59 +733,136 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     return this.activeTeachingFormat() === 'INDIVIDUALLY';
   }
 
-  // ── Lecturer<->student pairs ────────────────────────────────────────────
-
-  addPair() {
-    this.formPairs.set([...this.formPairs(), { key: this.nextPairKey++, id: null, lecturerId: '', studentId: '' }]);
-  }
-
-  removePair(pair: PairDraft) {
-    this.formPairs.set(this.formPairs().filter((p) => p.key !== pair.key));
-  }
-
-  setPairLecturer(pair: PairDraft, value: any) {
-    this.replacePair(pair, { lecturerId: value == null ? '' : String(value) });
-  }
-
-  setPairStudent(pair: PairDraft, value: any) {
-    this.replacePair(pair, { studentId: value == null ? '' : String(value) });
-  }
-
-  private replacePair(pair: PairDraft, patch: Partial<PairDraft>) {
-    this.formPairs.set(this.formPairs().map((p) => (p.key === pair.key ? { ...p, ...patch } : p)));
-  }
+  // ── Student roster (INDIVIDUALLY) ───────────────────────────────────────
 
   /**
-   * Students still selectable for a pair: everyone except those another pair already claims, plus
-   * this pair's own current pick. Mirrors UNIQUE (lecturer_workload_id, student_id) — a student has
-   * one supervising lecturer per workload — so the constraint can't be hit through the UI.
+   * Sets (or clears, with an empty value) the lecturer supervising one student. Clearing a row
+   * that has a stored pairing is how that pairing gets deleted — the row is then skipped on save,
+   * and the backend's nested-list reconciliation removes any row not present in the list.
+   *
+   * One student can only appear once in the roster, so UNIQUE (lecturer_workload_id, student_id)
+   * is structurally unreachable here rather than needing to be guarded.
    */
-  studentOptionsFor(pair: PairDraft): Option[] {
-    const taken = new Set(this.formPairs().filter((p) => p.key !== pair.key && p.studentId).map((p) => p.studentId));
-    return this.activeStudentOptions().filter((o) => !taken.has(o.id) || o.id === pair.studentId);
+  setRowLecturer(row: StudentRow, value: any) {
+    const lecturerId = value == null ? '' : String(value);
+    this.formStudentRows.set(this.formStudentRows().map(
+      (r) => (r.studentId === row.studentId ? { ...r, lecturerId } : r)));
   }
 
-  /** True once every candidate student is already paired — nothing left to add. */
-  canAddPair(): boolean {
-    return this.formPairs().length < this.activeStudentOptions().length;
+  /** Clears every row's lecturer, to start the roster over without reopening the modal. */
+  clearAllRows() {
+    this.formStudentRows.set(this.formStudentRows().map((r) => ({ ...r, lecturerId: '' })));
+  }
+
+  assignedCount(): number {
+    return this.formStudentRows().filter((r) => r.lecturerId).length;
+  }
+
+  // ── Candidate pool ──────────────────────────────────────────────────────
+
+  setCandidateScore(row: CandidateRow, value: any) {
+    this.replaceCandidate(row, { desirability: value == null ? '' : String(value) });
+  }
+
+  setCandidateMinStudents(row: CandidateRow, value: any) {
+    this.replaceCandidate(row, { minStudents: value == null ? '' : String(value) });
+  }
+
+  setCandidateMaxStudents(row: CandidateRow, value: any) {
+    this.replaceCandidate(row, { maxStudents: value == null ? '' : String(value) });
+  }
+
+  private replaceCandidate(row: CandidateRow, patch: Partial<CandidateRow>) {
+    this.formCandidates.set(this.formCandidates().map(
+      (r) => (r.lecturerId === row.lecturerId ? { ...r, ...patch } : r)));
+  }
+
+  /** A student limit is a non-negative integer, or blank. */
+  isBadStudentCount(raw: string): boolean {
+    const v = raw.trim();
+    if (v === '') return false;
+    const n = Number(v);
+    return !Number.isInteger(n) || n < 0;
+  }
+
+  /** The desired count can't exceed the ceiling. */
+  hasBadStudentRange(row: CandidateRow): boolean {
+    const min = row.minStudents.trim();
+    const max = row.maxStudents.trim();
+    if (min === '' || max === '') return false;
+    if (this.isBadStudentCount(min) || this.isBadStudentCount(max)) return false;
+    return Number(min) > Number(max);
+  }
+
+  candidateCount(): number {
+    return this.formCandidates().filter((r) => r.desirability.trim() !== '').length;
+  }
+
+  /** Clears every score, removing the whole pool on the next save. */
+  clearCandidates() {
+    this.formCandidates.set(this.formCandidates().map((r) => ({ ...r, desirability: '' })));
+  }
+
+  /** Out-of-range scores are highlighted rather than silently clamped. */
+  isBadScore(row: CandidateRow): boolean {
+    const raw = row.desirability.trim();
+    if (raw === '') return false;
+    const n = Number(raw);
+    return !Number.isInteger(n) || n < 1 || n > 100;
+  }
+
+  /** "Прізвище І. (90)" lines, best first — shown under the lecturers cell of the workload table. */
+  candidateLabels(w: Workload): string[] {
+    return (w.candidates ?? [])
+      .slice()
+      .sort((a, b) => (b.desirability ?? 0) - (a.desirability ?? 0)
+        || compareUk(this.lecturerName(a.lecturer), this.lecturerName(b.lecturer)))
+      .map((c) => {
+        const limit = (t: string) => (c.constraints ?? []).find((x) => x.constraintType === t)?.value;
+        const min = limit('MIN_STUDENTS');
+        const max = limit('MAX_STUDENTS');
+        const students = min != null || max != null
+          ? `, студентів ${min ?? '?'}\u2013${max ?? '\u221E'}`
+          : '';
+        return `${this.lecturerName(c.lecturer)} — ${c.desirability}${students}`;
+      });
   }
 
   save() {
     if (!this.activeWorkingCurriculumItemId && !this.activeCombinedWorkingCurriculumItemId) return;
 
-    const individually = this.isIndividually();
-    const pairs = this.formPairs();
-    if (individually) {
-      if (!pairs.length) { this.formError.set('Додайте щонайменше одну пару «викладач — студент».'); return; }
-      if (pairs.some((p) => !p.lecturerId || !p.studentId)) {
-        this.formError.set('У кожній парі оберіть і викладача, і студента.'); return;
+    const bad = this.formCandidates().find((r) => this.isBadScore(r));
+    if (bad) {
+      this.formError.set(`Бажаність для «${bad.lecturerLabel}» має бути цілим числом від 1 до 100.`);
+      return;
+    }
+    if (this.isIndividually()) {
+      const badCount = this.formCandidates().find(
+        (r) => this.isBadStudentCount(r.minStudents) || this.isBadStudentCount(r.maxStudents));
+      if (badCount) {
+        this.formError.set(`Кількість студентів для «${badCount.lecturerLabel}» має бути цілим невід'ємним числом.`);
+        return;
       }
+      const badRange = this.formCandidates().find((r) => this.hasBadStudentRange(r));
+      if (badRange) {
+        this.formError.set(`Бажана кількість студентів для «${badRange.lecturerLabel}» перевищує максимальну.`);
+        return;
+      }
+    }
+
+    const individually = this.isIndividually();
+    // Only students with a lecturer chosen become pairings; the rest of the roster is just the
+    // list of who is still unassigned, and is not sent.
+    const assignedRows = this.formStudentRows().filter((r) => r.lecturerId);
+    if (individually && !assignedRows.length) {
+      this.formError.set('Оберіть викладача щонайменше для одного студента.');
+      return;
     }
 
     const input: Record<string, any> = {
       // For INDIVIDUALLY items the lecturer list is derived from the pairs rather than picked
       // separately, so `lecturers` can never disagree with who actually supervises whom.
-      lecturerIds: individually ? Array.from(new Set(pairs.map((p) => p.lecturerId))) : this.formLecturerIds,
+      lecturerIds: individually ? Array.from(new Set(assignedRows.map((r) => r.lecturerId))) : this.formLecturerIds,
       // Academic groups are meaningless once the assignment is per-student; force-clear them (and
       // vice versa below) so switching an item's teaching format never leaves a stale half-state.
       academicGroupIds: individually ? [] : this.formAcademicGroupIds,
@@ -627,8 +872,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       // Always sent: the nested-list reconciliation reads an empty array as "delete every pairing",
       // which is exactly what a non-INDIVIDUALLY item should end up with.
       studentAssignments: individually
-        ? pairs.map((p) => (p.id ? { id: p.id, lecturerId: p.lecturerId, studentId: p.studentId }
-                                 : { lecturerId: p.lecturerId, studentId: p.studentId }))
+        ? assignedRows.map((r) => (r.id ? { id: r.id, lecturerId: r.lecturerId, studentId: r.studentId }
+                                        : { lecturerId: r.lecturerId, studentId: r.studentId }))
         : [],
       // Not user-selectable for individual work — see INDIVIDUAL_DURATION_HOURS.
       durationHours: Number(individually ? INDIVIDUAL_DURATION_HOURS : this.formDurationHours),
@@ -640,17 +885,267 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
     const id = this.editingId();
     const op = id ? 'updateLecturerWorkload' : 'createLecturerWorkload';
+    // A candidate carries children of its own (its student limits) and the framework's nested
+    // lists only go one level deep, so the pool is written separately — see reconcileCandidates.
     const q = id
       ? `mutation($id: ID!, $input: LecturerWorkloadInputPayload!) { lecturerWorkloads { ${op}(id: $id, lecturerWorkload: $input) { isSuccess errorStatus } } }`
-      : `mutation($input: LecturerWorkloadInputPayload!) { lecturerWorkloads { ${op}(lecturerWorkload: $input) { isSuccess errorStatus } } }`;
+      : `mutation($input: LecturerWorkloadInputPayload!) { lecturerWorkloads { ${op}(lecturerWorkload: $input) { isSuccess errorStatus data { id } } } }`;
 
     this.gql.request(q, id ? { id, input } : { input }).subscribe({
       next: (d: any) => {
         const res = d.lecturerWorkloads[op];
-        if (res.isSuccess) { this.closeForm(); this.loadAll(); }
-        else this.formError.set(res.errorStatus || 'Помилка операції');
+        if (!res.isSuccess) { this.formError.set(res.errorStatus || 'Помилка операції'); return; }
+        const workloadId = id ?? res.data?.id;
+        if (!workloadId) { this.closeForm(); this.loadAll(); return; }
+        this.reconcileCandidates(String(workloadId));
       },
       error: (e) => this.formError.set(e.message)
+    });
+  }
+
+  /**
+   * Brings the candidate pool in line with the roster: scored rows are created or updated (each
+   * carrying its own student limits as a nested list), and a row whose score was cleared is
+   * deleted. Untouched rows are skipped, so an unchanged pool costs no requests at all.
+   */
+  private reconcileCandidates(workloadId: string) {
+    const individually = this.isIndividually();
+    const ops: any[] = [];
+
+    for (const row of this.formCandidates()) {
+      const scored = row.desirability.trim() !== '';
+      if (!scored) {
+        // Was a candidate, no longer is.
+        if (row.id) ops.push(this.gql.request(
+          `mutation($id: ID!) { lecturerWorkloadCandidates { deleteLecturerWorkloadCandidate(id: $id) { isSuccess errorStatus } } }`,
+          { id: row.id }));
+        continue;
+      }
+      if (row.id && candidateSnapshot(row) === row.original) continue;   // nothing changed
+
+      // Student limits apply to individual work only; for anything else the list is sent empty,
+      // which clears whatever was there if the item's format changed.
+      const constraints: Record<string, any>[] = [];
+      if (individually) {
+        if (row.minStudents.trim() !== '') {
+          const c: Record<string, any> = { constraintType: 'MIN_STUDENTS', value: Number(row.minStudents) };
+          if (row.minStudentsId) c['id'] = row.minStudentsId;
+          constraints.push(c);
+        }
+        if (row.maxStudents.trim() !== '') {
+          const c: Record<string, any> = { constraintType: 'MAX_STUDENTS', value: Number(row.maxStudents) };
+          if (row.maxStudentsId) c['id'] = row.maxStudentsId;
+          constraints.push(c);
+        }
+      }
+
+      const input: Record<string, any> = {
+        lecturerWorkloadId: workloadId,
+        lecturerId: row.lecturerId,
+        desirability: Number(row.desirability),
+        constraints
+      };
+      ops.push(row.id
+        ? this.gql.request(
+            `mutation($id: ID!, $input: LecturerWorkloadCandidateInputPayload!) { lecturerWorkloadCandidates { updateLecturerWorkloadCandidate(id: $id, lecturerWorkloadCandidate: $input) { isSuccess errorStatus } } }`,
+            { id: row.id, input })
+        : this.gql.request(
+            `mutation($input: LecturerWorkloadCandidateInputPayload!) { lecturerWorkloadCandidates { createLecturerWorkloadCandidate(lecturerWorkloadCandidate: $input) { isSuccess errorStatus } } }`,
+            { input }));
+    }
+
+    if (!ops.length) { this.closeForm(); this.loadAll(); return; }
+    forkJoin(ops).subscribe({
+      next: (results: any[]) => {
+        const failed = results
+          .map((r) => Object.values(Object.values(r)[0] as any)[0] as any)
+          .find((r) => !r.isSuccess);
+        if (failed) {
+          // The workload itself saved; only part of the pool didn't.
+          this.formError.set(`Навантаження збережено, але кандидатів оновлено не повністю: ${failed.errorStatus || 'помилка'}`);
+          this.loadAll();
+          return;
+        }
+        this.closeForm();
+        this.loadAll();
+      },
+      error: (e: any) => { this.formError.set(`Навантаження збережено, але кандидатів оновлено не повністю: ${e.message}`); this.loadAll(); }
+    });
+  }
+
+  // ── Automatic generation: build inputs, run, preview, apply ─────────────
+
+  /**
+   * Flattens the loaded tree into the generator's plain input shape. Every workload of the
+   * department is included — both those hanging off a single working curriculum item and those on a
+   * combined item — because a lecturer's annual load spans all of them.
+   */
+  private buildGenWorkloads(): GenWorkload[] {
+    const out: GenWorkload[] = [];
+    this.durationByWorkload.clear();
+
+    for (const group of this.groups()) {
+      for (const hg of group.hoursGroups) {
+        for (const wci of hg.items) {
+          // An elective group's real discipline is the chosen elective, not the container.
+          const course = wci.course ?? group.course;
+          for (const w of wci.workloads) {
+            this.durationByWorkload.set(w.id, w.durationHours);
+            out.push({
+              id: w.id,
+              lecturerCount: wci.lecturerCount || 1,
+              assignedLecturerIds: (w.lecturers ?? []).map((l) => l.id),
+              candidates: (w.candidates ?? []).map((c) => ({
+                lecturerId: c.lecturer.id,
+                desirability: c.desirability,
+                minStudents: (c.constraints ?? []).find((x) => x.constraintType === 'MIN_STUDENTS')?.value ?? null,
+                maxStudents: (c.constraints ?? []).find((x) => x.constraintType === 'MAX_STUDENTS')?.value ?? null
+              })),
+              hours: hg.hours ?? 0,
+              hourType: hg.hourType as any,
+              courseId: course.id,
+              courseType: (course as any).courseType ?? group.course.courseType,
+              teachingFormat: (wci.teachingFormat as any) ?? 'TOGETHER',
+              studentIds: this.studentsByWorkload.get(w.id),
+              assignedStudents: (w.studentAssignments ?? []).map((a) => ({
+                studentId: a.student.id, lecturerId: a.lecturer.id
+              })),
+              label: `${group.course.name} · ${this.hourTypeLabel(hg.hourType)} · семестр ${group.semester}`
+            });
+          }
+        }
+      }
+    }
+
+    for (const c of this.combinedItems()) {
+      const first = c.workingCurriculumItems[0];
+      if (!first) continue;
+      const ci = first.curriculumItemHours.curriculumItem;
+      for (const w of c.workloads) {
+        this.durationByWorkload.set(w.id, w.durationHours);
+        out.push({
+          id: w.id,
+          lecturerCount: 1,
+          assignedLecturerIds: (w.lecturers ?? []).map((l) => l.id),
+          candidates: (w.candidates ?? []).map((x) => ({
+            lecturerId: x.lecturer.id, desirability: x.desirability,
+            minStudents: null, maxStudents: null
+          })),
+          hours: first.curriculumItemHours.hours ?? 0,
+          hourType: first.curriculumItemHours.hourType as any,
+          courseId: ci.course.id,
+          courseType: (ci.course as any).courseType ?? 'MANDATORY',
+          teachingFormat: 'TOGETHER',
+          label: `${ci.course.name} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)} · семестр ${ci.semester} (об'єднана)`
+        });
+      }
+    }
+    return out;
+  }
+
+  /** INDIVIDUALLY workloads need their students up front; one aliased query covers every group. */
+  private loadStudentsForGeneration(workloads: GenWorkload[], done: () => void) {
+    const groupsByWorkload = new Map<string, GroupRef[]>();
+    for (const group of this.groups()) {
+      for (const hg of group.hoursGroups) {
+        for (const wci of hg.items) {
+          if (!this.isIndividuallyItem(wci)) continue;
+          for (const w of wci.workloads) groupsByWorkload.set(w.id, wci.academicGroups ?? []);
+        }
+      }
+    }
+    const groupIds = Array.from(new Set(
+      Array.from(groupsByWorkload.values()).flat().map((g) => g.id)));
+    if (!groupIds.length) { done(); return; }
+
+    const parts = groupIds
+      .map((id, i) => `g${i}: studentConnection(limit: 500, offset: 0, academicGroupId: "${id}") { nodes { id } }`)
+      .join(' ');
+    this.gql.request(`{ students { ${parts} } }`).subscribe({
+      next: (d: any) => {
+        const byGroup = new Map<string, string[]>();
+        groupIds.forEach((id, i) => {
+          byGroup.set(id, (d.students?.[`g${i}`]?.nodes ?? []).map((n: any) => n.id));
+        });
+        this.studentsByWorkload.clear();
+        for (const [workloadId, groups] of groupsByWorkload) {
+          const ids = new Set<string>();
+          for (const g of groups) for (const s of byGroup.get(g.id) ?? []) ids.add(s);
+          this.studentsByWorkload.set(workloadId, Array.from(ids));
+        }
+        for (const w of workloads) w.studentIds = this.studentsByWorkload.get(w.id);
+        done();
+      },
+      error: () => done()
+    });
+  }
+
+  generate() {
+    this.genError.set('');
+    this.genResult.set(null);
+    this.genRunning.set(true);
+    const workloads = this.buildGenWorkloads();
+    this.loadStudentsForGeneration(workloads, () => {
+      try {
+        this.genResult.set(generateWorkloads({
+          workloads,
+          lecturers: this.genLecturers(),
+          defaultMaxHoursPerYear: this.defaultMaxHoursPerYear(),
+          mode: this.genMode()
+        }));
+      } catch (e: any) {
+        this.genError.set(e?.message ?? 'Не вдалося сформувати навантаження.');
+      }
+      this.genRunning.set(false);
+    });
+  }
+
+  discardPlan() { this.genResult.set(null); this.genError.set(''); }
+
+  /** Only the workloads the plan actually changes are written. */
+  changedAssignments() {
+    return (this.genResult()?.assignments ?? []).filter((a) => a.changed);
+  }
+
+  issuesOf(kind: GenIssue['kind']): GenIssue[] {
+    return (this.genResult()?.issues ?? []).filter((i) => i.kind === kind);
+  }
+
+  applyPlan() {
+    const changed = this.changedAssignments();
+    if (!changed.length) return;
+    this.genApplying.set(true);
+    this.genError.set('');
+
+    const ops = changed.map((a) => {
+      const input: Record<string, any> = {
+        lecturerIds: a.lecturerIds,
+        // Required by the input payload even though generation never changes it — see
+        // durationByWorkload.
+        durationHours: this.durationByWorkload.get(a.workloadId) ?? Number(this.defaultDurationHours())
+      };
+      if (a.studentAssignments) {
+        input['studentAssignments'] = a.studentAssignments.map((p) => ({
+          lecturerId: p.lecturerId, studentId: p.studentId
+        }));
+      }
+      return this.gql.request(
+        `mutation($id: ID!, $input: LecturerWorkloadInputPayload!) { lecturerWorkloads { updateLecturerWorkload(id: $id, lecturerWorkload: $input) { isSuccess errorStatus } } }`,
+        { id: a.workloadId, input });
+    });
+
+    forkJoin(ops).subscribe({
+      next: (results: any[]) => {
+        const failed = results
+          .map((r) => Object.values(Object.values(r)[0] as any)[0] as any)
+          .filter((r) => !r.isSuccess);
+        this.genApplying.set(false);
+        if (failed.length) {
+          this.genError.set(`Застосовано частково: ${failed.length} з ${results.length} записів не оновлено (${failed[0].errorStatus || 'помилка'}).`);
+        }
+        this.loadAll();
+      },
+      error: (e: any) => { this.genApplying.set(false); this.genError.set(e.message); this.loadAll(); }
     });
   }
 
@@ -665,4 +1160,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       error: (e) => this.error.set(e.message)
     });
   }
+}
+
+/** The four editable values of a candidate row, for cheap change detection between loads. */
+function candidateSnapshot(row: CandidateRow): string {
+  return [row.desirability, row.minStudents, row.maxStudents].map((v) => v.trim()).join('|');
 }

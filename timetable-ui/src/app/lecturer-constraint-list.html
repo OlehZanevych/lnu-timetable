@@ -1,0 +1,131 @@
+<div class="page-header">
+  <div>
+    <h2>Обмеження навантаження</h2>
+    <p class="muted">
+      {{ specificallyConstrainedCount() }} із {{ blocks().length }} викладачів мають спеціальні обмеження
+      @if (defaultMaxHours() !== null) {
+        &middot; типовий максимум {{ defaultMaxHours() }} год./рік
+      }
+    </p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="ce-toolbar">
+  <label class="ce-search">
+    <span>Пошук викладача</span>
+    <input type="text" [ngModel]="lecturerFilter()" (ngModelChange)="lecturerFilter.set($event)"
+           name="lecturerFilter" placeholder="прізвище&hellip;" />
+  </label>
+  <label class="ce-check" title="Не враховує загальні обмеження: години на рік і максимум дисциплін усього">
+    <input type="checkbox" [ngModel]="onlySpecific()" (ngModelChange)="onlySpecific.set($event)"
+           name="onlySpecific" />
+    <span>лише зі спеціальними обмеженнями</span>
+  </label>
+</div>
+
+@for (block of visibleBlocks(); track block.id) {
+  @let invalid = invalidKeys(block);
+  @let issues = violations(block);
+
+  <div class="card lc-card" [class.invalid]="issues.length" [class.dirty]="block.dirty() && !issues.length">
+    <div class="lc-header">
+      <strong>{{ block.name }}</strong>
+      <span class="muted">
+        задано {{ setCount(block) }} обмежень &middot; спеціальних {{ specificCount(block) }}
+      </span>
+      <button type="button" class="ghost" [disabled]="!setCount(block) || block.saving()" (click)="clear(block)">
+        Очистити
+      </button>
+    </div>
+
+    @if (block.error()) { <p class="error">{{ block.error() }}</p> }
+
+    @if (issues.length) {
+      <ul class="lc-issues">
+        @for (issue of issues; track issue.message) {
+          <li>{{ issue.message }}</li>
+        }
+      </ul>
+    }
+
+    <div class="lc-scalars">
+      <label [class.invalid]="invalid.has(MIN_HOURS)">
+        <span>{{ label(MIN_HOURS) }}</span>
+        <input type="number" min="0" placeholder="не задано"
+               [ngModel]="value(block, MIN_HOURS)" (ngModelChange)="setValue(block, MIN_HOURS, $event)"
+               [name]="'minH_' + block.id" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label [class.invalid]="invalid.has(MAX_HOURS)">
+        <span>
+          {{ label(MAX_HOURS) }}
+          @if (!value(block, MAX_HOURS) && defaultMaxHours() !== null) {
+            <em class="lc-default">типово {{ defaultMaxHours() }}</em>
+          }
+        </span>
+        <input type="number" min="0" [placeholder]="defaultMaxHours() !== null ? defaultMaxHours() : 'не задано'"
+               [ngModel]="value(block, MAX_HOURS)" (ngModelChange)="setValue(block, MAX_HOURS, $event)"
+               [name]="'maxH_' + block.id" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label [class.invalid]="invalid.has(MAX_COURSES)">
+        <span>{{ label(MAX_COURSES) }}</span>
+        <input type="number" min="0" placeholder="не задано"
+               [ngModel]="value(block, MAX_COURSES)" (ngModelChange)="setValue(block, MAX_COURSES, $event)"
+               [name]="'maxC_' + block.id" [ngModelOptions]="{ standalone: true }" />
+      </label>
+    </div>
+
+    <table class="lc-grid">
+      <thead>
+        <tr>
+          <th>Кількість різних дисциплін</th>
+          @for (h of HOUR_TYPES; track h) {
+            <th>{{ HOUR_TYPE_LABELS[h] }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (scope of SCOPES; track scope) {
+          <tr>
+            <th>{{ SCOPE_LABELS[scope] }}</th>
+            @for (h of HOUR_TYPES; track h) {
+              @let minKey = courseKey('MIN', scope, h);
+              @let maxKey = courseKey('MAX', scope, h);
+              <td>
+                <div class="lc-pair">
+                  <input type="number" min="0" placeholder="мін" [attr.aria-label]="label(minKey)"
+                         [class.invalid]="invalid.has(minKey)"
+                         [ngModel]="value(block, minKey)" (ngModelChange)="setValue(block, minKey, $event)"
+                         [name]="minKey + '_' + block.id" [ngModelOptions]="{ standalone: true }" />
+                  <input type="number" min="0" placeholder="макс" [attr.aria-label]="label(maxKey)"
+                         [class.invalid]="invalid.has(maxKey)"
+                         [ngModel]="value(block, maxKey)" (ngModelChange)="setValue(block, maxKey, $event)"
+                         [name]="maxKey + '_' + block.id" [ngModelOptions]="{ standalone: true }" />
+                </div>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <div class="lc-actions">
+      <button type="button" [disabled]="!block.dirty() || block.saving() || issues.length" (click)="save(block)">
+        {{ block.saving() ? 'Збереження&hellip;' : 'Зберегти' }}
+      </button>
+      @if (block.dirty()) {
+        <button type="button" class="ghost" [disabled]="block.saving()" (click)="revert(block)">Скасувати</button>
+      }
+      @if (issues.length) {
+        <span class="muted lc-blocked">Збереження заблоковано до усунення суперечностей.</span>
+      }
+    </div>
+  </div>
+} @empty {
+  <p class="muted">
+    @if (loading()) { Завантаження&hellip; }
+    @else if (blocks().length) { Жоден викладач не відповідає фільтру. }
+    @else { На цій кафедрі ще немає викладачів. }
+  </p>
+}

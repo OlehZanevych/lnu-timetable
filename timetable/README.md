@@ -102,8 +102,11 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/CONSULTATION/ASSESSMENT/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
 | `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups, M-N combined working curriculum items |
 | `CombinedWorkingCurriculumItem` | `combined_working_curriculum_items` | pure M-N hub, no scalar fields of its own; bundles several `WorkingCurriculumItem`s that share course/semester/hour-type (e.g. one shared lecture across specialties) so one `LecturerWorkload` can cover all of them at once; → M-N working curriculum items, workloads |
-| `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads |
+| `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads, workloadConstraints |
+| `LecturerWorkloadConstraint` | `lecturer_workload_constraints` | one (type, value) workload restriction; no standalone queries/mutations — written through `Lecturer`'s `workloadConstraints` nested list; → lecturer |
 | `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → M-N lecturers, M-N academicGroups, M-N combinedGroups, 1-N studentAssignments (INDIVIDUALLY only), *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
+| `LecturerWorkloadCandidate` | `lecturer_workload_candidates` | a lecturer who *could* deliver a workload, scored 1-100 by desirability — the pool automatic generation picks from, distinct from the lecturers actually assigned; no standalone queries/mutations (written through `LecturerWorkload`'s `candidates` nested list); → workload, lecturer |
+| `LecturerWorkloadCandidateConstraint` | `lecturer_workload_candidate_constraints` | `MIN_STUDENTS` (desired) / `MAX_STUDENTS` (ceiling) for one candidate, used only by `INDIVIDUALLY`-taught items; → candidate |
 | `LecturerWorkloadStudent` | `lecturer_workload_students` | one lecturer↔student pairing of an `INDIVIDUALLY`-taught workload; no standalone queries/mutations — written through `LecturerWorkload`'s `studentAssignments` nested list; → workload, lecturer, student |
 | `Student` | `students` | first/middle/last name (по батькові optional), record book number; → academic group |
 | `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
@@ -119,7 +122,10 @@ Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbrevia
 `lecturers.email`, `curriculum_items(course_id, specialty_id, semester)`,
 `curriculum_item_hours(curriculum_item_id, hour_type)`, `course_tags(course_id, tag)`,
 `lecturer_workload_students(lecturer_workload_id, student_id)` (within one workload a student has
-exactly one supervising lecturer).
+exactly one supervising lecturer), `lecturer_workload_constraints(lecturer_id, constraint_type)`
+(a constraint is set at most once per lecturer), `lecturer_workload_candidates(lecturer_workload_id,
+lecturer_id)` (a lecturer is a candidate for a workload at most once, with `CHECK (desirability
+BETWEEN 1 AND 100)`).
 
 > **History note**: earlier versions of this service modeled a *curriculum* as its own
 > entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
@@ -136,6 +142,8 @@ ordering significance beyond their values, because `ORDER BY` on an enum column 
 |---|---|
 | `hour_type` | `LECTURE`, `PRACTICAL`, `LAB`, `CONSULTATION`, `ASSESSMENT`, `INDEPENDENT_WORK` |
 | `teaching_format` | `TOGETHER`, `SEPARATELY`, `INDIVIDUALLY` |
+| `lecturer_workload_candidate_constraint_type` | `MIN_STUDENTS`, `MAX_STUDENTS` |
+| `lecturer_workload_constraint_type` | `MIN`/`MAX_HOURS_PER_YEAR`, `MAX_COURSES`, and `MIN`/`MAX_[MANDATORY\|ELECTIVE]_[LECTURE\|PRACTICAL\|LAB]_COURSES` (21 values) |
 | `control_form` | `EXAM`, `CREDIT`, `GRADED_CREDIT` |
 | `course_type` | `MANDATORY`, `ELECTIVE_GROUP`, `ELECTIVE`, `OPTIONAL`, `INTERNSHIP`, `COURSE_PROJECT`, `COURSE_WORK`, `QUALIFICATION_WORK` |
 | `week_parity` | `WEEKLY`, `NUMERATOR`, `DENOMINATOR` |
@@ -186,7 +194,8 @@ client-side — see its README's *Ukrainian sorting*.
 `global_properties` (`name` VARCHAR **primary key**, `type` a `property_type` enum, `value`
 VARCHAR) is a generic name/type/value store for system-wide settings — currently
 `academic_hour_duration_minutes`, `semester_duration_weeks`, `current_semester_parity`
-(`ODD`/`EVEN`) and `default_class_duration_hours`. It deliberately has **no** annotated
+(`ODD`/`EVEN`), `default_class_duration_hours` and `default_max_hours_per_year` (the annual
+teaching ceiling applied to a lecturer who sets none of their own). It deliberately has **no** annotated
 `GlobalProperty` domain class: the whole framework (`EntityMetadataRegistry`,
 `DynamicGraphQLSchemaBuilder`, `DynamicDataFetchers`, `R2dbcQueryEngine.selectOne`/`insert`/
 `update`/`delete`) hardcodes the assumption that every entity has a `Long id` primary key, which
@@ -200,6 +209,46 @@ hand-written fetchers in `DynamicDataFetchers` (`globalPropertyList()`, `globalP
 columnValues, whereColumn, whereValue)` — an `update()` variant keyed by an arbitrary column
 instead of the conventional `id` — was added specifically to make `updateGlobalProperty` possible
 without touching the generic `update()`/`selectOne()` methods every other entity relies on.
+
+### Join tables with no entity of their own
+
+Several many-to-many links exist only as join tables, reached through a `@ManyToMany` field rather
+than a `@GraphQLEntity` class of their own — they carry no columns beyond the two foreign keys, so
+there is nothing to query or mutate directly:
+
+| Join table | Links | Exposed as |
+|---|---|---|
+| `course_specialties` | `Course` ↔ `Specialty` | `Course.specialties`, `specialtyIds` input |
+| `course_tags` *(has an entity)* | `Course` → `CourseTag` | nested list, see `CourseTag` |
+| `combined_group_academic_groups` | `CombinedGroup` ↔ `AcademicGroup` | `CombinedGroup.academicGroups` |
+| `working_curriculum_item_groups` | `WorkingCurriculumItem` ↔ `AcademicGroup` | `academicGroupIds` input |
+| `combined_working_curriculum_item_members` | `CombinedWorkingCurriculumItem` ↔ `WorkingCurriculumItem` | `workingCurriculumItemIds` input |
+| `lecturer_workload_lecturers` | `LecturerWorkload` ↔ `Lecturer` | `lecturerIds` input |
+| `lecturer_workload_academic_groups` | `LecturerWorkload` ↔ `AcademicGroup` | `academicGroupIds` input |
+| `lecturer_workload_combined_groups` | `LecturerWorkload` ↔ `CombinedGroup` | `combinedGroupIds` input |
+
+Contrast the four tables that *do* have entities despite looking like join tables —
+`lecturer_workload_students`, `lecturer_workload_candidates`,
+`lecturer_workload_candidate_constraints` and `lecturer_workload_constraints`. Each carries data
+beyond the pair of keys (a desirability score, a constraint value), which is exactly why it needs a
+surrogate id and an entity rather than a `@ManyToMany`.
+
+### Inputs for automatic workload generation
+
+Four tables added for the generator, which lives entirely in the frontend
+([WORKLOAD-GENERATION.md](../timetable-ui/WORKLOAD-GENERATION.md)) — the service only stores and
+serves them:
+
+| Table | Answers |
+|---|---|
+| `lecturer_workload_candidates` | *Who could deliver this workload, and how much do we want them to?* (1–100) |
+| `lecturer_workload_candidate_constraints` | *For individual work, how many students should this candidate get?* (`MIN_STUDENTS` desired, `MAX_STUDENTS` ceiling) |
+| `lecturer_workload_constraints` | *What may this lecturer be given overall?* — annual hours and distinct-course counts, by hour type and by mandatory/elective |
+| `global_properties.default_max_hours_per_year` | *…and what applies when they set no annual ceiling of their own?* |
+
+The service enforces none of these as scheduling rules; they are data the generator reads. The only
+guarantees the database makes are structural — value ranges, uniqueness, and the cascades that keep
+them from outliving their parents.
 
 ### `users` / `groups` / `permissions` — outside the entity framework
 
@@ -229,6 +278,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `Course` | `Department`?, `Faculty`?, parent `Course`? (elective group → its options) |
 | `CourseTag` | `Course` |
 | `Lecturer` | `Department` |
+| `LecturerWorkloadConstraint` | `Lecturer` |
 | `AcademicGroup` | `Specialty` |
 | `CombinedGroup` | any member `AcademicGroup` (via `combined_group_academic_groups`) |
 | `Student` | `AcademicGroup` |
@@ -237,6 +287,8 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `WorkingCurriculumItem` | `Department`, `CurriculumItemHours`, elective `Course`? |
 | `CombinedWorkingCurriculumItem` | any member `WorkingCurriculumItem` (via `combined_working_curriculum_item_members`) |
 | `LecturerWorkload` | `WorkingCurriculumItem`?, `CombinedWorkingCurriculumItem`?, any linked `Lecturer`/`AcademicGroup`/`CombinedGroup` (join tables) |
+| `LecturerWorkloadCandidate` | `LecturerWorkload` |
+| `LecturerWorkloadCandidateConstraint` | `LecturerWorkloadCandidate` |
 | `LecturerWorkloadStudent` | `LecturerWorkload` |
 | `TimetableEntry` | `LecturerWorkload`, `Room` |
 | `Building`, `AcademicDegree`, `ClassStartTime` | *(none — top-level; only an administrator can create/modify these)* |
@@ -322,6 +374,14 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
 
 `nullableRelation(...)` declares an optional to-one relation (e.g. a workload tied to either
 an academic group *or* a combined group; an elective `WorkingCurriculumItem.course`).
+
+**Nested lists are one level deep.** `createNestedLists`/`reconcileNestedLists` bind each child's
+own scalar and FK columns; they do not recurse, so a child that itself owns a list needs its own
+mutations. `LecturerWorkloadCandidate` is the case in point: it carries `constraints`
+(`MIN_STUDENTS`/`MAX_STUDENTS`) as *its* nested list, and therefore has standalone
+create/update/delete mutations rather than riding along on `LecturerWorkload`'s input payload — which
+also keeps a single writer for those rows, since a nested list on the workload would reconcile (and
+delete) candidates behind those mutations' back.
 
 **Nested one-to-many children in one mutation** — `.nestedList(fieldName, childClass,
 fkField, ...childInputFields)` lets a single `createCurriculumItem`/`updateCurriculumItem`

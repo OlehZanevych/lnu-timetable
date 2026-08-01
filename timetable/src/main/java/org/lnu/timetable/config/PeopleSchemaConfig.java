@@ -16,6 +16,7 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
     public void configure(SchemaDefinition s) {
         configureAcademicDegree(s);
         configureLecturer(s);
+        configureLecturerWorkloadConstraint(s);
         configureStudent(s);
         configureAcademicGroup(s);
         configureCombinedGroup(s);
@@ -55,21 +56,23 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureLecturer(SchemaDefinition s) {
         s.type(Lecturer.class)
-            .fields("firstName", "middleName", "lastName", "email", "position", "maxHoursPerWeek")
+            .fields("firstName", "middleName", "lastName", "email", "position")
             .nullableRelation("academicDegree")
-            .relation("department").relation("workloads");
+            .relation("department").relation("workloads").relation("workloadConstraints");
 
         s.query("lecturerConnection").entity(Lecturer.class).connection().orderBy("lastName").filter("departmentId", "department_id");
         s.query("lecturer").entity(Lecturer.class).findById();
 
         s.mutation("createLecturer").entity(Lecturer.class).create()
-            .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
+            .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "departmentId")
+            .nestedList("workloadConstraints", LecturerWorkloadConstraint.class, "lecturerId", "constraintType", "value")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateLecturer").entity(Lecturer.class).update()
-            .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "maxHoursPerWeek", "departmentId")
+            .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "departmentId")
+            .nestedList("workloadConstraints", LecturerWorkloadConstraint.class, "lecturerId", "constraintType", "value")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURER_NOT_FOUND", "Lecturer not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -78,6 +81,20 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("deleteLecturer").entity(Lecturer.class).delete()
             .errorStatus("LECTURER_NOT_FOUND", "Lecturer not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // LecturerWorkloadConstraint
+    // -------------------------------------------------------------------------
+
+    /**
+     * Registered as a type so Lecturer.workloadConstraints resolves, but with no queries or
+     * mutations of its own: a lecturer's constraints are only meaningful (and only validatable)
+     * as a set, so they are written through Lecturer's "workloadConstraints" nestedList above.
+     */
+    private void configureLecturerWorkloadConstraint(SchemaDefinition s) {
+        s.type(LecturerWorkloadConstraint.class)
+            .fields("constraintType", "value");
     }
 
     // -------------------------------------------------------------------------

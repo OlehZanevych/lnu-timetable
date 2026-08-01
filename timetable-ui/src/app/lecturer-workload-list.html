@@ -7,6 +7,99 @@
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 
+<!-- ── Automatic generation ── -->
+<div class="card gen-panel">
+  <div class="gen-header">
+    <strong>&#x2699; Автоматичне формування навантаження</strong>
+    <label class="gen-mode">
+      <input type="radio" name="genMode" value="gaps"
+             [checked]="genMode() === 'gaps'" (change)="genMode.set('gaps')" />
+      <span>лише незаповнені та неповні</span>
+    </label>
+    <label class="gen-mode">
+      <input type="radio" name="genMode" value="all"
+             [checked]="genMode() === 'all'" (change)="genMode.set('all')" />
+      <span>перевизначити всіх викладачів кафедри</span>
+    </label>
+    <button type="button" [disabled]="genRunning() || genApplying()" (click)="generate()">
+      {{ genRunning() ? 'Обчислення&hellip;' : 'Сформувати' }}
+    </button>
+  </div>
+
+  <p class="muted gen-hint">
+    Викладачі підбираються лише з кандидатів кожної позиції, за спаданням бажаності, з дотриманням
+    максимальних обмежень навантаження. Нічого не зберігається, доки ви не натиснете
+    &laquo;Застосувати&raquo;.
+  </p>
+
+  @if (genError()) { <p class="error">{{ genError() }}</p> }
+
+  @if (genResult(); as plan) {
+    <div class="gen-summary">
+      <span><strong>{{ plan.filledSlots }}</strong> із {{ plan.requestedSlots }} місць заповнено</span>
+      <span><strong>{{ changedAssignments().length }}</strong> записів буде змінено</span>
+      <span class="muted">сумарна бажаність {{ plan.totalDesirability }}</span>
+    </div>
+
+    @if (issuesOf('no-candidates').length || issuesOf('unfilled').length) {
+      <ul class="gen-issues error-list">
+        @for (i of issuesOf('no-candidates'); track i.message) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('unfilled'); track i.message) { <li>{{ i.message }}</li> }
+      </ul>
+    }
+    @if (issuesOf('unmet-minimum').length || issuesOf('no-students').length) {
+      <ul class="gen-issues warn-list">
+        @for (i of issuesOf('unmet-minimum'); track i.message) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('no-students'); track i.message) { <li>{{ i.message }}</li> }
+      </ul>
+    }
+
+    @if (changedAssignments().length) {
+      <table class="wci-table gen-table">
+        <thead>
+          <tr><th>Позиція</th><th>Викладачі після формування</th></tr>
+        </thead>
+        <tbody>
+          @for (a of changedAssignments(); track a.workloadId) {
+            <tr>
+              <td>{{ a.workloadLabel }}</td>
+              <td>
+                @if (a.studentAssignments) {
+                  {{ a.studentAssignments.length }} студент(ів) розподілено між
+                  {{ a.lecturerIds.length }} викладач(ами)
+                } @else {
+                  {{ a.lecturerIds.length ? a.lecturerIds.length + ' викладач(ів)' : '&mdash;' }}
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <p class="muted">Нічого змінювати &mdash; усі позиції вже заповнені відповідно до кандидатів.</p>
+    }
+
+    <div class="gen-actions">
+      <button type="button" [disabled]="!changedAssignments().length || genApplying()" (click)="applyPlan()">
+        {{ genApplying() ? 'Застосування&hellip;' : 'Застосувати' }}
+      </button>
+      <button type="button" class="ghost" [disabled]="genApplying()" (click)="discardPlan()">Відхилити</button>
+    </div>
+
+    <details class="gen-load">
+      <summary>Навантаження викладачів після формування</summary>
+      <table class="wci-table">
+        <thead><tr><th>Викладач</th><th>Годин на рік</th><th>Дисциплін</th></tr></thead>
+        <tbody>
+          @for (l of plan.load; track l.lecturerId) {
+            <tr><td>{{ l.name }}</td><td>{{ l.hours }}</td><td>{{ l.courses }}</td></tr>
+          }
+        </tbody>
+      </table>
+    </details>
+  }
+</div>
+
 @if (combinedItems().length > 0) {
   <h3>Об'єднані позиції</h3>
 
@@ -37,7 +130,17 @@
             <tbody>
               @for (w of c.workloads; track w.id) {
                 <tr>
-                  <td>{{ lecturerNames(w) }}</td>
+                  <td>
+                    {{ lecturerNames(w) }}
+                    @if (candidateLabels(w).length) {
+                      <div class="lw-candidate-note">
+                        <span>кандидати:</span>
+                        @for (line of candidateLabels(w); track line) {
+                          <div>{{ line }}</div>
+                        }
+                      </div>
+                    }
+                  </td>
                   <td>{{ academicGroupNames(w.academicGroups) }}</td>
                   <td>{{ w.durationHours }} год.</td>
                   <td class="row-actions">
@@ -115,6 +218,14 @@
                         } @empty {
                           <span class="muted">&mdash;</span>
                         }
+                        @if (candidateLabels(w).length) {
+                          <div class="lw-candidate-note">
+                            <span>кандидати:</span>
+                            @for (line of candidateLabels(w); track line) {
+                              <div>{{ line }}</div>
+                            }
+                          </div>
+                        }
                       </td>
                       <td>
                         @for (pair of pairRows(w); track $index) {
@@ -124,7 +235,17 @@
                         }
                       </td>
                     } @else {
-                      <td>{{ lecturerNames(w) }}</td>
+                      <td>
+                        {{ lecturerNames(w) }}
+                        @if (candidateLabels(w).length) {
+                          <div class="lw-candidate-note">
+                            <span>кандидати:</span>
+                            @for (line of candidateLabels(w); track line) {
+                              <div>{{ line }}</div>
+                            }
+                          </div>
+                        }
+                      </td>
                       <td>{{ academicGroupNames(w.academicGroups) }}</td>
                       @if (wci.teachingFormat === 'SEPARATELY') {
                         <td>{{ combinedGroupNames(w.combinedGroups) }}</td>
@@ -168,32 +289,35 @@
         @if (isIndividually()) {
           <div class="lw-pairs">
             <div class="lw-pairs-header">
-              <span>Викладачі та студенти</span>
-              <button type="button" class="ghost" [disabled]="!canAddPair()" (click)="addPair()">+ Додати пару</button>
+              <span>Викладачі студентів</span>
+              <span class="muted lw-pairs-count">
+                призначено {{ assignedCount() }} із {{ formStudentRows().length }}
+              </span>
+              <button type="button" class="ghost danger" [disabled]="!assignedCount()" (click)="clearAllRows()">
+                Очистити всіх
+              </button>
             </div>
             <p class="muted lw-pairs-hint">
               Заняття проводяться індивідуально з кожним студентом, тому замість академічних груп
-              вказуються пари «викладач &mdash; студент».
+              для кожного студента вказується його викладач. Студентів без викладача не буде
+              збережено.
             </p>
 
-            @for (pair of formPairs(); track pair.key) {
-              <div class="lw-pair-row">
-                <label>
-                  <span>Викладач *</span>
-                  <app-search-select [options]="lecturerOptions()" placeholder="&mdash; не обрано &mdash;"
-                                     [ngModel]="pair.lecturerId" (ngModelChange)="setPairLecturer(pair, $event)"
-                                     [name]="'pairLecturer_' + pair.key" [ngModelOptions]="{ standalone: true }" />
-                </label>
-                <label>
-                  <span>Студент *</span>
-                  <app-search-select [options]="studentOptionsFor(pair)" placeholder="&mdash; не обрано &mdash;"
-                                     [ngModel]="pair.studentId" (ngModelChange)="setPairStudent(pair, $event)"
-                                     [name]="'pairStudent_' + pair.key" [ngModelOptions]="{ standalone: true }" />
-                </label>
-                <button type="button" class="ghost danger" (click)="removePair(pair)">&#x2715;</button>
+            @for (row of formStudentRows(); track row.studentId) {
+              <div class="lw-pair-row" [class.assigned]="row.lecturerId">
+                <span class="lw-student-name">{{ row.studentLabel }}</span>
+                <app-search-select [options]="lecturerOptions()" placeholder="&mdash; не призначено &mdash;"
+                                   [ngModel]="row.lecturerId" (ngModelChange)="setRowLecturer(row, $event)"
+                                   [name]="'rowLecturer_' + row.studentId" [ngModelOptions]="{ standalone: true }" />
               </div>
             } @empty {
-              <p class="muted lw-pairs-empty">Пар ще немає &mdash; натисніть &laquo;Додати пару&raquo;.</p>
+              <p class="muted lw-pairs-empty">
+                @if (loadingStudents()) {
+                  Завантаження студентів&hellip;
+                } @else {
+                  В академічних групах цієї позиції ще немає студентів.
+                }
+              </p>
             }
           </div>
         } @else {
@@ -219,6 +343,55 @@
                                 name="durationHours" [ngModelOptions]="{ standalone: true }" />
           </label>
         }
+
+        <div class="lw-pairs lw-candidates">
+          <div class="lw-pairs-header">
+            <span>Кандидати на викладання</span>
+            <span class="muted lw-pairs-count">обрано {{ candidateCount() }}</span>
+            <button type="button" class="ghost danger" [disabled]="!candidateCount()" (click)="clearCandidates()">
+              Очистити
+            </button>
+          </div>
+          <p class="muted lw-pairs-hint">
+            Бажаність від 1 до 100: 100 &mdash; найбільш бажаний викладач, 1 &mdash; вкрай небажаний.
+            Порожнє поле означає, що викладач не є кандидатом. Використовується для автоматичного
+            формування навантаження.
+          </p>
+          @if (isIndividually()) {
+            <p class="muted lw-pairs-hint">
+              Для індивідуальних занять можна вказати бажану та максимальну кількість студентів.
+              Спершу кожному кандидату намагаються дати бажану кількість; студентів понад неї
+              розподіляють між тими, у кого є запас до максимуму, за спаданням бажаності.
+            </p>
+          }
+
+          @for (row of formCandidates(); track row.lecturerId) {
+            <div class="lw-pair-row" [class.assigned]="row.desirability">
+              <span class="lw-student-name">{{ row.lecturerLabel }}</span>
+              <input type="number" min="1" max="100" step="1" placeholder="не кандидат"
+                     class="lw-score" [class.invalid]="isBadScore(row)"
+                     [attr.aria-label]="'Бажаність: ' + row.lecturerLabel"
+                     [ngModel]="row.desirability" (ngModelChange)="setCandidateScore(row, $event)"
+                     [name]="'cand_' + row.lecturerId" [ngModelOptions]="{ standalone: true }" />
+              @if (isIndividually() && row.desirability) {
+                <span class="lw-students-fields" [class.range-invalid]="hasBadStudentRange(row)">
+                  <input type="number" min="0" step="1" placeholder="бажано студентів"
+                         class="lw-score" [class.invalid]="isBadStudentCount(row.minStudents) || hasBadStudentRange(row)"
+                         [attr.aria-label]="'Бажана кількість студентів: ' + row.lecturerLabel"
+                         [ngModel]="row.minStudents" (ngModelChange)="setCandidateMinStudents(row, $event)"
+                         [name]="'candMin_' + row.lecturerId" [ngModelOptions]="{ standalone: true }" />
+                  <input type="number" min="0" step="1" placeholder="макс. студентів"
+                         class="lw-score" [class.invalid]="isBadStudentCount(row.maxStudents) || hasBadStudentRange(row)"
+                         [attr.aria-label]="'Максимум студентів: ' + row.lecturerLabel"
+                         [ngModel]="row.maxStudents" (ngModelChange)="setCandidateMaxStudents(row, $event)"
+                         [name]="'candMax_' + row.lecturerId" [ngModelOptions]="{ standalone: true }" />
+                </span>
+              }
+            </div>
+          } @empty {
+            <p class="muted lw-pairs-empty">На цій кафедрі ще немає викладачів.</p>
+          }
+        </div>
 
         <div class="actions">
           <button type="submit">{{ editingId() ? 'Зберегти' : 'Створити' }}</button>

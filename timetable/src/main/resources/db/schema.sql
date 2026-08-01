@@ -94,9 +94,58 @@ CREATE TABLE lecturers
     email                VARCHAR(64) UNIQUE,
     position             lecturer_position,
     academic_degree_id   BIGINT REFERENCES academic_degrees (id) ON DELETE SET NULL,
-    min_hours_per_week   INTEGER,
-    max_hours_per_week   INTEGER,
     department_id        BIGINT NOT NULL REFERENCES departments (id) ON DELETE CASCADE
+);
+
+-- Workload restrictions for a lecturer, one row per constraint that is actually set. Replaces the
+-- former lecturers.min_hours_per_week / max_hours_per_week pair: the rules a real workload plan has
+-- to satisfy are per-year rather than per-week, and most of them bound a *count of distinct
+-- courses* rather than hours, so a fixed column per rule would mean two dozen mostly-NULL columns.
+--
+-- A lecturer with no row for a given constraint is unconstrained by it, except for
+-- MAX_HOURS_PER_YEAR, which falls back to the `default_max_hours_per_year` global property.
+--
+-- Naming: <MIN|MAX>_[MANDATORY|ELECTIVE]_[LECTURE|PRACTICAL|LAB]_COURSES counts *distinct courses*
+-- in which the lecturer runs classes of that hour type; MANDATORY/ELECTIVE narrow it to
+-- courses.course_type. MAX_COURSES bounds the distinct courses taught across all three taught hour
+-- types together. The remaining two are academic-hour totals for the whole academic year.
+CREATE TYPE lecturer_workload_constraint_type AS ENUM (
+    -- academic hours per academic year, across everything the lecturer teaches
+    'MIN_HOURS_PER_YEAR',
+    'MAX_HOURS_PER_YEAR',
+    -- distinct courses with any taught hour type (LECTURE, PRACTICAL or LAB)
+    'MAX_COURSES',
+    -- distinct courses, by hour type
+    'MIN_LECTURE_COURSES',
+    'MAX_LECTURE_COURSES',
+    'MIN_PRACTICAL_COURSES',
+    'MAX_PRACTICAL_COURSES',
+    'MIN_LAB_COURSES',
+    'MAX_LAB_COURSES',
+    -- distinct mandatory courses, by hour type
+    'MIN_MANDATORY_LECTURE_COURSES',
+    'MAX_MANDATORY_LECTURE_COURSES',
+    'MIN_MANDATORY_PRACTICAL_COURSES',
+    'MAX_MANDATORY_PRACTICAL_COURSES',
+    'MIN_MANDATORY_LAB_COURSES',
+    'MAX_MANDATORY_LAB_COURSES',
+    -- distinct elective courses, by hour type
+    'MIN_ELECTIVE_LECTURE_COURSES',
+    'MAX_ELECTIVE_LECTURE_COURSES',
+    'MIN_ELECTIVE_PRACTICAL_COURSES',
+    'MAX_ELECTIVE_PRACTICAL_COURSES',
+    'MIN_ELECTIVE_LAB_COURSES',
+    'MAX_ELECTIVE_LAB_COURSES'
+);
+
+CREATE TABLE lecturer_workload_constraints
+(
+    id              BIGSERIAL PRIMARY KEY,
+    lecturer_id     BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
+    constraint_type lecturer_workload_constraint_type NOT NULL,
+    value           INTEGER NOT NULL CHECK (value >= 0),
+    -- A constraint is set at most once per lecturer; re-setting it updates the existing row.
+    UNIQUE (lecturer_id, constraint_type)
 );
 
 CREATE TYPE study_form AS ENUM ('FULL_TIME', 'PART_TIME');
@@ -319,6 +368,44 @@ CREATE TABLE lecturer_workload_students
     student_id           BIGINT NOT NULL REFERENCES students (id) ON DELETE CASCADE,
     -- Within one workload a student has exactly one supervising lecturer.
     UNIQUE (lecturer_workload_id, student_id)
+);
+
+-- Lecturers who *could* deliver a workload, each with how desirable that assignment is: 100 is
+-- ideal, 1 is a last resort. Input for automatic workload generation — the generator picks from
+-- these rather than from every lecturer of the department, and prefers higher scores.
+--
+-- Distinct from lecturer_workload_lecturers, which records who was actually assigned: a workload
+-- may list many candidates and end up with one of them (or, before generation runs, none).
+CREATE TABLE lecturer_workload_candidates
+(
+    id                   BIGSERIAL PRIMARY KEY,
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    lecturer_id          BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
+    desirability         INTEGER NOT NULL CHECK (desirability BETWEEN 1 AND 100),
+    -- A lecturer is a candidate for a given workload at most once.
+    UNIQUE (lecturer_workload_id, lecturer_id)
+);
+
+-- Per-candidate student-count limits, meaningful only when the underlying working curriculum item
+-- is taught INDIVIDUALLY (coursework consultations and the like), where the workload is measured
+-- in students rather than in groups. Shaped like lecturer_workload_constraints: one row per limit
+-- actually set, rather than two mostly-NULL columns on every candidate.
+--
+--   MIN_STUDENTS  the *desired* number of students for this lecturer — generation tries to give
+--                 them at least this many.
+--   MAX_STUDENTS  the hard ceiling. Students beyond the desired number are handed out among the
+--                 candidates that still have headroom, in order of desirability, up to this value.
+CREATE TYPE lecturer_workload_candidate_constraint_type AS ENUM ('MIN_STUDENTS', 'MAX_STUDENTS');
+
+CREATE TABLE lecturer_workload_candidate_constraints
+(
+    id                             BIGSERIAL PRIMARY KEY,
+    lecturer_workload_candidate_id BIGINT NOT NULL
+        REFERENCES lecturer_workload_candidates (id) ON DELETE CASCADE,
+    constraint_type                lecturer_workload_candidate_constraint_type NOT NULL,
+    value                          INTEGER NOT NULL CHECK (value >= 0),
+    -- A limit is set at most once per candidate.
+    UNIQUE (lecturer_workload_candidate_id, constraint_type)
 );
 
 CREATE TYPE week_parity AS ENUM ('WEEKLY', 'NUMERATOR', 'DENOMINATOR');

@@ -35,6 +35,11 @@
       &#x1F517; Об'єднані позиції РНП
     </button>
     <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'constraints'"
+            (click)="activeSection.set('constraints')">
+      &#x1F6E1; Обмеження навантаження
+    </button>
+    <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloads'"
             (click)="activeSection.set('workloads')">
       &#x1F5C2; Навантаження викладачів
@@ -75,6 +80,11 @@
     <!-- ── Combined working curriculum items ── -->
     @if (activeSection() === 'combinedItems') {
       <app-combined-working-curriculum-item-list [departmentId]="departmentId" />
+    }
+
+    <!-- ── Lecturer workload constraints ── -->
+    @if (activeSection() === 'constraints') {
+      <app-lecturer-constraint-list [departmentId]="departmentId" />
     }
 
     <!-- ── Lecturer workloads ── -->
