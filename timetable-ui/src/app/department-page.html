@@ -44,6 +44,16 @@
             (click)="activeSection.set('workloads')">
       &#x1F5C2; Навантаження викладачів
     </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'workloadSummary'"
+            (click)="activeSection.set('workloadSummary')">
+      &#x1F4C8; Зведене навантаження
+    </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'workloadDetail'"
+            (click)="activeSection.set('workloadDetail')">
+      &#x1F4CA; Оцінка навантаження
+    </button>
   </nav>
 
   <!-- Content -->
@@ -90,6 +100,17 @@
     <!-- ── Lecturer workloads ── -->
     @if (activeSection() === 'workloads') {
       <app-lecturer-workload-list [departmentId]="departmentId" />
+    }
+
+    <!-- ── Department workload summary ── -->
+    @if (activeSection() === 'workloadSummary') {
+      <app-department-workload-summary [departmentId]="departmentId" [selectable]="true"
+                                       (lecturerSelected)="openAssessment($event)" />
+    }
+
+    <!-- ── Per-lecturer workload assessment ── -->
+    @if (activeSection() === 'workloadDetail') {
+      <app-lecturer-workload-detail [departmentId]="departmentId" [lecturerId]="focusLecturerId()" />
     }
 
   </div>

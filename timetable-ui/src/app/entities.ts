@@ -56,7 +56,7 @@ export const DEGREE_OPTIONS = [
   { value: 'DOCTOR_OF_SCIENCE', label: 'Доктор наук' }
 ];
 
-const COURSE_TYPE_OPTIONS = [
+export const COURSE_TYPE_OPTIONS = [
   { value: 'MANDATORY',          label: "Обов'язкова" },
   { value: 'ELECTIVE_GROUP',     label: 'Група вибіркових' },
   { value: 'ELECTIVE',           label: 'Вибіркова' },
@@ -66,6 +66,45 @@ const COURSE_TYPE_OPTIONS = [
   { value: 'COURSE_WORK',        label: 'Курсова робота' },
   { value: 'QUALIFICATION_WORK', label: 'Кваліфікаційна робота' }
 ];
+
+/** Ukrainian label for a courses.course_type value; falls back to the raw value if ever unknown. */
+export const courseTypeLabel = (v: string): string =>
+  COURSE_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
+
+// ── Academic terms ──────────────────────────────────────────────────────────
+//
+// curriculum_items.semester counts semesters across the whole programme (1..11 in real data).
+// People read that as a course year plus a half of it, so the UI shows "3 курс — друге півріччя"
+// rather than "семестр 6". The stored value is unchanged; only its presentation is.
+
+/** Course year a programme-wide semester falls in: semesters 1-2 → year 1, 3-4 → year 2, … */
+export const courseYearOf = (semester: number): number => Math.ceil(semester / 2);
+
+/** 1 for the first half-year of that course year (odd semesters), 2 for the second (even). */
+export const halfYearOf = (semester: number): 1 | 2 => (semester % 2 === 1 ? 1 : 2);
+
+/** Lower case, for use inside a phrase: "3 курс — друге півріччя". */
+export const HALF_YEAR_LABELS: Record<number, string> = {
+  1: 'перше півріччя',
+  2: 'друге півріччя'
+};
+
+/** Capitalised, for use as a heading in its own right. */
+export const HALF_YEAR_TITLES: Record<number, string> = {
+  1: 'Перше півріччя',
+  2: 'Друге півріччя'
+};
+
+/** The two halves of an academic year, in the order they are taught. */
+export const HALF_YEARS: readonly (1 | 2)[] = [1, 2];
+
+/** "3 курс — друге півріччя". */
+export const termLabel = (semester: number): string =>
+  `${courseYearOf(semester)} курс — ${HALF_YEAR_LABELS[halfYearOf(semester)]}`;
+
+/** "3 курс, 2 півріччя" — the compact form, for table cells. */
+export const termLabelShort = (semester: number): string =>
+  `${courseYearOf(semester)} курс, ${halfYearOf(semester)} півр.`;
 
 export const CONTROL_FORM_OPTIONS = [
   { value: 'EXAM',          label: 'Екзамен' },

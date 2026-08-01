@@ -62,6 +62,12 @@ just depends on whether it needed a bespoke layout.
 > control-value-accessor's own event binding marks the view dirty; anything holding a *tree* of
 > editable rows should make each editable value its own `WritableSignal` and replace arrays
 > immutably. `CurriculumEditor` is the worked example of that pattern.
+>
+> The same rule bites in `computed()`, and more quietly: a computed only re-runs when a **signal**
+> it read changes, so reading a plain field inside one memoises that field's first value forever,
+> with no error and no warning. "Оцінка навантаження" showed one lecturer's figures no matter who
+> was picked for exactly this reason — the selection was a plain `string`. If a value is read
+> inside `computed()`, it has to be a signal.
 
 ```
 src/app/
@@ -108,6 +114,12 @@ src/app/
 │                                                    #   CombinedWorkingCurriculumItem
 ├── lecturer-constraint-list.ts/.html # department tab: per-lecturer workload constraints with
 │                                     #   cross-field validation — "Обмеження навантаження"
+├── workload-stats.ts                 # per-lecturer hour totals + constraint deviation — pure
+├── workload-tree.ts                  # loads a department's delivered workload, flattened
+├── department-workload-summary.ts/.html # the department's workload on one sheet, one row per
+│                                     #   lecturer — "Зведене навантаження"; also embedded at the
+│                                     #   top of "Обмеження навантаження"
+├── lecturer-workload-detail.ts/.html # department tab: assess one lecturer — "Оцінка навантаження"
 ├── workload-generator.ts             # the automatic assignment algorithm — pure, no Angular
 ├── lecturer-workload-list.ts/.html   # department tab: assign lecturers/groups/duration to each
 │                                     #   working (or combined) curriculum item — "Навантаження викладачів"
@@ -149,8 +161,20 @@ edited through `TimeSelect`'s hour + minute dropdowns instead of a free-text box
 `ClassStartTime.startTime`, where only valid slot times should be enterable. Because the form is
 metadata-driven, any future time field gets the same widget for free.
 
+A `ref` field may also carry `parentFilter: { namespace, list, label }`. That swaps its plain
+dropdown for `DeptFacultySelect` — a second select above it, loaded from that connection, which
+narrows the first one's options (used by `Lecturer.departmentId`: pick a faculty, then one of its
+departments). Nothing else in the form changes; the field still saves the same FK.
+
 Field order in `fields[]` drives **both** the table columns and the modal form, so reordering one
 reorders the other — `Student` is listed Прізвище → Ім'я → По батькові for that reason.
+
+The enum option lists (`DEGREE_OPTIONS`, `COURSE_TYPE_OPTIONS`, `CONTROL_FORM_OPTIONS`,
+`HOUR_TYPE_OPTIONS`, `TEACHING_FORMAT_OPTIONS`, …) are exported, and the hand-written pages read
+them too rather than keeping their own copies — `courseTypeLabel(value)` is the shared
+value → Ukrainian label lookup for `courses.course_type`. A page that hand-rolls its own map is a
+bug waiting to happen: the one that existed showed raw `INTERNSHIP` / `COURSE_WORK` in a column
+because its private map only covered three of the eight values.
 
 `BaseEntity` (an abstract `@Directive`) builds the queries/mutations from this metadata —
 list (`{ <namespace> { <list>(limit, offset) { nodes {...} } } }`), create/update (typed
@@ -193,8 +217,10 @@ and composing purpose-built child-list components rather than going through `Bas
   (each room shows/edits its own faculty; there's no separate "faculties in this building" tab).
 - **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
   items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), workload constraints
-  (`LecturerConstraintList` — "Обмеження навантаження", see below), and lecturer workloads
-  (`LecturerWorkloadList` — "Навантаження викладачів", see below).
+  and department statistics (`LecturerConstraintList` — "Обмеження навантаження", see below),
+  lecturer workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below), the
+  department-wide summary (`DepartmentWorkloadSummary` — "Зведене навантаження") and the
+  per-lecturer assessment (`LecturerWorkloadDetail` — "Оцінка навантаження", see below).
 - **`SpecialtyDetailPage`** (`/specialty/:id`): info, the course-first curriculum editor
   (`CurriculumEditor`, "Редагування планів"), curriculum items (`CurriculumItemList`,
   "Навчальні плани") and, in a separate tab, working curriculum items (`WorkingCurriculumList`)
@@ -344,6 +370,39 @@ one of those covers every merged item at once, so they're handled in a dedicated
 the tree instead, using the same modal (`openCreateCombined`/`openEditCombined`) with the
 available academic groups widened to the union across every merged member.
 
+#### Workload statistics (`workload-stats.ts`, `workload-tree.ts`, `department-workload-summary.ts`)
+
+Three views read the same numbers, so they cannot disagree:
+
+- the **department summary**, "Зведене навантаження" (`DepartmentWorkloadSummary`) — one row per
+  lecturer with total annual hours, the hours falling in each half-year, their own minimum and
+  maximum (blank when unset, with the global default shown in brackets when it is what applies),
+  the signed deviation from the allowed band, hours by kind of work, and hours for
+  lectures/practicals/labs split by mandatory and elective disciplines. Rows outside their band are
+  tinted and the deviation itself rendered louder — `+6` for an overload, `−6` for a shortfall;
+  lecturers carrying nothing are greyed. Any hours column can be sorted (largest first on the first
+  click, since that is where the outliers are) and the list can be narrowed by name or to just the
+  rows that deviate. **Filtering never changes the department's totals**: the page header and the
+  "Разом по кафедрі" footer row always count every lecturer, and a separate "Разом за фільтром" row
+  appears above it while rows are hidden — a total that silently switches to meaning "this one
+  lecturer" is worse than no total. Clicking a name opens that lecturer's assessment;
+- the **same table embedded** at the top of "Обмеження навантаження" (`embedded` mode: no header,
+  no toolbar, no links), so a limit can be read beside the load it governs;
+- a **per-lecturer drill-down**, "Оцінка навантаження", where a picker selects one lecturer and
+  shows the same totals, then every constraint measured against what they actually carry, then every
+  position they deliver grouped into the first and second half-year, each with its own subtotal.
+
+`workload-stats.ts` is the arithmetic (pure, unit-tested); `workload-tree.ts` is the query that
+flattens a department's working and combined curriculum items into its input. Both accounting rules
+match the generator exactly: several lecturers on one item each accrue the **full** hours, and
+individual work costs `hours × students supervised`. Items merged into a combined item are counted
+once, through the combined item, rather than twice.
+
+One subtlety worth knowing: `distinctCourses` counts only disciplines with LECTURE, PRACTICAL or LAB
+hours, because that is how `MAX_COURSES` counts them. A course a lecturer only consults on consumes
+hours but is not a discipline they "teach" for constraint purposes — counting it would make the
+figure disagree with the limit it sits beside.
+
 #### Automatic generation (`workload-generator.ts`)
 
 The "Навантаження викладачів" tab opens with a generation panel offering two modes: **лише
@@ -445,11 +504,42 @@ All are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
   only once both halves are chosen, and keeps an already-stored off-grid value (an imported
   `07:07`, say) selectable rather than dropping it from the list — opening an edit form must never
   silently rewrite what is in the database. Used by the `'time'` field type in `entities.ts`.
-- **`DeptFacultySelect`** *(pattern)* — a faculty filter paired with a department
-  `SearchSelect` whose options are filtered by the chosen faculty, defaulting to the parent
-  entity's own faculty; implemented inline in `curriculum-item-list.ts` and
-  `working-curriculum-list.ts` via a `filteredDepartmentOptions` computed signal rather than
-  as a single shared component.
+- **`DeptFacultySelect`** — a faculty filter paired with a department `SearchSelect` whose options
+  are narrowed to the chosen faculty, defaulting to the edited entity's own faculty and clearable
+  to reach a department elsewhere. The generic tables render it automatically for any `ref` field
+  carrying a `parentFilter` (currently `Lecturer.departmentId`); the two drill-down child lists
+  (`curriculum-item-list.ts`, `working-curriculum-list.ts`) build the same behaviour inline from a
+  `filteredDepartmentOptions` computed signal, because their department select sits inside a larger
+  hand-written form rather than the metadata-driven one.
+
+### Academic terms (`entities.ts`)
+
+`curriculum_items.semester` counts semesters across the whole programme: 1–8 for a bachelor's,
+up to 11 in the real data. Nobody at a department thinks in those numbers — they say "третій курс,
+друге півріччя". The stored value is unchanged; only its presentation is, through four helpers in
+`entities.ts`:
+
+```ts
+courseYearOf(6)   // 3      — Math.ceil(semester / 2)
+halfYearOf(6)     // 2      — odd semesters are the first half-year, even the second
+termLabel(6)      // "3 курс — друге півріччя"
+termLabelShort(6) // "3 курс, 2 півр."   (compact form, for table cells)
+```
+
+plus `HALF_YEAR_LABELS` / `HALF_YEAR_TITLES` (lower case for use inside a phrase, capitalised for a
+heading of its own) and `HALF_YEARS` — `[1, 2]`, so a view can render both halves in teaching order
+even when one of them is empty, rather than only the halves the data happens to contain.
+
+Keeping this in one place matters because the two directions are not symmetric: a semester maps to
+exactly one (course year, half-year) pair, but a half-year spans every course year at once. The
+grouping in "Оцінка навантаження" and the two half-year columns in "Зведене навантаження" both
+group by `halfYearOf(...)` across the whole programme and still show the course year per row, which
+only stays consistent while both read the same helper.
+
+This vocabulary is applied in the two workload assessment views ("Зведене навантаження" and
+"Оцінка навантаження"). The workload tree itself, the curriculum editor, the curriculum item and
+working curriculum item tables, the combined-items section and the schedule builder still label
+things "Семестр N" — see [Notes / known limitations](#notes--known-limitations).
 
 ### Ukrainian sorting (`sort.ts`)
 
@@ -630,6 +720,14 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   *added* through it (an existing one is preserved and editable). The roster is also fetched with
   `limit: 500` per group and has no filter of its own — fine for a group, awkward for an item
   spanning many.
+- The курс / півріччя vocabulary (see [Academic terms](#academic-terms-entitiests)) has only been
+  rolled out across the two assessment views — "Зведене навантаження" and "Оцінка навантаження".
+  Six other places still speak in raw semester numbers: the curriculum editor, `CurriculumItemList`,
+  `WorkingCurriculumList`, `CombinedWorkingCurriculumItemList`, the schedule builder's parity filter
+  and `LecturerWorkloadList`'s own tree (including the generator preview). Nothing breaks — it is
+  the same stored number — but the same semester reads two different ways depending on which tab
+  you are on. `termLabel`/`termLabelShort` exist precisely so that sweep is a rename, not a
+  rewrite; `termLabelShort` currently has no caller.
 - Adding a value to `HOUR_TYPE_OPTIONS`/`TEACHING_FORMAT_OPTIONS` in `entities.ts` is not enough on
   its own — the value must also exist in the backing Postgres enum, and a few places hold their own
   copy of the ordering or of which values are meaningful: `HOUR_TYPE_ORDER` in

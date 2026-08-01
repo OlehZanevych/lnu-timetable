@@ -1,0 +1,152 @@
+@let sums = totals();
+@let list = rows();
+
+@if (!embedded) {
+  <div class="page-header">
+    <div>
+      <h2>Зведене навантаження кафедри</h2>
+      <p class="muted">
+        {{ stats().length }} викладачів &middot; разом {{ sums.totalHours }} год.
+        @if (idleCount()) { &middot; без навантаження: {{ idleCount() }} }
+        @if (defaultMaxHours() !== null) { &middot; типовий максимум {{ defaultMaxHours() }} год./рік }
+      </p>
+    </div>
+  </div>
+}
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@if (!embedded) {
+  <div class="ce-toolbar">
+    <label class="ce-search">
+      <span>Пошук викладача</span>
+      <input type="text" [ngModel]="search()" (ngModelChange)="search.set($event)"
+             name="wsSearch" placeholder="прізвище&hellip;" />
+    </label>
+    <label class="ce-check" title="Показати лише тих, хто виходить за межі дозволеної кількості годин">
+      <input type="checkbox" [ngModel]="onlyDeviating()" (ngModelChange)="onlyDeviating.set($event)"
+             name="wsOnlyDeviating" />
+      <span>лише з відхиленням від норми</span>
+    </label>
+  </div>
+}
+
+<div class="card ws-card">
+  <div class="ws-header">
+    <strong>Навантаження кафедри за викладачами</strong>
+    <span class="muted">
+      разом по кафедрі {{ sums.totalHours }} год.
+      @if (sums.overloaded) { &middot; перевищень: {{ sums.overloaded }} }
+      @if (sums.underloaded) { &middot; недобір: {{ sums.underloaded }} }
+      @if (filtered()) {
+        &middot; показано {{ list.length }} із {{ stats().length }}
+        &middot; за фільтром {{ visibleTotals().totalHours }} год.
+      }
+    </span>
+  </div>
+
+  <div class="ws-scroll">
+    <table class="wci-table ws-table ws-wide">
+      <thead>
+        <tr>
+          <th rowspan="2" class="ws-sort" (click)="sortBy('name')">Викладач {{ sortMark('name') }}</th>
+          <th rowspan="2" class="ws-sort" (click)="sortBy('total')">Усього год. {{ sortMark('total') }}</th>
+          <th colspan="2">За півріччями</th>
+          <th colspan="3">Норма годин на рік</th>
+          <th [attr.colspan]="STAT_HOUR_TYPES.length">За видами робіт</th>
+          <th [attr.colspan]="SPLIT_HOUR_TYPES.length">Обов'язкові</th>
+          <th [attr.colspan]="SPLIT_HOUR_TYPES.length">Вибіркові</th>
+        </tr>
+        <tr>
+          <th class="ws-sort" [title]="HALF_YEAR_TITLES[1]" (click)="sortBy('half1')">
+            1-ше {{ sortMark('half1') }}
+          </th>
+          <th class="ws-sort" [title]="HALF_YEAR_TITLES[2]" (click)="sortBy('half2')">
+            2-ге {{ sortMark('half2') }}
+          </th>
+          <th>мін</th>
+          <th>макс</th>
+          <th class="ws-sort" (click)="sortBy('deviation')">відхилення {{ sortMark('deviation') }}</th>
+          @for (t of STAT_HOUR_TYPES; track t) { <th>{{ hourTypeLabel(t) }}</th> }
+          @for (t of SPLIT_HOUR_TYPES; track t) { <th>{{ hourTypeLabel(t) }}</th> }
+          @for (t of SPLIT_HOUR_TYPES; track t) { <th>{{ hourTypeLabel(t) }}</th> }
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of list; track row.lecturerId) {
+          <tr [class.over]="row.deviation > 0" [class.under]="row.deviation < 0"
+              [class.ws-idle]="!row.totalHours">
+            <td class="ws-name">
+              @if (selectable) {
+                <button type="button" class="ws-link" (click)="select(row)"
+                        title="Детальна оцінка навантаження">{{ row.name }}</button>
+              } @else {
+                {{ row.name }}
+              }
+            </td>
+            <td class="ws-total">{{ row.totalHours }}</td>
+            <td>{{ cellHours(halfHoursOf(row, 1)) }}</td>
+            <td>{{ cellHours(halfHoursOf(row, 2)) }}</td>
+            <td>{{ row.minHours ?? '' }}</td>
+            <td>
+              {{ row.maxHours ?? '' }}
+              @if (row.maxIsDefault) {
+                <em class="ws-default" title="Типове значення, власне обмеження не задано">
+                  ({{ row.effectiveMaxHours }})
+                </em>
+              }
+            </td>
+            <td class="ws-dev">{{ deviationLabel(row.deviation) }}</td>
+            @for (t of STAT_HOUR_TYPES; track t) { <td>{{ cellHours(row.byHourType[t]) }}</td> }
+            @for (t of SPLIT_HOUR_TYPES; track t) { <td>{{ splitHours(row, 'mandatory', t) }}</td> }
+            @for (t of SPLIT_HOUR_TYPES; track t) { <td>{{ splitHours(row, 'elective', t) }}</td> }
+          </tr>
+        } @empty {
+          <tr>
+            <td class="ws-name" [attr.colspan]="7 + STAT_HOUR_TYPES.length + 2 * SPLIT_HOUR_TYPES.length">
+              @if (loading()) { Завантаження&hellip; }
+              @else if (stats().length) { Жоден викладач не відповідає фільтру. }
+              @else { На цій кафедрі ще немає викладачів. }
+            </td>
+          </tr>
+        }
+      </tbody>
+      <tfoot>
+        @if (filtered() && list.length) {
+          @let shown = visibleTotals();
+          <tr class="ws-subtotal">
+            <th>Разом за фільтром ({{ list.length }})</th>
+            <th>{{ shown.totalHours }}</th>
+            <th>{{ cellHours(shown.half1) }}</th>
+            <th>{{ cellHours(shown.half2) }}</th>
+            <th colspan="3"></th>
+            @for (t of STAT_HOUR_TYPES; track t) { <th>{{ cellHours(shown.byHourType[t]) }}</th> }
+            @for (t of SPLIT_HOUR_TYPES; track t) { <th>{{ cellHours(shown.mandatoryByHourType[t]) }}</th> }
+            @for (t of SPLIT_HOUR_TYPES; track t) { <th>{{ cellHours(shown.electiveByHourType[t]) }}</th> }
+          </tr>
+        }
+        <tr>
+          <th>Разом по кафедрі ({{ stats().length }})</th>
+          <th>{{ sums.totalHours }}</th>
+          <th>{{ cellHours(sums.half1) }}</th>
+          <th>{{ cellHours(sums.half2) }}</th>
+          <th colspan="3"></th>
+          @for (t of STAT_HOUR_TYPES; track t) { <th>{{ cellHours(sums.byHourType[t]) }}</th> }
+          @for (t of SPLIT_HOUR_TYPES; track t) { <th>{{ cellHours(sums.mandatoryByHourType[t]) }}</th> }
+          @for (t of SPLIT_HOUR_TYPES; track t) { <th>{{ cellHours(sums.electiveByHourType[t]) }}</th> }
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <p class="muted ws-note">
+    Порожня клітинка означає, що обмеження не задано або годин цього виду немає. Відхилення
+    показано лише за межами дозволеного діапазону: &minus; &mdash; недобір до мінімуму,
+    + &mdash; перевищення максимуму. У позиціях, які ведуть кілька викладачів, кожному
+    зараховано повну кількість годин; індивідуальні заняття &mdash; години &times; кількість
+    студентів. Підсумки в шапці та в рядку &laquo;Разом по кафедрі&raquo; завжди рахуються по всіх
+    викладачах кафедри й не залежать від фільтрів; окремий рядок &laquo;Разом за фільтром&raquo;
+    з&#39;являється, коли частину викладачів приховано.
+    @if (selectable) { Натисніть прізвище, щоб перейти до детальної оцінки навантаження. }
+  </p>
+</div>
