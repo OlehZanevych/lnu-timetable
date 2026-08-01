@@ -5,6 +5,7 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
+import org.lnu.timetable.framework.annotation.OneToMany;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.PermissionParent;
 import org.lnu.timetable.framework.annotation.PgEnum;
@@ -34,10 +35,6 @@ public class Lecturer {
     private String position;
 
     @Nullable
-    @Description("Maximum teaching hours per week")
-    private Integer maxHoursPerWeek;
-
-    @Nullable
     @ManyToOne(joinColumn = "academic_degree_id")
     private AcademicDegree academicDegree;
 
@@ -47,4 +44,11 @@ public class Lecturer {
     @ManyToMany(joinTable = "lecturer_workload_lecturers",
         joinColumn = "lecturer_id", inverseJoinColumn = "lecturer_workload_id")
     private List<LecturerWorkload> workloads;
+
+    /**
+     * Workload restrictions, one row per constraint actually set — replaces the former
+     * min/maxHoursPerWeek columns. Written through this entity's create/update mutations.
+     */
+    @OneToMany(mappedBy = "lecturer_id")
+    private List<LecturerWorkloadConstraint> workloadConstraints;
 }

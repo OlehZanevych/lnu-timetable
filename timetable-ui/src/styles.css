@@ -275,14 +275,89 @@ button.danger:hover { background: #991b1b !important; }
 .lw-pair-line { font-size: 13px; line-height: 1.5; white-space: nowrap; }
 .lw-pair-line + .lw-pair-line { margin-top: 2px; }
 .lw-pairs { width: 100%; padding: 12px 14px; background: #f7f9fc; border-radius: 8px; }
-.lw-pairs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.lw-pairs-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.lw-pairs-header > button { margin-left: auto; }
 .lw-pairs-header > span { font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
   color: var(--gold); font-weight: 700; }
 .lw-pairs-hint { font-size: 12px; margin: 0 0 10px; }
 .lw-pairs-empty { font-size: 13px; margin: 0; }
-.lw-pair-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 8px; }
+.lw-pairs-count { font-size: 11px; }
+
+/* One row per student: name on the left, lecturer picker on the right. A subtle left border marks
+   the assigned ones, so the remaining gaps are scannable in a roster of 20+. */
+.lw-pair-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 6px;
+  padding: 4px 8px; border-left: 3px solid transparent; border-radius: 4px; }
 .lw-pair-row:last-child { margin-bottom: 0; }
+.lw-pair-row.assigned { border-left-color: #16a34a; background: #fff; }
+.lw-pair-row > app-search-select { flex: 1; min-width: 220px; }
+.lw-student-name { flex: 1 1 240px; min-width: 200px; font-size: 13px; color: var(--navy); }
+
+/* Candidate pool: a narrow 1..100 score per lecturer, rather than a full-width picker. */
+.lw-candidates .lw-pair-row.assigned { border-left-color: var(--blue); }
+.lw-score { flex: 0 0 130px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.lw-score::placeholder { color: #a5b0bd; font-style: italic; }
+.lw-score.invalid { border-color: #dc2626; border-width: 2px; background: #fee2e2; color: #7f1d1d; }
+/* Student limits, shown beside the score for INDIVIDUALLY items only. */
+.lw-students-fields { display: flex; gap: 6px; flex: 1 1 300px; }
+.lw-students-fields .lw-score { flex: 1 1 140px; }
+
+/* Candidates listed under a workload's lecturers cell, so no extra table column is needed. */
+.lw-candidate-note { margin-top: 4px; font-size: 11px; color: #7b8794; line-height: 1.5; }
+.lw-candidate-note > span { text-transform: uppercase; letter-spacing: .03em; font-size: 10px; color: var(--gold); font-weight: 700; }
 .lw-pair-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; flex: 1; min-width: 200px; }
+
+/* ── Lecturer workload constraints (department page) ── */
+.lc-card { padding: 16px 20px; margin-bottom: 16px; overflow: visible; border-left: 3px solid transparent; }
+.lc-card.dirty { border-left-color: var(--gold); background: #fdfaef; }
+/* A card that contradicts itself: whole-card tint, and the offending fields brighter still. */
+.lc-card.invalid { border-left-color: #b91c1c; background: #fdf3f3; }
+.lc-header { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline;
+  padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.lc-header strong { font-family: Georgia, serif; font-size: 16px; color: var(--navy); }
+.lc-header > button { margin-left: auto; }
+
+.lc-issues { margin: 0 0 12px; padding: 10px 12px 10px 28px; background: #fdeaea; border: 1px solid #f3c6c6;
+  border-radius: 8px; color: #991b1b; font-size: 13px; }
+.lc-issues li + li { margin-top: 4px; }
+
+.lc-scalars { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 14px; }
+.lc-scalars label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; flex: 1; min-width: 200px; }
+.lc-scalars input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.lc-default { font-style: normal; color: #7b8794; font-size: 11px; margin-left: 4px; }
+
+.lc-grid { width: 100%; background: #fff; border-radius: 6px; overflow: hidden; }
+.lc-grid th { background: #eef2f9; color: var(--navy); font-weight: 600; font-size: 12px; white-space: nowrap; }
+.lc-grid tbody th { text-align: left; }
+.lc-pair { display: flex; gap: 6px; }
+.lc-pair input { width: 100%; min-width: 62px; padding: 6px 8px; border: 1px solid var(--line);
+  border-radius: 6px; font: inherit; font-size: 13px; }
+.lc-pair input::placeholder, .lc-scalars input::placeholder { color: #a5b0bd; font-style: italic; }
+
+/* The specific fields a broken rule involves — deliberately louder than the card tint. */
+.lc-scalars label.invalid > span { color: #b91c1c; font-weight: 600; }
+.lc-scalars label.invalid input, .lc-pair input.invalid { border-color: #dc2626; border-width: 2px;
+  background: #fee2e2; color: #7f1d1d; font-weight: 600; }
+
+.lc-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+.lc-blocked { font-size: 12px; color: #b91c1c; }
+
+/* ── Automatic workload generation panel ── */
+.gen-panel { padding: 16px 20px; margin-bottom: 18px; border-left: 3px solid var(--blue); }
+.gen-header { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+.gen-header strong { font-family: Georgia, serif; font-size: 15px; color: var(--navy); }
+.gen-header > button { margin-left: auto; }
+.gen-mode { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--navy); }
+.gen-hint { font-size: 12px; margin: 8px 0 0; }
+.gen-summary { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 12px 0; font-size: 13px; color: var(--navy); }
+.gen-issues { margin: 0 0 12px; padding: 10px 12px 10px 28px; border-radius: 8px; font-size: 13px; }
+.gen-issues.error-list { background: #fdeaea; border: 1px solid #f3c6c6; color: #991b1b; }
+.gen-issues.warn-list { background: #fbf3d7; border: 1px solid #ecd9a0; color: #92400e; }
+.gen-issues li + li { margin-top: 4px; }
+.gen-table { margin-bottom: 12px; }
+.gen-actions { display: flex; gap: 8px; }
+.gen-load { margin-top: 12px; }
+.gen-load summary { cursor: pointer; font-size: 13px; color: var(--blue); }
+.gen-load table { margin-top: 8px; }
 
 /* ── Timetable grid ── */
 .timetable td { width: 16%; }

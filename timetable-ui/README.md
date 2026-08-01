@@ -6,6 +6,8 @@ resulting schedule as a weekly grid. Styled after
 [lnu.edu.ua](https://lnu.edu.ua/structure/faculties/) (navy + gold, serif headings).
 
 - Angular 21 (standalone components, **signals**, **zoneless** change detection, new `@if`/`@for`/`@switch` control flow)
+- Automatic lecturer-workload generation runs **in the browser** — see
+  [WORKLOAD-GENERATION.md](./WORKLOAD-GENERATION.md) for the algorithm in full
 - Talks to the service over plain GraphQL-over-HTTP (`GraphqlService`, no Apollo Client dependency)
 - JWT sign-in with forced password change on first login, and permission-aware UI that hides
   edit/delete/create controls a user isn't allowed to use — see [Authentication](#authentication)
@@ -83,6 +85,7 @@ src/app/
 ├── change-password-page.ts/.html  # "/change-password" — forced after signing in with a temporary password
 ├── admin-page.ts/.html       # "/admin" — user/group/permission management console (admin-only)
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
+├── app.config.ts             # bootstrap providers: router + HttpClient with authInterceptor
 ├── app.routes.ts             # route table (see below)
 │
 ├── faculty-home.ts/.html         # "/" — faculty tiles (drill-down entry point)
@@ -103,6 +106,9 @@ src/app/
 ├── combined-working-curriculum-item-list.ts/.html  # department tab: propose/manage merges of
 │                                                    #   working curriculum items into a shared
 │                                                    #   CombinedWorkingCurriculumItem
+├── lecturer-constraint-list.ts/.html # department tab: per-lecturer workload constraints with
+│                                     #   cross-field validation — "Обмеження навантаження"
+├── workload-generator.ts             # the automatic assignment algorithm — pure, no Angular
 ├── lecturer-workload-list.ts/.html   # department tab: assign lecturers/groups/duration to each
 │                                     #   working (or combined) curriculum item — "Навантаження викладачів"
 ├── faculty-timetable-list.ts/.html   # faculty tab: auto-generates schedulable blocks from
@@ -186,8 +192,9 @@ and composing purpose-built child-list components rather than going through `Bas
 - **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): info + rooms
   (each room shows/edits its own faculty; there's no separate "faculties in this building" tab).
 - **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
-  items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), and lecturer
-  workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below).
+  items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), workload constraints
+  (`LecturerConstraintList` — "Обмеження навантаження", see below), and lecturer workloads
+  (`LecturerWorkloadList` — "Навантаження викладачів", see below).
 - **`SpecialtyDetailPage`** (`/specialty/:id`): info, the course-first curriculum editor
   (`CurriculumEditor`, "Редагування планів"), curriculum items (`CurriculumItemList`,
   "Навчальні плани") and, in a separate tab, working curriculum items (`WorkingCurriculumList`)
@@ -250,6 +257,28 @@ per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours 
 - when the curriculum item's course is an `ELECTIVE_GROUP`, an extra **elective course**
   dropdown scoped to that group's child courses.
 
+#### Workload constraints (`LecturerConstraintList`, department "Обмеження навантаження" tab)
+
+One card per lecturer of the department, each showing **all 21** `lecturer_workload_constraints`
+types — set or not — as a compact grid: hours-per-year and the overall course maximum on top, then a
+3×3 table of min/max pairs (Усі / Обов'язкові / Вибіркові × Лекції / Практичні / Лабораторні). A
+blank field means "not set", and leaving it out of the saved nested list is what deletes a stored
+row. `MAX_HOURS_PER_YEAR` shows the `default_max_hours_per_year` global property as its placeholder,
+since that is the ceiling that applies when it isn't set.
+
+The rules only make sense together, so a card is validated as a whole on every keystroke:
+minimum ≤ maximum for each pair; a MANDATORY/ELECTIVE maximum never above the maximum for that hour
+type or the overall course maximum; a per-hour-type maximum never above the overall one; the
+MANDATORY and ELECTIVE *minimums added together* never above the maximum for that hour type (they
+are disjoint subsets, so both have to fit); and a minimum-hours value never above the effective
+maximum, whether that comes from the lecturer's own `MAX_HOURS_PER_YEAR` or from the global default.
+A card that breaks any of these takes a red tint, the specific fields involved go a brighter red,
+every broken rule is listed in plain Ukrainian, and **saving is blocked** — contradictory
+constraints would make workload generation unsatisfiable rather than merely wrong.
+
+Saving is one `updateLecturer` mutation per card (the constraints ride along as the
+`workloadConstraints` nested list), so a lecturer's whole set is replaced atomically.
+
 #### Lecturer workloads (`LecturerWorkloadList`, department "Навантаження викладачів" tab)
 
 Pre-loads every `WorkingCurriculumItem` delivered by the department (with its curriculum item /
@@ -263,16 +292,47 @@ workload's own stored value when editing one.
 
 When the item's `teachingFormat` is **`INDIVIDUALLY`** (a coursework consultation, say) the modal
 swaps shape entirely: the group pickers, the lecturer multi-select and the duration field all
-disappear, replaced by an add/remove list of **викладач + студент** pairs written through
-`LecturerWorkload.studentAssignments` (see the backend's `lecturer_workload_students`). Three
+disappear, replaced by a **roster** — every student of the item's academic groups, listed by
+default, each with a lecturer dropdown — written through `LecturerWorkload.studentAssignments`
+(see the backend's `lecturer_workload_students`). Listing the whole cohort up front rather than
+adding pairs one at a time is what makes filling a group in quick; a "призначено N із M" counter
+and a marker on assigned rows keep the remaining gaps scannable, and "Очистити всіх" starts the
+roster over without reopening the modal.
+
+An empty lecturer means "not assigned": that row is simply not sent, so clearing a student's
+lecturer omits their entry from the nested list and the backend deletes the stored pairing. Four
 details follow from the model rather than being cosmetic:
 
-- `lecturerIds` is *derived* from the distinct lecturers in the pairs, so `lecturers` can never
-  disagree with who actually supervises whom;
+- `lecturerIds` is *derived* from the distinct lecturers actually assigned, so `lecturers` can
+  never disagree with who supervises whom;
 - `academicGroupIds` is force-cleared for individual items and `studentAssignments` force-cleared
   for group ones, so switching an item's format never leaves half a stale assignment behind;
-- each student dropdown excludes students another pair already claims, making
-  `UNIQUE (lecturer_workload_id, student_id)` unreachable through the UI.
+- one row per student makes `UNIQUE (lecturer_workload_id, student_id)` structurally unreachable,
+  rather than something to guard against;
+- an existing pairing whose student is no longer in any of the item's groups is appended to the
+  roster instead of being dropped, so opening the form never silently deletes it.
+
+Independently of the teaching format, every workload's modal also carries a **candidate pool**:
+each lecturer of the department with a desirability score from 1 (last resort) to 100 (ideal), a
+blank score meaning "not a candidate". This is the input automatic workload generation reads — the
+generator chooses among a workload's candidates rather than the whole department — so it is
+deliberately separate from the lecturers actually assigned. Scores outside 1..100 (or fractional)
+are highlighted and block the save rather than being clamped. The workload table lists the pool as
+a muted "кандидати:" footnote under the lecturers cell, best score first, so no extra column is
+needed.
+
+For `INDIVIDUALLY` items each scored candidate also gets a **бажана** and a **максимальна кількість
+студентів** (`lecturer_workload_candidate_constraints`): generation first tries to give everyone
+their desired count, then hands out the remaining students among candidates with headroom, in
+descending order of desirability. Blank means unset — an unset maximum is unbounded, not zero. The
+fields only appear for individual work, and are never sent for any other format, so switching an
+item's teaching format clears them rather than leaving them to apply silently.
+
+Because a candidate owns those limits and the backend's nested lists only go one level deep, the
+pool is **not** part of the workload's payload: `save()` writes the workload first, then reconciles
+candidates through their own create/update/delete mutations, skipping rows whose values are
+unchanged (an untouched pool costs no extra requests). If the workload saves but part of the pool
+fails, the modal says so explicitly rather than reporting a clean save.
 
 Duration is not offered because individual work is always one academic hour per student
 (`INDIVIDUAL_DURATION_HOURS`), sent implicitly; the workload table drops its "Тривалість" column
@@ -283,6 +343,51 @@ come from the item's own academic groups, fetched in one round trip via aliased
 one of those covers every merged item at once, so they're handled in a dedicated section above
 the tree instead, using the same modal (`openCreateCombined`/`openEditCombined`) with the
 available academic groups widened to the union across every merged member.
+
+#### Automatic generation (`workload-generator.ts`)
+
+The "Навантаження викладачів" tab opens with a generation panel offering two modes: **лише
+незаповнені та неповні** (fill workloads with no lecturers, or fewer than their item's
+`lecturerCount` — a lab needing two with only one assigned) and **перевизначити всіх** (reassign the
+whole department from scratch). Nothing is written until you press Застосувати: generation produces
+a plan, and the panel shows what would change, which slots it couldn't fill, and which lecturer
+minimums remain unmet.
+
+The algorithm lives in `workload-generator.ts`, deliberately free of Angular, GraphQL and I/O so it
+can be unit-tested against plain objects — the component maps the loaded tree into its input shape
+and applies the returned plan itself. **[WORKLOAD-GENERATION.md](./WORKLOAD-GENERATION.md)
+documents it in full**: the constraint semantics, each phase with pseudocode, complexity bounds, a
+worked example, what is and isn't guaranteed, and where to take it next. The summary below is the
+short version.
+
+Assigning lecturers to slots so as to maximise total desirability, subject to per-lecturer ceilings
+on annual hours and on distinct-course counts, is an integer program. Rather than pretend otherwise,
+it runs three passes:
+
+1. **Most-constrained-first greedy.** Slots are filled in order of how few feasible candidates they
+   have — a slot with one viable lecturer must claim them before a slot with ten takes them for a
+   marginal gain — and each slot then prefers the highest desirability, breaking ties toward the
+   lecturer with the most headroom so the pool doesn't bottleneck.
+2. **Repair.** Where a lecturer sits below a `MIN_*` floor, move an assignment to them from someone
+   above theirs, if both are candidates and the move stays feasible. Strictly decreasing total
+   deficit, so it terminates.
+3. **Improvement.** Single moves that raise total desirability without breaking a ceiling or
+   undoing a satisfied floor, to a fixed point or an iteration cap.
+
+Ceilings (`MAX_*`, plus `default_max_hours_per_year` when a lecturer sets none) are hard — never
+violated, even at the cost of leaving a slot unfilled, which is reported instead. Floors (`MIN_*`)
+are soft: reported when unmet rather than forced. Distinct-course counting is set-based, so a second
+lab in a course a lecturer already teaches costs nothing. With several lecturers on one item each
+accrues the **full** hours, matching subgroup teaching.
+
+In **gaps** mode, assignments that already exist are locked — the repair and improvement passes
+cannot move them however much desirability a swap would buy, since "only fill what's missing" is the
+whole promise of that mode.
+
+INDIVIDUALLY workloads are distributed by student rather than by slot: each candidate is brought up
+to their `MIN_STUDENTS` in order of desirability, then the remainder goes to the most desirable
+candidate with headroom below `MAX_STUDENTS`, load only breaking ties between equals. Students that
+don't fit anywhere are reported.
 
 #### Merging working curriculum items (`CombinedWorkingCurriculumItemList`, department "Об'єднані позиції РНП" tab)
 
@@ -520,9 +625,11 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   keyed on students looks broken when it isn't: the `INDIVIDUALLY` workload UI shows an empty
   student dropdown, and the academic-group "Студенти" tab shows an empty table, for every group
   that has no rows.
-- The `INDIVIDUALLY` pairing UI offers only students of the working curriculum item's own academic
-  groups. That is the right default, but a consultation supervised for a student outside those
-  groups can't be recorded through it.
+- The `INDIVIDUALLY` roster is built from the working curriculum item's own academic groups. That
+  is the right default, but a consultation supervised for a student outside those groups can't be
+  *added* through it (an existing one is preserved and editable). The roster is also fetched with
+  `limit: 500` per group and has no filter of its own — fine for a group, awkward for an item
+  spanning many.
 - Adding a value to `HOUR_TYPE_OPTIONS`/`TEACHING_FORMAT_OPTIONS` in `entities.ts` is not enough on
   its own — the value must also exist in the backing Postgres enum, and a few places hold their own
   copy of the ordering or of which values are meaningful: `HOUR_TYPE_ORDER` in

@@ -21,7 +21,8 @@ const PROPERTY_LABELS: Record<string, string> = {
   academic_hour_duration_minutes: 'Тривалість академічної години (хв)',
   semester_duration_weeks: 'Тривалість семестру (тижнів)',
   current_semester_parity: 'Поточний семестр',
-  default_class_duration_hours: 'Тривалість заняття за замовчуванням (акад. год.)'
+  default_class_duration_hours: 'Тривалість заняття за замовчуванням (акад. год.)',
+  default_max_hours_per_year: 'Максимум годин на рік за замовчуванням (акад. год.)'
 };
 
 /** System-wide settings editor for the global_properties table (name/type/value triples). */

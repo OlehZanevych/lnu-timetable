@@ -62,6 +62,14 @@ public class LecturerWorkload {
     @OneToMany(mappedBy = "lecturer_workload_id")
     private List<LecturerWorkloadStudent> studentAssignments;
 
+    /**
+     * Lecturers who could deliver this workload, scored by desirability — the candidate pool
+     * automatic generation chooses from. Independent of {@link #lecturers}, which is who was
+     * actually assigned.
+     */
+    @OneToMany(mappedBy = "lecturer_workload_id")
+    private List<LecturerWorkloadCandidate> candidates;
+
     @Description("Duration of each class for this workload, in academic hours (1-4)")
     private Integer durationHours;
 
