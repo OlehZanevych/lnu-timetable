@@ -3,11 +3,14 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { LecturerPage } from './entity-pages';
+import { DepartmentWorkloadSummary } from './department-workload-summary';
 import { LecturerConstraintList } from './lecturer-constraint-list';
+import { LecturerWorkloadDetail } from './lecturer-workload-detail';
 import { LecturerWorkloadList } from './lecturer-workload-list';
 import { CombinedWorkingCurriculumItemList } from './combined-working-curriculum-item-list';
 
-type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'constraints' | 'workloads';
+type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'constraints' | 'workloads'
+  | 'workloadSummary' | 'workloadDetail';
 
 interface Department {
   id: string;
@@ -21,7 +24,8 @@ interface Department {
 @Component({
   selector: 'app-department-page',
   templateUrl: './department-page.html',
-  imports: [RouterLink, FormsModule, LecturerPage, LecturerConstraintList, LecturerWorkloadList, CombinedWorkingCurriculumItemList]
+  imports: [RouterLink, FormsModule, LecturerPage, LecturerConstraintList, LecturerWorkloadList,
+            DepartmentWorkloadSummary, LecturerWorkloadDetail, CombinedWorkingCurriculumItemList]
 })
 export class DepartmentDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
@@ -32,6 +36,9 @@ export class DepartmentDetailPage implements OnInit {
   department = signal<Department | null>(null);
   error = signal('');
   activeSection = signal<DeptSection>('info');
+
+  /** Set when a lecturer is picked in the summary, so the assessment opens on them. */
+  focusLecturerId = signal('');
 
   showEditForm = signal(false);
   editError = signal('');
@@ -48,6 +55,12 @@ export class DepartmentDetailPage implements OnInit {
   }
 
   get deptPreset(): Record<string, string> { return { departmentId: this.departmentId }; }
+
+  /** Summary row -> assessment: the natural next question after "who is overloaded?" is "why?". */
+  openAssessment(lecturerId: string) {
+    this.focusLecturerId.set(lecturerId);
+    this.activeSection.set('workloadDetail');
+  }
 
   openEdit() {
     const d = this.department();

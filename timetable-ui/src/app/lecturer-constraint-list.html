@@ -12,6 +12,10 @@
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 
+<!-- ── Department workload summary: the same table as the "Зведене навантаження"
+     subpage, shown here so a limit can be read beside the load it governs. ── -->
+<app-department-workload-summary [departmentId]="departmentId" [embedded]="true" />
+
 <div class="ce-toolbar">
   <label class="ce-search">
     <span>Пошук викладача</span>

@@ -359,6 +359,68 @@ button.danger:hover { background: #991b1b !important; }
 .gen-load summary { cursor: pointer; font-size: 13px; color: var(--blue); }
 .gen-load table { margin-top: 8px; }
 
+/* ── Department workload statistics table ── */
+.ws-card { padding: 16px 20px; margin-bottom: 18px; }
+.ws-header { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline;
+  padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.ws-header strong { font-family: Georgia, serif; font-size: 15px; color: var(--navy); }
+/* The table is wide by nature (5 work kinds x 3 groupings), so it scrolls rather than wraps. */
+.ws-scroll { overflow-x: auto; }
+.ws-table { min-width: 900px; }
+.ws-table th, .ws-table td { text-align: center; font-size: 12px; padding: 6px 8px; white-space: nowrap; }
+.ws-table thead th { background: #eef2f9; }
+.ws-table tfoot th { background: #eef2f9; font-weight: 600; }
+.ws-table .ws-name { text-align: left; font-size: 13px; }
+.ws-table .ws-total { font-weight: 600; color: var(--navy); }
+.ws-default { font-style: normal; color: #a5b0bd; font-size: 11px; }
+/* Out-of-band rows: tinted, with the deviation itself louder than the row. */
+.ws-table tr.over { background: #fdf3f3; }
+.ws-table tr.under { background: #fbf7ea; }
+.ws-table tr.over .ws-dev { color: #b91c1c; font-weight: 700; }
+.ws-table tr.under .ws-dev { color: #92400e; font-weight: 700; }
+.ws-note { font-size: 11px; margin: 10px 0 0; }
+/* The summary subpage adds the two half-year columns, so it needs more room than the embedded one. */
+.ws-table.ws-wide { min-width: 1150px; }
+/* Sortable headers: the arrow marks the active column, so the header itself is the only affordance. */
+.ws-table th.ws-sort { cursor: pointer; user-select: none; }
+.ws-table th.ws-sort:hover { background: #e3eaf5; }
+/* A lecturer's name opens their assessment; it stays typographically a name, not a button. */
+.ws-link { background: none; border: 0; padding: 0; font: inherit; color: var(--navy);
+  cursor: pointer; text-align: left; }
+.ws-link:hover { text-decoration: underline; }
+/* Nothing assigned at all — greyed so it reads as "empty", not as "zero hours of something". */
+.ws-table tr.ws-idle .ws-name, .ws-table tr.ws-idle .ws-total { color: #a5b0bd; }
+/* The filtered subtotal sits above the department row and is visibly the lesser of the two. */
+.ws-table tfoot tr.ws-subtotal th { background: #f5f7fb; font-weight: 500; color: #55606e; }
+
+/* ── Per-lecturer workload assessment ── */
+.wd-picker { min-width: 320px; }
+.wd-card { padding: 16px 20px; margin-bottom: 16px; overflow: visible; }
+.wd-totals { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.wd-tile { flex: 1 1 160px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px; border-left: 3px solid var(--blue); }
+.wd-tile.muted-tile { border-left-color: var(--line); }
+.wd-tile.half-tile { border-left-color: var(--gold); }
+.wd-empty-half { display: block; font-size: 13px; padding: 6px 0 10px; }
+.wd-semester tfoot th { background: #eef2f9; text-align: right; font-size: 12px; }
+.wd-semester tfoot th:last-child { text-align: center; }
+.wd-tile.over { border-left-color: #b91c1c; background: #fdf3f3; }
+.wd-tile.under { border-left-color: #d97706; background: #fbf7ea; }
+.wd-tile-value { font-family: Georgia, serif; font-size: 22px; color: var(--navy); }
+.wd-tile-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7b8794; }
+.wd-tile-dev { font-size: 12px; font-weight: 700; }
+.wd-tile.over .wd-tile-dev { color: #b91c1c; }
+.wd-tile.under .wd-tile-dev { color: #92400e; }
+.wd-breakdown tbody th { text-align: left; font-size: 12px; background: #eef2f9; white-space: nowrap; }
+/* A constraint with neither bound set is shown, but recedes. */
+.wd-unset { color: #a5b0bd; }
+.wd-semester { margin-bottom: 14px; }
+.wd-semester:last-child { margin-bottom: 0; }
+.wd-semester-header { display: flex; justify-content: space-between; align-items: baseline;
+  padding: 6px 0; font-weight: 600; color: var(--navy); font-size: 13px; }
+.wd-flag { font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--gold); font-weight: 700; margin-left: 6px; }
+
 /* ── Timetable grid ── */
 .timetable td { width: 16%; }
 .timetable .slot { background: #eef2f9; white-space: nowrap; color: var(--navy); }

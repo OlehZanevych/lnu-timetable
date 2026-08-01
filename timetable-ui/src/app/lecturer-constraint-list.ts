@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
 import { compareUk } from './sort';
+import { DepartmentWorkloadSummary } from './department-workload-summary';
 
 /** The taught hour types a course-count constraint can be scoped to. */
 const HOUR_TYPES = ['LECTURE', 'PRACTICAL', 'LAB'] as const;
@@ -95,7 +96,7 @@ interface Violation { message: string; keys: string[] }
 @Component({
   selector: 'app-lecturer-constraint-list',
   templateUrl: './lecturer-constraint-list.html',
-  imports: [FormsModule]
+  imports: [FormsModule, DepartmentWorkloadSummary]
 })
 export class LecturerConstraintList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

@@ -39,7 +39,7 @@ query selecting only the requested columns** — batching sibling-row relation l
   export JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home
   ```
 - **PostgreSQL** running on `localhost:5432` with a database named `lnu-timetable`.
-- Maven (the bundled `mvnw` wrapper also works).
+- **Maven** on the `PATH` (`mvn`) — there is no `mvnw` wrapper checked in, so a local install is required.
 
 ---
 
@@ -105,8 +105,8 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads, workloadConstraints |
 | `LecturerWorkloadConstraint` | `lecturer_workload_constraints` | one (type, value) workload restriction; no standalone queries/mutations — written through `Lecturer`'s `workloadConstraints` nested list; → lecturer |
 | `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → M-N lecturers, M-N academicGroups, M-N combinedGroups, 1-N studentAssignments (INDIVIDUALLY only), *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
-| `LecturerWorkloadCandidate` | `lecturer_workload_candidates` | a lecturer who *could* deliver a workload, scored 1-100 by desirability — the pool automatic generation picks from, distinct from the lecturers actually assigned; no standalone queries/mutations (written through `LecturerWorkload`'s `candidates` nested list); → workload, lecturer |
-| `LecturerWorkloadCandidateConstraint` | `lecturer_workload_candidate_constraints` | `MIN_STUDENTS` (desired) / `MAX_STUDENTS` (ceiling) for one candidate, used only by `INDIVIDUALLY`-taught items; → candidate |
+| `LecturerWorkloadCandidate` | `lecturer_workload_candidates` | a lecturer who *could* deliver a workload, scored 1-100 by desirability — the pool automatic generation picks from, distinct from the lecturers actually assigned; **has its own `create`/`update`/`delete` mutations** (no connection or `findById` query — it is read through `LecturerWorkload.candidates`) because it carries children of its own and nested lists only go one level deep, see [Declare the API](#declare-the-api-no-servicerepositorycontroller); → workload, lecturer, constraints |
+| `LecturerWorkloadCandidateConstraint` | `lecturer_workload_candidate_constraints` | `MIN_STUDENTS` (desired) / `MAX_STUDENTS` (ceiling) for one candidate, used only by `INDIVIDUALLY`-taught items; no standalone queries/mutations — written through `LecturerWorkloadCandidate`'s `constraints` nested list; → candidate |
 | `LecturerWorkloadStudent` | `lecturer_workload_students` | one lecturer↔student pairing of an `INDIVIDUALLY`-taught workload; no standalone queries/mutations — written through `LecturerWorkload`'s `studentAssignments` nested list; → workload, lecturer, student |
 | `Student` | `students` | first/middle/last name (по батькові optional), record book number; → academic group |
 | `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
@@ -453,6 +453,34 @@ Filter arguments compose: the frontend's faculty page passes `facultyId` *and* a
 `specialtyId`, so clearing its specialty sub-filter narrows to "every group of this faculty"
 instead of widening to every group in the university.
 
+### Where each entity is declared
+
+The four `*SchemaConfig` classes are the whole API surface — 23 entities, one `configure<Entity>`
+method each, split by subject area:
+
+| Config class | Entities declared |
+|---|---|
+| `OrganizationSchemaConfig` | `Building`, `Faculty`, `Department`, `Specialty`, `Room` |
+| `CurriculumSchemaConfig` | `Course`, `CourseTag`\*, `CurriculumItem`, `CurriculumItemHours`, `WorkingCurriculumItem`, `CombinedWorkingCurriculumItem` |
+| `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `Student`, `AcademicGroup`, `CombinedGroup` |
+| `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTime`, `TimetableEntry` |
+
+Eighteen of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
+The exceptions are all children written through a parent:
+
+- \* **type-only** (`s.type(...)` with no queries or mutations): registered so a parent's relation
+  field resolves, but written exclusively through that parent's `.nestedList(...)` —
+  `CourseTag` through `Course.tags`, `LecturerWorkloadConstraint` through
+  `Lecturer.workloadConstraints`, `LecturerWorkloadStudent` through
+  `LecturerWorkload.studentAssignments`, `LecturerWorkloadCandidateConstraint` through
+  `LecturerWorkloadCandidate.constraints`;
+- \*\* **mutations without queries**: `LecturerWorkloadCandidate` is read through
+  `LecturerWorkload.candidates` but written through its own three mutations, because it is the one
+  child that has children of its own.
+
+A new `*SchemaConfig` needs no registration beyond `@Component` — every implementation is injected
+as `List<GraphQLSchemaConfig>` and applied at startup.
+
 ### Generated GraphQL shape
 
 Queries/mutations are grouped per entity, matching the original deanery API:
@@ -658,6 +686,7 @@ timetable/
 │   ├── TimetableApplication.java
 │   ├── config/       the four GraphQLSchemaConfig classes — Organization, Curriculum,
 │   │                 People, Scheduling — which are the whole "API definition"
+│   │                 (which entity lives in which: "Where each entity is declared")
 │   ├── domain/       annotated POJOs, one per @GraphQLEntity table
 │   ├── framework/    the config-driven engine (see The framework above)
 │   ├── security/     JWT + PermissionService (see Authentication & authorization)
