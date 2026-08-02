@@ -63,7 +63,16 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
             .relation("department").relation("workloads").relation("workloadConstraints")
             .relation("timetableConstraints");
 
-        s.query("lecturerConnection").entity(Lecturer.class).connection().orderBy("lastName").filter("departmentId", "department_id");
+        // lecturers has no faculty_id of its own - a lecturer's faculty is only known through their
+        // department - so facultyId is an EXISTS subquery rather than a plain column filter (see
+        // QueryDefinition.RelationFilter; same approach as academicGroupConnection's facultyId).
+        // The schedule generator needs it: it reads every lecturer of a faculty together with their
+        // scheduling constraints in one request, rather than one request per department.
+        s.query("lecturerConnection").entity(Lecturer.class).connection().orderBy("lastName")
+            .filter("departmentId", "department_id")
+            .relationFilter("facultyId",
+                "EXISTS (SELECT 1 FROM departments d " +
+                "WHERE d.id = lecturers.department_id AND d.faculty_id = :facultyId)");
         s.query("lecturer").entity(Lecturer.class).findById();
 
         s.mutation("createLecturer").entity(Lecturer.class).create()

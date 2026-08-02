@@ -8,6 +8,9 @@ resulting schedule as a weekly grid. Styled after
 - Angular 21 (standalone components, **signals**, **zoneless** change detection, new `@if`/`@for`/`@switch` control flow)
 - Automatic lecturer-workload generation runs **in the browser** — see
   [WORKLOAD-GENERATION.md](./WORKLOAD-GENERATION.md) for the algorithm in full
+- Automatic **timetable** generation runs in the browser too, in a Web Worker — a UCTP solver
+  built on the objective function of *"Adaptive Memetic Algorithm for University Course
+  Timetabling"*; see [TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md)
 - Talks to the service over plain GraphQL-over-HTTP (`GraphqlService`, no Apollo Client dependency)
 - JWT sign-in with forced password change on first login, and permission-aware UI that hides
   edit/delete/create controls a user isn't allowed to use — see [Authentication](#authentication)
@@ -91,6 +94,7 @@ src/app/
 ├── change-password-page.ts/.html  # "/change-password" — forced after signing in with a temporary password
 ├── admin-page.ts/.html       # "/admin" — user/group/permission management console (admin-only)
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
+├── app.css                    # empty — every style in this app is global, in src/styles.css
 ├── app.config.ts             # bootstrap providers: router + HttpClient with authInterceptor
 ├── app.routes.ts             # route table (see below)
 │
@@ -123,16 +127,44 @@ src/app/
 │                                     #   lecturer — "Зведене навантаження"; also embedded at the
 │                                     #   top of "Обмеження навантаження"
 ├── lecturer-workload-detail.ts/.html # department tab: assess one lecturer — "Оцінка навантаження"
+├── workload-report.ts                 # the printable «РОЗРАХУНОК НАВЧАЛЬНОГО
+│                                   #   НАВАНТАЖЕННЯ» sheet — pure, returns bytes
+├── pdf-writer.ts                      # dependency-free PDF engine: TrueType subsetting,
+│                                   #   Identity-H, tables that break across pages
+├── pdf-fonts.ts                       # browser glue: lazy font fetch, cache, download
 ├── workload-generator.ts             # the automatic assignment algorithm — pure, no Angular
 ├── lecturer-workload-list.ts/.html   # department tab: assign lecturers/groups/duration to each
 │                                     #   working (or combined) curriculum item — "Навантаження викладачів"
 ├── faculty-timetable-list.ts/.html   # faculty tab: auto-generates schedulable blocks from
 │                                     #   workload hours and assigns day/start-time/room —
 │                                     #   "Формування розкладу" (see below)
+├── timetable-solver.ts               # the UCTP solver itself — pure, no Angular/GraphQL/I-O
+├── timetable-solver.worker.ts        # runs it off the main thread and reports progress
 ├── global-properties-page.ts/.html   # "/global-properties" — edit the global_properties settings
 │
 └── timetable.ts/.html        # "/timetable" — read-only weekly grid (days × class start times)
 ```
+
+### The pure modules
+
+Six files carry the logic that is not UI. All of them are free of Angular, GraphQL and I/O: they
+take plain objects and return plain objects, so each can be unit-tested (or run under Node) on its
+own, and the components' only job is to map data in and apply results out. This is the single most
+load-bearing convention in the app — every algorithm here is hand-written, and none of them is
+allowed to reach for a service.
+
+| Module | What it computes | Documented in |
+|---|---|---|
+| `workload-generator.ts` | which lecturer delivers which working curriculum item | [WORKLOAD-GENERATION.md](./WORKLOAD-GENERATION.md) |
+| `timetable-solver.ts` | day / start time / room / week parity for every class session | [TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) |
+| `workload-stats.ts` | per-lecturer hour totals and deviation from the constraints | *Workload statistics*, below |
+| `workload-report.ts` | the printable «Розрахунок навчального навантаження» sheet | [WORKLOAD-PDF.md](./WORKLOAD-PDF.md) |
+| `pdf-writer.ts` | a PDF, from scratch, including the TrueType subsetting | *Printable workload calculation*, below |
+| `sort.ts` | `compareUk` — the one Ukrainian-alphabet comparator | *Ukrainian sorting*, below |
+
+Only one of them needs a host that is not a component: `timetable-solver.worker.ts` runs the solver
+on its own thread. `workload-generator.ts` does not, because it is three greedy passes over a
+department rather than a search with a time budget — it returns before a frame is missed.
 
 ### Generic CRUD tables (`entities.ts` / `BaseEntity`)
 
@@ -188,7 +220,10 @@ and `lecturers.position`. `POSITION_OPTIONS` was inline in the `Lecturer` metada
 report needed the same labels; anything that renders a stored enum should reach for the exported
 list rather than repeat it. A page that hand-rolls its own map is a
 bug waiting to happen: the one that existed showed raw `INTERNSHIP` / `COURSE_WORK` in a column
-because its private map only covered three of the eight values.
+because its private map only covered three of the eight values. One exception is still in the tree:
+`specialty-page.ts` declares its own `DEGREE_OPTIONS` literal rather than importing the shared one
+(its sibling `specialty-list.ts` imports it). The two agree today, which is exactly what makes the
+duplication easy to miss.
 
 `BaseEntity` (an abstract `@Directive`) builds the queries/mutations from this metadata —
 list (`{ <namespace> { <list>(limit, offset) { nodes {...} } } }`), create/update (typed
@@ -209,8 +244,9 @@ without a dedicated drill-down page (`Room`, `RoomGroup`, `ClassStartTimeSet`, `
 `RoomGroup` uses `multiref` for its rooms and offers both a faculty and a department picker even
 though the two are mutually exclusive — the database rejects a row that sets both
 (`room_groups_scope_check`), so a form that does fails on save rather than being prevented here;
-`ClassStartTime` carries a `filterParam: 'classStartTimeSetId'`, since its `ordinal` only numbers
-periods *within* a set and an unfiltered list interleaves every set's. `CombinedGroupPage`
+`ClassStartTime` carries a `filterParam: 'classStartTimeSetId'` — ten of the fifteen entities carry
+a `filterParam`, but this is the one where it is not merely convenient: `ordinal` only numbers
+periods *within* a set, so an unfiltered list interleaves every set's and two rows both read "2.". `CombinedGroupPage`
 (the same `BaseEntity` table) is also registered as a component but not routed standalone — it's
 embedded directly as the Faculty page's "Об'єднані групи" tab instead. `CurriculumItem`,
 `CurriculumItemHours`, `WorkingCurriculumItem` and `LecturerWorkload` have no generic page at all;
@@ -480,7 +516,8 @@ Three views read the same numbers, so they cannot disagree:
   shows the same totals, then every constraint measured against what they actually carry, then every
   position they deliver grouped into the first and second half-year, each with its own subtotal.
 
-`workload-stats.ts` is the arithmetic (pure, unit-tested); `workload-tree.ts` is the query that
+`workload-stats.ts` is the arithmetic (pure, and testable on its own — though see the note about
+test infrastructure under [Notes / known limitations](#notes--known-limitations)); `workload-tree.ts` is the query that
 flattens a department's working and combined curriculum items into its input. Both accounting rules
 match the generator exactly: several lecturers on one item each accrue the **full** hours, and
 individual work costs `hours × students supervised`. Items merged into a combined item are counted
@@ -633,6 +670,44 @@ corresponding `TimetableEntry`.
   selection survives the reload that follows scheduling a different block, and sorted with every
   unscheduled block first, then by day → start-time ordinal → parity → course name.
 
+#### Automatic timetable generation (`timetable-solver.ts`, `timetable-solver.worker.ts`)
+
+The same tab opens with a generation panel offering the same two modes the workload generator does —
+**лише невизначені заняття** (place only the blocks with no `TimetableEntry` yet) and
+**перевизначити весь розклад** — plus a search budget (10 s … 2 min). Pressing «Згенерувати розклад»
+opens a modal that reports the search live: the phase, the objective function `f(σ)` decomposed per
+constraint, how many blocks are placed, and the adaptive intensity and temperature. Nothing is
+written until «Застосувати», which then shows exactly what would change.
+
+The solver is a University Course Timetabling heuristic using the objective function of
+*"Adaptive Memetic Algorithm for University Course Timetabling"* —
+`f(σ) = Σ βᵢ·Πᵢ(σ)^αᵢ` with `β = (150, 100, 50, 5, 20)` over lecturer/group/room conflicts and
+lecturer/group windows — reached by a most-constrained-first greedy construction followed by the
+article's two-phase multi-neighbourhood local search (reassign / swap / chain move under simulated
+annealing and a tabu list, then bounded window reduction) under an effectiveness-adaptive intensity.
+**[TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) documents it in full**: the formulation,
+every deviation from the paper, the constraint semantics, complexity bounds, and what is and isn't
+guaranteed.
+
+Three things about it are specific to scheduling *one faculty inside a shared university*:
+
+- **Rooms, lecturers and groups are shared.** Before searching, the tab reads the current timetable
+  of every room this faculty's workloads may use, of every lecturer of the faculty, and of every
+  academic group involved — whoever owns those classes — through the `roomIds` / `lecturerIds` /
+  `academicGroupIds` relation filters on `timetableEntryConnection` (three aliases in one request,
+  since connection filters compose with AND and what is wanted is OR). Classes belonging to other
+  faculties are loaded as **immovable**: the generator schedules around them and never rewrites
+  them, but it will not clash with them either.
+- **Every scheduling constraint is hard.** `NOT_BEFORE`, `NOT_AFTER`, `UNAVAILABLE` and
+  `MAX_CLASSES_PER_DAY` for lecturers, groups *and* rooms filter candidate placements outright,
+  resolved with the "more specific wins" rule; so do the workload's allowed rooms and its own grid
+  of bells. A block with no admissible placement is reported by name rather than squeezed in.
+- **The plan is applied in batches, and never deletes.** Updates go out first (a move frees the slot
+  it leaves), then creates, 25 per GraphQL document under aliases, so a full faculty is about twenty
+  requests rather than several hundred. A block the solver could not place keeps whatever entry it
+  already had and is reported as «не переплановано» — a heuristic running out of options is not a
+  reason to remove a class.
+
 #### Global settings (`GlobalPropertiesPage`, `/global-properties`)
 
 Lists every row of the backend's `global_properties` table (name/type/value) with an inline
@@ -658,7 +733,7 @@ All are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
 - **`DeptFacultySelect`** — a faculty filter paired with a department `SearchSelect` whose options
   are narrowed to the chosen faculty, defaulting to the edited entity's own faculty and clearable
   to reach a department elsewhere. The generic tables render it automatically for any `ref` field
-  carrying a `parentFilter` (currently `Lecturer.departmentId`); the two drill-down child lists
+  carrying a `parentFilter` — `Lecturer.departmentId` and `RoomGroup.departmentId`; the two drill-down child lists
   (`curriculum-item-list.ts`, `working-curriculum-list.ts`) build the same behaviour inline from a
   `filteredDepartmentOptions` computed signal, because their department select sits inside a larger
   hand-written form rather than the metadata-driven one.
@@ -732,12 +807,13 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 | `/e/:single` | generic `entity-pages.ts` component | one per remaining entity — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
 
 The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад"),
-the global settings page ("Глобальні властивості"), plus a flat "Загальне" group of
-generic-table links for entities with no dedicated page (`Building`, `RoomGroup`,
-`ClassStartTimeSet`, `ClassStartTime`, `AcademicDegree`). `CombinedGroup` also has no sidebar link
-of its own — it's only reachable
-embedded in the Faculty page's "Об'єднані групи" tab (see above), not as a standalone `/e/…`
-route.
+then a flat "Загальне" group of generic-table links for entities with no dedicated page
+(`Building`, `RoomGroup`, `ClassStartTimeSet`, `ClassStartTime`, `AcademicDegree`) plus the global
+settings page ("Глобальні властивості"), and — only for an administrator — an
+"Адміністрування" group holding the single "Користувачі та права" link. The top bar carries the
+signed-in user's name, an «АДМІН» badge where it applies, and the password / sign-out controls.
+`CombinedGroup` has no sidebar link of its own — it's only reachable embedded in the Faculty page's
+"Об'єднані групи" tab (see above), not as a standalone `/e/…` route.
 
 ---
 
@@ -860,19 +936,41 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   already scheduled can shift how many weekly/biweekly blocks that workload generates, so
   previously-scheduled entries may line up with a different position than before — review the
   affected workload's blocks after either change.
-- **Nothing checks a scheduled entry against the timetable constraints.** "Формування розкладу"
-  will happily put a class inside a lecturer's `UNAVAILABLE` window, past a group's `NOT_AFTER`, or
-  in a room the workload doesn't allow — the constraint tabs record the rules, and the schedule
-  builder does not yet read them. The one rule it does apply is the start-time set, by offering each
-  block only its own set's times. Applying the rest needs a class *end* time per candidate slot
-  (`startTime + durationHours × academic_hour_duration_minutes`, which the builder already computes
-  for display) and, for `MAX_CLASSES_PER_DAY`, counting per calendar week rather than per row —
-  `WEEKLY` entries fall in both weeks, so the cap has to hold for `WEEKLY + NUMERATOR` and
-  `WEEKLY + DENOMINATOR` separately. See the backend README's *Scheduling constraints*.
+- **Manual scheduling still checks nothing.** The generator applies every timetable constraint as a
+  hard filter, but the per-block form beside it does not: assigning a day/time/room by hand will
+  happily put a class inside a lecturer's `UNAVAILABLE` window, past a group's `NOT_AFTER`, or in a
+  room the workload doesn't allow. The one rule the form does apply is the start-time set, by
+  offering each block only its own set's times. The machinery exists but is not reachable:
+  `timetable-solver.ts` exports only `parseMinutes` and `solveTimetable`, keeping `resolveRules`,
+  `timeAllowed` and the room / `MAX_CLASSES_PER_DAY` checks module-private, so applying the same
+  rules to the manual form means exporting them first rather than merely calling them. Until that
+  happens a hand-placed class can silently break a rule the generator would never break. See the
+  backend README's *Scheduling constraints*.
+- **A generated schedule is a heuristic result, not an optimum.** UCTP is NP-hard; on a saturated
+  faculty the run finishes with conflicts rather than without, and reports them. A longer budget may
+  also produce a wholly different arrangement of equal quality, because nothing rewards similarity
+  to the timetable that was there before — which is what makes "перевизначити весь розклад"
+  a start-of-semester operation rather than a mid-semester one.
 - `TimetableConstraintList` loads its subjects with `limit: 500` and has no pagination — a faculty
   with more rooms or groups than that would silently show only the first page. It also re-sends each
   subject's own scalar fields on every save (the mutation payload is the whole entity), so a card
   saved from a stale page would overwrite a name someone changed in the meantime.
+- **The read-only `/timetable` grid shows both halves of the year at once.** `timetable.ts` asks for
+  `timetableEntryConnection(limit: 1000)` with no `semesterParity` and no faculty scope — while
+  `data.sql` carries 1428 entries spanning autumn *and* spring. So the grid silently drops 428 rows
+  to its limit, and of what it does show, autumn and spring classes appear to share rooms and slots.
+  Every other consumer of that table filters by semester for exactly this reason (see the backend
+  README's *Reading the current timetable*); this page predates the filter and has not been updated.
+- **There is no test infrastructure in the frontend at all** — no `*.spec.ts`, no runner in
+  `devDependencies`, and `npm test` (`ng test`) fails. The pure modules (see [The pure
+  modules](#the-pure-modules)) are written to be testable and are exercised only by hand; the
+  backend, by contrast, has `SchemaBuildTest`. Anywhere this README says a module *can* be
+  unit-tested, read it as a property of the code, not as a claim that it is.
+- **`entity-pages.ts` declares fifteen components but routes thirteen.** `CombinedGroupPage` is
+  deliberately unrouted (it is embedded in the Faculty page's "Об'єднані групи" tab). The other,
+  `BuildingPage`, is dead code: `/e/building` is claimed by `BuildingHome`, and the `BuildingPage`
+  that `app.routes.ts` imports is the unrelated drill-down component from `building-page.ts`. Two
+  different classes share the name, and the generic one has no importer.
 - Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
   `CurriculumEditor` renders a block per course of the specialty, which can be 240 of them on the
   largest — hence its name filter and "лише заплановані" toggle rather than pagination.

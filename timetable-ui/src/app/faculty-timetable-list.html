@@ -15,6 +15,38 @@
                       name="semesterParity" [ngModelOptions]="{ standalone: true }" />
 </div>
 
+<!-- ── Automatic generation ────────────────────────────────────────────────── -->
+
+<div class="card gen-panel">
+  <div class="gen-header">
+    <strong>Автоматичне формування розкладу</strong>
+    <label class="gen-mode">
+      <input type="radio" name="ttGenMode" [checked]="genMode() === 'gaps'" (change)="setMode('gaps')" />
+      лише невизначені заняття
+    </label>
+    <label class="gen-mode">
+      <input type="radio" name="ttGenMode" [checked]="genMode() === 'all'" (change)="setMode('all')" />
+      перевизначити весь розклад
+    </label>
+    <label class="gen-mode">
+      <span>Час пошуку</span>
+      <app-search-select [options]="SEARCH_BUDGET_OPTIONS" [ngModel]="genBudget()"
+                          (ngModelChange)="genBudget.set($event)"
+                          name="ttGenBudget" [ngModelOptions]="{ standalone: true }" />
+    </label>
+    <button type="button" [disabled]="generatableCount() === 0" (click)="generate()">
+      Згенерувати розклад
+    </button>
+  </div>
+  <p class="gen-hint muted">
+    Буде розміщено {{ generatableCount() }} з {{ blocks().length }} занять. Алгоритм працює у браузері,
+    враховує обмеження викладачів, академічних груп та аудиторій, дозволені аудиторії й набір дзвінків
+    кожного навантаження, а також уже наявні заняття інших факультетів у спільних аудиторіях, у
+    викладачів цього факультету та у його груп — такі заняття залишаються незмінними. Нічого не
+    записується, доки ви не натиснете «Застосувати».
+  </p>
+</div>
+
 @for (b of blocks(); track b.key) {
   <div class="card wci-item-card tt-block" [class.unscheduled]="b.dayOfWeek == null">
     <div class="wci-item-header">
@@ -34,44 +66,280 @@
         }
       </div>
 
-      <div class="tt-block-form">
-        <label>
-          <span>День тижня</span>
-          <app-search-select [options]="DAY_OF_WEEK_OPTIONS" [(ngModel)]="formState[b.key].dayOfWeek"
-                              [name]="b.key + '-day'" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        <label>
-          <span>Час початку</span>
-          <app-search-select [options]="classStartTimeOptionsFor(b)" [(ngModel)]="formState[b.key].classStartTimeId"
-                              [name]="b.key + '-slot'" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        @if (computedEndTime(b); as endTime) {
-          <span class="muted">Закінчення: {{ endTime }}</span>
-        }
-        <label>
-          <span>Аудиторія</span>
-          <app-search-select [options]="roomOptions()" [(ngModel)]="formState[b.key].roomId"
-                              [name]="b.key + '-room'" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        @if (b.isBiweekly) {
+      <!-- form(b) both returns and (re)seeds the block's editable state, so the selection is
+           bound through it rather than through formState directly. -->
+      @if (form(b); as f) {
+        <div class="tt-block-form">
           <label>
-            <span>Парність тижня</span>
-            <app-search-select [options]="BIWEEKLY_PARITY_OPTIONS" [(ngModel)]="formState[b.key].weekParity"
-                                [name]="b.key + '-parity'" [ngModelOptions]="{ standalone: true }" />
+            <span>День тижня</span>
+            <app-search-select [options]="DAY_OF_WEEK_OPTIONS" [(ngModel)]="f.dayOfWeek"
+                                [name]="b.key + '-day'" [ngModelOptions]="{ standalone: true }" />
           </label>
-        }
-
-        <div class="actions">
-          <button type="button" [disabled]="!canSave(b)" (click)="save(b)">
-            {{ b.entryId ? 'Зберегти' : 'Запланувати' }}
-          </button>
-          @if (b.entryId) {
-            <button type="button" class="ghost danger" (click)="remove(b)">Скасувати</button>
+          <label>
+            <span>Час початку</span>
+            <app-search-select [options]="classStartTimeOptionsFor(b)" [(ngModel)]="f.classStartTimeId"
+                                [name]="b.key + '-slot'" [ngModelOptions]="{ standalone: true }" />
+          </label>
+          @if (computedEndTime(b); as endTime) {
+            <span class="muted">Закінчення: {{ endTime }}</span>
           }
+          <label>
+            <span>Аудиторія</span>
+            <app-search-select [options]="roomOptions()" [(ngModel)]="f.roomId"
+                                [name]="b.key + '-room'" [ngModelOptions]="{ standalone: true }" />
+          </label>
+          @if (b.isBiweekly) {
+            <label>
+              <span>Парність тижня</span>
+              <app-search-select [options]="BIWEEKLY_PARITY_OPTIONS" [(ngModel)]="f.weekParity"
+                                  [name]="b.key + '-parity'" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          }
+
+          <div class="actions">
+            <button type="button" [disabled]="!canSave(b)" (click)="save(b)">
+              {{ b.entryId ? 'Зберегти' : 'Запланувати' }}
+            </button>
+            @if (b.entryId) {
+              <button type="button" class="ghost danger" (click)="remove(b)">Скасувати</button>
+            }
+          </div>
         </div>
-      </div>
+      }
     </div>
   </div>
 } @empty {
   <p class="muted">Для цього факультету ще немає навантажень, що потребують розкладу.</p>
+}
+
+<!-- ── Generation modal ────────────────────────────────────────────────────── -->
+
+@if (genOpen()) {
+  <div class="modal-backdrop" (click)="closeGeneration()">
+    <div class="modal tt-gen-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Формування розкладу</h3>
+        @if (genStage() !== 'applying') {
+          <button type="button" class="close" (click)="closeGeneration()">&#x2715;</button>
+        }
+      </div>
+
+      @if (genError()) { <p class="error">{{ genError() }}</p> }
+
+      @switch (genStage()) {
+
+        <!-- Reading the data the solver needs -->
+        @case ('loading') {
+          <p class="tt-gen-phase">{{ genLoadingStep() || 'Завантаження даних…' }}</p>
+          <div class="tt-gen-bar"><div class="tt-gen-bar-fill indeterminate"></div></div>
+          <div class="actions">
+            <button type="button" class="ghost" (click)="closeGeneration()">Скасувати</button>
+          </div>
+        }
+
+        <!-- The search itself -->
+        @case ('solving') {
+          <p class="tt-gen-phase">{{ phaseLabel() }}</p>
+          <div class="tt-gen-bar">
+            <div class="tt-gen-bar-fill" [style.width.%]="progressPercent()"></div>
+          </div>
+
+          @if (genProgress(); as p) {
+            <div class="tt-gen-tiles">
+              <div class="tt-gen-tile">
+                <span class="tt-gen-value">{{ objectiveLabel() }}</span>
+                <span class="tt-gen-label">Цільова функція f(&sigma;)</span>
+              </div>
+              <div class="tt-gen-tile" [class.good]="p.hardTotal === 0">
+                <span class="tt-gen-value">{{ p.hardTotal }}</span>
+                <span class="tt-gen-label">Жорстких порушень</span>
+              </div>
+              <div class="tt-gen-tile">
+                <span class="tt-gen-value">{{ p.placed }} / {{ p.total }}</span>
+                <span class="tt-gen-label">Розміщено занять</span>
+              </div>
+              <div class="tt-gen-tile">
+                <span class="tt-gen-value">{{ elapsedLabel() }}</span>
+                <span class="tt-gen-label">Час пошуку</span>
+              </div>
+            </div>
+
+            <table class="tt-gen-table">
+              <thead>
+                <tr>
+                  <th>Обмеження</th>
+                  <th>&Pi;<sub>i</sub></th>
+                  <th>&beta;<sub>i</sub></th>
+                  <th>Внесок у f</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Накладки викладачів (H1)</td>
+                  <td>{{ p.violations.lecturerConflicts }}</td><td>150</td>
+                  <td>{{ 150 * p.violations.lecturerConflicts * p.violations.lecturerConflicts }}</td>
+                </tr>
+                <tr>
+                  <td>Накладки груп (H2)</td>
+                  <td>{{ p.violations.groupConflicts }}</td><td>100</td>
+                  <td>{{ 100 * p.violations.groupConflicts * p.violations.groupConflicts }}</td>
+                </tr>
+                <tr>
+                  <td>Накладки аудиторій (H3)</td>
+                  <td>{{ p.violations.roomConflicts }}</td><td>50</td>
+                  <td>{{ 50 * p.violations.roomConflicts * p.violations.roomConflicts }}</td>
+                </tr>
+                <tr>
+                  <td>Вікна викладачів (S4)</td>
+                  <td>{{ p.violations.lecturerWindows }}</td><td>5</td>
+                  <td>{{ 5 * p.violations.lecturerWindows * p.violations.lecturerWindows }}</td>
+                </tr>
+                <tr>
+                  <td>Вікна груп (S5)</td>
+                  <td>{{ p.violations.groupWindows }}</td><td>20</td>
+                  <td>{{ 20 * p.violations.groupWindows * p.violations.groupWindows }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <p class="muted tt-gen-meta">
+              Ітерація {{ p.iteration }} · інтенсивність локального пошуку
+              {{ (p.intensity * 100).toFixed(0) }}% · температура {{ p.temperature.toFixed(2) }} ·
+              без покращення: {{ p.stagnation }}
+              @if (p.unplaced) { · неможливо розмістити: {{ p.unplaced }} }
+            </p>
+          }
+
+          <div class="actions">
+            <button type="button" class="ghost" (click)="stopAndShow()">Зупинити й показати результат</button>
+          </div>
+        }
+
+        <!-- What applying would change -->
+        @case ('preview') {
+          @if (genPlan(); as plan) {
+            @if (genResult(); as res) {
+              <p class="tt-gen-phase">
+                Пошук завершено за {{ (res.elapsedMs / 1000).toFixed(1) }} с
+                ({{ res.iterations }} ітерацій), f(&sigma;) = {{ res.objective.toLocaleString('uk-UA') }}
+              </p>
+
+              <div class="tt-gen-tiles">
+                <div class="tt-gen-tile good"><span class="tt-gen-value">{{ plan.creates.length }}</span>
+                  <span class="tt-gen-label">Нових занять</span></div>
+                <div class="tt-gen-tile"><span class="tt-gen-value">{{ plan.updates.length }}</span>
+                  <span class="tt-gen-label">Переміщено</span></div>
+                <div class="tt-gen-tile"><span class="tt-gen-value">{{ plan.unchanged }}</span>
+                  <span class="tt-gen-label">Без змін</span></div>
+                <div class="tt-gen-tile"><span class="tt-gen-value">{{ plan.kept }}</span>
+                  <span class="tt-gen-label">Не змінювались</span></div>
+                @if (plan.unresolved.length) {
+                  <div class="tt-gen-tile bad"><span class="tt-gen-value">{{ plan.unresolved.length }}</span>
+                    <span class="tt-gen-label">Не переплановано</span></div>
+                }
+              </div>
+
+              @if (plan.unresolved.length) {
+                <p class="muted tt-gen-meta">
+                  {{ plan.unresolved.length }} занять залишено на своїх місцях: алгоритм не знайшов для
+                  них жодного дозволеного місця. Наявні записи розкладу не вилучаються.
+                </p>
+              }
+
+              <p class="muted tt-gen-meta">
+                Накладки: викладачі {{ res.violations.lecturerConflicts }} ·
+                групи {{ res.violations.groupConflicts }} ·
+                аудиторії {{ res.violations.roomConflicts }}. Вікна: викладачі
+                {{ res.violations.lecturerWindows }} · групи {{ res.violations.groupWindows }}.
+              </p>
+
+              @if (res.unplaced.length) {
+                <ul class="gen-issues warn-list">
+                  <li><strong>Не вдалося розмістити {{ res.unplaced.length }} занять:</strong></li>
+                  @for (u of res.unplaced.slice(0, 12); track u.key) {
+                    <li>{{ u.courseName }} ({{ u.hourType }}) — {{ u.reason }}</li>
+                  }
+                  @if (res.unplaced.length > 12) {
+                    <li>… та ще {{ res.unplaced.length - 12 }}</li>
+                  }
+                </ul>
+              }
+
+              @if (res.conflicts.length) {
+                <ul class="gen-issues error-list">
+                  <li><strong>Залишились накладки ({{ res.conflicts.length }}):</strong></li>
+                  @for (c of res.conflicts.slice(0, 10); track $index) {
+                    <li>
+                      {{ dayLabel(c.dayOfWeek) }} —
+                      {{ c.descriptions[0] }} ↔ {{ c.descriptions[1] }}
+                    </li>
+                  }
+                  @if (res.conflicts.length > 10) {
+                    <li>… та ще {{ res.conflicts.length - 10 }}</li>
+                  }
+                </ul>
+              }
+
+              <details class="gen-load">
+                <summary>Показати зміни ({{ planChangeCount() }})</summary>
+                <table class="table gen-table">
+                  <thead>
+                    <tr><th>Дисципліна</th><th>Тип</th><th>Групи</th><th>Дія</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (c of plan.creates; track c.block.key) {
+                      <tr>
+                        <td>{{ c.block.courseName }}</td>
+                        <td>{{ hourTypeLabel(c.block.hourType) }}</td>
+                        <td class="cell-info">{{ groupNames(c.block) }}</td>
+                        <td>додати: {{ dayLabel(c.placement.dayOfWeek) }}</td>
+                      </tr>
+                    }
+                    @for (c of plan.updates; track c.block.key) {
+                      <tr>
+                        <td>{{ c.block.courseName }}</td>
+                        <td>{{ hourTypeLabel(c.block.hourType) }}</td>
+                        <td class="cell-info">{{ groupNames(c.block) }}</td>
+                        <td>перенести: {{ dayLabel(c.placement.dayOfWeek) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </details>
+
+              <div class="actions">
+                <button type="button" [disabled]="planChangeCount() === 0" (click)="applyPlan()">
+                  Застосувати ({{ planChangeCount() }})
+                </button>
+                <button type="button" class="ghost" (click)="closeGeneration()">Скасувати</button>
+              </div>
+            }
+          }
+        }
+
+        <!-- Writing the plan -->
+        @case ('applying') {
+          <p class="tt-gen-phase">Збереження розкладу — {{ applyDone() }} з {{ applyTotal() }}</p>
+          <div class="tt-gen-bar">
+            <div class="tt-gen-bar-fill" [style.width.%]="applyPercent()"></div>
+          </div>
+          <p class="muted">Не закривайте вкладку, доки збереження триває.</p>
+        }
+
+        @case ('done') {
+          <p class="tt-gen-phase">Розклад збережено.</p>
+          <p class="muted">Записів змінено: {{ applyDone() }}.</p>
+          <div class="actions">
+            <button type="button" (click)="closeGeneration()">Закрити</button>
+          </div>
+        }
+
+        @case ('error') {
+          <div class="actions">
+            <button type="button" (click)="closeGeneration()">Закрити</button>
+          </div>
+        }
+      }
+    </div>
+  </div>
 }

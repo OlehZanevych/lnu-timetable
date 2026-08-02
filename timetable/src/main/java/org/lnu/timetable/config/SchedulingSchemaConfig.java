@@ -234,7 +234,49 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .fields("dayOfWeek", "weekParity")
             .relation("workload").relation("classStartTime").relation("room");
 
-        s.query("timetableEntryConnection").entity(TimetableEntry.class).connection().orderBy("dayOfWeek").filter("workloadId", "workload_id");
+        // timetable_entries carries no semester and no room/lecturer/group of its own - those live
+        // on the workload behind it - so everything a scheduler needs to read the *current* state of
+        // the timetable around a faculty is an EXISTS subquery (see QueryDefinition.RelationFilter).
+        //
+        // The three id-list filters exist because a faculty never schedules in isolation: its rooms
+        // also host other faculties' classes, its lecturers also teach other faculties' specialties,
+        // and its groups are also taught by other faculties' departments. A generator has to see
+        // those entries to avoid clashing with them, and must not move them. They are declared
+        // separately (rather than as one OR-ed filter) because filters compose with AND: a caller
+        // asks for each slice under its own alias in one request and merges them client-side.
+        //
+        // semesterParity narrows to one half of the year, which any query over this table must do -
+        // both halves are stored at once and share rooms, so an unfiltered read reports clashes that
+        // do not exist. It reaches the semester through whichever target the workload has: a single
+        // working curriculum item, or the members of a combined one.
+        s.query("timetableEntryConnection").entity(TimetableEntry.class).connection().orderBy("dayOfWeek")
+            .filter("workloadId", "workload_id")
+            .filter("roomId", "room_id")
+            .relationFilterList("roomIds", "timetable_entries.room_id = ANY(:roomIds)")
+            .relationFilterList("lecturerIds",
+                "EXISTS (SELECT 1 FROM lecturer_workload_lecturers lwl " +
+                "WHERE lwl.lecturer_workload_id = timetable_entries.workload_id " +
+                "AND lwl.lecturer_id = ANY(:lecturerIds))")
+            .relationFilterList("academicGroupIds",
+                "(EXISTS (SELECT 1 FROM lecturer_workload_academic_groups lwag " +
+                "WHERE lwag.lecturer_workload_id = timetable_entries.workload_id " +
+                "AND lwag.academic_group_id = ANY(:academicGroupIds)) " +
+                "OR EXISTS (SELECT 1 FROM lecturer_workload_combined_groups lwcg " +
+                "JOIN combined_group_academic_groups cga ON cga.combined_group_id = lwcg.combined_group_id " +
+                "WHERE lwcg.lecturer_workload_id = timetable_entries.workload_id " +
+                "AND cga.academic_group_id = ANY(:academicGroupIds)))")
+            .relationFilterString("semesterParity",
+                "EXISTS (SELECT 1 FROM lecturer_workloads lw " +
+                "LEFT JOIN working_curriculum_items w ON w.id = lw.working_curriculum_item_id " +
+                "LEFT JOIN combined_working_curriculum_item_members m " +
+                "ON m.combined_working_curriculum_item_id = lw.combined_working_curriculum_item_id " +
+                "LEFT JOIN working_curriculum_items wm ON wm.id = m.working_curriculum_item_id " +
+                "JOIN curriculum_item_hours cih " +
+                "ON cih.id = COALESCE(w.curriculum_item_hours_id, wm.curriculum_item_hours_id) " +
+                "JOIN curriculum_items ci ON ci.id = cih.curriculum_item_id " +
+                "WHERE lw.id = timetable_entries.workload_id " +
+                "AND ((:semesterParity = 'ODD' AND ci.semester % 2 = 1) " +
+                "OR (:semesterParity = 'EVEN' AND ci.semester % 2 = 0)))");
         s.query("timetableEntry").entity(TimetableEntry.class).findById();
 
         s.mutation("createTimetableEntry").entity(TimetableEntry.class).create()
