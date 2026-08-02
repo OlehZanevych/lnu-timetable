@@ -38,6 +38,20 @@ backend must be running. Then open **http://localhost:4200**.
 npm run build      # production build into dist/
 ```
 
+### Served from the service
+
+`npm run build` is also the first half of the deployment path. `scripts/build-ui.sh` in the
+repository root runs it and copies `dist/timetable-ui/browser/` into the service's
+`src/main/resources/static/`, and `scripts/build-app.sh` then packages both halves into one Spring
+Boot jar — so the whole system deploys as a single artifact.
+
+Nothing in this project changes between the two modes. `GraphqlService` posts to the relative path
+`/graphql`, so being served from the same origin as the API needs no configuration at all;
+`src/proxy.conf.json` exists only because `ng serve` runs on a port of its own. Deep links keep
+working because the service answers any dotless path with `index.html` — that rule, and the one
+limit it carries, is written up in the [service
+README](../timetable/README.md#serving-the-frontend-from-this-service).
+
 ---
 
 ## Two architectures, side by side
@@ -961,6 +975,12 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   to its limit, and of what it does show, autumn and spring classes appear to share rooms and slots.
   Every other consumer of that table filters by semester for exactly this reason (see the backend
   README's *Reading the current timetable*); this page predates the filter and has not been updated.
+- **A route deeper than three path segments would 404 on reload** when the app is served from the
+  packaged jar rather than from `ng serve`. The service's deep-link fallback matches a fixed list of
+  patterns rather than a catch-all, so that requests for real files still reach the static resource
+  handler; nothing today comes close (`/faculty/:id` is the deepest route in `app.routes.ts`), but
+  adding one means adding a pattern in `FrontendController` too. See the [service
+  README](../timetable/README.md#serving-the-frontend-from-this-service).
 - **There is no test infrastructure in the frontend at all** — no `*.spec.ts`, no runner in
   `devDependencies`, and `npm test` (`ng test`) fails. The pure modules (see [The pure
   modules](#the-pure-modules)) are written to be testable and are exercised only by hand; the

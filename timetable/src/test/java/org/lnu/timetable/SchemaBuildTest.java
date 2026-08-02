@@ -68,9 +68,12 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("createTimetableEntry"));
         assertTrue(sdl.contains("TimetableEntryInputPayload"));
         assertTrue(sdl.contains("workloadId: ID"));
-        // Filter arguments on connection fields (graphql-java prints arguments in alphabetical order)
+        // Filter arguments on connection fields. SchemaPrinter sorts arguments alphabetically
+        // regardless of the order they were declared in, and a relation filter (.relationFilter,
+        // an EXISTS subquery) is printed exactly like a plain column filter — lecturerConnection's
+        // facultyId below is one, reached through lecturers.department_id -> departments.faculty_id.
         assertTrue(sdl.contains("departmentConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
         assertTrue(sdl.contains("specialtyConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
-        assertTrue(sdl.contains("lecturerConnection(departmentId: ID, limit: Int! = 1000, offset: Int! = 0)"));
+        assertTrue(sdl.contains("lecturerConnection(departmentId: ID, facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
     }
 }

@@ -44,3 +44,6 @@ logs/
 application-local.properties
 application-local.yml
 application-secrets.properties
+
+# Frontend build output copied in by scripts/build-ui.sh
+src/main/resources/static/

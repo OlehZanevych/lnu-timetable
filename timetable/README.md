@@ -66,9 +66,26 @@ filter by semester or autumn and spring classes will appear to share rooms. And 
 genuine clashes (four rooms, one group, three lecturers) are in the data because they are printed
 that way on the sheets; they were left visible rather than silently patched.
 
-Connection URL, credentials and pool sizing live in
-`src/main/resources/application.properties` (also toggles GraphiQL and R2DBC SQL/param
-debug logging, which is how the N+1 query problem described below was originally spotted).
+### Configuration
+
+Settings are split across two files in `src/main/resources`, and the split is by *what changes
+between environments* rather than by subject:
+
+| File | Holds |
+|---|---|
+| `application.properties` | what is the same everywhere — the connection URL and pool sizing, GraphiQL, `app.security.jwt-ttl-minutes`, and `spring.profiles.active=loc` |
+| `application-loc.properties` | what is not — `spring.r2dbc.username`/`password`, `app.security.jwt-secret`, the R2DBC SQL/param debug logging (which is how the N+1 query problem described below was originally spotted), and `app.apollo-sandbox.enabled` |
+
+The `loc` profile is activated from `application.properties` itself, so a local run needs nothing on
+the command line, and both files are checked in with working development values. Anything in the
+profile file can be overridden per run — `--spring.r2dbc.password=…`, `SPRING_R2DBC_PASSWORD=…`,
+`SPRING_APPLICATION_JSON` — and `--spring.profiles.active=` drops the file altogether. See the root
+README's *Running it as a single jar* for what a deployment should override.
+
+`scripts/reset_db.sh`, `scripts/backup_data.sh` and `scripts/renumber_ids.sh` read both files
+directly: the URL from the first, the credentials from the second. The connection is therefore
+stated once and the scripts stay correct when it changes; all three fail with a named error if
+either file, or either key, is missing.
 
 ---
 
@@ -80,7 +97,10 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home mvn spring-
 
 - GraphQL endpoint: `POST http://localhost:8080/graphql`
 - GraphiQL (browser IDE): `http://localhost:8080/graphiql`
-- `GET /` redirects to **Apollo Studio Sandbox** pointed at this service
+- `GET /` redirects to **Apollo Studio Sandbox** pointed at this service — while
+  `app.apollo-sandbox.enabled` is `true`, which is what `application-loc.properties` sets. When it
+  is anything else, that same path serves the built Angular client instead; see [Serving the
+  frontend from this service](#serving-the-frontend-from-this-service)
 - Apollo Federation `_service { sdl }` is served for schema introspection by gateways
 - A permissive `CorsFilter` allows any origin/method — fine for local dev, tighten before
   deploying anywhere public
@@ -93,6 +113,48 @@ Run tests (schema assembly):
 ```bash
 JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk-25.jdk/Contents/Home mvn test
 ```
+
+---
+
+## Serving the frontend from this service
+
+This service can carry the Angular client, so the whole system deploys as one jar.
+`scripts/build-ui.sh` in the repository root builds `timetable-ui` and copies
+`dist/timetable-ui/browser/` into `src/main/resources/static/`; `mvn package` then sweeps that into
+`BOOT-INF/classes/static/` with no pom changes, because it is where Spring Boot serves classpath
+static resources from. `static/` is build output and is git-ignored. `scripts/build-app.sh` does
+both steps and refuses to report success unless the bundle really is inside the jar.
+
+Two controllers share `/`, and exactly one of them is ever in the context:
+
+| `app.apollo-sandbox.enabled` | Registered | `GET /` |
+|---|---|---|
+| `true` | `IndexController` | 303 to Apollo Studio Sandbox, aimed at this instance's `/graphql` |
+| `false`, absent, or anything else | `FrontendController` | the client's `index.html` |
+
+`@ConditionalOnBooleanProperty` is what expresses that — `havingValue = true` on one,
+`havingValue = false, matchIfMissing = true` on the other. The two conditions partition every
+possible value of the property, so `/` can never be owned by both or by neither.
+
+The bundle's own files — `main-*.js`, `styles-*.css`, `favicon.ico`, `fonts/*.ttf` — are served by
+Spring Boot's ordinary static resource handling, untouched. `FrontendController` exists for the one
+thing that handling cannot do: answer a **deep link**. The Angular router owns `/faculty/3` and
+`/e/course`, which are paths in the browser and files nowhere, so a reload or a pasted URL asks
+this service for something that was never on disk. It answers those with `index.html` and lets the
+router take over. Three rules keep it from swallowing anything else:
+
+- every path segment is matched as `[^.]*`, so a request for any name containing a dot — every
+  hashed asset, every font — does not match here and falls through to the resource handler, which
+  still returns a real 404 when the file genuinely is missing rather than HTML where a script was
+  asked for;
+- `/graphql` and `/graphiql` belong to Spring for GraphQL's own `RouterFunction`, whose handler
+  mapping is ordered `-1` — ahead of the order-`0` mapping that serves annotated controllers — so
+  they are matched before these patterns are consulted at all;
+- `produces = text/html` keeps it out of the way of anything negotiating for JSON.
+
+The client asks for `/graphql` as a relative path (`GraphqlService`), so same-origin serving needs
+no configuration on either side; `timetable-ui/src/proxy.conf.json` exists only because `ng serve`
+runs on a port of its own.
 
 ---
 
@@ -922,10 +984,11 @@ anything except `login` fail the same way with "You must be signed in to do this
 
 ### Configuration & seed data
 
-`app.security.jwt-secret` (≥32 bytes for HS256) and `app.security.jwt-ttl-minutes` (default 720 =
-12 hours) live in `application.properties`. The checked-in secret is a generated dev-only value —
-**override it before deploying anywhere real** (e.g. via `SPRING_APPLICATION_JSON` or an
-environment variable).
+`app.security.jwt-secret` (≥32 bytes for HS256) lives in `application-loc.properties` and
+`app.security.jwt-ttl-minutes` (default 720 = 12 hours) in `application.properties` — see
+[Configuration](#configuration). The checked-in secret is a generated dev-only value, and the `loc`
+profile is active inside the packaged jar as well, so **override it before deploying anywhere
+real** — `--app.security.jwt-secret=…`, `APP_SECURITY_JWTSECRET`, or `SPRING_APPLICATION_JSON`.
 
 `data.sql` seeds two groups ("Деканат ФПМіІ", "Завідувачі кафедр") and three accounts for local
 testing:
@@ -944,7 +1007,7 @@ Because a GraphQL relation field's data fetcher is invoked **once per parent row
 implementation issues one SQL query per row for every relation a query touches. With a
 nested query like `curriculumItems → hours → workingCurriculumItems → department/course`,
 that used to fan out into dozens of tiny queries per page load, visible in the R2DBC debug
-logs (enabled via `application.properties`) as a wall of near-identical
+logs (enabled via `application-loc.properties`) as a wall of near-identical
 `SELECT id FROM faculties WHERE id = $1` calls.
 
 `DynamicDataFetchers.relation(...)` now resolves every relation field (to-one, to-many,
@@ -997,10 +1060,16 @@ timetable/
 │   ├── domain/       annotated POJOs, one per @GraphQLEntity table
 │   ├── framework/    the config-driven engine (see The framework above)
 │   ├── security/     JWT + PermissionService (see Authentication & authorization)
-│   ├── controller/   IndexController — only redirects / to Apollo Sandbox
+│   ├── controller/   IndexController redirects / to Apollo Sandbox; FrontendController
+│   │                 serves the built Angular client — one or the other, never both
+│   │                 (see Serving the frontend from this service)
 │   └── filter/       CorsFilter
 ├── src/main/resources/
-│   ├── application.properties
+│   ├── application.properties       what is the same in every environment
+│   ├── application-loc.properties   the 'loc' profile: credentials, JWT secret, SQL
+│   │                                logging, the "/" toggle (see Configuration)
+│   ├── static/                      the built Angular client, put here by
+│   │                                ../scripts/build-ui.sh — git-ignored build output
 │   └── db/
 │       ├── schema.sql     DDL; starts with DROP SCHEMA public CASCADE
 │       └── data.sql       pg_dump-style seed: the real LNU structure plus the
@@ -1009,8 +1078,9 @@ timetable/
 │                                          asserts on the printed SDL — the fastest
 │                                          check that a schema-config change is valid
 └── scripts/
-    ├── reset_db.sh        drop + re-apply schema.sql then data.sql (reads connection
-    │                      details from application.properties)
+    ├── reset_db.sh        drop + re-apply schema.sql then data.sql (reads the URL from
+    │                      application.properties, the credentials from
+    │                      application-loc.properties)
     ├── backup_data.sh     dump the current database back out over data.sql
     ├── renumber_ids.sh    compact id sequences in data.sql after manual editing
     ├── generate_data.py   synthetic seed generator (predates the real-data import)
@@ -1019,6 +1089,10 @@ timetable/
                            generated/data.sql, validate_sql.py checks it independently.
                            Has its own README.
 ```
+
+The repository root carries two more scripts, `scripts/build-ui.sh` and `scripts/build-app.sh`,
+which package this service and the Angular client into a single deployable jar — see [Serving the
+frontend from this service](#serving-the-frontend-from-this-service).
 
 Because `schema.sql`/`data.sql` are applied by hand (see [Known
 limitations](#known-limitations)), `scripts/reset_db.sh` is the usual way to pick up a schema
@@ -1038,6 +1112,17 @@ setup](#database-setup).
   command. Note that this makes every schema change destructive by default: a change that only
   *adds* a column or an enum value can be applied in place with `ALTER TABLE`/`ALTER TYPE`
   instead, but nothing in the repo tracks which of those you have already run.
+- **`spring.profiles.active=loc` is compiled into the jar.** A packaged deployment therefore still
+  loads `application-loc.properties` — its dev credentials, its DEBUG SQL logging (every statement
+  and every bound parameter, including the ones behind `login`), and `app.apollo-sandbox.enabled=true`,
+  which leaves `/` redirecting to Apollo Sandbox rather than serving the client. Each has to be
+  overridden per run, or the profile switched off with `--spring.profiles.active=`. Convenient for
+  `mvn spring-boot:run`, a trap for anything else; a `prod` profile file would be the tidier answer.
+- **`FrontendController` matches at most three path segments.** Every client route fits today
+  (`/faculty/:id` is the deepest), but a deeper one added later would 404 on reload until another
+  pattern is added there. It is a fixed list of patterns rather than a catch-all precisely so that
+  requests for real files keep falling through to the static resource handler — see [Serving the
+  frontend from this service](#serving-the-frontend-from-this-service).
 - **The `ukrainian` collation needs a Postgres built with ICU** (standard from v15). On a build
   without it, `schema.sql` fails at `CREATE COLLATION` — substitute the `provider = libc,
   locale = 'uk_UA.utf8'` variant noted at that line, which in turn needs that locale generated
