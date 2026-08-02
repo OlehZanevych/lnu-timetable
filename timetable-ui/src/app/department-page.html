@@ -40,6 +40,11 @@
       &#x1F6E1; Обмеження навантаження
     </button>
     <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'timetableConstraints'"
+            (click)="activeSection.set('timetableConstraints')">
+      &#x1F553; Обмеження розкладу
+    </button>
+    <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloads'"
             (click)="activeSection.set('workloads')">
       &#x1F5C2; Навантаження викладачів
@@ -95,6 +100,11 @@
     <!-- ── Lecturer workload constraints ── -->
     @if (activeSection() === 'constraints') {
       <app-lecturer-constraint-list [departmentId]="departmentId" />
+    }
+
+    <!-- ── Lecturer timetable constraints ── -->
+    @if (activeSection() === 'timetableConstraints') {
+      <app-timetable-constraint-list subject="lecturer" [scopeId]="departmentId" />
     }
 
     <!-- ── Lecturer workloads ── -->

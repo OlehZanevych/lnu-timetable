@@ -202,6 +202,9 @@ export abstract class BaseEntity implements OnInit, OnChanges {
       const opt = f.enumOptions?.find((o) => o.value === row[f.name]);
       return opt ? opt.label : (row[f.name] ?? '—');
     }
+    // A false flag reads better as a blank cell than as "Ні" repeated down the column: the point of
+    // the column is to show which row *is* the default one.
+    if (f.type === 'boolean') return row[f.name] ? 'Так' : '';
     return row[f.name] ?? '—';
   }
 
@@ -218,6 +221,9 @@ export abstract class BaseEntity implements OnInit, OnChanges {
       if (f.type === 'ref') this.form[f.name] = row[f.relation!]?.id ?? '';
       else if (f.type === 'multiref') this.form[f.name] = (row[f.relation!] ?? []).map((x: any) => String(x.id));
       else if (f.type === 'tags') this.form[f.name] = (row[f.relation!] ?? []).map((x: any) => x[f.tagField!]).join(', ');
+      // Not `?? ''`: a checkbox needs a real boolean, and '' would also be read as "empty" by
+      // buildInput and dropped, so unticking a box would never reach the server.
+      else if (f.type === 'boolean') this.form[f.name] = !!row[f.name];
       else this.form[f.name] = row[f.name] ?? '';
     }
     this.error.set('');
@@ -251,6 +257,13 @@ export abstract class BaseEntity implements OnInit, OnChanges {
           .map((t) => t.trim())
           .filter(Boolean)
           .map((tag) => ({ [f.tagField!]: tag }));
+        continue;
+      }
+
+      // An unticked checkbox is a value, not an absence — it has to be sent as `false`, otherwise
+      // a set could be made the default but never un-made.
+      if (f.type === 'boolean') {
+        input[f.name] = !!v;
         continue;
       }
 

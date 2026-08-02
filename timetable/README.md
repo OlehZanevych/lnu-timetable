@@ -54,7 +54,19 @@ psql -h localhost -U postgres -d lnu-timetable -f src/main/resources/db/data.sql
 ```
 
 `schema.sql` starts with `DROP SCHEMA public CASCADE`, so it always recreates a clean
-schema. Connection URL, credentials and pool sizing live in
+schema.
+
+`data.sql` is no longer a pristine `pg_dump` of a hand-entered database: on top of the real LNU
+structure it carries the **ФПМІ 2025/2026 timetable**, transcribed from the faculty's published
+PDF sheets — 1428 `timetable_entries` over both halves of the year, with the rooms, room groups,
+courses, curriculum items and `lecturer_workloads` they needed. Two things follow for anyone
+querying it. `timetable_entries` has **no semester column** — the semester lives on the curriculum
+item behind the workload — and both halves are loaded, so *any* query over the timetable must
+filter by semester or autumn and spring classes will appear to share rooms. And a handful of
+genuine clashes (four rooms, one group, three lecturers) are in the data because they are printed
+that way on the sheets; they were left visible rather than silently patched.
+
+Connection URL, credentials and pool sizing live in
 `src/main/resources/application.properties` (also toggles GraphiQL and R2DBC SQL/param
 debug logging, which is how the N+1 query problem described below was originally spotted).
 
@@ -102,17 +114,22 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/CONSULTATION/ASSESSMENT/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
 | `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups, M-N combined working curriculum items |
 | `CombinedWorkingCurriculumItem` | `combined_working_curriculum_items` | pure M-N hub, no scalar fields of its own; bundles several `WorkingCurriculumItem`s that share course/semester/hour-type (e.g. one shared lecture across specialties) so one `LecturerWorkload` can cover all of them at once; → M-N working curriculum items, workloads |
-| `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads, workloadConstraints |
+| `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads, workloadConstraints, timetableConstraints |
 | `LecturerWorkloadConstraint` | `lecturer_workload_constraints` | one (type, value) workload restriction; no standalone queries/mutations — written through `Lecturer`'s `workloadConstraints` nested list; → lecturer |
-| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → M-N lecturers, M-N academicGroups, M-N combinedGroups, 1-N studentAssignments (INDIVIDUALLY only), *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
+| `LecturerTimetableConstraint` | `lecturer_timetable_constraints` | one *scheduling* restriction — when this lecturer may be given classes; no standalone queries/mutations — written through `Lecturer`'s `timetableConstraints` nested list; → lecturer. See [Scheduling constraints](#scheduling-constraints) |
+| `LecturerWorkload` (**class requirement**) | `lecturer_workloads` | durationHours (academic hours, 1-4); → classStartTimeSet (which grid of bells its classes run on), M-N rooms + M-N roomGroups (where it may be held — the union, empty meaning unrestricted), M-N lecturers, M-N academicGroups, M-N combinedGroups, 1-N studentAssignments (INDIVIDUALLY only), *exactly one of* workingCurriculumItem / combinedWorkingCurriculumItem, timetable entries |
 | `LecturerWorkloadCandidate` | `lecturer_workload_candidates` | a lecturer who *could* deliver a workload, scored 1-100 by desirability — the pool automatic generation picks from, distinct from the lecturers actually assigned; **has its own `create`/`update`/`delete` mutations** (no connection or `findById` query — it is read through `LecturerWorkload.candidates`) because it carries children of its own and nested lists only go one level deep, see [Declare the API](#declare-the-api-no-servicerepositorycontroller); → workload, lecturer, constraints |
 | `LecturerWorkloadCandidateConstraint` | `lecturer_workload_candidate_constraints` | `MIN_STUDENTS` (desired) / `MAX_STUDENTS` (ceiling) for one candidate, used only by `INDIVIDUALLY`-taught items; no standalone queries/mutations — written through `LecturerWorkloadCandidate`'s `constraints` nested list; → candidate |
 | `LecturerWorkloadStudent` | `lecturer_workload_students` | one lecturer↔student pairing of an `INDIVIDUALLY`-taught workload; no standalone queries/mutations — written through `LecturerWorkload`'s `studentAssignments` nested list; → workload, lecturer, student |
 | `Student` | `students` | first/middle/last name (по батькові optional), record book number; → academic group |
-| `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups |
+| `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups, timetableConstraints |
+| `AcademicGroupTimetableConstraint` | `academic_group_timetable_constraints` | as `LecturerTimetableConstraint`, for a group; written through `AcademicGroup`'s `timetableConstraints` nested list |
 | `CombinedGroup` (об'єднана група) | `combined_groups` | M-N academic groups (electives) |
-| `Room` (аудиторія) | `rooms` | capacity, kind; → faculty? |
-| `ClassStartTime` (пара) | `class_start_times` | ordinal, start time (end time is derived from the workload's duration) |
+| `Room` (аудиторія) | `rooms` | capacity, kind; → faculty?, building?, timetableConstraints |
+| `RoomTimetableConstraint` | `room_timetable_constraints` | as `LecturerTimetableConstraint`, for a room; written through `Room`'s `timetableConstraints` nested list |
+| `RoomGroup` (група аудиторій) | `room_groups` | a named, reusable set of rooms a workload can point at instead of naming rooms one by one; scoped to a faculty *or* a department *or* neither (university-wide); → M-N rooms, M-N workloads |
+| `ClassStartTimeSet` (розклад дзвінків) | `class_start_time_sets` | a named grid of start times; exactly one row is the university-wide default, and a faculty-scoped set can never be it; → faculty?, classStartTimes. (No reverse `workloads` field — the link is `LecturerWorkload.classStartTimeSet` only) |
+| `ClassStartTime` (пара) | `class_start_times` | ordinal (unique *within its set*), start time (end time is derived from the workload's duration); → classStartTimeSet |
 | `TimetableEntry` (**the schedule / "gene"**) | `timetable_entries` | dayOfWeek, weekParity; → workload, classStartTime, room |
 | `AcademicDegree` | `academic_degrees` | name, abbreviation, level; → lecturers |
 
@@ -125,7 +142,21 @@ Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbrevia
 exactly one supervising lecturer), `lecturer_workload_constraints(lecturer_id, constraint_type)`
 (a constraint is set at most once per lecturer), `lecturer_workload_candidates(lecturer_workload_id,
 lecturer_id)` (a lecturer is a candidate for a workload at most once, with `CHECK (desirability
-BETWEEN 1 AND 100)`).
+BETWEEN 1 AND 100)`), `class_start_times(class_start_time_set_id, ordinal)` and
+`(class_start_time_set_id, start_time)` (a set numbers its own periods 1..N and never lists one
+clock time twice), and `room_groups_unique_name` / `class_start_time_sets_unique_name`, which are
+unique within their scope via `COALESCE(faculty_id, 0)` (and `COALESCE(department_id, 0)`) so that
+a faculty and one of its departments can each keep a group called "Комп'ютерні класи".
+
+Seven of the indexes are *partial* — they carry a `WHERE`, so only the matching rows collide:
+`class_start_time_sets_single_default` (`WHERE is_default`, which is how "at most one default in the
+whole table" is expressed — a plain `UNIQUE (is_default)` would wrongly allow just one *non*-default
+set as well), plus the `…_unique_single` / `…_unique_window` pair on each of the three
+timetable-constraint tables, described in [Scheduling constraints](#scheduling-constraints).
+
+> The house convention for "unique, treating NULL as a value" is `COALESCE(col, 0)` inside the
+> index expression rather than `NULLS NOT DISTINCT` — `permissions_unique_grant` established it and
+> the newer indexes follow, so all of them read the same way.
 
 > **History note**: earlier versions of this service modeled a *curriculum* as its own
 > entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
@@ -144,6 +175,7 @@ ordering significance beyond their values, because `ORDER BY` on an enum column 
 | `teaching_format` | `TOGETHER`, `SEPARATELY`, `INDIVIDUALLY` |
 | `lecturer_workload_candidate_constraint_type` | `MIN_STUDENTS`, `MAX_STUDENTS` |
 | `lecturer_workload_constraint_type` | `MIN`/`MAX_HOURS_PER_YEAR`, `MAX_COURSES`, and `MIN`/`MAX_[MANDATORY\|ELECTIVE]_[LECTURE\|PRACTICAL\|LAB]_COURSES` (21 values) |
+| `timetable_constraint_type` | `MAX_CLASSES_PER_DAY`, `NOT_BEFORE`, `NOT_AFTER`, `UNAVAILABLE` — shared by all three timetable-constraint tables |
 | `control_form` | `EXAM`, `CREDIT`, `GRADED_CREDIT` |
 | `course_type` | `MANDATORY`, `ELECTIVE_GROUP`, `ELECTIVE`, `OPTIONAL`, `INTERNSHIP`, `COURSE_PROJECT`, `COURSE_WORK`, `QUALIFICATION_WORK` |
 | `week_parity` | `WEEKLY`, `NUMERATOR`, `DENOMINATOR` |
@@ -226,12 +258,126 @@ there is nothing to query or mutate directly:
 | `lecturer_workload_lecturers` | `LecturerWorkload` ↔ `Lecturer` | `lecturerIds` input |
 | `lecturer_workload_academic_groups` | `LecturerWorkload` ↔ `AcademicGroup` | `academicGroupIds` input |
 | `lecturer_workload_combined_groups` | `LecturerWorkload` ↔ `CombinedGroup` | `combinedGroupIds` input |
+| `lecturer_workload_rooms` | `LecturerWorkload` ↔ `Room` | `LecturerWorkload.rooms`, `roomIds` input |
+| `lecturer_workload_room_groups` | `LecturerWorkload` ↔ `RoomGroup` | `LecturerWorkload.roomGroups`, `roomGroupIds` input |
+| `room_group_rooms` | `RoomGroup` ↔ `Room` | `RoomGroup.rooms`, `roomIds` input |
 
 Contrast the four tables that *do* have entities despite looking like join tables —
 `lecturer_workload_students`, `lecturer_workload_candidates`,
 `lecturer_workload_candidate_constraints` and `lecturer_workload_constraints`. Each carries data
 beyond the pair of keys (a desirability score, a constraint value), which is exactly why it needs a
-surrogate id and an entity rather than a `@ManyToMany`.
+surrogate id and an entity rather than a `@ManyToMany`. The three timetable-constraint tables are
+the same case again.
+
+### Where a class may be held, and on which bells
+
+Two questions about a `LecturerWorkload` that the timetable needs answered before a
+`TimetableEntry` can be built, both stored on the workload rather than on the entry — they are
+properties of the *class*, not of one of its weekly occurrences.
+
+**Rooms.** A workload may name individual rooms (`lecturer_workload_rooms`), whole reusable room
+groups (`lecturer_workload_room_groups`), or both. The eligible rooms are the **union** of the two
+lists, and an **empty union means unrestricted** — the right default for the many ordinary classes
+with no particular requirement, so restricting is opt-in. Both exist because both are natural: a
+lecture that must happen in the one hall large enough for it names that hall, while a lab that can
+run in any computer class points at the group and stays correct when a room is later added to it.
+
+`room_groups` is modelled on `combined_groups`, down to the optional `purpose` note. A group may be
+scoped so it is only offered where it makes sense — `faculty_id` set means that faculty's
+departments, `department_id` set means one department, both `NULL` means university-wide — and the
+two are mutually exclusive (`room_groups_scope_check`), since a department already determines its
+faculty. The scope governs who may *reach for* the group, not what is in it: a department's group
+routinely holds rooms owned by the faculty or by nobody.
+
+**Bells.** Not every kind of class runs on the same grid — physical education usually starts on its
+own so students can reach a sports hall and back, and an evening programme may shift the whole day
+later. `class_start_times` therefore belong to a named `class_start_time_sets` row, and
+`lecturer_workloads.class_start_time_set_id` (NOT NULL, `ON DELETE RESTRICT`) says which grid a
+workload's classes run on. `ordinal` is unique *within* a set, so every set numbers its periods
+1..N independently and two sets both legitimately have a "друга пара". Exactly one set is the
+university-wide default, and a faculty-scoped set can never be it.
+
+Moving the default is a whole-table operation, because `class_start_time_sets_single_default` is
+checked per statement rather than deferred to commit:
+
+```sql
+UPDATE class_start_time_sets SET is_default = (id = :newId) WHERE is_default OR id = :newId;
+```
+
+Inserting a new default and only then clearing the old one fails, even inside one transaction — so
+the frontend clears the outgoing set first and only then sets the incoming one.
+
+**Neither rule is enforced on `timetable_entries`.** That a room is one the workload allows is a
+set-membership test across two join tables, and that an entry's `class_start_time_id` belongs to
+the workload's set is one join away; both are conditions a `CHECK` cannot see, so the scheduler (and
+the UI, which only offers a block its own set's times) enforces them. The database guarantees only
+what is structural — the foreign keys, the value ranges, and the cascades.
+
+### Scheduling constraints
+
+`lecturer_timetable_constraints`, `academic_group_timetable_constraints` and
+`room_timetable_constraints` say **when, and how densely,** a lecturer, a group or a room may be
+given classes. They do not describe a timetable; they restrict the ones a scheduler is allowed to
+build, and are checked against a candidate `timetable_entries` row rather than stored on it.
+
+The eight rules the faculty asked for are four kinds of restriction, each of which either applies to
+every day or to one named day — so `day_of_week NULL` means "every day" and a value (1..7, Monday =
+1, the same convention as `timetable_entries.day_of_week`) means "that day only". The payload is a
+single `constraint_value` string whose meaning depends on `constraint_type`, the same arrangement
+`global_properties` uses:
+
+| `constraint_type` | `constraint_value` | Example | Meaning |
+|---|---|---|---|
+| `MAX_CLASSES_PER_DAY` | `N` | `'3'` | at most N classes |
+| `NOT_BEFORE` | `HH:MM` | `'12:30'` | nothing may *start* before this |
+| `NOT_AFTER` | `HH:MM` | `'17:00'` | nothing may *end* after this |
+| `UNAVAILABLE` | `HH:MM-HH:MM` | `'13:10-14:00'` | nothing may overlap `[from, to)` |
+
+Each form is pinned by a `CASE constraint_type WHEN … THEN constraint_value ~ '…'` check constraint
+on every table, so the column can only ever hold a string the matching type knows how to read: a
+count is canonical decimal (`'0'` is meaningful — "no classes at all on Friday" — while `'007'`
+and `'-1'` are not), times are zero-padded 24-hour, and a window's two halves are separated by one
+`-` and must run forwards. Reading it back is `constraint_value::int` for a count and
+`left(…, 5)`/`right(…, 5)` for a window; because the times are zero-padded, plain string comparison
+against `class_start_times.start_time` is chronological comparison with no cast either way.
+`day_of_week` is deliberately *not* folded into the string — it selects which rows apply and has to
+stay a column the scheduler can filter and index on.
+
+**More specific wins.** A day-specific row *overrides* the every-day row of the same type for that
+day rather than adding to it: `NOT_BEFORE 12:30` every day together with `NOT_BEFORE 09:00` on
+Monday means Monday starts at 09:00 and the rest of the week at 12:30. Without that rule the two
+could only ever contradict each other. `UNAVAILABLE` is the exception — its windows *accumulate*,
+since several disjoint gaps in one day are a normal thing to want. The unique indexes say exactly
+this: `…_unique_single` on `(subject_id, constraint_type, COALESCE(day_of_week, 0)) WHERE
+constraint_type <> 'UNAVAILABLE'`, and `…_unique_window` on `(subject_id, COALESCE(day_of_week, 0),
+constraint_value) WHERE constraint_type = 'UNAVAILABLE'`. A third, plain index on the subject column
+covers "read every constraint of one lecturer", which spans both partial ones.
+
+Two things a scheduler has to get right and the schema cannot:
+
+- **Evaluating the time rules needs the *end* of a class**, which is stored nowhere: it is
+  `class_start_times.start_time + lecturer_workloads.duration_hours ×` the
+  `academic_hour_duration_minutes` global property. Only `NOT_BEFORE` can be answered from the start
+  time alone.
+- **`MAX_CLASSES_PER_DAY` counts per *calendar week*, not per row.** A `WEEKLY` entry falls in both
+  weeks and `NUMERATOR`/`DENOMINATOR` in one each, so the cap has to hold for (`WEEKLY` +
+  `NUMERATOR`) and for (`WEEKLY` + `DENOMINATOR`) separately. Counting all three together would
+  reject a legal timetable that merely alternates two classes in one slot.
+
+The last three types are one idea — a forbidden interval — and a scheduler is expected to normalise
+them (`NOT_BEFORE` → `[00:00, from)`, `NOT_AFTER` → `[to, 24:00)`). They are kept separate anyway
+because the intent is what the user typed and what an editing UI must show back; collapsing them
+would turn "закінчувати о 17:00" into "не займати 17:00–24:00" the next time the row is read.
+
+Every row is a **hard** restriction. Soft constraints would need a weight alongside, in the shape of
+`lecturer_workload_candidates.desirability`, and are deliberately left out until there is a
+scheduler that can trade them off.
+
+**Why three tables rather than one with a nullable lecturer/group/room triple.** Each subject then
+has a plain `NOT NULL` foreign key instead of an "exactly one of three is set" `CHECK`, the unique
+indexes lose their `COALESCE` over the subject columns, and each table is indexed and queried on its
+own. The cost is that the value rule is written out three times — the enum is shared, but adding a
+constraint type means touching all three tables.
 
 ### Inputs for automatic workload generation
 
@@ -275,11 +421,16 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `Faculty` | `Building`? |
 | `Department`, `Specialty` | `Faculty` |
 | `Room` | `Faculty`?, `Building`? |
+| `RoomTimetableConstraint` | `Room` |
+| `RoomGroup` | `Faculty`?, `Department`? |
+| `ClassStartTimeSet` | `Faculty`? |
+| `ClassStartTime` | `ClassStartTimeSet` |
 | `Course` | `Department`?, `Faculty`?, parent `Course`? (elective group → its options) |
 | `CourseTag` | `Course` |
 | `Lecturer` | `Department` |
-| `LecturerWorkloadConstraint` | `Lecturer` |
+| `LecturerWorkloadConstraint`, `LecturerTimetableConstraint` | `Lecturer` |
 | `AcademicGroup` | `Specialty` |
+| `AcademicGroupTimetableConstraint` | `AcademicGroup` |
 | `CombinedGroup` | any member `AcademicGroup` (via `combined_group_academic_groups`) |
 | `Student` | `AcademicGroup` |
 | `CurriculumItem` | `Specialty`, `Course` |
@@ -291,7 +442,12 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `LecturerWorkloadCandidateConstraint` | `LecturerWorkloadCandidate` |
 | `LecturerWorkloadStudent` | `LecturerWorkload` |
 | `TimetableEntry` | `LecturerWorkload`, `Room` |
-| `Building`, `AcademicDegree`, `ClassStartTime` | *(none — top-level; only an administrator can create/modify these)* |
+| `Building`, `AcademicDegree` | *(none — top-level; only an administrator can create/modify these)* |
+
+`LecturerWorkload`'s rooms and room groups are deliberately **not** permission parents: being able
+to modify a room, or the list of rooms in a group, must not confer the right to modify every
+workload that happens to be allowed to use it. Its `ClassStartTimeSet` is left out for the same
+reason.
 
 `?` marks a `nullable = true` edge (the FK may be unset, in which case that path just doesn't
 apply). Following these edges upward from any row yields the full set of resources whose grant
@@ -455,17 +611,17 @@ instead of widening to every group in the university.
 
 ### Where each entity is declared
 
-The four `*SchemaConfig` classes are the whole API surface — 23 entities, one `configure<Entity>`
+The four `*SchemaConfig` classes are the whole API surface — 28 entities, one `configure<Entity>`
 method each, split by subject area:
 
 | Config class | Entities declared |
 |---|---|
-| `OrganizationSchemaConfig` | `Building`, `Faculty`, `Department`, `Specialty`, `Room` |
+| `OrganizationSchemaConfig` | `Building`, `Faculty`, `Department`, `Specialty`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup` |
 | `CurriculumSchemaConfig` | `Course`, `CourseTag`\*, `CurriculumItem`, `CurriculumItemHours`, `WorkingCurriculumItem`, `CombinedWorkingCurriculumItem` |
-| `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `Student`, `AcademicGroup`, `CombinedGroup` |
-| `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTime`, `TimetableEntry` |
+| `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `LecturerTimetableConstraint`\*, `Student`, `AcademicGroup`, `AcademicGroupTimetableConstraint`\*, `CombinedGroup` |
+| `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTimeSet`, `ClassStartTime`, `TimetableEntry` |
 
-Eighteen of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
+Twenty of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
 The exceptions are all children written through a parent:
 
 - \* **type-only** (`s.type(...)` with no queries or mutations): registered so a parent's relation
@@ -473,7 +629,11 @@ The exceptions are all children written through a parent:
   `CourseTag` through `Course.tags`, `LecturerWorkloadConstraint` through
   `Lecturer.workloadConstraints`, `LecturerWorkloadStudent` through
   `LecturerWorkload.studentAssignments`, `LecturerWorkloadCandidateConstraint` through
-  `LecturerWorkloadCandidate.constraints`;
+  `LecturerWorkloadCandidate.constraints`, and the three `*TimetableConstraint`s through
+  `Lecturer`/`AcademicGroup`/`Room`'s `timetableConstraints`. The last three are worth a word: a
+  subject's scheduling rules are only meaningful *as a set* — a day-specific rule overrides the
+  every-day one — so they have to be read and written together, and the nested list's
+  "anything not sent is deleted" reconciliation is exactly the semantics that needs;
 - \*\* **mutations without queries**: `LecturerWorkloadCandidate` is read through
   `LecturerWorkload.candidates` but written through its own three mutations, because it is the one
   child that has children of its own.
@@ -696,7 +856,8 @@ timetable/
 │   ├── application.properties
 │   └── db/
 │       ├── schema.sql     DDL; starts with DROP SCHEMA public CASCADE
-│       └── data.sql       full pg_dump-style seed (real LNU structure)
+│       └── data.sql       pg_dump-style seed: the real LNU structure plus the
+│                          transcribed ФПМІ 2025/2026 timetable (see Database setup)
 ├── src/test/java/…/SchemaBuildTest.java   assembles the whole GraphQL schema and
 │                                          asserts on the printed SDL — the fastest
 │                                          check that a schema-config change is valid
@@ -742,13 +903,30 @@ setup](#database-setup).
   schema/fetcher slice instead of a generic generalization; see [global_properties — outside the
   entity framework](#global_properties--outside-the-entity-framework). A second string-keyed (or
   composite-keyed) entity would need the same treatment, not a `@GraphQLEntity` annotation.
-- `lecturer_workloads.duration_hours` has a `CHECK (duration_hours BETWEEN 1 AND 4)` constraint,
-  but a violation surfaces through the generic mutation error-mapping as `LECTURERWORKLOAD_NOT_FOUND`
-  rather than something naming the real problem: `DynamicDataFetchers`' generic error handler maps
-  any `DataIntegrityViolationException` (which is also what a foreign-key violation throws) to
-  whichever declared error status *contains* the substring `"NOT_FOUND"`, and doesn't distinguish a
-  CHECK-constraint failure from a missing related row. In practice this is only reachable by
-  bypassing the UI (which only offers 1–4 via a select), so the impact is limited to direct API use.
+- **A `CHECK`-constraint failure is reported as if a related row were missing.**
+  `DynamicDataFetchers`' generic error handler maps any `DataIntegrityViolationException` — which is
+  also what a foreign-key violation throws — to whichever declared error status *contains* the
+  substring `"NOT_FOUND"`, so it cannot distinguish the two. `lecturer_workloads.duration_hours`
+  (`CHECK … BETWEEN 1 AND 4`) surfaces as `LECTURERWORKLOAD_NOT_FOUND`; a malformed
+  `constraint_value` on any of the three timetable-constraint tables surfaces as its parent's
+  `RELATED_NOT_FOUND`; `room_groups_scope_check` and `class_start_time_sets_default_scope_check`
+  behave the same way. In practice each is only reachable by bypassing the UI, which validates the
+  same rules client-side and blocks the save — but a direct API caller gets a message that names
+  the wrong problem. Distinguishing them would mean inspecting the Postgres `SQLSTATE`
+  (`23514` check vs. `23503` foreign key) in that handler.
+- **Nothing checks a `TimetableEntry` against the rules that govern it.** Its room may be outside
+  the union its workload allows, its `class_start_time_id` may belong to a different set than the
+  workload's, and it may sit inside an `UNAVAILABLE` window or past a `NOT_AFTER` — the database
+  accepts all three. Every one of these is a condition one or two joins away (and the time rules
+  additionally need a class *end* time, which is derived, not stored), so they belong to a scheduler
+  and to the UI. There is no scheduler in this repo yet; the timetable is entered by hand through
+  the frontend's "Формування розкладу" tab, which offers only the start times of the workload's own
+  set but does not yet filter rooms or apply the constraint tables.
+- **`roomGroupConnection`'s and `classStartTimeSetConnection`'s `facultyId` filters match the column
+  exactly**, so they return only that faculty's rows — not the university-wide ones (`faculty_id IS
+  NULL`) a caller almost always wants as well. Clients that need both fetch unfiltered and narrow
+  client-side, which is what `LecturerWorkloadList` does. A relation filter with an
+  `IS NULL OR = :facultyId` condition would fix it at the source.
 - Not every many-to-many relation is wired for mutation yet — `CombinedGroup ↔
   AcademicGroup` membership is queryable but still read-only through the generated
   mutations (seed it via `data.sql` or direct SQL). `WorkingCurriculumItem ↔ AcademicGroup`

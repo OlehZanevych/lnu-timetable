@@ -306,13 +306,123 @@ CREATE TABLE rooms
     faculty_id  BIGINT REFERENCES faculties (id) ON DELETE SET NULL
 );
 
--- Stores only the possible start times a class can begin at; the end of a class is derived from
--- the workload's duration_hours and the academic_hour_duration_minutes global property.
-CREATE TABLE class_start_times
+-- A named, reusable set of rooms — "Комп'ютерні класи (2 корпус)", "Спортивні зали", "Потокові
+-- аудиторії ФПМІ". Its purpose is reuse: the same handful of rooms is eligible for dozens of
+-- workloads, and naming that set once is better than re-picking the rooms every time.
+--
+-- Modelled on combined_groups, which does the same job for academic groups, down to the optional
+-- `purpose` note explaining what the set is for.
+--
+-- A group may be scoped, so that it is only offered where it makes sense:
+--
+--   both NULL     university-wide — any workload may use it;
+--   faculty_id    only workloads of that faculty's departments;
+--   department_id only that one department's workloads.
+--
+-- The two are mutually exclusive rather than combinable: a department already determines its
+-- faculty, so setting both could only ever be redundant or contradictory. Note the rooms in a
+-- group are *not* constrained by its scope — a department's group routinely contains rooms owned
+-- by the faculty, or by nobody; the scope says who may reach for the group, not what is in it.
+CREATE TABLE room_groups
+(
+    id            BIGSERIAL PRIMARY KEY,
+    name          VARCHAR(64)  COLLATE ukrainian NOT NULL,
+    purpose       VARCHAR(200) COLLATE ukrainian,
+    -- ON DELETE CASCADE for the same reason as class_start_time_sets.faculty_id: a group that
+    -- exists *for* one faculty or department is meaningless once its owner is gone. Nothing is lost
+    -- beyond the group itself — lecturer_workload_room_groups only loses the link, and the rooms,
+    -- which are physical and shared, are untouched.
+    faculty_id    BIGINT REFERENCES faculties (id)   ON DELETE CASCADE,
+    department_id BIGINT REFERENCES departments (id) ON DELETE CASCADE,
+    CONSTRAINT room_groups_scope_check CHECK (
+        faculty_id IS NULL OR department_id IS NULL
+    )
+);
+
+-- Unique within its scope, so a faculty and one of its departments can each keep a group called
+-- "Комп'ютерні класи" without one blocking the other. COALESCE rather than NULLS NOT DISTINCT,
+-- matching class_start_time_sets_unique_name and permissions_unique_grant.
+CREATE UNIQUE INDEX room_groups_unique_name
+    ON room_groups (name, COALESCE(faculty_id, 0), COALESCE(department_id, 0));
+
+CREATE INDEX room_groups_faculty_idx    ON room_groups (faculty_id)    WHERE faculty_id IS NOT NULL;
+CREATE INDEX room_groups_department_idx ON room_groups (department_id) WHERE department_id IS NOT NULL;
+
+CREATE TABLE room_group_rooms
+(
+    room_group_id BIGINT NOT NULL REFERENCES room_groups (id) ON DELETE CASCADE,
+    room_id       BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,
+    PRIMARY KEY (room_group_id, room_id)
+);
+
+-- ============================ Infrastructure: Class start times ============================
+--
+-- Not every kind of class runs on the same bells. Physical education, for instance, usually starts
+-- on its own grid so students have time to reach a sports hall and back; an evening or part-time
+-- programme may shift the whole day later. So the start times are grouped into *named sets*, and a
+-- timetable entry picks a time out of one of them.
+--
+-- Exactly one set is the default: the one that applies wherever nothing more specific does. A set
+-- may instead be scoped to a single faculty, which restricts it to that faculty — and such a set
+-- can never be the default, because a default is by definition university-wide.
+
+CREATE TABLE class_start_time_sets
 (
     id         BIGSERIAL PRIMARY KEY,
-    ordinal    INTEGER     NOT NULL UNIQUE,
-    start_time VARCHAR(8)  NOT NULL
+    name       VARCHAR(120) COLLATE ukrainian NOT NULL,
+    -- The university-wide set used when nothing more specific applies. At most one row in the whole
+    -- table may have this set — see class_start_time_sets_single_default below.
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    -- NULL = available to every faculty; set = usable only in that faculty's timetables.
+    --
+    -- ON DELETE CASCADE rather than the SET NULL that rooms.faculty_id and courses.faculty_id use:
+    -- a room outlives its faculty because it is a physical thing, but a set that exists *for* one
+    -- faculty has no meaning once that faculty is gone. Widening it instead would silently promote
+    -- a private grid to a university-wide one, and — where a university-wide set already carries
+    -- the same name — make deleting the faculty fail on the name index below.
+    faculty_id BIGINT REFERENCES faculties (id) ON DELETE CASCADE,
+    -- Scoping and defaulting are mutually exclusive: "the default" means "for the whole university".
+    CONSTRAINT class_start_time_sets_default_scope_check CHECK (
+        NOT (is_default AND faculty_id IS NOT NULL)
+    )
+);
+
+-- At most one default across the whole table. A *partial* unique index is what expresses that: it
+-- only indexes the rows where is_default is true, so they collide with each other while the
+-- non-default rows are left alone. A plain UNIQUE (is_default) would wrongly allow just one
+-- non-default set as well.
+--
+-- The index is checked per statement, not deferred to commit, so moving the default has to clear
+-- the old row before (or in the same statement as) setting the new one:
+--     UPDATE class_start_time_sets SET is_default = (id = :newId) WHERE is_default OR id = :newId;
+-- Inserting a new default and only then clearing the old one fails, even inside one transaction.
+CREATE UNIQUE INDEX class_start_time_sets_single_default
+    ON class_start_time_sets (is_default) WHERE is_default;
+
+-- Names are unique within their scope, so two faculties can each keep their own "Фізичне
+-- виховання" while the university-wide sets stay distinguishable from one another. COALESCE
+-- rather than NULLS NOT DISTINCT, matching permissions_unique_grant below.
+CREATE UNIQUE INDEX class_start_time_sets_unique_name
+    ON class_start_time_sets (name, COALESCE(faculty_id, 0));
+
+CREATE INDEX class_start_time_sets_faculty_idx
+    ON class_start_time_sets (faculty_id) WHERE faculty_id IS NOT NULL;
+
+-- Stores only the possible start times a class can begin at; the end of a class is derived from
+-- the workload's duration_hours and the academic_hour_duration_minutes global property.
+--
+-- ordinal is unique *within a set* rather than globally, so every set numbers its own periods
+-- 1..N independently — "друга пара" of the PE set is a different row from "друга пара" of the
+-- main one, and both are legitimately number 2.
+CREATE TABLE class_start_times
+(
+    id                      BIGSERIAL PRIMARY KEY,
+    class_start_time_set_id BIGINT      NOT NULL REFERENCES class_start_time_sets (id) ON DELETE CASCADE,
+    ordinal                 INTEGER     NOT NULL,
+    start_time              VARCHAR(8)  NOT NULL,
+    UNIQUE (class_start_time_set_id, ordinal),
+    -- A set never lists the same clock time twice, whatever ordinal it is given.
+    UNIQUE (class_start_time_set_id, start_time)
 );
 
 -- ============================ Workload (class requirements) & timetable ============================
@@ -327,6 +437,15 @@ CREATE TABLE lecturer_workloads
     combined_working_curriculum_item_id BIGINT REFERENCES combined_working_curriculum_items (id) ON DELETE CASCADE,
     -- Duration of each class for this workload, in academic hours (1 lesson = 1-4 academic hours).
     duration_hours                      INTEGER NOT NULL DEFAULT 2 CHECK (duration_hours BETWEEN 1 AND 4),
+    -- Which grid of start times this workload's classes are scheduled on. Carried per workload
+    -- rather than per timetable entry because it is a property of the *class*, not of one of its
+    -- weekly occurrences: physical education runs on its own bells for every one of its classes.
+    -- timetable_entries.class_start_time_id must therefore point at a time belonging to this set.
+    --
+    -- ON DELETE RESTRICT: a set in use cannot simply vanish. CASCADE would delete the workloads
+    -- scheduled on it — losing an entire discipline's assignment because someone tidied up a list
+    -- of bells — and the column is NOT NULL, so SET NULL is not available either.
+    class_start_time_set_id             BIGINT  NOT NULL REFERENCES class_start_time_sets (id) ON DELETE RESTRICT,
     CONSTRAINT lecturer_workloads_target_check CHECK (
         (working_curriculum_item_id IS NOT NULL) <> (combined_working_curriculum_item_id IS NOT NULL)
     )
@@ -351,6 +470,32 @@ CREATE TABLE lecturer_workload_combined_groups
     lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
     combined_group_id    BIGINT NOT NULL REFERENCES combined_groups (id) ON DELETE CASCADE,
     PRIMARY KEY (lecturer_workload_id, combined_group_id)
+);
+
+-- Which rooms this workload's classes may be held in, said two ways: individually named rooms, and
+-- whole reusable room groups. Both exist because both are natural — a lecture that must happen in
+-- the one hall large enough for it names that hall directly, while a lab that can run in any
+-- computer class points at the group and stays correct when a room is later added to it.
+--
+-- The eligible rooms are the **union** of the two lists, and an empty union means *unrestricted*:
+-- a workload that names neither may be scheduled anywhere, which is the right default for the many
+-- ordinary classes with no particular requirement. Restricting is opt-in.
+--
+-- Nothing here forces timetable_entries.room_id to fall within that union. It is a condition two
+-- joins away (and expands through room_group_rooms), so it belongs to the scheduler, alongside the
+-- matching rule for class start times — see the note on timetable_entries below.
+CREATE TABLE lecturer_workload_rooms
+(
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    room_id              BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,
+    PRIMARY KEY (lecturer_workload_id, room_id)
+);
+
+CREATE TABLE lecturer_workload_room_groups
+(
+    lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    room_group_id        BIGINT NOT NULL REFERENCES room_groups (id) ON DELETE CASCADE,
+    PRIMARY KEY (lecturer_workload_id, room_group_id)
 );
 
 -- Lecturer<->student pairings for a workload whose working curriculum item is taught
@@ -416,9 +561,224 @@ CREATE TABLE timetable_entries
     day_of_week  INTEGER     NOT NULL,
     week_parity  week_parity NOT NULL,
     workload_id  BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    -- The chosen time carries its set with it (class_start_times.class_start_time_set_id), so no
+    -- separate set column is stored here — one would only be able to disagree with this one.
+    -- Whether that set is *allowed* for the entry's faculty is a question about
+    -- class_start_time_sets.faculty_id and the workload's groups, two joins away, so it is enforced
+    -- in the application rather than by a constraint here.
     class_start_time_id BIGINT NOT NULL REFERENCES class_start_times (id) ON DELETE CASCADE,
+    -- Likewise: the room must be one the workload allows — the union of lecturer_workload_rooms and
+    -- the rooms of its lecturer_workload_room_groups, or any room at all when both are empty. That
+    -- is a set-membership test across two join tables, so the scheduler enforces it, not a CHECK.
     room_id      BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE
 );
+
+-- ============================ Scheduling constraints ============================
+--
+-- When and how densely a lecturer, an academic group or a room may be given classes. These do not
+-- describe a timetable; they restrict the ones the scheduler is allowed to build, and are checked
+-- against a candidate timetable_entries row rather than stored on it.
+--
+-- The eight rules the faculty asks for are four kinds of restriction, each of which either applies
+-- to every day or to one named day — so `day_of_week NULL` means "every day" and a value means
+-- "that day only".
+--
+-- The payload is a single `constraint_value` string whose meaning depends on `constraint_type`,
+-- the same arrangement global_properties uses (value always text, type says how to read it):
+--
+--   constraint_type      constraint_value    example  meaning
+--   -------------------  ------------------  -------  --------------------------------------------
+--   MAX_CLASSES_PER_DAY  N                   '3'      at most N classes
+--   NOT_BEFORE           HH:MM               '12:30'  nothing may *start* before this
+--   NOT_AFTER            HH:MM               '17:00'  nothing may *end* after this
+--   UNAVAILABLE          HH:MM-HH:MM         '13:10-14:00'  nothing may overlap [from, to)
+--
+-- Each form is pinned by timetable_constraints_value_check on every table, so the column can only
+-- ever hold a string the matching type knows how to read: a count is canonical decimal with no
+-- leading zeros or sign, times are zero-padded 24-hour, and a window's two halves are separated by
+-- one '-' and run forwards. Reading it back is `constraint_value::int` for a count,
+-- `left(constraint_value, 5)` and `right(constraint_value, 5)` for a window's ends — and because
+-- the times are zero-padded, plain string comparison against class_start_times.start_time
+-- (VARCHAR(8), but only ever HH:MM) is chronological comparison, with no cast either way.
+--
+-- day_of_week is deliberately *not* folded into the string: it selects which rows apply and has to
+-- stay a column the scheduler can filter and index on.
+--
+-- The last three types are one idea — a forbidden interval — and a scheduler is expected to
+-- normalise them into intervals: NOT_BEFORE is [00:00, from), NOT_AFTER is [to, 24:00), and
+-- UNAVAILABLE is the closed-open span between the two. They are kept as separate types anyway
+-- because the intent is what the user typed and what an editing UI has to show back; collapsing
+-- them would turn "закінчувати о 17:00" into "не займати 17:00–24:00" the next time the row is read.
+--
+-- **More specific wins.** A day-specific row overrides the every-day row of the same type for that
+-- day rather than adding to it: NOT_BEFORE 12:30 every day together with NOT_BEFORE 09:00 on
+-- Monday means Monday starts at 09:00 and the rest of the week at 12:30. Without that rule the two
+-- could only ever contradict each other, since a lecturer who wants a later start on one day has no
+-- way to say so. UNAVAILABLE is the exception: its windows accumulate, because several disjoint
+-- gaps in one day are a normal thing to want and none of them contradicts another. The unique
+-- indexes on each table below say exactly this — one row per (subject, type, day) for the three
+-- single-valued types, and only exact duplicates rejected for windows.
+--
+-- Evaluating the time rules needs the *end* of a class, which is not stored anywhere: it is
+-- class_start_times.start_time + lecturer_workloads.duration_hours × the
+-- academic_hour_duration_minutes global property. Only NOT_BEFORE can be answered from the start
+-- time alone.
+--
+-- Counting for MAX_CLASSES_PER_DAY is per *calendar week*, not per row: an entry with week_parity
+-- WEEKLY falls in both weeks, NUMERATOR and DENOMINATOR in one each, so the cap has to hold for
+-- (WEEKLY + NUMERATOR) and for (WEEKLY + DENOMINATOR) separately. Counting all three together
+-- would reject a legal timetable that merely alternates two classes in one slot.
+--
+-- Nothing here is a preference: every row is a hard restriction. Soft constraints would need a
+-- weight alongside, in the shape of lecturer_workload_candidates.desirability, and are deliberately
+-- left out until there is a scheduler that can trade them off.
+--
+-- One table per subject rather than one shared table with a nullable lecturer/group/room triple:
+-- each subject then has a plain NOT NULL foreign key instead of an "exactly one of three is set"
+-- CHECK, the unique indexes lose their COALESCE over the subject columns, and each table is
+-- indexed and queried on its own. The cost is that the value rule below is written out three
+-- times — the enum is shared, but adding a constraint type means touching all three tables.
+
+CREATE TYPE timetable_constraint_type AS ENUM (
+    'MAX_CLASSES_PER_DAY',
+    'NOT_BEFORE',
+    'NOT_AFTER',
+    'UNAVAILABLE'
+);
+
+-- ------------------------------------------------------------------ lecturers
+
+CREATE TABLE lecturer_timetable_constraints
+(
+    id               BIGSERIAL PRIMARY KEY,
+    lecturer_id      BIGINT NOT NULL REFERENCES lecturers (id) ON DELETE CASCADE,
+    constraint_type  timetable_constraint_type NOT NULL,
+    -- NULL = every day. Otherwise 1..7 with Monday = 1, the same convention as
+    -- timetable_entries.day_of_week.
+    day_of_week      INTEGER,
+    -- Serialized per constraint_type — see the table of forms above.
+    constraint_value VARCHAR(32) NOT NULL,
+
+    CONSTRAINT lecturer_timetable_constraints_day_check CHECK (
+        day_of_week IS NULL OR day_of_week BETWEEN 1 AND 7
+    ),
+    -- The value is only ever a string the matching type can read. '0' is a meaningful count —
+    -- "no classes at all on Friday" — so it is allowed, while '007', '-1' and '9:00' are not, and
+    -- an UNAVAILABLE window must run forwards (equal ends would be an empty window, a row that
+    -- restricts nothing).
+    CONSTRAINT lecturer_timetable_constraints_value_check CHECK (
+        CASE constraint_type
+            WHEN 'MAX_CLASSES_PER_DAY' THEN
+                constraint_value ~ '^(0|[1-9][0-9]{0,2})$'
+            WHEN 'NOT_BEFORE' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            WHEN 'NOT_AFTER' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            WHEN 'UNAVAILABLE' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
+                AND left(constraint_value, 5) < right(constraint_value, 5)
+        END
+    )
+);
+
+-- The three single-valued types are set at most once per lecturer and day — re-setting one updates
+-- the existing row, as lecturer_workload_constraints does. COALESCE rather than NULLS NOT DISTINCT
+-- so that the every-day row (day_of_week NULL) collides with another every-day row of the same
+-- type, matching room_groups_unique_name and permissions_unique_grant.
+CREATE UNIQUE INDEX lecturer_timetable_constraints_unique_single
+    ON lecturer_timetable_constraints (lecturer_id, constraint_type, COALESCE(day_of_week, 0))
+    WHERE constraint_type <> 'UNAVAILABLE';
+
+-- Windows may repeat across a lecturer's days but not within one: the same span entered twice is a
+-- duplicate, not a second restriction.
+CREATE UNIQUE INDEX lecturer_timetable_constraints_unique_window
+    ON lecturer_timetable_constraints (lecturer_id, COALESCE(day_of_week, 0), constraint_value)
+    WHERE constraint_type = 'UNAVAILABLE';
+
+-- Reading every constraint of one lecturer spans both partial indexes above, so it needs one of
+-- its own. Same for the two tables that follow.
+CREATE INDEX lecturer_timetable_constraints_lecturer_idx
+    ON lecturer_timetable_constraints (lecturer_id);
+
+-- ------------------------------------------------------------------ academic groups
+
+CREATE TABLE academic_group_timetable_constraints
+(
+    id                BIGSERIAL PRIMARY KEY,
+    academic_group_id BIGINT NOT NULL REFERENCES academic_groups (id) ON DELETE CASCADE,
+    constraint_type   timetable_constraint_type NOT NULL,
+    day_of_week       INTEGER,
+    constraint_value  VARCHAR(32) NOT NULL,
+
+    CONSTRAINT academic_group_timetable_constraints_day_check CHECK (
+        day_of_week IS NULL OR day_of_week BETWEEN 1 AND 7
+    ),
+    CONSTRAINT academic_group_timetable_constraints_value_check CHECK (
+        CASE constraint_type
+            WHEN 'MAX_CLASSES_PER_DAY' THEN
+                constraint_value ~ '^(0|[1-9][0-9]{0,2})$'
+            WHEN 'NOT_BEFORE' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            WHEN 'NOT_AFTER' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            WHEN 'UNAVAILABLE' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
+                AND left(constraint_value, 5) < right(constraint_value, 5)
+        END
+    )
+);
+
+CREATE UNIQUE INDEX academic_group_timetable_constraints_unique_single
+    ON academic_group_timetable_constraints (academic_group_id, constraint_type,
+                                             COALESCE(day_of_week, 0))
+    WHERE constraint_type <> 'UNAVAILABLE';
+
+CREATE UNIQUE INDEX academic_group_timetable_constraints_unique_window
+    ON academic_group_timetable_constraints (academic_group_id, COALESCE(day_of_week, 0),
+                                             constraint_value)
+    WHERE constraint_type = 'UNAVAILABLE';
+
+CREATE INDEX academic_group_timetable_constraints_group_idx
+    ON academic_group_timetable_constraints (academic_group_id);
+
+-- ------------------------------------------------------------------ rooms
+
+CREATE TABLE room_timetable_constraints
+(
+    id               BIGSERIAL PRIMARY KEY,
+    room_id          BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE,
+    constraint_type  timetable_constraint_type NOT NULL,
+    day_of_week      INTEGER,
+    constraint_value VARCHAR(32) NOT NULL,
+
+    CONSTRAINT room_timetable_constraints_day_check CHECK (
+        day_of_week IS NULL OR day_of_week BETWEEN 1 AND 7
+    ),
+    CONSTRAINT room_timetable_constraints_value_check CHECK (
+        CASE constraint_type
+            WHEN 'MAX_CLASSES_PER_DAY' THEN
+                constraint_value ~ '^(0|[1-9][0-9]{0,2})$'
+            WHEN 'NOT_BEFORE' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            WHEN 'NOT_AFTER' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'
+            WHEN 'UNAVAILABLE' THEN
+                constraint_value ~ '^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$'
+                AND left(constraint_value, 5) < right(constraint_value, 5)
+        END
+    )
+);
+
+CREATE UNIQUE INDEX room_timetable_constraints_unique_single
+    ON room_timetable_constraints (room_id, constraint_type, COALESCE(day_of_week, 0))
+    WHERE constraint_type <> 'UNAVAILABLE';
+
+CREATE UNIQUE INDEX room_timetable_constraints_unique_window
+    ON room_timetable_constraints (room_id, COALESCE(day_of_week, 0), constraint_value)
+    WHERE constraint_type = 'UNAVAILABLE';
+
+CREATE INDEX room_timetable_constraints_room_idx
+    ON room_timetable_constraints (room_id);
 
 -- ============================ Authentication & authorization ============================
 --

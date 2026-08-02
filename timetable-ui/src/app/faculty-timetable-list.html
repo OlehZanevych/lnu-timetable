@@ -29,6 +29,9 @@
       <div class="lw-record-header">
         <span>Академічні групи: {{ groupNames(b) }}</span>
         <span>Викладачі: {{ lecturerNamesLabel(b) }}</span>
+        @if (b.classStartTimeSetName) {
+          <span>Дзвінки: {{ b.classStartTimeSetName }}</span>
+        }
       </div>
 
       <div class="tt-block-form">
@@ -39,7 +42,7 @@
         </label>
         <label>
           <span>Час початку</span>
-          <app-search-select [options]="classStartTimeOptions()" [(ngModel)]="formState[b.key].classStartTimeId"
+          <app-search-select [options]="classStartTimeOptionsFor(b)" [(ngModel)]="formState[b.key].classStartTimeId"
                               [name]="b.key + '-slot'" [ngModelOptions]="{ standalone: true }" />
         </label>
         @if (computedEndTime(b); as endTime) {

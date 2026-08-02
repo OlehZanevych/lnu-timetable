@@ -41,4 +41,8 @@ public class AcademicGroup {
     @ManyToMany(joinTable = "combined_group_academic_groups",
         joinColumn = "academic_group_id", inverseJoinColumn = "combined_group_id")
     private List<CombinedGroup> combinedGroups;
+
+    /** When this group may be given classes — see {@link AcademicGroupTimetableConstraint}. */
+    @OneToMany(mappedBy = "academic_group_id")
+    private List<AcademicGroupTimetableConstraint> timetableConstraints;
 }

@@ -8,12 +8,14 @@ import { DepartmentList } from './department-list';
 import { SpecialtyList } from './specialty-list';
 import { AcademicGroupList } from './academic-group-list';
 import { FacultyTimetableList } from './faculty-timetable-list';
+import { TimetableConstraintList } from './timetable-constraint-list';
 import { RoomPage, CoursePage, CombinedGroupPage } from './entity-pages';
 
 export type FacultySection =
   | 'info'
   | 'departments' | 'specialties' | 'rooms'
-  | 'courses' | 'timetable' | 'academicGroups' | 'combinedGroups';
+  | 'courses' | 'timetable' | 'academicGroups' | 'combinedGroups'
+  | 'groupConstraints' | 'roomConstraints';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
 
@@ -36,6 +38,8 @@ const SECTIONS: SectionDef[] = [
   { key: 'combinedGroups',         label: "Об'єднані групи",      group: 'Люди та групи' },
   { key: 'courses',                label: 'Дисципліни',           group: 'Навчальні плани' },
   { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад' },
+  { key: 'groupConstraints',       label: 'Обмеження груп',       group: 'Розклад' },
+  { key: 'roomConstraints',        label: 'Обмеження аудиторій',  group: 'Розклад' },
 ];
 
 @Component({
@@ -44,7 +48,7 @@ const SECTIONS: SectionDef[] = [
   imports: [
     RouterLink, FormsModule, SearchSelect,
     DepartmentList, SpecialtyList, AcademicGroupList, FacultyTimetableList,
-    RoomPage, CoursePage, CombinedGroupPage
+    TimetableConstraintList, RoomPage, CoursePage, CombinedGroupPage
   ]
 })
 export class FacultyPage implements OnInit {

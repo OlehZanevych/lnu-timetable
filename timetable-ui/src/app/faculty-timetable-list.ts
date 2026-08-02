@@ -35,6 +35,7 @@ interface RawEntry {
 interface RawWorkload {
   id: string;
   durationHours: number;
+  classStartTimeSet: { id: string; name: string } | null;
   lecturers: LecturerRef[];
   academicGroups: GroupRef[];
   combinedGroups: { id: string; academicGroups: GroupRef[] }[];
@@ -73,6 +74,8 @@ interface WorkloadSource {
   hourType: string;
   hours: number;
   durationHours: number;
+  classStartTimeSetId: string | null;
+  classStartTimeSetName: string;
   academicGroupNames: string[];
   lecturerNames: string[];
   entries: RawEntry[];
@@ -90,6 +93,9 @@ interface Block {
   lecturerNames: string[];
   isBiweekly: boolean;
   dayOfWeek: number | null;
+  /** The grid of bells this class runs on — decided per workload, not per occurrence. */
+  classStartTimeSetId: string | null;
+  classStartTimeSetName: string;
   classStartTimeId: string | null;
   roomId: string | null;
   weekParity: string; // 'WEEKLY' for non-biweekly blocks; 'NUMERATOR' | 'DENOMINATOR' for biweekly ones
@@ -141,7 +147,8 @@ export class FacultyTimetableList implements OnInit, OnChanges {
   private combinedItems = signal<RawCombinedItem[]>([]);
 
   roomOptions = signal<Option[]>([]);
-  classStartTimeOptions = signal<Option[]>([]);
+  /** setId -> that set's times, in ordinal order. */
+  private classStartTimeOptionsBySet = signal<Map<string, Option[]>>(new Map());
   private classStartTimeOrdinals = new Map<string, number>();
   private classStartTimeStarts = new Map<string, string>();
 
@@ -199,6 +206,7 @@ export class FacultyTimetableList implements OnInit, OnChanges {
       workloads {
         id
         durationHours
+        classStartTimeSet { id name }
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id academicGroups { id name } }
@@ -229,6 +237,7 @@ export class FacultyTimetableList implements OnInit, OnChanges {
       workloads {
         id
         durationHours
+        classStartTimeSet { id name }
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id academicGroups { id name } }
@@ -282,19 +291,34 @@ export class FacultyTimetableList implements OnInit, OnChanges {
     });
   }
 
+  /**
+   * Loads every start time, grouped by the set it belongs to.
+   *
+   * A flat list would be wrong now that ordinals restart within each set: "2. 10:10" and
+   * "2. 10:40" would sit side by side in one dropdown with nothing to tell them apart, and a class
+   * could be scheduled on bells its workload does not run on. Each block is therefore offered only
+   * its own set's times — see classStartTimeOptionsFor.
+   */
   private loadClassStartTimes() {
-    const q = `{ classStartTimes { classStartTimeConnection(limit: 100) { nodes { id ordinal startTime } } } }`;
+    const q = `{ classStartTimes { classStartTimeConnection(limit: 500) { nodes {
+      id ordinal startTime classStartTimeSet { id }
+    } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => {
-        const nodes = [...d.classStartTimes.classStartTimeConnection.nodes].sort((a: any, b: any) => a.ordinal - b.ordinal);
+        const nodes = [...d.classStartTimes.classStartTimeConnection.nodes]
+          .sort((a: any, b: any) => a.ordinal - b.ordinal);
         this.classStartTimeOrdinals.clear();
         this.classStartTimeStarts.clear();
-        const opts: Option[] = nodes.map((t: any) => {
+        const bySet = new Map<string, Option[]>();
+        for (const t of nodes) {
           this.classStartTimeOrdinals.set(t.id, t.ordinal);
           this.classStartTimeStarts.set(t.id, t.startTime);
-          return { id: t.id, label: `${t.ordinal}. ${t.startTime}` };
-        });
-        this.classStartTimeOptions.set(opts);
+          const setId = t.classStartTimeSet?.id ?? '';
+          const list = bySet.get(setId) ?? [];
+          list.push({ id: t.id, label: `${t.ordinal}. ${t.startTime}` });
+          bySet.set(setId, list);
+        }
+        this.classStartTimeOptionsBySet.set(bySet);
       },
       error: () => {}
     });
@@ -351,6 +375,8 @@ export class FacultyTimetableList implements OnInit, OnChanges {
       hourType,
       hours,
       durationHours: w.durationHours,
+      classStartTimeSetId: w.classStartTimeSet?.id ?? null,
+      classStartTimeSetName: w.classStartTimeSet?.name ?? '',
       academicGroupNames: this.academicGroupsFor(w),
       lecturerNames: (w.lecturers ?? []).map((l) => this.lecturerName(l)),
       entries: w.timetableEntries ?? []
@@ -431,6 +457,8 @@ export class FacultyTimetableList implements OnInit, OnChanges {
       lecturerNames: s.lecturerNames,
       isBiweekly,
       dayOfWeek: entry?.dayOfWeek ?? null,
+      classStartTimeSetId: s.classStartTimeSetId,
+      classStartTimeSetName: s.classStartTimeSetName,
       classStartTimeId: entry?.classStartTime?.id ?? null,
       roomId: entry?.room?.id ?? null,
       weekParity: entry?.weekParity ?? (isBiweekly ? 'NUMERATOR' : 'WEEKLY')
@@ -463,6 +491,15 @@ export class FacultyTimetableList implements OnInit, OnChanges {
 
   private classStartTimeOrdinal(id: string | null): number {
     return id ? this.classStartTimeOrdinals.get(id) ?? 0 : 0;
+  }
+
+  /**
+   * The times a block may be scheduled at: only those of the grid its workload runs on. Offering
+   * every set's times would let a physical-education class be put on the main bells, which is the
+   * very thing the sets exist to prevent — and the ordinals would collide in the dropdown.
+   */
+  classStartTimeOptionsFor(block: Block): Option[] {
+    return this.classStartTimeOptionsBySet().get(block.classStartTimeSetId ?? '') ?? [];
   }
 
   unscheduledCount(): number {

@@ -9,10 +9,14 @@ import {
   CONTROL_FORM_OPTIONS, HALF_YEARS, HALF_YEAR_TITLES, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS,
   courseTypeLabel, courseYearOf, halfYearOf, termLabel
 } from './entities';
+import { downloadPdf, loadReportFonts } from './pdf-fonts';
 import { compareUk } from './sort';
 import {
   LecturerStats, SPLIT_HOUR_TYPES, STAT_HOUR_TYPES, StatWorkload, computeStats, deviationOf
 } from './workload-stats';
+import {
+  academicYearLabel, buildLecturerWorkloadReport, workloadReportFileName
+} from './workload-report';
 import { loadDepartmentWorkloads } from './workload-tree';
 
 /** Every constraint type, grouped the way the assessment panel reads them. */
@@ -69,9 +73,16 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
   error = signal('');
   loading = signal(false);
 
+  /** True while the PDF is being produced — the fonts are fetched on the first export. */
+  exporting = signal(false);
+  exportError = signal('');
+
   private allStats = signal<LecturerStats[]>([]);
   private workloads = signal<StatWorkload[]>([]);
   private constraintsById = signal<Record<string, Record<string, number>>>({});
+  /** Position and academic degree, needed by the printable form but not by the on-screen tables. */
+  private profileById = signal<Record<string, { position: string; academicDegree: string }>>({});
+  private department = signal<{ name: string; facultyName: string } | null>(null);
   defaultMaxHours = signal<number | null>(null);
 
   /** The chosen lecturer's row, or null until one is picked. */
@@ -96,8 +107,11 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
     this.loading.set(true);
     const lecturersQuery = `{
       lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes {
-        id firstName middleName lastName workloadConstraints { constraintType value }
+        id firstName middleName lastName position
+        academicDegree { name }
+        workloadConstraints { constraintType value }
       } } }
+      departments { department(id: "${this.departmentId}") { name faculty { name } } }
       globalProperties { globalProperty(name: "default_max_hours_per_year") { value } }
     }`;
 
@@ -110,11 +124,16 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
         const parsed = raw != null ? Number(raw) : NaN;
         this.defaultMaxHours.set(Number.isFinite(parsed) ? parsed : null);
 
+        const dept = meta.departments?.department;
+        this.department.set(dept ? { name: dept.name, facultyName: dept.faculty?.name ?? '' } : null);
+
         const nodes = meta.lecturers.lecturerConnection.nodes;
         const lecturers = nodes
           .map((n: any) => ({
             id: n.id,
             name: [n.lastName, n.firstName, n.middleName].filter(Boolean).join(' '),
+            position: n.position ?? '',
+            academicDegree: n.academicDegree?.name ?? '',
             constraints: Object.fromEntries(
               (n.workloadConstraints ?? []).map((c: any) => [c.constraintType, c.value]))
           }))
@@ -122,6 +141,8 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
 
         this.lecturerOptions.set(lecturers.map((l: any) => ({ id: l.id, label: l.name })));
         this.constraintsById.set(Object.fromEntries(lecturers.map((l: any) => [l.id, l.constraints])));
+        this.profileById.set(Object.fromEntries(lecturers.map(
+          (l: any) => [l.id, { position: l.position, academicDegree: l.academicDegree }])));
         this.workloads.set(workloads);
         this.allStats.set(computeStats({
           workloads, lecturers, defaultMaxHoursPerYear: this.defaultMaxHours()
@@ -257,4 +278,44 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
   }
 
   cellHours(v: number): string { return v ? String(v) : ''; }
+
+  /**
+   * Builds the printable «Розрахунок навчального навантаження» for the selected lecturer and hands
+   * it to the browser as a download.
+   *
+   * Everything happens on the client: the document is assembled from the statistics already in
+   * memory by `workload-report.ts`, and written out by the project's own PDF writer, so no round
+   * trip and no server-side rendering is involved. The only fetch is for the embedded font, and
+   * only on the first export of a session.
+   */
+  downloadReport() {
+    const s = this.selected();
+    const dept = this.department();
+    if (!s || this.exporting()) return;
+
+    this.exporting.set(true);
+    this.exportError.set('');
+    const profile = this.profileById()[s.lecturerId] ?? { position: '', academicDegree: '' };
+    const generatedAt = new Date();
+
+    loadReportFonts()
+      .then((fonts) => {
+        const bytes = buildLecturerWorkloadReport({
+          stats: s,
+          facultyName: dept?.facultyName ?? '',
+          departmentName: dept?.name ?? '',
+          position: profile.position,
+          academicDegree: profile.academicDegree,
+          defaultMaxHours: this.defaultMaxHours(),
+          generatedAt,
+          fonts
+        });
+        downloadPdf(bytes, workloadReportFileName(s.name, academicYearLabel(generatedAt)));
+        this.exporting.set(false);
+      })
+      .catch((e: unknown) => {
+        this.exportError.set(e instanceof Error ? e.message : 'Не вдалося сформувати PDF');
+        this.exporting.set(false);
+      });
+  }
 }

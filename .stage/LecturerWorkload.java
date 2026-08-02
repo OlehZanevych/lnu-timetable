@@ -28,9 +28,6 @@ import java.util.List;
     selfColumn = "lecturer_workload_id", parentColumn = "academic_group_id")
 @PermissionJoinParent(value = CombinedGroup.class, joinTable = "lecturer_workload_combined_groups",
     selfColumn = "lecturer_workload_id", parentColumn = "combined_group_id")
-// Rooms and room groups are intentionally *not* permission parents: being able to modify a room,
-// or the list of rooms in a group, must not confer the right to modify every workload that happens
-// to be allowed to use it.
 public class LecturerWorkload {
 
     private Long id;
@@ -46,26 +43,6 @@ public class LecturerWorkload {
     @ManyToMany(joinTable = "lecturer_workload_combined_groups",
         joinColumn = "lecturer_workload_id", inverseJoinColumn = "combined_group_id")
     private List<CombinedGroup> combinedGroups;
-
-    /**
-     * Rooms this workload's classes may be held in, named individually — for the lecture that must
-     * happen in the one hall big enough for it.
-     *
-     * Together with {@link #roomGroups} these form the eligible set, as a **union**; when both are
-     * empty the workload is unrestricted and may be scheduled anywhere, which is the right default
-     * for the many ordinary classes with no particular requirement.
-     */
-    @ManyToMany(joinTable = "lecturer_workload_rooms",
-        joinColumn = "lecturer_workload_id", inverseJoinColumn = "room_id")
-    private List<Room> rooms;
-
-    /**
-     * Whole reusable room groups this workload may use — for the lab that can run in any computer
-     * class, which stays correct when a room is later added to the group.
-     */
-    @ManyToMany(joinTable = "lecturer_workload_room_groups",
-        joinColumn = "lecturer_workload_id", inverseJoinColumn = "room_group_id")
-    private List<RoomGroup> roomGroups;
 
     // Exactly one of workingCurriculumItem / combinedWorkingCurriculumItem is set (enforced by
     // the lecturer_workloads_target_check DB constraint).

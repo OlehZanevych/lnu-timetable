@@ -67,6 +67,9 @@ interface CandidateRow {
 interface Workload {
   id: string;
   durationHours: number;
+  classStartTimeSet?: { id: string; name: string } | null;
+  rooms?: { id: string; number: string; name?: string | null }[];
+  roomGroups?: { id: string; name: string }[];
   lecturers: LecturerRef[];
   academicGroups: GroupRef[];
   combinedGroups: GroupRef[];
@@ -197,6 +200,22 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
    *  a new workload (see openCreate/openCreateCombined and loadDefaultDurationHours). */
   private defaultDurationHours = signal('2');
 
+  /**
+   * The grids of start times a workload may be scheduled on: the university-wide ones plus those
+   * belonging to this department's faculty. A set scoped to another faculty is not offered at all —
+   * see loadClassStartTimeSets.
+   */
+  classStartTimeSetOptions = signal<Option[]>([]);
+  /** The set marked as default, pre-selected when creating a workload. */
+  private defaultClassStartTimeSetId = signal('');
+
+  /**
+   * Rooms and room groups this department may restrict a workload to. Rooms of another faculty and
+   * groups scoped elsewhere are not offered — see loadRoomOptions.
+   */
+  roomOptions = signal<Option[]>([]);
+  roomGroupOptions = signal<Option[]>([]);
+
   private rawItems = signal<WorkingItem[]>([]);
   /** Combined items with at least one member belonging to this department — filtered server-side
    *  (see loadCombined) via the departmentIds relation filter on combinedWorkingCurriculumItemConnection. */
@@ -216,6 +235,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   formAcademicGroupIds: string[] = [];
   formCombinedGroupIds: string[] = [];
   formDurationHours = '2';
+  formClassStartTimeSetId = '';
+  formRoomIds: string[] = [];
+  formRoomGroupIds: string[] = [];
 
   /**
    * The student roster shown instead of academic groups when the item is taught INDIVIDUALLY:
@@ -264,6 +286,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
    * lecturers must still echo it or the mutation is rejected before it reaches the resolver.
    */
   private durationByWorkload = new Map<string, number>();
+  /** workloadId -> its current class start time set, echoed for the same reason as the duration. */
+  private startTimeSetByWorkload = new Map<string, string>();
 
   private activeWorkingCurriculumItemId: string | null = null;
   private activeCombinedWorkingCurriculumItemId: string | null = null;
@@ -275,6 +299,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.loadDefaultDurationHours();
     if (this.departmentId) {
       this.loadLecturerOptions();
+      this.loadClassStartTimeSets();
+      this.loadRoomOptions();
       this.loadAll();
     }
   }
@@ -282,6 +308,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   ngOnChanges() {
     if (this.initialized && this.departmentId) {
       this.loadLecturerOptions();
+      this.loadClassStartTimeSets();
+      this.loadRoomOptions();
       this.loadAll();
     }
   }
@@ -335,6 +363,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       workloads {
         id
         durationHours
+        classStartTimeSet { id name }
+        rooms { id number name }
+        roomGroups { id name }
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
@@ -367,6 +398,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       workloads {
         id
         durationHours
+        classStartTimeSet { id name }
+        rooms { id number name }
+        roomGroups { id name }
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
@@ -418,6 +452,77 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       next: (d: any) => {
         const opts: Option[] = d.lecturers.lecturerConnection.nodes.map((l: any) => ({ id: l.id, label: this.lecturerName(l) }));
         this.lecturerOptions.set(opts);
+      },
+      error: () => {}
+    });
+  }
+
+  /**
+   * Loads the start-time grids this department may schedule on, and remembers which is the default.
+   *
+   * The connection is fetched unfiltered and narrowed here rather than by `facultyId`: that filter
+   * matches on equality, so asking for this faculty's sets would exclude the university-wide ones
+   * (faculty_id IS NULL), which are exactly the sets most workloads use.
+   */
+  private loadClassStartTimeSets() {
+    if (!this.departmentId) return;
+    // The department's faculty comes along in the same round trip, because which sets are usable
+    // depends on it.
+    const q = `{
+      departments { department(id: "${this.departmentId}") { faculty { id } } }
+      classStartTimeSets { classStartTimeSetConnection(limit: 200, offset: 0) { nodes {
+        id name isDefault faculty { id }
+      } } }
+    }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => {
+        const nodes = d.classStartTimeSets.classStartTimeSetConnection.nodes ?? [];
+        const facultyId = d.departments?.department?.faculty?.id ?? '';
+        const usable = nodes.filter((n: any) => !n.faculty || n.faculty.id === facultyId);
+        this.classStartTimeSetOptions.set(
+          usable
+            .map((n: any) => ({ id: n.id, label: n.isDefault ? `${n.name} (типовий)` : n.name }))
+            .sort((a: Option, b: Option) => compareUk(a.label, b.label)));
+        this.defaultClassStartTimeSetId.set(nodes.find((n: any) => n.isDefault)?.id ?? '');
+      },
+      error: () => {}
+    });
+  }
+
+  /**
+   * Loads the rooms and room groups a workload of this department may be restricted to.
+   *
+   * Rooms: this faculty's, plus those belonging to no faculty (shared sports halls and the like).
+   * Groups: university-wide, this faculty's, and this department's own. Both are fetched
+   * unfiltered and narrowed here for the same reason as the start-time sets — an equality filter
+   * on facultyId would drop exactly the unscoped rows that are most often wanted.
+   */
+  private loadRoomOptions() {
+    if (!this.departmentId) return;
+    const q = `{
+      departments { department(id: "${this.departmentId}") { faculty { id } } }
+      rooms { roomConnection(limit: 1000, offset: 0) { nodes { id number name faculty { id } } } }
+      roomGroups { roomGroupConnection(limit: 500, offset: 0) { nodes {
+        id name faculty { id } department { id }
+      } } }
+    }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => {
+        const facultyId = d.departments?.department?.faculty?.id ?? '';
+
+        const rooms = (d.rooms.roomConnection.nodes ?? [])
+          .filter((r: any) => !r.faculty || r.faculty.id === facultyId)
+          .map((r: any) => ({ id: r.id, label: r.name ? `${r.number} — ${r.name}` : r.number }))
+          .sort((a: Option, b: Option) => compareUk(a.label, b.label));
+        this.roomOptions.set(rooms);
+
+        const groups = (d.roomGroups.roomGroupConnection.nodes ?? [])
+          .filter((g: any) => (!g.faculty && !g.department)
+            || g.faculty?.id === facultyId
+            || g.department?.id === this.departmentId)
+          .map((g: any) => ({ id: g.id, label: g.name }))
+          .sort((a: Option, b: Option) => compareUk(a.label, b.label));
+        this.roomGroupOptions.set(groups);
       },
       error: () => {}
     });
@@ -608,9 +713,28 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   /** Column count of a working curriculum item's workload table, for the empty row's colspan. */
   workloadColumns(wci: WorkingItem): number {
     // Individual work has no duration column — it is always one academic hour per student
-    // (see INDIVIDUAL_DURATION_HOURS), so showing "1 год." on every row says nothing.
-    if (this.isIndividuallyItem(wci)) return 3;          // lecturer, student, actions
-    return wci.teachingFormat === 'SEPARATELY' ? 5 : 4;  // lecturers, groups, (+ combined), duration, actions
+    // (see INDIVIDUAL_DURATION_HOURS), so showing "1 год." on every row says nothing. Every layout
+    // carries the start-time set, though: it applies to individual consultations just as much.
+    if (this.isIndividuallyItem(wci)) return 5;          // lecturer, student, bells, rooms, actions
+    return wci.teachingFormat === 'SEPARATELY' ? 7 : 6;  // lecturers, groups, (+ combined), duration, bells, rooms, actions
+  }
+
+  /** Name of the grid of bells a workload is scheduled on, for the tree's "Дзвінки" column. */
+  startTimeSetName(w: Workload): string {
+    return w.classStartTimeSet?.name ?? '—';
+  }
+
+  /**
+   * Where a workload may be held, for the tree's "Аудиторії" column: the named rooms and the room
+   * groups together, since the eligible rooms are their union. Nothing named means no restriction,
+   * which is worth saying in words rather than leaving as a dash.
+   */
+  roomRestrictionLabel(w: Workload): string {
+    const parts = [
+      ...(w.rooms ?? []).map((r) => r.number),
+      ...(w.roomGroups ?? []).map((g) => `${g.name} (група)`)
+    ];
+    return parts.length ? parts.join(', ') : 'будь-яка';
   }
 
   /** True once this working curriculum item has been merged into a combined item — such items are
@@ -658,6 +782,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.loadStudentRows(this.isIndividuallyItem(wci) ? wci.academicGroups : [], []);
     this.buildCandidateRows([]);
     this.formDurationHours = this.isIndividuallyItem(wci) ? INDIVIDUAL_DURATION_HOURS : this.defaultDurationHours();
+    this.formClassStartTimeSetId = this.defaultClassStartTimeSetId();
+    this.formRoomIds = [];
+    this.formRoomGroupIds = [];
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -674,6 +801,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.loadStudentRows(this.isIndividuallyItem(wci) ? wci.academicGroups : [], w.studentAssignments ?? []);
     this.buildCandidateRows(w.candidates ?? []);
     this.formDurationHours = this.isIndividuallyItem(wci) ? INDIVIDUAL_DURATION_HOURS : String(w.durationHours);
+    this.formClassStartTimeSetId = w.classStartTimeSet?.id ?? this.defaultClassStartTimeSetId();
+    this.formRoomIds = (w.rooms ?? []).map((r) => r.id);
+    this.formRoomGroupIds = (w.roomGroups ?? []).map((g) => g.id);
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -695,6 +825,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formStudentRows.set([]);
     this.buildCandidateRows([]);
     this.formDurationHours = this.defaultDurationHours();
+    this.formClassStartTimeSetId = this.defaultClassStartTimeSetId();
+    this.formRoomIds = [];
+    this.formRoomGroupIds = [];
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -711,6 +844,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.formStudentRows.set([]);
     this.buildCandidateRows(w.candidates ?? []);
     this.formDurationHours = String(w.durationHours);
+    this.formClassStartTimeSetId = w.classStartTimeSet?.id ?? this.defaultClassStartTimeSetId();
+    this.formRoomIds = (w.rooms ?? []).map((r) => r.id);
+    this.formRoomGroupIds = (w.roomGroups ?? []).map((g) => g.id);
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -859,6 +995,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       return;
     }
 
+    // lecturer_workloads.class_start_time_set_id is NOT NULL, so an empty picker would fail at the
+    // database with a message nobody can act on. Caught here instead, in Ukrainian.
+    if (!this.formClassStartTimeSetId) {
+      this.formError.set('Оберіть набір часів початку занять.');
+      return;
+    }
+
     const input: Record<string, any> = {
       // For INDIVIDUALLY items the lecturer list is derived from the pairs rather than picked
       // separately, so `lecturers` can never disagree with who actually supervises whom.
@@ -877,6 +1020,12 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         : [],
       // Not user-selectable for individual work — see INDIVIDUAL_DURATION_HOURS.
       durationHours: Number(individually ? INDIVIDUAL_DURATION_HOURS : this.formDurationHours),
+      // Non-null in the database, so it is always sent rather than omitted when unchanged.
+      classStartTimeSetId: this.formClassStartTimeSetId,
+      // Always sent in full: an empty array means "no room restriction", and omitting the field
+      // would instead leave whatever was there — see the manyToMany note in base-entity.ts.
+      roomIds: this.formRoomIds,
+      roomGroupIds: this.formRoomGroupIds,
     };
     // Exactly one of these two is sent, matching whichever entry point (single item or combined
     // item) the modal was opened from.
@@ -983,6 +1132,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   private buildGenWorkloads(): GenWorkload[] {
     const out: GenWorkload[] = [];
     this.durationByWorkload.clear();
+    this.startTimeSetByWorkload.clear();
 
     for (const group of this.groups()) {
       for (const hg of group.hoursGroups) {
@@ -991,6 +1141,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
           const course = wci.course ?? group.course;
           for (const w of wci.workloads) {
             this.durationByWorkload.set(w.id, w.durationHours);
+            this.startTimeSetByWorkload.set(w.id, w.classStartTimeSet?.id ?? '');
             out.push({
               id: w.id,
               lecturerCount: wci.lecturerCount || 1,
@@ -1023,6 +1174,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       const ci = first.curriculumItemHours.curriculumItem;
       for (const w of c.workloads) {
         this.durationByWorkload.set(w.id, w.durationHours);
+        this.startTimeSetByWorkload.set(w.id, w.classStartTimeSet?.id ?? '');
         out.push({
           id: w.id,
           lecturerCount: 1,
@@ -1122,7 +1274,9 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         lecturerIds: a.lecturerIds,
         // Required by the input payload even though generation never changes it — see
         // durationByWorkload.
-        durationHours: this.durationByWorkload.get(a.workloadId) ?? Number(this.defaultDurationHours())
+        durationHours: this.durationByWorkload.get(a.workloadId) ?? Number(this.defaultDurationHours()),
+        // Same reason as durationHours: non-null in the payload, and generation never changes it.
+        classStartTimeSetId: this.startTimeSetByWorkload.get(a.workloadId) || this.defaultClassStartTimeSetId()
       };
       if (a.studentAssignments) {
         input['studentAssignments'] = a.studentAssignments.map((p) => ({
