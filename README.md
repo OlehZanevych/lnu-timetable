@@ -68,6 +68,14 @@ npm start
 `timetable/scripts/reset_db.sh` re-applies both SQL files in one command, which is the usual way to
 pick up a schema change — see the service README's *Known limitations* for why that step is manual.
 
+Everything environment-specific lives in one file,
+[`timetable/src/main/resources/application-loc.properties`](./timetable/src/main/resources/application-loc.properties):
+the database credentials, the JWT signing key, the R2DBC SQL logging, and the toggle that decides
+what `/` serves. It is checked in with working local values and activated by
+`spring.profiles.active=loc` in `application.properties`, so a fresh clone runs as-is — change the
+two `spring.r2dbc.*` lines if your PostgreSQL disagrees. The three helper scripts under
+`timetable/scripts/` read the same file, so the credentials are stated once and cannot drift.
+
 Sign in with one of the seeded accounts:
 
 | Email | Password | Role |
@@ -77,6 +85,64 @@ Sign in with one of the seeded accounts:
 | `o.melnyk@lnu.edu.ua` | `Temp#12345` | department-scoped; must change password on first login |
 
 There is no sign-up screen anywhere: accounts are created by an administrator, by design.
+
+---
+
+## Running it as a single jar
+
+The two halves also ship as one artifact. `scripts/build-app.sh` builds the Angular client, copies
+the bundle into the service's `src/main/resources/static/`, and packages the Spring Boot jar around
+it — the result serves the GraphQL API on `/graphql` and the client on everything else, from one
+process needing nothing but a JRE 25 and a reachable PostgreSQL.
+
+```bash
+scripts/build-ui.sh     # build timetable-ui → timetable/src/main/resources/static/
+scripts/build-app.sh    # the above, then mvn clean package
+```
+
+`build-app.sh` calls `build-ui.sh` itself, so it is normally the only one you run; `--skip-ui`
+packages whatever is already in `static/`, `--skip-tests` skips `SchemaBuildTest`. It refuses to
+report success unless `BOOT-INF/classes/static/index.html` really is inside the jar, so a frontend
+that silently failed to build cannot be mistaken for one that shipped.
+
+Run the result:
+
+```bash
+java -jar timetable/target/timetable-0.0.1-SNAPSHOT.jar \
+    --spring.r2dbc.username=postgres \
+    --spring.r2dbc.password=postgres47 \
+    --app.security.jwt-secret=vFhvq86LU85HrhoVaf7i4P5GErwPZnAIe3rFF5c8-Ch0jmzce3DRwHMIn_pi3pjL
+```
+
+That starts the API with its credentials given explicitly rather than inherited. Note what it does
+*not* do: **`/` still redirects to Apollo Studio Sandbox**, because `application-loc.properties`
+travels inside the jar and sets `app.apollo-sandbox.enabled=true`. One more flag serves the client
+there instead:
+
+```bash
+java -jar timetable/target/timetable-0.0.1-SNAPSHOT.jar \
+    --app.apollo-sandbox.enabled=false \
+    --spring.r2dbc.url=r2dbc:postgresql://HOST:5432/lnu-timetable \
+    --spring.r2dbc.username=USER \
+    --spring.r2dbc.password=PASSWORD \
+    --app.security.jwt-secret=<a fresh secret of at least 32 bytes>
+```
+
+That one property is the whole switch between the two things `/` can be — the Apollo Sandbox
+redirect a developer wants, or the Angular client a deployment wants. `IndexController` and
+`FrontendController` are each conditional on it and are never both registered; see the service
+README's [Serving the frontend from this
+service](./timetable/README.md#serving-the-frontend-from-this-service).
+
+Two more things worth knowing before deploying this anywhere real. Adding
+`--spring.profiles.active=` drops `application-loc.properties` altogether, so nothing at all is
+inherited from the local profile — otherwise its DEBUG SQL logging (which logs every statement and
+every bound parameter, including the ones behind `login`) stays on. And a command line is readable
+through `ps`, so prefer the environment-variable forms — `SPRING_R2DBC_PASSWORD`,
+`APP_SECURITY_JWTSECRET` — for anything you would not commit.
+
+The schema is still not created on startup: run `schema.sql` and `data.sql` against the target
+database once first.
 
 ---
 
@@ -120,15 +186,23 @@ whole university and narrow it down in the browser.
 
 ```
 lnu-timetable/
+├── scripts/              build-ui.sh (Angular → the service's static resources) and
+│                         build-app.sh (that, then the deployable jar)
 ├── timetable/            the GraphQL service
 │   ├── src/main/java/org/lnu/timetable/
 │   │   ├── config/       the four schema-config classes — the whole API definition
+│   │   ├── controller/   IndexController / FrontendController — the two owners of "/"
 │   │   ├── domain/       annotated POJOs, one per table
 │   │   ├── framework/    the config-driven engine (metadata → schema → SQL)
 │   │   └── security/     JWT + the entity-scoped permission model
-│   ├── src/main/resources/db/
-│   │   ├── schema.sql    DDL — starts with DROP SCHEMA public CASCADE
-│   │   └── data.sql      the real LNU structure plus the ФПМІ 2025/2026 timetable
+│   ├── src/main/resources/
+│   │   ├── application.properties      what is the same in every environment
+│   │   ├── application-loc.properties  what is not: credentials, JWT secret, SQL
+│   │   │                               logging, and the "/" toggle
+│   │   ├── static/       the built client, put here by scripts/build-ui.sh (git-ignored)
+│   │   └── db/
+│   │       ├── schema.sql   DDL — starts with DROP SCHEMA public CASCADE
+│   │       └── data.sql     the real LNU structure plus the ФПМІ 2025/2026 timetable
 │   └── scripts/          reset/backup helpers, and the lnu.edu.ua import pipeline
 └── timetable-ui/         the Angular client
     ├── src/app/          pages, child-list widgets, form controls, and the pure modules
@@ -142,6 +216,7 @@ lnu-timetable/
 
 Local-development quality, and deliberately so in a few places the sub-READMEs each spell out under
 *Known limitations*: `schema.sql`/`data.sql` are applied by hand rather than by a migration tool, the
-checked-in JWT secret and database password are dev-only values, the CORS filter allows any origin,
-and the client has no automated tests. Read those sections before deploying any of this anywhere
-real.
+JWT secret and database password checked into `application-loc.properties` are dev-only values and
+that profile is active inside the packaged jar too, the CORS filter allows any origin, and the
+client has no automated tests. Read those sections — and *Running it as a single jar* above, for
+what to override — before deploying any of this anywhere real.
