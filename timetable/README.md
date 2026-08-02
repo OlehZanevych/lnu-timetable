@@ -148,11 +148,15 @@ clock time twice), and `room_groups_unique_name` / `class_start_time_sets_unique
 unique within their scope via `COALESCE(faculty_id, 0)` (and `COALESCE(department_id, 0)`) so that
 a faculty and one of its departments can each keep a group called "Комп'ютерні класи".
 
-Seven of the indexes are *partial* — they carry a `WHERE`, so only the matching rows collide:
+Seven of the *unique* indexes are **partial** — they carry a `WHERE`, so only the matching rows collide:
 `class_start_time_sets_single_default` (`WHERE is_default`, which is how "at most one default in the
 whole table" is expressed — a plain `UNIQUE (is_default)` would wrongly allow just one *non*-default
 set as well), plus the `…_unique_single` / `…_unique_window` pair on each of the three
 timetable-constraint tables, described in [Scheduling constraints](#scheduling-constraints).
+
+(Five ordinary, non-unique indexes carry a `WHERE` too — the faculty/department scoping indexes on
+`room_groups` and `class_start_time_sets`, and the two grantee indexes on `permissions` — but there
+the predicate only narrows what is stored, it does not change what collides.)
 
 > The house convention for "unique, treating NULL as a value" is `COALESCE(col, 0)` inside the
 > index expression rather than `NULLS NOT DISTINCT` — `permissions_unique_grant` established it and
@@ -174,11 +178,12 @@ ordering significance beyond their values, because `ORDER BY` on an enum column 
 | `hour_type` | `LECTURE`, `PRACTICAL`, `LAB`, `CONSULTATION`, `ASSESSMENT`, `INDEPENDENT_WORK` |
 | `teaching_format` | `TOGETHER`, `SEPARATELY`, `INDIVIDUALLY` |
 | `lecturer_workload_candidate_constraint_type` | `MIN_STUDENTS`, `MAX_STUDENTS` |
-| `lecturer_workload_constraint_type` | `MIN`/`MAX_HOURS_PER_YEAR`, `MAX_COURSES`, and `MIN`/`MAX_[MANDATORY\|ELECTIVE]_[LECTURE\|PRACTICAL\|LAB]_COURSES` (21 values) |
+| `lecturer_workload_constraint_type` | `MIN`/`MAX_HOURS_PER_YEAR`, `MAX_COURSES`, `MIN`/`MAX_[LECTURE\|PRACTICAL\|LAB]_COURSES`, and `MIN`/`MAX_[MANDATORY\|ELECTIVE]_[LECTURE\|PRACTICAL\|LAB]_COURSES` (2 + 1 + 6 + 12 = 21 values) |
 | `timetable_constraint_type` | `MAX_CLASSES_PER_DAY`, `NOT_BEFORE`, `NOT_AFTER`, `UNAVAILABLE` — shared by all three timetable-constraint tables |
 | `control_form` | `EXAM`, `CREDIT`, `GRADED_CREDIT` |
 | `course_type` | `MANDATORY`, `ELECTIVE_GROUP`, `ELECTIVE`, `OPTIONAL`, `INTERNSHIP`, `COURSE_PROJECT`, `COURSE_WORK`, `QUALIFICATION_WORK` |
 | `week_parity` | `WEEKLY`, `NUMERATOR`, `DENOMINATOR` |
+| `grantee_type` | `USER`, `GROUP` — which column of a `permissions` row is set |
 | `study_form`, `degree`, `lecturer_position`, `room_kind`, `property_type` | see `schema.sql` |
 
 `hour_type` is declared "contact teaching, then the contact work around it, then the student's own
@@ -379,6 +384,70 @@ indexes lose their `COALESCE` over the subject columns, and each table is indexe
 own. The cost is that the value rule is written out three times — the enum is shared, but adding a
 constraint type means touching all three tables.
 
+### Reading the current timetable
+
+A scheduler needs the opposite of what a CRUD screen needs. A screen asks for "this faculty's
+rows"; a scheduler asks for "everything that already occupies the rooms, the lecturers and the
+groups this faculty is about to schedule into" — regardless of which faculty owns those classes.
+Three id-list relation filters on `timetableEntryConnection` answer that, and one string filter
+makes the answer mean anything.
+
+| Argument | Type | Matches an entry whose… |
+|---|---|---|
+| `roomIds` | `[ID!]` | `room_id` is one of these |
+| `lecturerIds` | `[ID!]` | workload has one of these lecturers (`lecturer_workload_lecturers`) |
+| `academicGroupIds` | `[ID!]` | workload has one of these groups directly (`lecturer_workload_academic_groups`) **or** through a combined group (`lecturer_workload_combined_groups` -> `combined_group_academic_groups`) |
+| `semesterParity` | `String` | curriculum item behind the workload has an odd (`'ODD'`) or even (`'EVEN'`) semester |
+| `workloadId`, `roomId` | `ID` | plain column filters, for the single-row cases |
+
+**`semesterParity` is not optional in practice.** `timetable_entries` has no semester column — the
+semester lives on the curriculum item two joins behind the workload — and `data.sql` carries both
+halves of the year at once. An unfiltered read therefore reports a room hosting an autumn class and
+a spring class "at the same time", which is not a clash at all. The filter reaches the semester
+through whichever target the workload has: `working_curriculum_item_id` directly, or the members of
+`combined_working_curriculum_item_id`, the two coalesced.
+
+**Why three separate filters rather than one.** Filter arguments compose with `AND`, and what a
+scheduler wants here is `OR`: an entry matters if it uses one of my rooms *or* one of my lecturers
+*or* one of my groups. Rather than invent an OR-combining filter syntax, the three are asked for
+under three aliases in one request and merged by entry id on the client:
+
+```graphql
+query($parity: String, $rooms: [ID!], $lecturers: [ID!], $groups: [ID!]) {
+  timetableEntries {
+    byRoom:     timetableEntryConnection(limit: 5000, semesterParity: $parity, roomIds: $rooms)           { nodes { ...E } }
+    byLecturer: timetableEntryConnection(limit: 5000, semesterParity: $parity, lecturerIds: $lecturers)   { nodes { ...E } }
+    byGroup:    timetableEntryConnection(limit: 5000, semesterParity: $parity, academicGroupIds: $groups) { nodes { ...E } }
+  }
+}
+```
+
+where the shared selection `E` is what a conflict test needs and the row itself does not hold:
+
+```graphql
+id dayOfWeek weekParity
+classStartTime { id startTime }
+room { id }
+workload {
+  id durationHours
+  lecturers { id }
+  academicGroups { id }
+  combinedGroups { academicGroups { id } }
+}
+```
+
+The class's *end* is still nowhere in there. It is `classStartTime.startTime + workload.durationHours
+* academic_hour_duration_minutes`, and the caller computes it — the same derivation the constraint
+rules need (see above).
+
+`lecturerConnection(facultyId:)` exists for the same consumer: it reads every lecturer of a faculty
+together with their `timetableConstraints` in one request, rather than one request per department.
+
+The only client of all this today is the frontend's schedule generator
+([TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md)). The service itself neither
+schedules nor validates what a scheduler writes back — see [Known
+limitations](#known-limitations).
+
 ### Inputs for automatic workload generation
 
 Four tables added for the generator, which lives entirely in the frontend
@@ -474,9 +543,11 @@ org.lnu.timetable.framework
 ├── schema/        DynamicGraphQLSchemaBuilder — builds GraphQLSchema from
 │                  metadata + config; DataFetcherProvider
 ├── query/         R2dbcQueryEngine — table-driven optimized SQL: selectOne,
-│                  selectList, selectWhere, count, insert, update, delete,
-│                  plus the batched selectByIds / selectWhereIn /
-│                  selectViaJoinTableBatch used by relation DataLoaders
+│                  selectList, selectWhere, count/countWhere, insert, update,
+│                  delete, the by-arbitrary-column updateWhere / deleteWhere,
+│                  insertJoinRow for many-to-many membership, plus the batched
+│                  selectByIds / selectWhereIn / selectViaJoinTableBatch used
+│                  by relation DataLoaders
 └── runtime/       DynamicDataFetchers (query/connection/mutation/relation,
                    with per-request DataLoader batching), DynamicGraphQlConfiguration
                    (exposes the GraphQlSource bean)
@@ -599,6 +670,16 @@ The same mechanism scopes the two "people" connections to a faculty, neither of 
 | `combinedGroupConnection` | `facultyId` | `combined_group_academic_groups → academic_groups → specialties.faculty_id` |
 | `workingCurriculumItemConnection` | `facultyId`, `semesterParity` | `working_curriculum_items.department_id → departments.faculty_id`; `curriculum_item_hours → curriculum_items.semester` |
 | `combinedWorkingCurriculumItemConnection` | `facultyId`, `departmentIds`, `semesterParity` | member `working_curriculum_items` |
+| `lecturerConnection` | `facultyId` | `lecturers.department_id → departments.faculty_id` |
+| `timetableEntryConnection` | `roomIds`, `lecturerIds`, `academicGroupIds`, `semesterParity` | `timetable_entries.room_id`; the workload's `lecturer_workload_lecturers`; its academic groups *and* its combined groups' members; the semester of the curriculum item behind the workload (single or combined) |
+
+The last row is what lets a client read the *current* state of the timetable around one faculty.
+The three id-list filters are declared separately rather than as one OR-ed condition because filters
+compose with **AND**: a caller asks for each slice under its own alias in a single request and
+merges them client-side, which is exactly what the frontend's schedule generator does. And
+`semesterParity` is not optional in practice — `timetable_entries` has no semester column and both
+halves of the year are loaded at once, so an unfiltered read reports room clashes that do not
+exist.
 
 `combinedGroupConnection`'s `facultyId` matches when **any** member academic group belongs to the
 faculty, so a combined group spanning two faculties appears under both — which is the point of
@@ -655,6 +736,50 @@ mutation {
 }
 ```
 
+### The query catalogue
+
+Every generated connection, with the ordering it applies and the arguments it accepts. Unmarked
+arguments are plain column filters (`.filter`); the ones marked (r) are `EXISTS` relation filters
+(`.relationFilter` / `.relationFilterList` / `.relationFilterString`, described under *Declare the
+API* above). Every connection also takes `limit` and `offset` and returns
+`{ nodes, pageInfo { total hasNextPage nextPageOffset } }`, and every entity listed here also has a
+single-row `<entity>(id:)` query.
+
+| Connection | Ordered by | Arguments |
+|---|---|---|
+| `buildingConnection` | `name` | — |
+| `facultyConnection` | `name` | — |
+| `departmentConnection` | `name` | `facultyId` |
+| `specialtyConnection` | `code` | `facultyId` |
+| `roomConnection` | `number` | `facultyId`, `buildingId` |
+| `roomGroupConnection` | `name` | `facultyId`, `departmentId` |
+| `academicDegreeConnection` | `level` | — |
+| `lecturerConnection` | `lastName` | `departmentId`, `facultyId` (r) |
+| `studentConnection` | `lastName` | `academicGroupId` |
+| `academicGroupConnection` | `name` | `specialtyId`, `facultyId` (r) |
+| `combinedGroupConnection` | `name` | `facultyId` (r) |
+| `courseConnection` | `name` | `departmentId`, `facultyId`, `specialtyId` (r) |
+| `curriculumItemConnection` | `semester` | `specialtyId` |
+| `curriculumItemHoursConnection` | `hourType` | `curriculumItemId` |
+| `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r) |
+| `combinedWorkingCurriculumItemConnection` | `id` | `facultyId` (r), `departmentIds` (r), `semesterParity` (r) |
+| `lecturerWorkloadConnection` | `id` | — |
+| `classStartTimeSetConnection` | `name` | `facultyId` |
+| `classStartTimeConnection` | `ordinal` | `classStartTimeSetId` |
+| `timetableEntryConnection` | `dayOfWeek` | `workloadId`, `roomId`, `roomIds` (r), `lecturerIds` (r), `academicGroupIds` (r), `semesterParity` (r) |
+
+Eight entities are missing from this table on purpose, and the omission is the design rather than a
+gap: `CourseTag`, `LecturerWorkloadConstraint`, `LecturerTimetableConstraint`,
+`AcademicGroupTimetableConstraint`, `RoomTimetableConstraint`, `LecturerWorkloadStudent` and
+`LecturerWorkloadCandidateConstraint` are read through their parent's relation field and written
+through its `.nestedList(...)`, and `LecturerWorkloadCandidate` is read through
+`LecturerWorkload.candidates` while being written through mutations of its own. See [Where each
+entity is declared](#where-each-entity-is-declared).
+
+Note also what `lecturerWorkloadConnection` does *not* offer: no `departmentId` or `facultyId`. In
+practice nothing reaches for workloads flatly — they are always read through the working (or
+combined) curriculum item that owns them, which is where the department and faculty live.
+
 ### Optimized field selection
 
 Each fetcher reads the GraphQL selection set and selects **only** the requested columns,
@@ -700,6 +825,28 @@ around).
    `DynamicGraphQLSchemaBuilder.buildAuthTypes()`/`registerAuthFetchers()`, the same escape-hatch
    pattern used for `GlobalProperty` (see above), so a `User`'s password hash is never reachable
    through the generic, selection-set-driven machinery.
+
+### The security package
+
+`org.lnu.timetable.security` is eleven classes, and it is worth knowing which of them decides what:
+
+| Class | Role |
+|---|---|
+| `AuthenticationGraphQlInterceptor` | reads `Authorization: Bearer <jwt>` on every request, resolves it to a `Principal` and puts it on the GraphQL context; an absent or invalid token leaves the request anonymous rather than failing it, which is what keeps `login` reachable through the same endpoint |
+| `JwtService` | issues and parses the HS256 tokens, which carry only the user id |
+| `Principal` | record — id, email, first/last name, `mustChangePassword` |
+| `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field and "may modify" on every generated mutation |
+| `PermissionService` | the decision point: `canModify`, `canCreate`, `canManageGrantsOn` |
+| `PermissionGraphRepository` | the three raw reads `PermissionService` walks the permission graph with — `fetchForeignKeys`, `fetchJoinParentIds`, `fetchLabel` |
+| `ResourceRef` | record — one `(resourceType, resourceId)` node of that ancestry |
+| `PermissionRepository` | everything else the auth tables need: users, groups, memberships, grants |
+| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `canModifyResources`, `grantsForResource` and the grant/membership mutations |
+| `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
+| `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
+
+The split between `PermissionGraphRepository` and `PermissionRepository` follows the two questions
+being asked: one walks *domain* tables along annotation-declared edges and knows nothing about
+users, the other reads the *auth* tables and knows nothing about the domain.
 
 ### The permission model
 
@@ -919,9 +1066,11 @@ setup](#database-setup).
   workload's, and it may sit inside an `UNAVAILABLE` window or past a `NOT_AFTER` — the database
   accepts all three. Every one of these is a condition one or two joins away (and the time rules
   additionally need a class *end* time, which is derived, not stored), so they belong to a scheduler
-  and to the UI. There is no scheduler in this repo yet; the timetable is entered by hand through
-  the frontend's "Формування розкладу" tab, which offers only the start times of the workload's own
-  set but does not yet filter rooms or apply the constraint tables.
+  and to the UI. There is still no scheduler *in this service*: the one that exists lives in the
+  sibling frontend project (see
+  [TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md)), applies all of these rules as
+  hard filters, and this service only stores what it decides. An entry written by any other client —
+  or by the same tab's manual per-block form — is still accepted unchecked.
 - **`roomGroupConnection`'s and `classStartTimeSetConnection`'s `facultyId` filters match the column
   exactly**, so they return only that faculty's rows — not the university-wide ones (`faculty_id IS
   NULL`) a caller almost always wants as well. Clients that need both fetch unfiltered and narrow
