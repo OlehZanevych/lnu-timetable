@@ -141,6 +141,14 @@
         <app-faculty-timetable-list [facultyId]="fid" />
       }
 
+      @case ('groupConstraints') {
+        <app-timetable-constraint-list subject="academicGroup" [scopeId]="fid" />
+      }
+
+      @case ('roomConstraints') {
+        <app-timetable-constraint-list subject="room" [scopeId]="fid" />
+      }
+
     }
   </div>
 </div>

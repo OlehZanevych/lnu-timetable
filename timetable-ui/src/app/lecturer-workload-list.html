@@ -124,6 +124,8 @@
                 <th>Викладачі</th>
                 <th>Академічні групи</th>
                 <th>Тривалість</th>
+                <th>Дзвінки</th>
+                <th>Аудиторії</th>
                 <th></th>
               </tr>
             </thead>
@@ -143,13 +145,15 @@
                   </td>
                   <td>{{ academicGroupNames(w.academicGroups) }}</td>
                   <td>{{ w.durationHours }} год.</td>
+                  <td class="cell-info">{{ startTimeSetName(w) }}</td>
+                  <td class="cell-info" [title]="roomRestrictionLabel(w)">{{ roomRestrictionLabel(w) }}</td>
                   <td class="row-actions">
                     <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
                     <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="4" class="muted">Навантаження ще немає.</td></tr>
+                <tr><td colspan="6" class="muted">Навантаження ще немає.</td></tr>
               }
             </tbody>
           </table>
@@ -205,6 +209,8 @@
                   @if (!isIndividuallyItem(wci)) {
                     <th>Тривалість</th>
                   }
+                  <th>Дзвінки</th>
+                  <th>Аудиторії</th>
                   <th></th>
                 </tr>
               </thead>
@@ -254,6 +260,8 @@
                     @if (!isIndividuallyItem(wci)) {
                       <td>{{ w.durationHours }} год.</td>
                     }
+                    <td class="cell-info">{{ startTimeSetName(w) }}</td>
+                    <td class="cell-info" [title]="roomRestrictionLabel(w)">{{ roomRestrictionLabel(w) }}</td>
                     <td class="row-actions">
                       <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
                       <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
@@ -343,6 +351,31 @@
                                 name="durationHours" [ngModelOptions]="{ standalone: true }" />
           </label>
         }
+        <label>
+          <span>Часи початку занять *</span>
+          <app-search-select [options]="classStartTimeSetOptions()" [(ngModel)]="formClassStartTimeSetId"
+                              name="classStartTimeSetId" placeholder="— оберіть набір —"
+                              [ngModelOptions]="{ standalone: true }" />
+          <small class="muted lw-field-hint">
+            Розклад дзвінків, за яким проводяться заняття цієї позиції &mdash; наприклад, окремий
+            для фізичного виховання. За замовчуванням обрано типовий набір.
+          </small>
+        </label>
+        <label>
+          <span>Аудиторії</span>
+          <app-multi-select [options]="roomOptions()" [(ngModel)]="formRoomIds"
+                            name="roomIds" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Групи аудиторій</span>
+          <app-multi-select [options]="roomGroupOptions()" [(ngModel)]="formRoomGroupIds"
+                            name="roomGroupIds" [ngModelOptions]="{ standalone: true }" />
+          <small class="muted lw-field-hint">
+            Де можуть проходити заняття. Дозволені аудиторії &mdash; це обрані аудиторії разом з
+            аудиторіями обраних груп. Якщо не обрано нічого, заняття можна ставити в будь-яку
+            аудиторію.
+          </small>
+        </label>
 
         <div class="lw-pairs lw-candidates">
           <div class="lw-pairs-header">

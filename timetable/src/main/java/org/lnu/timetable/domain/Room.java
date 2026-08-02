@@ -5,8 +5,11 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
+import org.lnu.timetable.framework.annotation.OneToMany;
 import org.lnu.timetable.framework.annotation.PermissionParent;
 import org.lnu.timetable.framework.annotation.PgEnum;
+
+import java.util.List;
 
 @Data
 @GraphQLEntity(table = "rooms")
@@ -37,4 +40,8 @@ public class Room {
     @Nullable
     @ManyToOne(joinColumn = "building_id")
     private Building building;
+
+    /** When this room may be given classes — see {@link RoomTimetableConstraint}. */
+    @OneToMany(mappedBy = "room_id")
+    private List<RoomTimetableConstraint> timetableConstraints;
 }

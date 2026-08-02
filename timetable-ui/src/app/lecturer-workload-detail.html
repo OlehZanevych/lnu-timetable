@@ -8,6 +8,7 @@
 </div>
 
 @if (error()) { <p class="error">{{ error() }}</p> }
+@if (exportError()) { <p class="error">{{ exportError() }}</p> }
 
 <div class="ce-toolbar">
   <label class="ce-search wd-picker">
@@ -17,6 +18,11 @@
                        name="lecturerPick"
                        [ngModelOptions]="{ standalone: true }" />
   </label>
+  <button type="button" class="wd-export" [disabled]="!selected() || exporting()"
+          (click)="downloadReport()"
+          title="Розрахунок навчального навантаження у форматі PDF">
+    @if (exporting()) { Формування&hellip; } @else { &#x1F4C4; Завантажити PDF }
+  </button>
 </div>
 
 @if (selected(); as s) {

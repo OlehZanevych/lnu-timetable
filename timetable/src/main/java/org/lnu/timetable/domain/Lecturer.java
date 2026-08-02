@@ -51,4 +51,11 @@ public class Lecturer {
      */
     @OneToMany(mappedBy = "lecturer_id")
     private List<LecturerWorkloadConstraint> workloadConstraints;
+
+    /**
+     * When this lecturer may be given classes — see {@link LecturerTimetableConstraint}. Separate
+     * from workloadConstraints, which bound *how much* they teach rather than *when*.
+     */
+    @OneToMany(mappedBy = "lecturer_id")
+    private List<LecturerTimetableConstraint> timetableConstraints;
 }

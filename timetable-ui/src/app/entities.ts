@@ -3,7 +3,7 @@
 export interface FieldMeta {
   name: string;            // scalar field name, or FK input field (e.g. "facultyId") for refs
   label: string;
-  type: 'text' | 'number' | 'textarea' | 'ref' | 'enum' | 'multiref' | 'tags' | 'time';
+  type: 'text' | 'number' | 'boolean' | 'textarea' | 'ref' | 'enum' | 'multiref' | 'tags' | 'time';
   required?: boolean;
   // time-only: hour dropdown bounds and the minute dropdown's step, in minutes
   minHour?: number;
@@ -55,6 +55,20 @@ export const DEGREE_OPTIONS = [
   { value: 'PHD',             label: 'Доктор філософії' },
   { value: 'DOCTOR_OF_SCIENCE', label: 'Доктор наук' }
 ];
+
+/** lecturers.position — the academic posts a lecturer can hold, lowest first. */
+export const POSITION_OPTIONS = [
+  { value: 'ASSISTANT',          label: 'Асистент' },
+  { value: 'TEACHER',            label: 'Викладач' },
+  { value: 'SENIOR_LECTURER',    label: 'Старший викладач' },
+  { value: 'DOCENT',             label: 'Доцент' },
+  { value: 'PROFESSOR',          label: 'Професор' },
+  { value: 'HEAD_OF_DEPARTMENT', label: 'Завідувач кафедри' }
+];
+
+/** Ukrainian label for a lecturers.position value; falls back to the raw value if ever unknown. */
+export const positionLabel = (v: string): string =>
+  POSITION_OPTIONS.find((o) => o.value === v)?.label ?? v;
 
 export const COURSE_TYPE_OPTIONS = [
   { value: 'MANDATORY',          label: "Обов'язкова" },
@@ -230,16 +244,7 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'middleName', label: 'По батькові', type: 'text' },
       { name: 'lastName', label: 'Прізвище', type: 'text', required: true },
       { name: 'email', label: 'Ел. пошта', type: 'text' },
-      { name: 'position', label: 'Посада', type: 'enum',
-        enumOptions: [
-          { value: 'ASSISTANT',          label: 'Асистент' },
-          { value: 'TEACHER',            label: 'Викладач' },
-          { value: 'SENIOR_LECTURER',    label: 'Старший викладач' },
-          { value: 'DOCENT',             label: 'Доцент' },
-          { value: 'PROFESSOR',          label: 'Професор' },
-          { value: 'HEAD_OF_DEPARTMENT', label: 'Завідувач кафедри' }
-        ]
-      },
+      { name: 'position', label: 'Посада', type: 'enum', enumOptions: POSITION_OPTIONS },
       ref('academicDegreeId', 'Наук. ступінь', 'academicDegree', 'academicDegree', 'name'),
       { name: 'departmentId', label: 'Кафедра', type: 'ref', ref: 'department', relation: 'department', refLabel: 'name', required: true,
         parentFilter: { namespace: 'faculties', list: 'facultyConnection', label: 'Факультет' } }
@@ -287,8 +292,35 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'ClassStartTime', label: 'Часи початку занять', single: 'classStartTime', namespace: 'classStartTimes', list: 'classStartTimeConnection',
+    // A reusable set of rooms a lecturer workload can point at instead of naming rooms one by one.
+    // faculty and department scope who may use the group and are mutually exclusive — the database
+    // rejects a row that sets both (room_groups_scope_check), so a form that does fails on save.
+    name: 'RoomGroup', label: 'Групи аудиторій', single: 'roomGroup', namespace: 'roomGroups', list: 'roomGroupConnection', filterParam: 'facultyId',
     fields: [
+      { name: 'name', label: 'Назва', type: 'text', required: true },
+      { name: 'purpose', label: 'Призначення', type: 'text' },
+      ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name'),
+      { name: 'departmentId', label: 'Кафедра', type: 'ref', ref: 'department', relation: 'department', refLabel: 'name',
+        parentFilter: { namespace: 'faculties', list: 'facultyConnection', label: 'Факультет' } },
+      multiref('roomIds', 'Аудиторії', 'room', 'rooms', 'number')
+    ]
+  },
+  {
+    // A named grid of bells. Exactly one set is the default (the one a new workload starts on), and
+    // a set scoped to a faculty may never be the default — both rules are enforced by the database
+    // (class_start_time_sets_single_default / class_start_time_sets_default_scope_check), so a form
+    // that breaks them fails on save rather than being prevented here.
+    name: 'ClassStartTimeSet', label: 'Набори часів початку занять', single: 'classStartTimeSet', namespace: 'classStartTimeSets', list: 'classStartTimeSetConnection', filterParam: 'facultyId',
+    fields: [
+      { name: 'name', label: 'Назва', type: 'text', required: true },
+      { name: 'isDefault', label: 'Типовий', type: 'boolean' },
+      ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name')
+    ]
+  },
+  {
+    name: 'ClassStartTime', label: 'Часи початку занять', single: 'classStartTime', namespace: 'classStartTimes', list: 'classStartTimeConnection', filterParam: 'classStartTimeSetId',
+    fields: [
+      ref('classStartTimeSetId', 'Набір', 'classStartTimeSet', 'classStartTimeSet', 'name', true),
       { name: 'ordinal', label: 'Порядковий №', type: 'number', required: true },
       time('startTime', 'Початок', true)
     ]

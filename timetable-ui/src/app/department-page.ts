@@ -5,12 +5,13 @@ import { GraphqlService } from './graphql.service';
 import { LecturerPage } from './entity-pages';
 import { DepartmentWorkloadSummary } from './department-workload-summary';
 import { LecturerConstraintList } from './lecturer-constraint-list';
+import { TimetableConstraintList } from './timetable-constraint-list';
 import { LecturerWorkloadDetail } from './lecturer-workload-detail';
 import { LecturerWorkloadList } from './lecturer-workload-list';
 import { CombinedWorkingCurriculumItemList } from './combined-working-curriculum-item-list';
 
-type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'constraints' | 'workloads'
-  | 'workloadSummary' | 'workloadDetail';
+type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'constraints'
+  | 'timetableConstraints' | 'workloads' | 'workloadSummary' | 'workloadDetail';
 
 interface Department {
   id: string;
@@ -24,8 +25,9 @@ interface Department {
 @Component({
   selector: 'app-department-page',
   templateUrl: './department-page.html',
-  imports: [RouterLink, FormsModule, LecturerPage, LecturerConstraintList, LecturerWorkloadList,
-            DepartmentWorkloadSummary, LecturerWorkloadDetail, CombinedWorkingCurriculumItemList]
+  imports: [RouterLink, FormsModule, LecturerPage, LecturerConstraintList, TimetableConstraintList,
+            LecturerWorkloadList, DepartmentWorkloadSummary, LecturerWorkloadDetail,
+            CombinedWorkingCurriculumItemList]
 })
 export class DepartmentDetailPage implements OnInit {
   private route = inject(ActivatedRoute);

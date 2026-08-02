@@ -114,6 +114,9 @@ src/app/
 │                                                    #   CombinedWorkingCurriculumItem
 ├── lecturer-constraint-list.ts/.html # department tab: per-lecturer workload constraints with
 │                                     #   cross-field validation — "Обмеження навантаження"
+├── timetable-constraint-list.ts/.html # one component, three tabs: scheduling constraints for
+│                                     #   lecturers (department), academic groups and rooms
+│                                     #   (faculty) — "Обмеження розкладу" (see below)
 ├── workload-stats.ts                 # per-lecturer hour totals + constraint deviation — pure
 ├── workload-tree.ts                  # loads a department's delivered workload, flattened
 ├── department-workload-summary.ts/.html # the department's workload on one sheet, one row per
@@ -161,6 +164,14 @@ edited through `TimeSelect`'s hour + minute dropdowns instead of a free-text box
 `ClassStartTime.startTime`, where only valid slot times should be enterable. Because the form is
 metadata-driven, any future time field gets the same widget for free.
 
+A `'boolean'` field type renders a checkbox (`ClassStartTimeSet.isDefault` is the only one so far)
+and needs three small departures from how every other type is handled, all in `base-entity.ts`:
+the table cell shows «Так» or a **blank**, not "Ні" repeated down the column — the point of the
+column is to show which row *is* the default one; `edit(row)` seeds the form with a real boolean
+rather than `?? ''`, because `''` would also be read as "empty"; and `buildInput` always sends the
+value, since an unticked box is a value rather than an absence. Without the last two, a set could
+be made the default but never un-made.
+
 A `ref` field may also carry `parentFilter: { namespace, list, label }`. That swaps its plain
 dropdown for `DeptFacultySelect` — a second select above it, loaded from that connection, which
 narrows the first one's options (used by `Lecturer.departmentId`: pick a faculty, then one of its
@@ -169,10 +180,13 @@ departments). Nothing else in the form changes; the field still saves the same F
 Field order in `fields[]` drives **both** the table columns and the modal form, so reordering one
 reorders the other — `Student` is listed Прізвище → Ім'я → По батькові for that reason.
 
-The enum option lists (`DEGREE_OPTIONS`, `COURSE_TYPE_OPTIONS`, `CONTROL_FORM_OPTIONS`,
-`HOUR_TYPE_OPTIONS`, `TEACHING_FORMAT_OPTIONS`, …) are exported, and the hand-written pages read
-them too rather than keeping their own copies — `courseTypeLabel(value)` is the shared
-value → Ukrainian label lookup for `courses.course_type`. A page that hand-rolls its own map is a
+The enum option lists (`DEGREE_OPTIONS`, `POSITION_OPTIONS`, `COURSE_TYPE_OPTIONS`,
+`CONTROL_FORM_OPTIONS`, `HOUR_TYPE_OPTIONS`, `TEACHING_FORMAT_OPTIONS`, …) are exported, and the
+hand-written pages read them too rather than keeping their own copies — `courseTypeLabel(value)`
+and `positionLabel(value)` are the shared value → Ukrainian label lookups for `courses.course_type`
+and `lecturers.position`. `POSITION_OPTIONS` was inline in the `Lecturer` metadata until the PDF
+report needed the same labels; anything that renders a stored enum should reach for the exported
+list rather than repeat it. A page that hand-rolls its own map is a
 bug waiting to happen: the one that existed showed raw `INTERNSHIP` / `COURSE_WORK` in a column
 because its private map only covered three of the eight values.
 
@@ -186,11 +200,17 @@ subclass rendered through the shared `entity-page.html` (table + modal form):
 export class CoursePage extends BaseEntity { meta = meta('Course'); }
 ```
 
-`entity-pages.ts` currently registers 11 such pages (`academicDegree`, `faculty`,
+`entity-pages.ts` currently registers 13 such pages (`academicDegree`, `faculty`,
 `department`, `specialty`, `course`, `lecturer`, `student`, `academicGroup`,
-`room`, `classStartTime`, `timetableEntry`), each routed at `/e/:single`. These are
-the fallback / power-user screens — useful for bulk edits or entities without a dedicated
-drill-down page (`Room`, `ClassStartTime`, `AcademicDegree`, `TimetableEntry`). `CombinedGroupPage`
+`room`, `roomGroup`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at
+`/e/:single`. These are the fallback / power-user screens — useful for bulk edits or entities
+without a dedicated drill-down page (`Room`, `RoomGroup`, `ClassStartTimeSet`, `ClassStartTime`,
+`AcademicDegree`, `TimetableEntry`). Two of them lean on the metadata in ways worth noting:
+`RoomGroup` uses `multiref` for its rooms and offers both a faculty and a department picker even
+though the two are mutually exclusive — the database rejects a row that sets both
+(`room_groups_scope_check`), so a form that does fails on save rather than being prevented here;
+`ClassStartTime` carries a `filterParam: 'classStartTimeSetId'`, since its `ordinal` only numbers
+periods *within* a set and an unfiltered list interleaves every set's. `CombinedGroupPage`
 (the same `BaseEntity` table) is also registered as a component but not routed standalone — it's
 embedded directly as the Faculty page's "Об'єднані групи" tab instead. `CurriculumItem`,
 `CurriculumItemHours`, `WorkingCurriculumItem` and `LecturerWorkload` have no generic page at all;
@@ -206,8 +226,10 @@ and composing purpose-built child-list components rather than going through `Bas
 - **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
   tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
   info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, academic groups,
-  combined groups (`CombinedGroupPage`), courses, and schedule building (`FacultyTimetableList`,
-  see below). Every list on this page is scoped to the faculty, including the two that have no
+  combined groups (`CombinedGroupPage`), courses, schedule building (`FacultyTimetableList`,
+  see below) and — under the same "Розклад" group — "Обмеження груп" and "Обмеження аудиторій",
+  two instances of `TimetableConstraintList` (see below). Every list on this page is scoped to the
+  faculty, including the two that have no
   `faculty_id` of their own: "Академічні групи" passes `[facultyId]` alongside its optional
   specialty sub-filter (so clearing that sub-filter means "all specialties *of this faculty*",
   not "every group in the university"), and "Об'єднані групи" passes the same scope to the
@@ -218,7 +240,8 @@ and composing purpose-built child-list components rather than going through `Bas
 - **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
   items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), workload constraints
   and department statistics (`LecturerConstraintList` — "Обмеження навантаження", see below),
-  lecturer workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below), the
+  per-lecturer scheduling constraints (`TimetableConstraintList` — "Обмеження розкладу", see
+  below), lecturer workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below), the
   department-wide summary (`DepartmentWorkloadSummary` — "Зведене навантаження") and the
   per-lecturer assessment (`LecturerWorkloadDetail` — "Оцінка навантаження", see below).
 - **`SpecialtyDetailPage`** (`/specialty/:id`): info, the course-first curriculum editor
@@ -305,6 +328,50 @@ constraints would make workload generation unsatisfiable rather than merely wron
 Saving is one `updateLecturer` mutation per card (the constraints ride along as the
 `workloadConstraints` nested list), so a lecturer's whole set is replaced atomically.
 
+#### Timetable constraints (`TimetableConstraintList`, three tabs)
+
+*When* a lecturer, an academic group or a room may be given classes — the inputs a scheduler has to
+satisfy, as opposed to the hour ceilings above. **One component serves all three subjects**, because
+the generated GraphQL schema gives them the same shape: a `SUBJECTS` record holds everything that
+differs (namespace, connection, filter argument, mutation entity, the extra fields to select, the
+label to show, and the Ukrainian titles), and two inputs pick a row of it — `subject` and `scopeId`.
+It is mounted three times:
+
+| Tab | `subject` | `scopeId` | Rows |
+|---|---|---|---|
+| department → "Обмеження розкладу" | `lecturer` | department id | every lecturer of the department |
+| faculty → "Обмеження груп" | `academicGroup` | faculty id | every academic group of the faculty |
+| faculty → "Обмеження аудиторій" | `room` | faculty id | every room of the faculty |
+
+One card per subject, holding a small table of rules. Each rule is a day (`усі дні` or one weekday),
+a kind, and a value whose editor follows the kind through an `@switch`: a number input for
+**Не більше пар**, one `TimeSelect` for **Починати не раніше** / **Закінчувати не пізніше**, and a
+pair of them for **Не займати проміжок**. Every card's rules are also summarised as chips on its
+header, so a page of eighty lecturers can be skimmed without opening any of them, and a search box
+plus a "лише з обмеженнями" toggle narrow the list.
+
+The **"more specific wins"** rule documented in `schema.sql` is stated in the legend above the cards
+and implemented in `effective(rules, type, day)`, which resolves what actually applies on a given
+day — the day's own rule if it has one, otherwise the every-day rule. That resolution is what makes
+the cross-rule check meaningful: a `NOT_BEFORE` later than the `NOT_AFTER` that governs the same day
+leaves no room for anything, whether both are day-specific or one comes from the every-day rule.
+
+Validation runs on every keystroke and, as in `LecturerConstraintList`, a card that fails takes a
+red tint, the offending rows go brighter red, each broken rule is listed in plain Ukrainian and
+**saving is blocked**. It covers everything the database would reject before the round trip —
+a missing or non-integer count, a missing time, a window whose end is not after its start, and a
+second rule of the same single-valued kind on the same day (the partial unique indexes) — plus the
+contradictions only visible across rules.
+
+Saving is one `update<Entity>` mutation per card, the rules riding along as the
+`timetableConstraints` nested list, so a subject's whole set is replaced atomically and a removed
+rule is deleted by not being sent. Because the mutation's input payload is the *whole* entity, the
+component sends the subject's required scalars back unchanged alongside the list (`meta.required(node)`
+— a lecturer's first and last name, a group's name/year/study form/specialty, a room's number);
+omitting them would blank them. "Очистити" only empties the card and marks it dirty — the empty list
+reaches the server on the next "Зберегти", like any other edit, so a mis-click is undone by
+"Скасувати" rather than by re-entering the rules.
+
 #### Lecturer workloads (`LecturerWorkloadList`, department "Навантаження викладачів" tab)
 
 Pre-loads every `WorkingCurriculumItem` delivered by the department (with its curriculum item /
@@ -315,6 +382,27 @@ when the item's `teachingFormat` is `SEPARATELY` — "together" has nothing to c
 **duration** (`SearchSelect` over 1–4 academic hours) that defaults from the
 `default_class_duration_hours` global property when creating a new workload, or from the
 workload's own stored value when editing one.
+
+Three further fields say *where* and *on which bells* the class runs, and appear whatever the
+teaching format — they apply to individual consultations just as much:
+
+- **Часи початку занять** (required) — the `ClassStartTimeSet` its classes are scheduled on, e.g.
+  the separate grid physical education runs on. `lecturer_workloads.class_start_time_set_id` is
+  `NOT NULL`, so an empty picker is caught here, in Ukrainian, rather than at the database; a new
+  workload starts on the set marked as default.
+- **Аудиторії** and **Групи аудиторій** (`MultiSelect` each) — where the class may be held. The
+  eligible rooms are the **union** of the two, and choosing nothing means no restriction, which the
+  hint says in words. Both lists are always sent in full, including when empty: omitting a
+  many-to-many field leaves the stored membership untouched, so "clear the restriction" has to be
+  an explicit empty array.
+
+All three are echoed in the workload tree as "Дзвінки" and "Аудиторії" columns, the latter joining
+named rooms and `«group» (група)` entries into one cell and reading «будь-яка» when nothing is set.
+The options for all three are fetched **unfiltered and narrowed client-side**, deliberately: the
+backend's `facultyId` filter matches the column exactly, so asking for this faculty's sets or groups
+would drop precisely the university-wide ones (`faculty_id IS NULL`) that most workloads use. What
+survives the narrowing is this faculty's rows plus the unscoped ones — and, for room groups, this
+department's own.
 
 When the item's `teachingFormat` is **`INDIVIDUALLY`** (a coursework consultation, say) the modal
 swaps shape entirely: the group pickers, the lecturer multi-select and the duration field all
@@ -403,6 +491,63 @@ hours, because that is how `MAX_COURSES` counts them. A course a lecturer only c
 hours but is not a discipline they "teach" for constraint purposes — counting it would make the
 figure disagree with the limit it sits beside.
 
+#### Printable workload calculation (`pdf-writer.ts`, `workload-report.ts`, `pdf-fonts.ts`)
+
+"Оцінка навантаження" carries a **«Завантажити PDF»** button that produces the paper form a
+department head signs — «РОЗРАХУНОК НАВЧАЛЬНОГО НАВАНТАЖЕННЯ науково-педагогічного працівника на
+20\_\_/20\_\_ навчальний рік» — for the lecturer currently selected. It is written **entirely on the
+client**: nothing is sent to the server, and the file downloads straight from a `Blob`.
+
+Three files, and the split matters:
+
+- **`pdf-writer.ts`** — a dependency-free PDF engine. It parses a TrueType file (`head`, `hhea`,
+  `hmtx`, `maxp`, `cmap` formats 4/6/12), embeds it as a `CIDFontType2` under `Identity-H`, emits a
+  `ToUnicode` CMap so the result stays selectable and searchable, and offers text, wrapping, lines,
+  rectangles and a bordered table renderer that breaks across pages and repeats its header.
+  Coordinates are **millimetres from the top-left corner**, because that is the vocabulary the
+  document rules are written in; font sizes stay in points, as in Word.
+- **`workload-report.ts`** — the document itself, pure and framework-free like `workload-stats.ts`:
+  it takes a `LecturerStats` plus the department context and returns bytes, so it can be rendered
+  under Node in a test as easily as in the browser. It does no arithmetic of its own beyond summing
+  rows, so the sheet and the screen cannot disagree.
+- **`pdf-fonts.ts`** — the browser-side glue: fetches the font subsets lazily on the first export,
+  caches the parsed faces for the session, and triggers the download.
+
+**Why a hand-written writer rather than jsPDF/pdfmake.** Two reasons. The project has no runtime
+dependencies to speak of and every algorithm here is hand-written (`workload-generator.ts`,
+`workload-stats.ts`, `sort.ts`), so a 300 KB library for one button is out of proportion. And it
+would not have saved the hard part anyway: the fourteen fonts every PDF viewer ships are Latin-1
+only, so a Ukrainian document needs an embedded Unicode face whichever route is taken.
+
+**The font.** `public/fonts/LiberationSerif-{Regular,Bold}.ttf` are **subsets** — Latin, Cyrillic
+and the punctuation these documents use — which brings each face from ~340 KB down to ~16 KB. They
+are fetched on demand, so a user who never exports pays nothing. Liberation Serif is
+metric-compatible with Times New Roman (the face ДСТУ documents are set in), covers Ukrainian
+including ґ/є/і/ї, and is redistributable under the SIL Open Font License. To regenerate them:
+
+```
+pyftsubset LiberationSerif-Regular.ttf \
+  --unicodes="U+0020-007E,U+00A0,U+00AB,U+00BB,U+00B0,U+00B7,U+0401,U+0404,U+0406,U+0407,\
+U+0410-044F,U+0451,U+0454,U+0456,U+0457,U+0490,U+0491,U+2013,U+2014,U+2018,U+2019,U+201C,\
+U+201D,U+2022,U+2026,U+2116,U+2212" \
+  --layout-features='' --no-hinting --drop-tables+=GSUB,GPOS,GDEF,DSIG,kern,prep,fpgm,cvt \
+  --output-file=LiberationSerif-Regular.ttf
+```
+
+A character outside that set renders as `.notdef` rather than failing — add its code point above and
+re-subset if one is ever needed.
+
+The document's structure, and what in Ukrainian practice each part answers to, is written up in
+[WORKLOAD-PDF.md](WORKLOAD-PDF.md). In short: гриф ЗАТВЕРДЖУЮ, шапка МОН → ЗВО → факультет →
+кафедра, назва, дані працівника and the legal basis on the title sheet; then зведені показники,
+розподіл годин за видами навчальної роботи, склад навантаження за півріччями with per-half and
+annual totals, and a signature block. Landscape А4, береги 30/10/20/20 мм, page numbers from the
+second sheet — ДСТУ 4163:2020.
+
+**"Відповідність обмеженням" is deliberately left out.** Those bounds are an internal planning aid
+of this system, not a reviewable attribute of the workload, and a signed form should not carry
+them.
+
 #### Automatic generation (`workload-generator.ts`)
 
 The "Навантаження викладачів" tab opens with a generation panel offering two modes: **лише
@@ -475,6 +620,12 @@ corresponding `TimetableEntry`.
   length and the per-class duration are configurable per-workload/global-property values, not
   hardcoded); a remainder of at least half a weekly class becomes one additional class held every
   other week (`NUMERATOR`/`DENOMINATOR` week parity).
+- The **start-time dropdown is per block**, not global: `classStartTimeOptionsFor(block)` offers
+  only the times of the `ClassStartTimeSet` the block's workload runs on, and the block header names
+  that set ("Дзвінки: …"). A flat list would be wrong twice over now that ordinals restart within
+  each set — "2. 10:10" and "2. 10:40" would sit side by side with nothing to tell them apart, and a
+  physical-education class could be put on the main bells, which is the very thing the sets exist to
+  prevent.
 - Each block shows a computed **end time** — `startTime + durationHours ×
   academic_hour_duration_minutes` — once a class start time is chosen, since `ClassStartTime`
   only stores possible start times, not a fixed end time.
@@ -582,8 +733,9 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 
 The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад"),
 the global settings page ("Глобальні властивості"), plus a flat "Загальне" group of
-generic-table links for entities with no dedicated page (`Building`, `ClassStartTime`,
-`AcademicDegree`). `CombinedGroup` also has no sidebar link of its own — it's only reachable
+generic-table links for entities with no dedicated page (`Building`, `RoomGroup`,
+`ClassStartTimeSet`, `ClassStartTime`, `AcademicDegree`). `CombinedGroup` also has no sidebar link
+of its own — it's only reachable
 embedded in the Faculty page's "Об'єднані групи" tab (see above), not as a standalone `/e/…`
 route.
 
@@ -708,6 +860,19 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   already scheduled can shift how many weekly/biweekly blocks that workload generates, so
   previously-scheduled entries may line up with a different position than before — review the
   affected workload's blocks after either change.
+- **Nothing checks a scheduled entry against the timetable constraints.** "Формування розкладу"
+  will happily put a class inside a lecturer's `UNAVAILABLE` window, past a group's `NOT_AFTER`, or
+  in a room the workload doesn't allow — the constraint tabs record the rules, and the schedule
+  builder does not yet read them. The one rule it does apply is the start-time set, by offering each
+  block only its own set's times. Applying the rest needs a class *end* time per candidate slot
+  (`startTime + durationHours × academic_hour_duration_minutes`, which the builder already computes
+  for display) and, for `MAX_CLASSES_PER_DAY`, counting per calendar week rather than per row —
+  `WEEKLY` entries fall in both weeks, so the cap has to hold for `WEEKLY + NUMERATOR` and
+  `WEEKLY + DENOMINATOR` separately. See the backend README's *Scheduling constraints*.
+- `TimetableConstraintList` loads its subjects with `limit: 500` and has no pagination — a faculty
+  with more rooms or groups than that would silently show only the first page. It also re-sends each
+  subject's own scalar fields on every save (the mutation payload is the whole entity), so a card
+  saved from a stale page would overwrite a name someone changed in the meantime.
 - Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
   `CurriculumEditor` renders a block per course of the specialty, which can be 240 of them on the
   largest — hence its name filter and "лише заплановані" toggle rather than pagination.
@@ -728,6 +893,15 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   the same stored number — but the same semester reads two different ways depending on which tab
   you are on. `termLabel`/`termLabelShort` exist precisely so that sweep is a rename, not a
   rewrite; `termLabelShort` currently has no caller.
+- The PDF report has no ставка (частка ставки) field, because the data model has none: `Lecturer`
+  stores посада and науковий ступінь but not the fraction of a post held, so the form shows the
+  norm and the actual load without the "планове навантаження на займану частку ставки" line a
+  paper розрахунок usually carries. Вчене звання is likewise absent — `academicDegree` is a
+  degree, not a title. Both would be a `Lecturer` field plus a column in `schema.sql`.
+- `workload-report.ts` never inflects a stored name. Ukrainian needs the genitive for "завідувач
+  кафедри *прикладної математики*" and "декан *механіко-математичного факультету*", and that
+  cannot be derived reliably from a nominative name, so the signature block says just «Завідувач
+  кафедри» / «Декан факультету» — both are already named in the letterhead above.
 - Adding a value to `HOUR_TYPE_OPTIONS`/`TEACHING_FORMAT_OPTIONS` in `entities.ts` is not enough on
   its own — the value must also exist in the backing Postgres enum, and a few places hold their own
   copy of the ordering or of which values are meaningful: `HOUR_TYPE_ORDER` in

@@ -393,8 +393,17 @@ button.danger:hover { background: #991b1b !important; }
 /* The filtered subtotal sits above the department row and is visibly the lesser of the two. */
 .ws-table tfoot tr.ws-subtotal th { background: #f5f7fb; font-weight: 500; color: #55606e; }
 
+/* A checkbox in the generic entity form: sized like text, not stretched like an input. */
+.entity-form input.entity-check { width: auto; align-self: flex-start; margin-top: 4px; }
+/* Explanatory line under a field in the workload modal. */
+.lw-field-hint { display: block; font-size: 11px; margin-top: 4px; }
+
 /* ── Per-lecturer workload assessment ── */
 .wd-picker { min-width: 320px; }
+/* The export sits at the far end of the picker row: it always exports the lecturer chosen there. */
+.wd-export { margin-left: auto; }
+.wd-export[disabled] { background: #c3ccd8; cursor: not-allowed; }
+.wd-export[disabled]:hover { background: #c3ccd8; }
 .wd-card { padding: 16px 20px; margin-bottom: 16px; overflow: visible; }
 .wd-totals { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
 .wd-tile { flex: 1 1 160px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px;
@@ -455,3 +464,40 @@ button.danger:hover { background: #991b1b !important; }
 .ss-menu li:hover { background: #eef2f9; }
 .ss-menu li.sel { background: var(--blue); color: #fff; }
 .ss-menu .ss-empty { color: #9aa5b1; cursor: default; }
+
+/* ── Timetable constraints (app-timetable-constraint-list) ─────────────────────
+   One card per lecturer / academic group / room, each holding a small table of
+   rules. Shares .lc-issues, .lc-actions and .lc-blocked with the workload
+   constraint editor, so the two read as the same kind of form. */
+.tc-legend { font-size: 12px; margin: -4px 0 14px; }
+.tc-card { padding: 16px 20px; margin-bottom: 16px; overflow: visible; border-left: 3px solid transparent; }
+.tc-card.dirty { border-left-color: var(--gold); background: #fdfaef; }
+.tc-card.invalid { border-left-color: #b91c1c; background: #fdf3f3; }
+
+.tc-header { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline;
+  padding-bottom: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.tc-header strong { font-family: Georgia, serif; font-size: 16px; color: var(--navy); }
+.tc-header > button { margin-left: auto; }
+.tc-title { display: flex; flex-direction: column; gap: 2px; }
+.tc-title .muted { font-size: 12px; }
+
+/* The rules a card holds, summarised on its header so a page of cards can be
+   skimmed without opening any of them. */
+.tc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tc-chip { background: #eef2f9; color: var(--navy); border-radius: 999px;
+  padding: 2px 10px; font-size: 12px; white-space: nowrap; }
+
+.tc-grid { width: 100%; background: #fff; border-radius: 6px; overflow: hidden; }
+.tc-grid th { background: #eef2f9; color: var(--navy); font-weight: 600; font-size: 12px;
+  text-align: left; white-space: nowrap; }
+.tc-grid td { vertical-align: middle; }
+.tc-grid select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+  font: inherit; font-size: 13px; background: #fff; }
+.tc-grid tr.invalid td { background: #fee2e2; }
+.tc-grid tr.invalid select, .tc-grid tr.invalid input { border-color: #dc2626; }
+.tc-count { width: 90px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+  font: inherit; font-size: 13px; }
+.tc-window { display: flex; align-items: center; gap: 8px; }
+.tc-dash { color: #7b8794; }
+.tc-remove { width: 1%; text-align: right; }
+.tc-remove button { padding: 4px 8px; line-height: 1; }

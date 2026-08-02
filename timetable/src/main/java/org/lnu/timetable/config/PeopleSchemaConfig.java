@@ -17,8 +17,10 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         configureAcademicDegree(s);
         configureLecturer(s);
         configureLecturerWorkloadConstraint(s);
+        configureLecturerTimetableConstraint(s);
         configureStudent(s);
         configureAcademicGroup(s);
+        configureAcademicGroupTimetableConstraint(s);
         configureCombinedGroup(s);
     }
 
@@ -58,7 +60,8 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         s.type(Lecturer.class)
             .fields("firstName", "middleName", "lastName", "email", "position")
             .nullableRelation("academicDegree")
-            .relation("department").relation("workloads").relation("workloadConstraints");
+            .relation("department").relation("workloads").relation("workloadConstraints")
+            .relation("timetableConstraints");
 
         s.query("lecturerConnection").entity(Lecturer.class).connection().orderBy("lastName").filter("departmentId", "department_id");
         s.query("lecturer").entity(Lecturer.class).findById();
@@ -66,6 +69,8 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("createLecturer").entity(Lecturer.class).create()
             .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "departmentId")
             .nestedList("workloadConstraints", LecturerWorkloadConstraint.class, "lecturerId", "constraintType", "value")
+            .nestedList("timetableConstraints", LecturerTimetableConstraint.class, "lecturerId",
+                "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
@@ -73,6 +78,8 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("updateLecturer").entity(Lecturer.class).update()
             .inputFields("firstName", "middleName", "lastName", "email", "position", "academicDegreeId", "departmentId")
             .nestedList("workloadConstraints", LecturerWorkloadConstraint.class, "lecturerId", "constraintType", "value")
+            .nestedList("timetableConstraints", LecturerTimetableConstraint.class, "lecturerId",
+                "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURER_NOT_FOUND", "Lecturer not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -95,6 +102,21 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
     private void configureLecturerWorkloadConstraint(SchemaDefinition s) {
         s.type(LecturerWorkloadConstraint.class)
             .fields("constraintType", "value");
+    }
+
+    // -------------------------------------------------------------------------
+    // LecturerTimetableConstraint
+    // -------------------------------------------------------------------------
+
+    /**
+     * Registered as a type so Lecturer.timetableConstraints resolves, with no queries or mutations
+     * of its own: a lecturer's scheduling rules are only meaningful as a set — a day-specific rule
+     * overrides the every-day one, so they have to be read and written together — and are written
+     * through Lecturer's "timetableConstraints" nestedList above.
+     */
+    private void configureLecturerTimetableConstraint(SchemaDefinition s) {
+        s.type(LecturerTimetableConstraint.class)
+            .fields("constraintType", "dayOfWeek", "constraintValue");
     }
 
     // -------------------------------------------------------------------------
@@ -134,7 +156,8 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
     private void configureAcademicGroup(SchemaDefinition s) {
         s.type(AcademicGroup.class)
             .fields("name", "courseYear", "studyForm", "studentsCount")
-            .relation("specialty").relation("students").relation("combinedGroups");
+            .relation("specialty").relation("students").relation("combinedGroups")
+            .relation("timetableConstraints");
 
         // academic_groups has no faculty_id of its own — a group's faculty is only known through
         // its specialty — so facultyId is an EXISTS subquery rather than a plain column filter
@@ -149,12 +172,16 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("createAcademicGroup").entity(AcademicGroup.class).create()
             .inputFields("name", "courseYear", "studyForm", "studentsCount", "specialtyId")
+            .nestedList("timetableConstraints", AcademicGroupTimetableConstraint.class, "academicGroupId",
+                "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateAcademicGroup").entity(AcademicGroup.class).update()
             .inputFields("name", "courseYear", "studyForm", "studentsCount", "specialtyId")
+            .nestedList("timetableConstraints", AcademicGroupTimetableConstraint.class, "academicGroupId",
+                "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("ACADEMICGROUP_NOT_FOUND", "AcademicGroup not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -163,6 +190,16 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("deleteAcademicGroup").entity(AcademicGroup.class).delete()
             .errorStatus("ACADEMICGROUP_NOT_FOUND", "AcademicGroup not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // AcademicGroupTimetableConstraint
+    // -------------------------------------------------------------------------
+
+    /** As LecturerTimetableConstraint: a type only, written through AcademicGroup's nestedList. */
+    private void configureAcademicGroupTimetableConstraint(SchemaDefinition s) {
+        s.type(AcademicGroupTimetableConstraint.class)
+            .fields("constraintType", "dayOfWeek", "constraintValue");
     }
 
     // -------------------------------------------------------------------------

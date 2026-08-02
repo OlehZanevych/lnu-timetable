@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for the core organizational entities:
- * Building, Faculty, Department, Specialty, Room, RoomGroup.
+ * Building, Faculty, Department, Specialty, Room.
  */
 @Component
 public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
@@ -19,8 +19,6 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         configureDepartment(s);
         configureSpecialty(s);
         configureRoom(s);
-        configureRoomTimetableConstraint(s);
-        configureRoomGroup(s);
     }
 
     // -------------------------------------------------------------------------
@@ -150,8 +148,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         s.type(Room.class)
             .fields("number", "name", "capacity", "kind")
             .nullableRelation("faculty")
-            .nullableRelation("building")
-            .relation("timetableConstraints");
+            .nullableRelation("building");
 
         s.query("roomConnection").entity(Room.class).connection().orderBy("number")
             .filter("facultyId", "faculty_id")
@@ -160,16 +157,12 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("createRoom").entity(Room.class).create()
             .inputFields("number", "name", "capacity", "kind", "facultyId", "buildingId")
-            .nestedList("timetableConstraints", RoomTimetableConstraint.class, "roomId",
-                "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateRoom").entity(Room.class).update()
             .inputFields("number", "name", "capacity", "kind", "facultyId", "buildingId")
-            .nestedList("timetableConstraints", RoomTimetableConstraint.class, "roomId",
-                "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("ROOM_NOT_FOUND", "Room not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -177,64 +170,6 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("deleteRoom").entity(Room.class).delete()
             .errorStatus("ROOM_NOT_FOUND", "Room not found")
-            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
-    }
-
-    // -------------------------------------------------------------------------
-    // RoomGroup
-    // -------------------------------------------------------------------------
-
-    /**
-     * A reusable set of rooms a workload can point at instead of naming rooms one by one.
-     *
-     * `facultyId` and `departmentId` scope the group; they are mutually exclusive, and the database
-     * rejects a row that sets both (room_groups_scope_check) rather than the check living here —
-     * it is a condition on the row, and the client filters the list it offers accordingly.
-     *
-     * Note the connection's `facultyId` filter matches the column exactly, so it returns *only*
-     * that faculty's groups — not the university-wide ones a caller almost always wants as well.
-     * Clients that need both fetch unfiltered and narrow client-side, as LecturerWorkloadList does.
-     */
-    /** As LecturerTimetableConstraint: a type only, written through Room's nestedList. */
-    private void configureRoomTimetableConstraint(SchemaDefinition s) {
-        s.type(RoomTimetableConstraint.class)
-            .fields("constraintType", "dayOfWeek", "constraintValue");
-    }
-
-    // -------------------------------------------------------------------------
-    // RoomGroup
-    // -------------------------------------------------------------------------
-
-    private void configureRoomGroup(SchemaDefinition s) {
-        s.type(RoomGroup.class)
-            .fields("name", "purpose")
-            .nullableRelation("faculty")
-            .nullableRelation("department")
-            .relation("rooms")
-            .relation("workloads");
-
-        s.query("roomGroupConnection").entity(RoomGroup.class).connection().orderBy("name")
-            .filter("facultyId", "faculty_id")
-            .filter("departmentId", "department_id");
-        s.query("roomGroup").entity(RoomGroup.class).findById();
-
-        s.mutation("createRoomGroup").entity(RoomGroup.class).create()
-            .inputFields("name", "purpose", "facultyId", "departmentId")
-            .manyToMany("roomIds", "room_group_rooms", "room_group_id", "room_id")
-            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
-            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
-            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
-
-        s.mutation("updateRoomGroup").entity(RoomGroup.class).update()
-            .inputFields("name", "purpose", "facultyId", "departmentId")
-            .manyToMany("roomIds", "room_group_rooms", "room_group_id", "room_id")
-            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
-            .errorStatus("ROOMGROUP_NOT_FOUND", "RoomGroup not found")
-            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
-            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
-
-        s.mutation("deleteRoomGroup").entity(RoomGroup.class).delete()
-            .errorStatus("ROOMGROUP_NOT_FOUND", "RoomGroup not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 }

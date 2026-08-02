@@ -86,6 +86,8 @@
                 [required]="!!f.required"
                 [(ngModel)]="form[f.name]"
                 [name]="f.name" />
+            } @else if (f.type === 'boolean') {
+              <input type="checkbox" class="entity-check" [(ngModel)]="form[f.name]" [name]="f.name" />
             } @else if (f.type === 'tags') {
               <input type="text" [(ngModel)]="form[f.name]" [name]="f.name" placeholder="тег1, тег2, ..." />
             } @else if (f.type === 'textarea') {

@@ -1,0 +1,158 @@
+<div class="page-header">
+  <div>
+    <h2>{{ meta.title }}</h2>
+    <p class="muted">
+      {{ meta.hint }}
+      &middot; обмеження задано для {{ constrainedCount() }} із {{ blocks().length }}
+    </p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="ce-toolbar">
+  <label class="ce-search">
+    <span>{{ meta.searchLabel }}</span>
+    <input type="text" [ngModel]="filter()" (ngModelChange)="filter.set($event)"
+           name="tcFilter" placeholder="назва&hellip;" />
+  </label>
+  <label class="ce-check">
+    <input type="checkbox" [ngModel]="onlyConstrained()" (ngModelChange)="onlyConstrained.set($event)"
+           name="tcOnlyConstrained" />
+    <span>лише з обмеженнями</span>
+  </label>
+</div>
+
+<p class="muted tc-legend">
+  Правило без дня діє щодня. Правило на конкретний день <strong>замінює</strong> щоденне того ж виду
+  для цього дня &mdash; окрім заборонених проміжків, які додаються один до одного.
+</p>
+
+@for (block of visibleBlocks(); track block.id) {
+  @let issues = violations(block);
+  @let invalid = invalidRows(block);
+  @let rules = block.rules();
+
+  <div class="card tc-card" [class.invalid]="issues.length" [class.dirty]="block.dirty() && !issues.length">
+    <div class="tc-header">
+      <div class="tc-title">
+        <strong>{{ block.name }}</strong>
+        @if (block.sub) { <span class="muted">{{ block.sub }}</span> }
+      </div>
+      <div class="tc-chips">
+        @for (r of rules; track $index) {
+          <span class="tc-chip">{{ describe(r) }}</span>
+        } @empty {
+          <span class="muted">без обмежень</span>
+        }
+      </div>
+      <button type="button" class="ghost" [disabled]="!rules.length || block.saving()" (click)="clear(block)">
+        Очистити
+      </button>
+    </div>
+
+    @if (block.error()) { <p class="error">{{ block.error() }}</p> }
+
+    @if (issues.length) {
+      <ul class="lc-issues">
+        @for (issue of issues; track issue.message) {
+          <li>{{ issue.message }}</li>
+        }
+      </ul>
+    }
+
+    @if (rules.length) {
+      <table class="tc-grid">
+        <thead>
+          <tr>
+            <th>День</th>
+            <th>Обмеження</th>
+            <th>Значення</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of rules; track $index) {
+            <tr [class.invalid]="invalid.has($index)">
+              <td>
+                <select [ngModel]="r.day()" (ngModelChange)="r.day.set($event); touch(block)"
+                        [name]="'day_' + block.id + '_' + $index" [ngModelOptions]="{ standalone: true }"
+                        aria-label="День тижня">
+                  <option value="">усі дні</option>
+                  @for (d of DAYS; track d) {
+                    <option [value]="d">{{ DAY_LABELS[d] }}</option>
+                  }
+                </select>
+              </td>
+              <td>
+                <select [ngModel]="r.type()" (ngModelChange)="setType(block, r, $event)"
+                        [name]="'type_' + block.id + '_' + $index" [ngModelOptions]="{ standalone: true }"
+                        aria-label="Вид обмеження">
+                  @for (t of TYPES; track t) {
+                    <option [value]="t">{{ TYPE_LABELS[t] }}</option>
+                  }
+                </select>
+              </td>
+              <td>
+                @switch (r.type()) {
+                  @case ('MAX_CLASSES_PER_DAY') {
+                    <input type="number" min="0" max="999" class="tc-count" placeholder="пар"
+                           aria-label="Кількість пар"
+                           [ngModel]="r.count()" (ngModelChange)="r.count.set($event); touch(block)"
+                           [name]="'count_' + block.id + '_' + $index" [ngModelOptions]="{ standalone: true }" />
+                  }
+                  @case ('NOT_BEFORE') {
+                    <app-time-select [ngModel]="r.from()" (ngModelChange)="r.from.set($event); touch(block)"
+                                     [name]="'from_' + block.id + '_' + $index"
+                                     [ngModelOptions]="{ standalone: true }" />
+                  }
+                  @case ('NOT_AFTER') {
+                    <app-time-select [ngModel]="r.to()" (ngModelChange)="r.to.set($event); touch(block)"
+                                     [name]="'to_' + block.id + '_' + $index"
+                                     [ngModelOptions]="{ standalone: true }" />
+                  }
+                  @default {
+                    <div class="tc-window">
+                      <app-time-select [ngModel]="r.from()" (ngModelChange)="r.from.set($event); touch(block)"
+                                       [name]="'wfrom_' + block.id + '_' + $index"
+                                       [ngModelOptions]="{ standalone: true }" />
+                      <span class="tc-dash">&ndash;</span>
+                      <app-time-select [ngModel]="r.to()" (ngModelChange)="r.to.set($event); touch(block)"
+                                       [name]="'wto_' + block.id + '_' + $index"
+                                       [ngModelOptions]="{ standalone: true }" />
+                    </div>
+                  }
+                }
+              </td>
+              <td class="tc-remove">
+                <button type="button" class="ghost" title="Вилучити правило"
+                        [disabled]="block.saving()" (click)="removeRule(block, $index)">&#x2715;</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+
+    <div class="lc-actions">
+      <button type="button" class="ghost" [disabled]="block.saving()" (click)="addRule(block)">
+        &#x002B; Додати правило
+      </button>
+      <button type="button" [disabled]="!block.dirty() || block.saving() || issues.length" (click)="save(block)">
+        {{ block.saving() ? 'Збереження&hellip;' : 'Зберегти' }}
+      </button>
+      @if (block.dirty()) {
+        <button type="button" class="ghost" [disabled]="block.saving()" (click)="revert(block)">Скасувати</button>
+      }
+      @if (issues.length) {
+        <span class="muted lc-blocked">Збереження заблоковано до усунення помилок.</span>
+      }
+    </div>
+  </div>
+} @empty {
+  <p class="muted">
+    @if (loading()) { Завантаження&hellip; }
+    @else if (blocks().length) { Нічого не відповідає фільтру. }
+    @else { {{ meta.emptyText }} }
+  </p>
+}
