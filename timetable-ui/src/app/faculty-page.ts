@@ -9,12 +9,13 @@ import { SpecialtyList } from './specialty-list';
 import { AcademicGroupList } from './academic-group-list';
 import { FacultyTimetableList } from './faculty-timetable-list';
 import { TimetableConstraintList } from './timetable-constraint-list';
-import { RoomPage, CoursePage, CombinedGroupPage } from './entity-pages';
+import { RoomPage, RoomGroupPage, CoursePage, CombinedGroupPage } from './entity-pages';
+import { TimetableView } from './timetable-view';
 
 export type FacultySection =
   | 'info'
-  | 'departments' | 'specialties' | 'rooms'
-  | 'courses' | 'timetable' | 'academicGroups' | 'combinedGroups'
+  | 'departments' | 'specialties' | 'rooms' | 'roomGroups'
+  | 'courses' | 'timetable' | 'facultyTimetable' | 'academicGroups' | 'combinedGroups'
   | 'groupConstraints' | 'roomConstraints';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
@@ -34,10 +35,12 @@ const SECTIONS: SectionDef[] = [
   { key: 'departments',            label: 'Кафедри',              group: 'Структура' },
   { key: 'specialties',            label: 'Спеціальності',        group: 'Структура' },
   { key: 'rooms',                  label: 'Аудиторії',            group: 'Структура' },
+  { key: 'roomGroups',             label: 'Групи аудиторій',      group: 'Структура' },
   { key: 'academicGroups',         label: 'Академічні групи',     group: 'Люди та групи' },
   { key: 'combinedGroups',         label: "Об'єднані групи",      group: 'Люди та групи' },
   { key: 'courses',                label: 'Дисципліни',           group: 'Навчальні плани' },
   { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад' },
+  { key: 'facultyTimetable',       label: 'Розклад факультету',   group: 'Розклад' },
   { key: 'groupConstraints',       label: 'Обмеження груп',       group: 'Розклад' },
   { key: 'roomConstraints',        label: 'Обмеження аудиторій',  group: 'Розклад' },
 ];
@@ -48,7 +51,7 @@ const SECTIONS: SectionDef[] = [
   imports: [
     RouterLink, FormsModule, SearchSelect,
     DepartmentList, SpecialtyList, AcademicGroupList, FacultyTimetableList,
-    TimetableConstraintList, RoomPage, CoursePage, CombinedGroupPage
+    TimetableConstraintList, TimetableView, RoomPage, RoomGroupPage, CoursePage, CombinedGroupPage
   ]
 })
 export class FacultyPage implements OnInit {
@@ -66,6 +69,9 @@ export class FacultyPage implements OnInit {
   faculty = signal<Faculty | null>(null);
   error = signal('');
   activeSection = signal<FacultySection>('info');
+
+  /** Every academic group of the faculty — the columns of the published розклад. */
+  groupIds = signal<string[]>([]);
 
   specs = signal<Option[]>([]);
   selectedSpecId = '';
@@ -92,6 +98,7 @@ export class FacultyPage implements OnInit {
     this.loadDepts();
     this.loadSpecs();
     this.loadBuildings();
+    this.loadGroupIds();
     if (this.auth.isAdmin()) {
       this.canModifyFaculty.set(true);
     } else {
@@ -149,6 +156,19 @@ export class FacultyPage implements OnInit {
         const opts: Option[] = d.specialties.specialtyConnection.nodes.map((sp: any) => ({ id: sp.id, label: sp.name }));
         this.specs.set(opts);
       }
+    });
+  }
+
+  /**
+   * A faculty timetable is the timetable of its academic groups: `timetableEntryConnection` has no
+   * facultyId filter of its own, so the groups are resolved first and passed as `academicGroupIds`.
+   */
+  private loadGroupIds() {
+    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, facultyId: "${this.facultyId}") { nodes { id } } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => this.groupIds.set(
+        d.academicGroups.academicGroupConnection.nodes.map((g: any) => String(g.id))),
+      error: () => this.groupIds.set([])
     });
   }
 

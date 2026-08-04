@@ -1,9 +1,12 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
+import { WorkingCurriculumSummary } from './working-curriculum-summary';
+import { WorkingPlanItemInput, buildWorkingCurriculumPlan } from './working-curriculum-plan';
 
 type DeptOption = Option & { facultyId: string };
 type GroupOption = Option & { courseYear: number };
@@ -24,6 +27,8 @@ interface ItemCourse {
 interface AcademicGroupRef {
   id: string;
   name: string;
+  /** Only read by the summary above the page: individual work is charged per student. */
+  studentsCount?: number | null;
 }
 
 interface WorkingItem {
@@ -52,6 +57,36 @@ interface CurriculumItemNode {
 }
 
 /**
+ * Flattens the editor's tree into the shape `working-curriculum-plan.ts` computes on, so the strip
+ * above the page is the very object the reading tab and the printed sheet are built from.
+ */
+const toWorkingPlanItem = (item: CurriculumItemNode): WorkingPlanItemInput => ({
+  id: item.id,
+  semester: item.semester,
+  controlForm: item.controlForm,
+  ectsCredits: item.ectsCredits ?? 0,
+  course: item.course
+    ? { id: item.course.id, name: item.course.name, courseType: item.course.courseType ?? 'MANDATORY' }
+    : null,
+  hours: (item.hours ?? []).map((h) => ({
+    id: h.id,
+    hourType: h.hourType,
+    hours: h.hours ?? 0,
+    positions: (h.workingCurriculumItems ?? []).map((w) => ({
+      id: w.id,
+      departmentId: w.department?.id ?? '',
+      departmentName: w.department?.name ?? '—',
+      lecturerCount: w.lecturerCount ?? 1,
+      teachingFormat: w.teachingFormat ?? '',
+      electiveCourseName: w.course?.name ?? null,
+      groups: (w.academicGroups ?? []).map((g) => ({
+        id: g.id, name: g.name, studentsCount: g.studentsCount ?? null
+      }))
+    }))
+  }))
+});
+
+/**
  * Shows, for a specialty, every curriculum item block (semester / discipline / control form / ECTS),
  * each containing its curriculum_item_hours sub-blocks, and under each hours sub-block the working
  * curriculum items (робочий навчальний план) assigned to it, with create/edit/delete support.
@@ -59,10 +94,11 @@ interface CurriculumItemNode {
 @Component({
   selector: 'app-working-curriculum-list',
   templateUrl: './working-curriculum-list.html',
-  imports: [FormsModule, SearchSelect, MultiSelect]
+  imports: [FormsModule, SearchSelect, MultiSelect, WorkingCurriculumSummary]
 })
 export class WorkingCurriculumList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private settings = inject(GlobalPropertiesService);
 
   @Input() specialtyId!: string;
   /** The specialty's own faculty; pre-selected as the department faculty filter when opening the modal. */
@@ -82,6 +118,15 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   items = signal<CurriculumItemNode[]>([]);
   error = signal('');
+
+  /**
+   * The same plan the reading tab and the printed «Робочий навчальний план» are built from, over
+   * every курс of the specialty. Shown above the editor so the coverage figure moves as кафедри are
+   * assigned: it is otherwise impossible to tell, from a page of nested blocks, whether the last
+   * block of hours has found an owner.
+   */
+  plan = computed(() =>
+    buildWorkingCurriculumPlan(this.items().map(toWorkingPlanItem), null, this.settings.limits()));
 
   facultyOptions = signal<Option[]>([]);
   departmentOptions = signal<DeptOption[]>([]);
@@ -121,6 +166,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   ngOnInit() {
     this.initialized = true;
+    this.settings.ensureLoaded();
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
     this.loadGroupOptions();
@@ -144,7 +190,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
           id lecturerCount teachingFormat
           department { id name faculty { id } }
           course { id name }
-          academicGroups { id name }
+          academicGroups { id name studentsCount }
         }
       }
     } } } }`;

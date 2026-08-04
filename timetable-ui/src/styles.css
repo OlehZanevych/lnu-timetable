@@ -535,3 +535,93 @@ button.danger:hover { background: #991b1b !important; }
 .tt-gen-table td:not(:first-child), .tt-gen-table th:not(:first-child) { text-align: right; width: 1%; white-space: nowrap; }
 
 .tt-gen-meta { margin: 0 0 12px; line-height: 1.6; }
+
+/* ── Curriculum plan: headline figures and the printable sheet ── */
+/* The export sits beside "+ Додати": it always exports the specialty being looked at. */
+.cp-actions { display: flex; align-items: center; gap: 10px; }
+.cp-export[disabled] { color: #9aa5b1; border-color: var(--line); cursor: not-allowed; }
+.cp-export[disabled]:hover { background: transparent; color: #9aa5b1; }
+
+.cp-summary { padding: 16px 20px; margin-bottom: 16px; }
+.cp-tiles { display: flex; flex-wrap: wrap; gap: 12px; }
+.cp-tile { flex: 1 1 170px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px; border-left: 3px solid var(--blue); }
+/* A plan below the 25 % вибірковості of ст. 62 ч. 1 п. 15 is flagged where it is read, not only in the PDF. */
+.cp-tile.over { border-left-color: #b91c1c; background: #fdf3f3; }
+.cp-tile-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #7b8794; }
+.cp-tile strong { font-family: Georgia, serif; font-size: 18px; color: var(--navy); font-weight: normal; }
+.cp-tile .muted { font-size: 12px; }
+.cp-violation { margin: 12px 0 0; font-size: 13px; color: #b91c1c; }
+.cp-note { margin: 12px 0 0; font-size: 12px; }
+
+/* ── Working curriculum, read-only view ── */
+.wv-toolbar { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.wv-picker { min-width: 240px; }
+.wv-scope-note { flex: 1 1 320px; margin: 22px 0 0; font-size: 12px; line-height: 1.5; }
+.wv-section-title { margin: 24px 0 12px; font-family: Georgia, serif; color: var(--navy); font-size: 17px; }
+.wv-note { margin: 10px 2px 0; font-size: 12px; line-height: 1.5; }
+
+.wv-table { width: 100%; }
+.wv-table td, .wv-table th { padding: 6px 8px; font-size: 12px; vertical-align: top; }
+.wv-table th { background: #eef2f9; color: var(--navy); font-weight: 600; }
+.wv-table td.num, .wv-table th.num { text-align: right; width: 1%; white-space: nowrap; }
+.wv-table tfoot th { background: #e6ecf6; }
+/* A discipline with hours nobody has been made responsible for is the gap a РНП exists to close. */
+.wv-table tr.wv-gap td { background: #fdf6f3; }
+.wv-unassigned { display: block; margin-top: 3px; font-size: 11px; color: #b45309; }
+
+/* ── Global properties, grouped ── */
+.gp-group { margin-bottom: 28px; }
+.gp-group-title { margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy); font-size: 17px; }
+.gp-group-note { margin: 0 0 12px; font-size: 12px; line-height: 1.55; max-width: 780px; }
+
+.gp-table { width: 100%; }
+.gp-table th { text-align: left; font-weight: 500; color: var(--navy); vertical-align: top;
+  padding: 12px 14px; width: 46%; }
+.gp-table td { vertical-align: top; padding: 10px 14px; }
+/* The hint carries what a "Тип" column used to imply, in words a reader can act on. */
+.gp-hint { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; color: #7b8794;
+  line-height: 1.5; }
+.gp-value input[type="number"], .gp-value input[type="text"] { max-width: 260px; }
+.gp-value app-search-select { display: block; max-width: 260px; }
+.gp-problem { display: block; margin-top: 4px; font-size: 11px; color: #b91c1c; }
+.gp-table tr.gp-invalid td.gp-value input { border-color: #b91c1c; background: #fdf6f6; }
+
+/* ── "Відкрити →": the drill-down link a generic table grows when its entity has a page ── */
+.open-link { display: inline-block; margin-right: 10px; font-size: 13px; color: var(--blue);
+  text-decoration: none; white-space: nowrap; }
+.open-link:hover { text-decoration: underline; }
+
+/* ── Timetable grid, shared by the faculty, department, lecturer and room views ── */
+.tv-toolbar { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.tv-picker { min-width: 260px; }
+.tv-scope-note { flex: 1 1 320px; margin: 22px 0 0; font-size: 12px; line-height: 1.5; }
+.tv-warn { color: #b45309; }
+.tv-note { margin: 10px 2px 0; font-size: 12px; line-height: 1.5; }
+.tv-card { overflow-x: auto; }
+
+.tv-table { width: 100%; border-collapse: collapse; }
+.tv-table th, .tv-table td { border: 1px solid var(--line); padding: 5px 7px; vertical-align: top;
+  font-size: 12px; }
+.tv-table thead th { background: #eef2f9; color: var(--navy); font-weight: 600; text-align: center;
+  position: sticky; top: 0; z-index: 1; }
+.tv-day-col { width: 1%; white-space: nowrap; background: #e6ecf6; color: var(--navy);
+  font-weight: 600; text-align: center; vertical-align: middle; }
+.tv-slot-col { width: 1%; white-space: nowrap; text-align: center; background: #f7f9fc; }
+.tv-slot-col .tv-time { display: block; font-size: 11px; color: #7b8794; }
+.tv-cell { min-width: 150px; }
+/* A day's first row carries the top border that separates it from the day above. */
+.tv-table tr.tv-day-start > td, .tv-table tr.tv-day-start > th { border-top: 2px solid var(--navy); }
+
+.tv-entry { display: flex; flex-direction: column; gap: 1px; padding: 3px 0; }
+.tv-entry + .tv-entry { border-top: 1px dashed var(--line); }
+.tv-course { font-weight: 600; color: var(--navy); }
+.tv-meta { font-size: 11px; color: #55606e; }
+/* Classes taught every other week are marked, since two of them share one cell. */
+.tv-parity { align-self: flex-start; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .03em; color: #7b5cd6; }
+.tv-biweekly { border-left: 2px solid #c4b5fd; padding-left: 5px; }
+
+/* A chip for a small inline fact — tags, hour breakdowns, "об'єднана позиція". */
+.cp-chip { display: inline-block; margin: 0 4px 3px 0; padding: 1px 7px; border-radius: 10px;
+  background: #eef2f9; color: #55606e; font-size: 11px; white-space: nowrap; }

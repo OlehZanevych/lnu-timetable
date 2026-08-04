@@ -92,7 +92,11 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .fields("semester", "controlForm", "ectsCredits")
             .relation("specialty").relation("course").relation("hours");
 
-        s.query("curriculumItemConnection").entity(CurriculumItem.class).connection().orderBy("semester").filter("specialtyId", "specialty_id");
+        s.query("curriculumItemConnection").entity(CurriculumItem.class).connection().orderBy("semester")
+            .filter("specialtyId", "specialty_id")
+            // The course detail page asks "where is this discipline taught?"; Course carries no
+            // curriculumItems relation, so the connection is the only way in.
+            .filter("courseId", "course_id");
         s.query("curriculumItem").entity(CurriculumItem.class).findById();
 
         s.mutation("createCurriculumItem").entity(CurriculumItem.class).create()

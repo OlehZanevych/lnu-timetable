@@ -83,6 +83,15 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     return this.auth.isAdmin() || (this.auth.currentUser()?.permissions?.length ?? 0) > 0;
   }
 
+  /**
+   * The route to a row's own page, or null when this entity has none. Declared once per entity in
+   * `entities.ts`, so every table of it — the standalone /e/… page and every embedding on a faculty
+   * or department page alike — offers the same «Відкрити →».
+   */
+  detailLink(row: any): any[] | null {
+    return this.meta.detailRoute ? ['/' + this.meta.detailRoute, row.id] : null;
+  }
+
   canModify(row: any): boolean {
     return this.auth.isAdmin() || this.modifiableIds().has(String(row.id));
   }

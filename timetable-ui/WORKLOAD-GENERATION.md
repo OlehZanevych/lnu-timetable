@@ -274,7 +274,7 @@ tens of slots, so the quadratic term is comfortable. It would not be at faculty 
 - Deterministic: identical input yields byte-identical output (every tie-break bottoms out in an id
   comparison).
 - Terminates on every input.
-- Nothing is written. The result is a plan; the user previews it and presses Застосувати.
+- Nothing is written. The result is a plan; the user previews it and presses «Застосувати».
 
 **Not guaranteed**
 

@@ -2,8 +2,11 @@ import { Component, Input, OnChanges, OnInit, WritableSignal, computed, inject, 
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
+import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
+import { CurriculumSummary } from './curriculum-summary';
+import { PlanHourType, PlanItemInput, buildCurriculumPlan } from './curriculum-plan';
 import { compareUk } from './sort';
 
 /** Highest semester offerable in a plan. curriculum_items.semester is a plain INTEGER, so this is
@@ -46,6 +49,12 @@ interface CourseBlock {
   name: string;
   /** "Name (tag1, tag2)" — what the header shows. */
   label: string;
+  /**
+   * Raw `courses.course_type`. Not editable here — it belongs to the course, not to the plan — but
+   * it is what sorts a component into обов'язкові / вибіркові and so decides the 25 % share the
+   * summary above the page reports.
+   */
+  courseType: string;
   items: WritableSignal<ItemDraft[]>;
 }
 
@@ -54,11 +63,13 @@ interface CourseBlock {
  * course_specialties join table), each holding its curriculum items as inline-editable semester
  * blocks, each of those holding a row per hour type.
  *
- * Sibling relationship to the other two specialty subpages:
+ * Sibling relationship to the other specialty subpages:
  *   - "Навчальні плани" (CurriculumItemList) is a flat table of the same curriculum_items, edited
- *     through a modal — good for scanning a whole plan, tedious for filling one course out.
- *   - "Робочі навчальні плани" (WorkingCurriculumList) nests one level deeper still, hanging
+ *     through a modal — good for scanning a whole plan, tedious for filling one course out. It
+ *     carries the printable «Навчальний план»; this page carries only the summary strip they share.
+ *   - "Редагування робочих планів" (WorkingCurriculumList) nests one level deeper still, hanging
  *     working_curriculum_items off each hours row. Its block markup is the visual model reused here.
+ *   - "Робочі навчальні плани" (WorkingCurriculumView) reads those back as a document, per курс.
  *
  * Unlike both, this page is course-first: every course of the specialty is listed even when it has
  * no curriculum items yet, so gaps in the plan are visible rather than merely absent.
@@ -69,12 +80,18 @@ interface CourseBlock {
 @Component({
   selector: 'app-curriculum-editor',
   templateUrl: './curriculum-editor.html',
-  imports: [FormsModule, SearchSelect]
+  imports: [FormsModule, SearchSelect, CurriculumSummary]
 })
 export class CurriculumEditor implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private settings = inject(GlobalPropertiesService);
 
   @Input() specialtyId!: string;
+  /**
+   * Raw `specialties.degree`. A signal, not a plain field, because {@link plan} reads it inside a
+   * `computed()` — see the zoneless note in the README.
+   */
+  @Input() set degree(value: string | null) { this.degreeSignal.set(value ?? ''); }
 
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
@@ -101,11 +118,52 @@ export class CurriculumEditor implements OnInit, OnChanges {
 
   plannedCount = computed(() => this.blocks().filter((b) => b.items().length > 0).length);
 
+  private degreeSignal = signal('');
+
+  /**
+   * The same освітня програма the "Навчальні плани" tab summarises and the printed «Навчальний
+   * план» is built from — but computed from the **drafts on screen**, unsaved edits included.
+   *
+   * That is the point of showing it here: the 25 % частка вибіркових and the programme volume move
+   * as fields are typed into, so a plan can be brought within ст. 5 and ст. 62 before anything is
+   * written. It works only because every editable value is its own signal (see the zoneless note in
+   * the README) — a `computed()` over plain fields would memoise the first value it ever read.
+   */
+  plan = computed(() => {
+    const items: PlanItemInput[] = [];
+    for (const block of this.blocks()) {
+      for (const draft of block.items()) {
+        const semester = Number(draft.semester());
+        if (!Number.isFinite(semester) || semester <= 0) continue;   // a block with no semester yet
+        const hours: Partial<Record<PlanHourType, number>> = {};
+        for (const row of draft.hours) {
+          const n = Number(row.hours().trim());
+          if (Number.isFinite(n) && n > 0) hours[row.hourType as PlanHourType] = n;
+        }
+        const credits = Number(draft.ectsCredits());
+        items.push({
+          id: draft.id ?? `draft-${draft.key}`,
+          semester,
+          controlForm: draft.controlForm(),
+          ectsCredits: Number.isFinite(credits) && credits > 0 ? credits : 0,
+          course: { id: block.courseId, name: block.name, courseType: block.courseType },
+          hours
+        });
+      }
+    }
+    return buildCurriculumPlan(items, this.degreeSignal(), this.settings.limits());
+  });
+
+  /** True while any block on the page carries unsaved edits — the summary says so when it does. */
+  hasUnsaved = computed(() =>
+    this.blocks().some((b) => b.items().some((i) => i.dirty())));
+
   private nextKey = 1;
   private initialized = false;
 
   ngOnInit() {
     this.initialized = true;
+    this.settings.ensureLoaded();
     if (this.specialtyId) this.load();
   }
 
@@ -124,8 +182,10 @@ export class CurriculumEditor implements OnInit, OnChanges {
     if (!this.specialtyId) return;
     this.loading.set(true);
 
+    // courseType comes along for the summary above the page: it is what tells обов'язкові from
+    // вибіркові, and so what the 25 % of ст. 62 ч. 1 п. 15 is measured on.
     const coursesQuery = `{ courses { courseConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}") {
-      nodes { id name tags { tag } }
+      nodes { id name courseType tags { tag } }
     } } }`;
     const itemsQuery = `{ curriculumItems { curriculumItemConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}") {
       nodes { id semester controlForm ectsCredits course { id } hours { id hourType hours } }
@@ -160,6 +220,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
             courseId: c.id,
             name: c.name,
             label: this.courseLabel(c.name, c.tags),
+            courseType: c.courseType ?? 'MANDATORY',
             items: signal<ItemDraft[]>(drafts)
           };
         });

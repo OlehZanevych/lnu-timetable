@@ -1,0 +1,156 @@
+@let l = lecturer();
+@let s = summary();
+
+<div class="faculty-header">
+  @if (l?.department) {
+    <a [routerLink]="['/department', l!.department!.id]" class="back-link">&#x2190; {{ l!.department!.name }}</a>
+  }
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ fullName() || '&#x2026;' }}</h2>
+      <p class="muted">
+        {{ l?.position ? positionLabel(l!.position!) : '' }}
+        @if (l?.academicDegree) { &middot; {{ l!.academicDegree!.name }} }
+      </p>
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Викладач</p>
+    @for (sec of sections; track sec.key) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === sec.key"
+              (click)="selectSection(sec.key)"
+              [innerHTML]="sec.label"></button>
+    }
+  </nav>
+
+  <div class="faculty-section">
+    @switch (activeSection()) {
+
+      @case ('info') {
+        <div class="page-header"><h2>Інформація про викладача</h2></div>
+
+        <div class="card cp-summary">
+          <div class="cp-tiles">
+            <div class="cp-tile">
+              <span class="cp-tile-label">Позицій навантаження</span>
+              <strong>{{ s.workloads }}</strong>
+              <span class="muted">{{ fmtNumber(s.hours) }} год за планом</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Дисциплін</span>
+              <strong>{{ s.courses }}</strong>
+              <span class="muted">лекції, практичні, лабораторні</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Академічних груп</span>
+              <strong>{{ s.groups }}</strong>
+            </div>
+            <div class="cp-tile" [class.over]="s.workloads > 0 && s.scheduled === 0">
+              <span class="cp-tile-label">Занять у розкладі</span>
+              <strong>{{ s.scheduled }}</strong>
+              @if (s.workloads > 0 && s.scheduled === 0) {
+                <span class="muted">навантаження ще не розставлене</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (l) {
+          <div class="card info-card">
+            <table class="info-table">
+              <tbody>
+                <tr><th>Прізвище, ім&rsquo;я, по батькові</th><td>{{ fullName() }}</td></tr>
+                <tr><th>Посада</th><td>{{ l.position ? positionLabel(l.position) : '&mdash;' }}</td></tr>
+                <tr><th>Науковий ступінь</th><td>{{ l.academicDegree?.name || '&mdash;' }}</td></tr>
+                <tr>
+                  <th>Кафедра</th>
+                  <td>
+                    @if (l.department) {
+                      <a [routerLink]="['/department', l.department.id]">{{ l.department.name }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+                <tr>
+                  <th>Факультет</th>
+                  <td>
+                    @if (l.department?.faculty) {
+                      <a [routerLink]="['/faculty', l.department!.faculty!.id]">{{ l.department!.faculty!.name }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+                <tr>
+                  <th>Ел. пошта</th>
+                  <td>
+                    @if (l.email) { <a [href]="'mailto:' + l.email">{{ l.email }}</a> } @else { &mdash; }
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- ── Classes taught, from the lecturer workloads ── -->
+      @case ('classes') {
+        <div class="page-header">
+          <div>
+            <h2>Дисципліни та заняття</h2>
+            <p class="muted">{{ classes().length }} позицій навантаження &middot; {{ fmtNumber(s.hours) }} год</p>
+          </div>
+        </div>
+        <div class="card">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Дисципліна</th>
+                <th>Вид роботи</th>
+                <th class="num">Годин</th>
+                <th>Сем.</th>
+                <th>Курс</th>
+                <th>Спеціальність</th>
+                <th>Академічні групи</th>
+                <th class="num">Занять</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of classes(); track row.id) {
+                <tr [class.wv-gap]="!row.scheduledClasses">
+                  <td>
+                    {{ row.courseName }}
+                    @if (row.combined) { <span class="cp-chip">об&rsquo;єднана позиція</span> }
+                  </td>
+                  <td>{{ hourTypeLabel(row.hourType) }}</td>
+                  <td class="num">{{ fmtNumber(row.hours) }}</td>
+                  <td>{{ row.semester || '&mdash;' }}</td>
+                  <td>{{ row.semester ? termLabelShort(row.semester) : '&mdash;' }}</td>
+                  <td>{{ row.specialtyName || '&mdash;' }}</td>
+                  <td>{{ row.groupNames || '&mdash;' }}</td>
+                  <td class="num">{{ row.scheduledClasses }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="8" class="muted">Цьому викладачеві ще не призначено навантаження.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ── The lecturer's own timetable ── -->
+      @case ('timetable') {
+        <app-timetable-view
+          [lecturerIds]="lecturerIds()"
+          columnMode="single"
+          heading="Розклад занять викладача"
+          [report]="{ kind: 'LECTURER', subjectName: fullName(),
+                      facultyName: l?.department?.faculty?.name ?? '' }" />
+      }
+
+    }
+  </div>
+</div>

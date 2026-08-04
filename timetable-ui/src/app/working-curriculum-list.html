@@ -1,11 +1,18 @@
 <div class="page-header">
   <div>
-    <h2>Робочі навчальні плани</h2>
+    <h2>Редагування робочих навчальних планів</h2>
     <p class="muted">{{ items().length }} позицій навчального плану</p>
   </div>
 </div>
 
 @if (error()) { <p class="error">{{ error() }}</p> }
+
+<!-- Computed from the tree below, so the coverage figure moves as кафедри are assigned. -->
+@if (items().length) {
+  <app-working-curriculum-summary
+    [plan]="plan()"
+    note="Показники охоплюють усі курси спеціальності. Документ формується на вкладці «Робочі навчальні плани»." />
+}
 
 @for (item of items(); track item.id) {
   <div class="card wci-item-card">

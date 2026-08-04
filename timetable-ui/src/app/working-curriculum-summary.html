@@ -1,0 +1,34 @@
+<!-- The same object the printed «Робочий навчальний план» is built from, so the sheet and the
+     screen cannot disagree. Rendered identically on both working-curriculum tabs. -->
+<div class="card cp-summary">
+  <div class="cp-tiles">
+    <div class="cp-tile">
+      <span class="cp-tile-label">Обсяг</span>
+      <strong>{{ fmtNumber(plan.totals.credits) }} кредитів ЄКТС</strong>
+      <span class="muted">{{ fmtNumber(plan.totals.hours) }} год</span>
+    </div>
+    <div class="cp-tile" [class.over]="plan.coverage.covered < plan.coverage.required">
+      <span class="cp-tile-label">Закріплено за кафедрами</span>
+      <strong>{{ plan.coverage.covered }} з {{ plan.coverage.required }}</strong>
+      <span class="muted">блоків контактних годин</span>
+    </div>
+    <div class="cp-tile">
+      <span class="cp-tile-label">Кафедр-виконавців</span>
+      <strong>{{ plan.departments.length }}</strong>
+      <span class="muted">{{ plan.positions.length }} позицій РНП</span>
+    </div>
+    <div class="cp-tile">
+      <span class="cp-tile-label">Планових годин кафедр</span>
+      <strong>{{ fmtNumber(plan.plannedHours) }}</strong>
+      <span class="muted">{{ fmtNumber(plan.totals.contactHours) }} год за планом</span>
+    </div>
+  </div>
+
+  @for (check of plan.checks; track check.title) {
+    @if (check.status === 'violation') {
+      <p class="cp-violation">{{ check.title }}: {{ check.value }} &mdash; {{ check.verdict }} <span class="muted">({{ check.norm }})</span></p>
+    }
+  }
+
+  @if (note) { <p class="cp-note muted">{{ note }}</p> }
+</div>

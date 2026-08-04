@@ -55,17 +55,23 @@
 
       <!-- ── Curriculum editor ── -->
       @case ('curriculaEditor') {
-        <app-curriculum-editor [specialtyId]="specialtyId" />
+        <app-curriculum-editor [specialtyId]="specialtyId" [degree]="s?.degree ?? ''" />
       }
 
       <!-- ── Curricula ── -->
       @case ('curricula') {
-        <app-curriculum-item-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />
+        <app-curriculum-item-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null"
+                                  [specialty]="s" />
       }
 
-      <!-- ── Working curricula ── -->
-      @case ('workingCurricula') {
+      <!-- ── Working curriculum editor ── -->
+      @case ('workingCurriculaEditor') {
         <app-working-curriculum-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />
+      }
+
+      <!-- ── Working curricula (read-only, with the printable РНП) ── -->
+      @case ('workingCurricula') {
+        <app-working-curriculum-view [specialtyId]="specialtyId" [specialty]="s" />
       }
 
       <!-- ── Academic Groups ── -->

@@ -25,6 +25,16 @@ export const routes: Routes = [
   { path: 'department/:id', component: DepartmentDetailPage, canActivate: [authGuard] },
   { path: 'specialty/:id', component: SpecialtyDetailPage, canActivate: [authGuard] },
   { path: 'academic-group/:id', component: AcademicGroupDetailPage, canActivate: [authGuard] },
+  // The three drill-down pages are lazy routes: each is a whole screen with its own aggregate
+  // query, none of them is on the path a user takes to reach a timetable, and the main bundle is
+  // already close to its budget. `loadComponent` costs one extra request the first time each is
+  // opened and nothing after that.
+  { path: 'course/:id', canActivate: [authGuard],
+    loadComponent: () => import('./course-page').then((m) => m.CourseDetailPage) },
+  { path: 'lecturer/:id', canActivate: [authGuard],
+    loadComponent: () => import('./lecturer-page').then((m) => m.LecturerDetailPage) },
+  { path: 'room/:id', canActivate: [authGuard],
+    loadComponent: () => import('./room-page').then((m) => m.RoomDetailPage) },
   { path: 'timetable', component: Timetable, canActivate: [authGuard] },
   { path: 'global-properties', component: GlobalPropertiesPage, canActivate: [authGuard] },
   // /e/building is handled by BuildingHome, not the generic entity table

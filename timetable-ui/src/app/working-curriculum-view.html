@@ -1,0 +1,158 @@
+@let p = plan();
+
+<div class="page-header">
+  <div>
+    <h2>Робочі навчальні плани</h2>
+    <p class="muted">
+      {{ p.rows.length }} освітніх компонентів &middot; {{ p.positions.length }} позицій РНП
+      &middot; {{ p.departments.length }} кафедр
+    </p>
+  </div>
+  <div class="cp-actions">
+    <button type="button" class="ghost cp-export"
+            [disabled]="!p.rows.length || exporting()"
+            (click)="downloadPlan()"
+            title="Робочий навчальний план у форматі PDF">
+      @if (exporting()) { Формування&hellip; } @else { &#x1F4C4; Завантажити PDF }
+    </button>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+@if (exportError()) { <p class="error">{{ exportError() }}</p> }
+
+<!-- A робочий навчальний план is drawn up for one academic year; the model stores no cohort,
+     so the year is chosen here and the document says which scope it was built for. -->
+<div class="wv-toolbar">
+  <label class="wv-picker">
+    <span>Курс</span>
+    <app-search-select [options]="courseYearOptions()" placeholder="усі курси"
+                       [ngModel]="courseYearFilter()" (ngModelChange)="courseYearFilter.set($event)"
+                       name="courseYearFilter" [ngModelOptions]="{ standalone: true }" />
+  </label>
+  @if (courseYearFilter() === '') {
+    <p class="muted wv-scope-note">
+      Показано всі курси спеціальності. Робочий навчальний план складають на один навчальний рік
+      &mdash; оберіть курс, щоб отримати документ у звичному обсязі.
+    </p>
+  }
+</div>
+
+@if (p.rows.length) {
+  <app-working-curriculum-summary [plan]="p" />
+
+  <!-- ── The plan itself ── -->
+  <div class="card">
+    <table class="wv-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Курс</th>
+          <th>Сем.</th>
+          <th>Освітній компонент</th>
+          <th>Форма контролю</th>
+          <th class="num">ECTS</th>
+          <th class="num">Годин</th>
+          <th class="num">Лек.</th>
+          <th class="num">Практ.</th>
+          <th class="num">Лаб.</th>
+          <th class="num">Конс., контр.</th>
+          <th class="num">Сам. робота</th>
+          <th>Кафедра, що забезпечує викладання</th>
+          <th>Академічні групи</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of p.rows; track row.id; let i = $index) {
+          <tr [class.wv-gap]="row.unassignedHourTypes.length">
+            <td>{{ i + 1 }}</td>
+            <td>{{ row.courseYear }}</td>
+            <td>{{ row.semester }}</td>
+            <td>{{ row.name }}</td>
+            <td>{{ controlFormLabel(row.controlForm) }}</td>
+            <td class="num">{{ fmtNumber(row.credits) }}</td>
+            <td class="num">{{ fmtNumber(row.totalHours) }}</td>
+            <td class="num">{{ fmtOrDash(row.hours.LECTURE) }}</td>
+            <td class="num">{{ fmtOrDash(row.hours.PRACTICAL) }}</td>
+            <td class="num">{{ fmtOrDash(row.hours.LAB) }}</td>
+            <td class="num">{{ fmtOrDash(row.otherContactHours) }}</td>
+            <td class="num">{{ fmtOrDash(row.independentHours) }}</td>
+            <td>
+              {{ departmentsLabel(row) || '&mdash;' }}
+              @if (row.unassignedHourTypes.length) {
+                <span class="wv-unassigned">не закріплено: {{ unassignedLabel(row.unassignedHourTypes) }}</span>
+              }
+            </td>
+            <td>{{ row.groupNames.length ? row.groupNames.join(', ') : '&mdash;' }}</td>
+          </tr>
+        }
+      </tbody>
+      <tfoot>
+        <tr>
+          <th colspan="5">Разом</th>
+          <th class="num">{{ fmtNumber(p.totals.credits) }}</th>
+          <th class="num">{{ fmtNumber(p.totals.hours) }}</th>
+          <th class="num">{{ fmtOrDash(p.totals.byHourType.LECTURE) }}</th>
+          <th class="num">{{ fmtOrDash(p.totals.byHourType.PRACTICAL) }}</th>
+          <th class="num">{{ fmtOrDash(p.totals.byHourType.LAB) }}</th>
+          <th class="num">{{ fmtOrDash(p.totals.byHourType.CONSULTATION + p.totals.byHourType.ASSESSMENT) }}</th>
+          <th class="num">{{ fmtOrDash(p.totals.independentHours) }}</th>
+          <th colspan="2"></th>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── Per-department breakdown ── -->
+  @if (p.departments.length) {
+    <h3 class="wv-section-title">Розрахунок годин навчального навантаження кафедр</h3>
+    <div class="card">
+      <table class="wv-table">
+        <thead>
+          <tr>
+            <th>Кафедра</th>
+            <th class="num">Позицій</th>
+            <th class="num">Дисциплін</th>
+            <th class="num">Лек.</th>
+            <th class="num">Практ.</th>
+            <th class="num">Лаб.</th>
+            <th class="num">Конс.</th>
+            <th class="num">Контр. заходи</th>
+            <th class="num">Годин за планом</th>
+            <th class="num">Планових годин</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (d of p.departments; track d.departmentId) {
+            <tr>
+              <td>{{ d.departmentName }}</td>
+              <td class="num">{{ d.positions }}</td>
+              <td class="num">{{ d.courses }}</td>
+              <td class="num">{{ fmtOrDash(d.byHourType.LECTURE) }}</td>
+              <td class="num">{{ fmtOrDash(d.byHourType.PRACTICAL) }}</td>
+              <td class="num">{{ fmtOrDash(d.byHourType.LAB) }}</td>
+              <td class="num">{{ fmtOrDash(d.byHourType.CONSULTATION) }}</td>
+              <td class="num">{{ fmtOrDash(d.byHourType.ASSESSMENT) }}</td>
+              <td class="num">{{ fmtNumber(d.planHours) }}</td>
+              <td class="num">{{ fmtNumber(d.plannedHours) }}</td>
+            </tr>
+          }
+        </tbody>
+        <tfoot>
+          <tr>
+            <th colspan="8">Разом по кафедрах</th>
+            <th class="num">{{ fmtNumber(p.totals.contactHours) }}</th>
+            <th class="num">{{ fmtNumber(p.plannedHours) }}</th>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <p class="muted wv-note">
+      Планові години обчислено за правилом цієї системи: позицію, яку веде кілька викладачів, кожен
+      проводить у повному обсязі, а індивідуальна робота коштує &laquo;години &middot; кількість
+      студентів&raquo;. Норми часу встановлює заклад вищої освіти.
+    </p>
+  }
+} @else if (!loading()) {
+  <p class="muted">Для цієї спеціальності ще немає позицій навчального плану.</p>
+}
