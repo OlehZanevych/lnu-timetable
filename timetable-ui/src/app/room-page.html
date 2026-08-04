@@ -1,0 +1,81 @@
+@let r = room();
+
+<div class="faculty-header">
+  @if (r?.building) {
+    <a [routerLink]="['/building', r!.building!.id]" class="back-link">&#x2190; {{ r!.building!.name }}</a>
+  } @else if (r?.faculty) {
+    <a [routerLink]="['/faculty', r!.faculty!.id]" class="back-link">&#x2190; {{ r!.faculty!.name }}</a>
+  }
+  <div class="faculty-header-title">
+    <div>
+      <h2>Аудиторія {{ r?.number ?? '&#x2026;' }}</h2>
+      <p class="muted">
+        {{ r?.name }}
+        @if (r?.kind) { &middot; {{ kindLabel(r!.kind) }} }
+        @if (r?.capacity) { &middot; {{ r!.capacity }} місць }
+      </p>
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Аудиторія</p>
+    @for (sec of sections; track sec.key) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === sec.key"
+              (click)="selectSection(sec.key)"
+              [innerHTML]="sec.label"></button>
+    }
+  </nav>
+
+  <div class="faculty-section">
+    @switch (activeSection()) {
+
+      @case ('info') {
+        <div class="page-header"><h2>Інформація про аудиторію</h2></div>
+        @if (r) {
+          <div class="card info-card">
+            <table class="info-table">
+              <tbody>
+                <tr><th>Номер</th><td>{{ r.number }}</td></tr>
+                <tr><th>Назва</th><td>{{ r.name || '&mdash;' }}</td></tr>
+                <tr><th>Тип</th><td>{{ kindLabel(r.kind) }}</td></tr>
+                <tr><th>Місткість</th><td>{{ r.capacity ?? '&mdash;' }}</td></tr>
+                <tr>
+                  <th>Корпус</th>
+                  <td>
+                    @if (r.building) {
+                      <a [routerLink]="['/building', r.building.id]">{{ r.building.name }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+                <tr><th>Адреса</th><td>{{ r.building?.address || '&mdash;' }}</td></tr>
+                <tr>
+                  <th>Факультет</th>
+                  <td>
+                    @if (r.faculty) {
+                      <a [routerLink]="['/faculty', r.faculty.id]">{{ r.faculty.name }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      @case ('timetable') {
+        <app-timetable-view
+          [roomIds]="roomIds()"
+          columnMode="single"
+          heading="Зайнятість аудиторії"
+          [report]="{ kind: 'ROOM', subjectName: label(),
+                      facultyName: r?.faculty?.name ?? '' }" />
+      }
+
+    }
+  </div>
+</div>

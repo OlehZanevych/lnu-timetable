@@ -1,5 +1,6 @@
 import { Component, Type } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { BaseEntity } from './base-entity';
 import { SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
@@ -7,7 +8,9 @@ import { DeptFacultySelect } from './dept-faculty-select';
 import { TimeSelect } from './time-select';
 import { ENTITIES, EntityMeta } from './entities';
 
-const IMPORTS = [FormsModule, SearchSelect, MultiSelect, DeptFacultySelect, TimeSelect];
+// RouterLink is here for the «Відкрити →» link entity-page.html renders for entities
+// that declare a `detailRoute`.
+const IMPORTS = [FormsModule, RouterLink, SearchSelect, MultiSelect, DeptFacultySelect, TimeSelect];
 const meta = (name: string): EntityMeta => ENTITIES.find((e) => e.name === name)!;
 const TPL = './entity-page.html';
 

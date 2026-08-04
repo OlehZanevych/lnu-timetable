@@ -110,6 +110,12 @@
         <app-room [filterValue]="fid" [presets]="facultyPreset" />
       }
 
+      <!-- Room groups scoped to this faculty: room_groups_scope_check forbids a group carrying both
+           a faculty and a department, so presetting facultyId here is what keeps them valid. -->
+      @case ('roomGroups') {
+        <app-room-group [filterValue]="fid" [presets]="facultyPreset" />
+      }
+
       <!-- ── People & Groups ── -->
 
       @case ('academicGroups') {
@@ -139,6 +145,14 @@
 
       @case ('timetable') {
         <app-faculty-timetable-list [facultyId]="fid" />
+      }
+
+      @case ('facultyTimetable') {
+        <app-timetable-view
+          [academicGroupIds]="groupIds()"
+          columnMode="group"
+          heading="Розклад занять факультету"
+          [report]="{ kind: 'FACULTY', subjectName: f?.name ?? '', facultyName: f?.name ?? '' }" />
       }
 
       @case ('groupConstraints') {

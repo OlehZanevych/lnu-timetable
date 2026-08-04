@@ -33,6 +33,10 @@
             <td>{{ display(row, f) }}</td>
           }
           <td class="row-actions">
+            @let link = detailLink(row);
+            @if (link) {
+              <a class="open-link" [routerLink]="link">Відкрити &rarr;</a>
+            }
             @if (canModify(row)) {
               <button type="button" class="ghost" (click)="edit(row)">Редагувати</button>
               <button type="button" class="ghost danger" (click)="remove(row)">Видалити</button>

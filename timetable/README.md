@@ -291,10 +291,7 @@ client-side — see its README's *Ukrainian sorting*.
 ### `global_properties` — outside the entity framework
 
 `global_properties` (`name` VARCHAR **primary key**, `type` a `property_type` enum, `value`
-VARCHAR) is a generic name/type/value store for system-wide settings — currently
-`academic_hour_duration_minutes`, `semester_duration_weeks`, `current_semester_parity`
-(`ODD`/`EVEN`), `default_class_duration_hours` and `default_max_hours_per_year` (the annual
-teaching ceiling applied to a lecturer who sets none of their own). It deliberately has **no** annotated
+VARCHAR) is a generic name/type/value store for system-wide settings. It deliberately has **no** annotated
 `GlobalProperty` domain class: the whole framework (`EntityMetadataRegistry`,
 `DynamicGraphQLSchemaBuilder`, `DynamicDataFetchers`, `R2dbcQueryEngine.selectOne`/`insert`/
 `update`/`delete`) hardcodes the assumption that every entity has a `Long id` primary key, which
@@ -308,6 +305,36 @@ hand-written fetchers in `DynamicDataFetchers` (`globalPropertyList()`, `globalP
 columnValues, whereColumn, whereValue)` — an `update()` variant keyed by an arbitrary column
 instead of the conventional `id` — was added specifically to make `updateGlobalProperty` possible
 without touching the generic `update()`/`selectOne()` methods every other entity relies on.
+
+**What the table holds.** `data.sql` seeds nineteen rows, in two groups.
+
+| Property | Seeded | What it governs |
+|---|---|---|
+| `academic_hour_duration_minutes` | 40 | length of one academic hour; every class end time in the client is computed from it |
+| `semester_duration_weeks` | 16 | weeks in a semester; the schedule builder divides a workload's hours by it |
+| `current_semester_parity` | `ODD` | which half-year is running; the default of every semester filter |
+| `default_class_duration_hours` | 2 | what a new workload starts at |
+| `default_max_hours_per_year` | 600 | annual teaching ceiling for a lecturer who sets none of their own |
+| `hours_per_ects_credit` | 30 | hours in one ECTS credit — every curriculum total is built on it |
+| `credits_per_academic_year` · `credits_per_year_tolerance` | 60 · 3 | the year's credit target and how far a plan may sit from it |
+| `min_credits_*` / `max_credits_*` (`junior_bachelor`, `bachelor`, `master`, `phd`) | 120/120, 180/240, 90/120, 30/60 | the volume a programme of each degree must fall within |
+| `min_elective_share_percent` | 25 | least share of a programme that must be elective |
+| `max_courses_per_semester` · `max_exams_per_semester` | 8 · 5 | per-semester ceilings a plan is advised against |
+
+The second group — everything from `hours_per_ects_credit` down — arrived when the client's
+curriculum checks stopped being constants. The reason is worth recording on this side too, because
+it constrains what the service may assume: **these figures are not invariants.** Some are statutory
+and change when the law does (the elective quota was rewritten by Закон № 3642-IX in 2024); the rest
+differ between institutions by design, since the Закон «Про вищу освіту» leaves the form of the
+educational process to each institution. A **blank value is meaningful** — it means «не встановлено»,
+and the
+client drops the check that rests on it — so `updateGlobalProperty` accepts an empty string and must
+keep accepting one. `global-properties-limits.sql` beside `data.sql` adds just this group with
+`ON CONFLICT DO NOTHING`, for a database created before it existed.
+
+Nothing in the service reads any of these: they are stored and served, and every one of them is
+applied in the client. That is the same division as everywhere else — see *How the two halves divide
+the work* in the root README.
 
 ### Join tables with no entity of their own
 
@@ -821,7 +848,7 @@ single-row `<entity>(id:)` query.
 | `academicGroupConnection` | `name` | `specialtyId`, `facultyId` (r) |
 | `combinedGroupConnection` | `name` | `facultyId` (r) |
 | `courseConnection` | `name` | `departmentId`, `facultyId`, `specialtyId` (r) |
-| `curriculumItemConnection` | `semester` | `specialtyId` |
+| `curriculumItemConnection` | `semester` | `specialtyId`, `courseId` |
 | `curriculumItemHoursConnection` | `hourType` | `curriculumItemId` |
 | `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r) |
 | `combinedWorkingCurriculumItemConnection` | `id` | `facultyId` (r), `departmentIds` (r), `semesterParity` (r) |
@@ -837,6 +864,11 @@ gap: `CourseTag`, `LecturerWorkloadConstraint`, `LecturerTimetableConstraint`,
 through its `.nestedList(...)`, and `LecturerWorkloadCandidate` is read through
 `LecturerWorkload.candidates` while being written through mutations of its own. See [Where each
 entity is declared](#where-each-entity-is-declared).
+
+`curriculumItemConnection`'s `courseId` exists for one screen: the client's discipline page asks
+«where is this course taught?», and `Course` carries no `curriculumItems` relation to walk — its
+`@OneToMany` fields are `childCourses` and `tags` only. Adding the filter was cheaper and narrower
+than adding a relation, which would have appeared on every `Course` selection in the schema.
 
 Note also what `lecturerWorkloadConnection` does *not* offer: no `departmentId` or `facultyId`. In
 practice nothing reaches for workloads flatly — they are always read through the working (or

@@ -1,0 +1,35 @@
+<!-- The same object the printed «Навчальний план» is built from, so the sheet and the screen
+     cannot disagree. Rendered identically on both curriculum tabs. -->
+<div class="card cp-summary">
+  <div class="cp-tiles">
+    <div class="cp-tile">
+      <span class="cp-tile-label">Обсяг освітньої програми</span>
+      <strong>{{ fmtNumber(plan.programme.credits) }} кредитів ЄКТС</strong>
+      <span class="muted">{{ fmtNumber(plan.programme.hours) }} год</span>
+    </div>
+    <div class="cp-tile">
+      <span class="cp-tile-label">Обов&rsquo;язкові компоненти</span>
+      <strong>{{ fmtNumber(plan.mandatory.credits) }} кредитів</strong>
+      <span class="muted">{{ plan.mandatory.items }} позиц.</span>
+    </div>
+    @let elective = electiveCheck();
+    <div class="cp-tile" [class.over]="elective?.status === 'violation'">
+      <span class="cp-tile-label">Вибіркові компоненти</span>
+      <strong>{{ plan.electiveShare === null ? '&mdash;' : fmtShare(plan.electiveShare) }}</strong>
+      <span class="muted">{{ elective ? 'норма — ' + elective.norm : 'межу не встановлено' }}</span>
+    </div>
+    <div class="cp-tile">
+      <span class="cp-tile-label">Строк навчання</span>
+      <strong>{{ plan.years }} курс(ів)</strong>
+      <span class="muted">{{ plan.lastSemester }} семестр(ів)</span>
+    </div>
+  </div>
+
+  @for (check of plan.checks; track check.title) {
+    @if (check.status === 'violation') {
+      <p class="cp-violation">{{ check.title }}: {{ check.value }} &mdash; {{ check.verdict }} <span class="muted">({{ check.norm }})</span></p>
+    }
+  }
+
+  @if (note) { <p class="cp-note muted">{{ note }}</p> }
+</div>

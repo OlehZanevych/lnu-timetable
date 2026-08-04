@@ -59,6 +59,15 @@ const TEACHING_FORMAT_LABELS: Record<string, string> = {
 };
 
 export const UNIVERSITY_NAME = 'Львівський національний університет імені Івана Франка';
+
+/**
+ * What the footer of every generated sheet names as its origin.
+ *
+ * Shared rather than repeated: this module once said «система обліку навчального навантаження» while
+ * the other three said «система планування освітнього процесу», and four copies of a string are
+ * four chances for a set of documents from one system to look like documents from four.
+ */
+export const SYSTEM_NAME = 'система планування освітнього процесу ЛНУ';
 const MINISTRY_NAME = 'МІНІСТЕРСТВО ОСВІТИ І НАУКИ УКРАЇНИ';
 
 const A4_LANDSCAPE = { widthMm: 297, heightMm: 210 };
@@ -476,8 +485,7 @@ function drawSignatures(doc: PdfDocument): void {
  * number in the middle of the top margin and leaves the first sheet unnumbered.
  */
 function drawPageFurniture(doc: PdfDocument, input: WorkloadReportInput): void {
-  const stamp = `Сформовано автоматично ${fmtDate(input.generatedAt)} · ` +
-                'система обліку навчального навантаження ЛНУ';
+  const stamp = `Сформовано автоматично ${fmtDate(input.generatedAt)} · ${SYSTEM_NAME}`;
   for (let page = 0; page < doc.pageCount; page++) {
     doc.onPage(page, () => {
       if (page > 0) {

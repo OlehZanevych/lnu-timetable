@@ -3,10 +3,23 @@
     <h2>Навчальні плани</h2>
     <p class="muted">{{ items().length }} запис(ів)</p>
   </div>
-  <button type="button" (click)="openCreate()">+ Додати</button>
+  <div class="cp-actions">
+    <button type="button" class="ghost cp-export"
+            [disabled]="!items().length || exporting()"
+            (click)="downloadPlan()"
+            title="Навчальний план спеціальності у форматі PDF">
+      @if (exporting()) { Формування&hellip; } @else { &#x1F4C4; Завантажити PDF }
+    </button>
+    <button type="button" (click)="openCreate()">+ Додати</button>
+  </div>
 </div>
 
 @if (error()) { <p class="error">{{ error() }}</p> }
+@if (exportError()) { <p class="error">{{ exportError() }}</p> }
+
+@if (items().length) {
+  <app-curriculum-summary [plan]="plan()" />
+}
 
 <div class="card">
   <table>

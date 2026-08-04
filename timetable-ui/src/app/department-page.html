@@ -59,6 +59,11 @@
             (click)="activeSection.set('workloadDetail')">
       &#x1F4CA; Оцінка навантаження
     </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'timetable'"
+            (click)="activeSection.set('timetable')">
+      &#x1F4C5; Розклад кафедри
+    </button>
   </nav>
 
   <!-- Content -->
@@ -121,6 +126,16 @@
     <!-- ── Per-lecturer workload assessment ── -->
     @if (activeSection() === 'workloadDetail') {
       <app-lecturer-workload-detail [departmentId]="departmentId" [lecturerId]="focusLecturerId()" />
+    }
+
+    <!-- ── The department's own timetable, one column per lecturer ── -->
+    @if (activeSection() === 'timetable') {
+      <app-timetable-view
+        [lecturerIds]="lecturerIds()"
+        columnMode="lecturer"
+        heading="Розклад занять кафедри"
+        [report]="{ kind: 'DEPARTMENT', subjectName: d?.name ?? '',
+                    facultyName: d?.faculty?.name ?? '' }" />
     }
 
   </div>

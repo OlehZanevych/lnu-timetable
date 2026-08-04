@@ -39,6 +39,13 @@ export interface EntityMeta {
   list: string;            // connection query field, e.g. "facultyConnection"
   fields: FieldMeta[];
   filterParam?: string;    // GraphQL arg name for optional scoping (e.g. "facultyId", "departmentId")
+  /**
+   * Router path of this entity's own detail page, when it has one (e.g. 'course' → /course/:id).
+   * Set it and every generic table of that entity — wherever it is embedded — grows an
+   * «Відкрити →» link, so the drill-down pages are reachable from the places the entity is listed
+   * rather than only by typing a URL.
+   */
+  detailRoute?: string;
 }
 
 const ref = (name: string, label: string, ref: string, relation: string, refLabel: string, required = false): FieldMeta =>
@@ -209,7 +216,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Specialty', label: 'Спеціальності', single: 'specialty', namespace: 'specialties', list: 'specialtyConnection', filterParam: 'facultyId',
+    name: 'Specialty', label: 'Спеціальності', single: 'specialty', namespace: 'specialties', list: 'specialtyConnection', filterParam: 'facultyId', detailRoute: 'specialty',
     fields: [
       { name: 'code', label: 'Код', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text', required: true },
@@ -218,7 +225,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Course', label: 'Дисципліни', single: 'course', namespace: 'courses', list: 'courseConnection', filterParam: 'departmentId',
+    name: 'Course', label: 'Дисципліни', single: 'course', namespace: 'courses', list: 'courseConnection', filterParam: 'departmentId', detailRoute: 'course',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'courseType', label: 'Тип', type: 'enum', required: true, enumOptions: COURSE_TYPE_OPTIONS },
@@ -238,7 +245,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Lecturer', label: 'Викладачі', single: 'lecturer', namespace: 'lecturers', list: 'lecturerConnection', filterParam: 'departmentId',
+    name: 'Lecturer', label: 'Викладачі', single: 'lecturer', namespace: 'lecturers', list: 'lecturerConnection', filterParam: 'departmentId', detailRoute: 'lecturer',
     fields: [
       { name: 'firstName', label: "Ім'я", type: 'text', required: true },
       { name: 'middleName', label: 'По батькові', type: 'text' },
@@ -264,7 +271,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'AcademicGroup', label: 'Академічні групи', single: 'academicGroup', namespace: 'academicGroups', list: 'academicGroupConnection', filterParam: 'specialtyId',
+    name: 'AcademicGroup', label: 'Академічні групи', single: 'academicGroup', namespace: 'academicGroups', list: 'academicGroupConnection', filterParam: 'specialtyId', detailRoute: 'academic-group',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'courseYear', label: 'Курс', type: 'number', required: true },
@@ -281,7 +288,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Room', label: 'Аудиторії', single: 'room', namespace: 'rooms', list: 'roomConnection', filterParam: 'facultyId',
+    name: 'Room', label: 'Аудиторії', single: 'room', namespace: 'rooms', list: 'roomConnection', filterParam: 'facultyId', detailRoute: 'room',
     fields: [
       { name: 'number', label: 'Номер', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text' },

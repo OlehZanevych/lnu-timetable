@@ -1,10 +1,24 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
+import { CurriculumSummary } from './curriculum-summary';
+import { PlanHourType, PlanItemInput, buildCurriculumPlan } from './curriculum-plan';
+// `curriculum-report`, `pdf-fonts` and `workload-report` are imported dynamically in
+// downloadPlan(): see the comment there for why the PDF engine is kept out of the main bundle.
 
 type DeptOption = Option & { facultyId: string };
+
+/** The specialty this curriculum belongs to — everything the printed plan names it by. */
+export interface CurriculumSpecialty {
+  id: string;
+  code: string;
+  name: string;
+  degree: string;
+  faculty: { id: string; name: string };
+}
 
 interface CurriculumItemHours {
   id: string;
@@ -24,6 +38,7 @@ interface CurriculumItem {
   course?: {
     id: string;
     name: string;
+    courseType?: string;
     tags?: CourseTagRef[];
     faculty?: { id: string };
     department?: { id: string; faculty?: { id: string } };
@@ -32,20 +47,51 @@ interface CurriculumItem {
 }
 
 /**
+ * Flattens a loaded row into the shape `curriculum-plan.ts` computes on: the nested `hours` list
+ * becomes a map, which is how every consumer of it wants to read it.
+ */
+const toPlanItem = (item: CurriculumItem): PlanItemInput => {
+  const hours: Partial<Record<PlanHourType, number>> = {};
+  for (const h of item.hours ?? []) hours[h.hourType as PlanHourType] = h.hours;
+  return {
+    id: item.id,
+    semester: item.semester,
+    controlForm: item.controlForm,
+    ectsCredits: item.ectsCredits ?? 0,
+    course: item.course
+      ? {
+          id: item.course.id,
+          name: item.course.name,
+          courseType: item.course.courseType ?? 'MANDATORY',
+          tags: (item.course.tags ?? []).map((t) => t.tag).filter(Boolean)
+        }
+      : null,
+    hours
+  };
+};
+
+/**
  * Shows the curriculum items (with their per-type hour breakdown) belonging directly
- * to a specialty, with create/edit/delete support for each item.
+ * to a specialty, with create/edit/delete support for each item, the headline figures of the
+ * resulting освітня програма, and the printable «Навчальний план» those figures are signed off on.
  */
 @Component({
   selector: 'app-curriculum-item-list',
   templateUrl: './curriculum-item-list.html',
-  imports: [FormsModule, SearchSelect]
+  imports: [FormsModule, SearchSelect, CurriculumSummary]
 })
 export class CurriculumItemList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private settings = inject(GlobalPropertiesService);
 
   @Input() specialtyId!: string;
   /** The specialty's own faculty; pre-selected as the faculty filter when opening the modal. */
   @Input() specialtyFacultyId: string | null = null;
+  /**
+   * The specialty itself, passed down from the page that already loaded it. A signal, not a plain
+   * field, because {@link plan} reads it inside a `computed()` — see the zoneless note in the README.
+   */
+  @Input() set specialty(value: CurriculumSpecialty | null) { this.specialtySignal.set(value); }
 
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
@@ -54,6 +100,22 @@ export class CurriculumItemList implements OnInit, OnChanges {
   items = signal<CurriculumItem[]>([]);
   courseOptions = signal<Option[]>([]);
   error = signal('');
+
+  private specialtySignal = signal<CurriculumSpecialty | null>(null);
+  /** Raw `academic_groups.study_form` values among the specialty's groups; names the форма навчання. */
+  private studyForms = signal<string[]>([]);
+
+  /** True while the PDF is being produced — the fonts are fetched on the first export. */
+  exporting = signal(false);
+  exportError = signal('');
+
+  /**
+   * The plan the printed sheet is built from — sections, totals and the compliance checks. The tab
+   * shows its headline figures above the table so the screen and the PDF cannot disagree: both read
+   * this one object.
+   */
+  plan = computed(() => buildCurriculumPlan(
+    this.items().map(toPlanItem), this.specialtySignal()?.degree ?? '', this.settings.limits()));
 
   showForm = signal(false);
   editingId = signal<string | null>(null);
@@ -86,13 +148,14 @@ export class CurriculumItemList implements OnInit, OnChanges {
 
   ngOnInit() {
     this.initialized = true;
+    this.settings.ensureLoaded();
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
-    if (this.specialtyId) this.loadItems();
+    if (this.specialtyId) { this.loadItems(); this.loadStudyForms(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.specialtyId) this.loadItems();
+    if (this.initialized && this.specialtyId) { this.loadItems(); this.loadStudyForms(); }
   }
 
   private loadFacultyOptions() {
@@ -163,14 +226,32 @@ export class CurriculumItemList implements OnInit, OnChanges {
 
   private loadItems() {
     if (!this.specialtyId) return;
+    // courseType is selected for the printed plan: it is what sorts an item into «Обов'язкові» /
+    // «Вибіркові компоненти», «Практична підготовка» or «Атестація», and the 25 % share of
+    // ст. 62 ч. 1 п. 15 cannot be computed without it.
     const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
       id semester controlForm ectsCredits
-      course { id name tags { tag } faculty { id } department { id faculty { id } } }
+      course { id name courseType tags { tag } faculty { id } department { id faculty { id } } }
       hours { id hourType hours }
     } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => this.items.set(d.curriculumItems.curriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
+    });
+  }
+
+  /**
+   * The форма здобуття освіти named on the printed plan. The model records it per academic group
+   * (`academic_groups.study_form`), not per specialty, so it is read off the groups; a specialty
+   * with no groups yet simply leaves that line of the form blank.
+   */
+  private loadStudyForms() {
+    if (!this.specialtyId) return;
+    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id studyForm } } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => this.studyForms.set(
+        d.academicGroups.academicGroupConnection.nodes.map((g: any) => g.studyForm).filter(Boolean)),
+      error: () => this.studyForms.set([])
     });
   }
 
@@ -278,6 +359,55 @@ export class CurriculumItemList implements OnInit, OnChanges {
       items.push(item);
     }
     return items;
+  }
+
+  // ── Printable plan ───────────────────────────────────────────────────────
+
+  /**
+   * Builds the printable «Навчальний план» for this specialty and hands it to the browser as a
+   * download.
+   *
+   * Everything happens on the client: the document is assembled from the plan already in memory by
+   * `curriculum-report.ts` and written out by the project's own PDF writer, so no round trip and no
+   * server-side rendering is involved. The only fetch is for the embedded font, and only on the
+   * first export of a session.
+   *
+   * The document modules are **imported dynamically**, so the PDF engine, the report and the font
+   * loader are a lazy chunk rather than part of the main bundle — the same bargain the font subsets
+   * already make: a user who never exports pays nothing for the ability to.
+   */
+  async downloadPlan() {
+    const specialty = this.specialtySignal();
+    if (!specialty || this.exporting() || !this.items().length) return;
+
+    this.exporting.set(true);
+    this.exportError.set('');
+    const generatedAt = new Date();
+    const plan = this.plan();
+
+    try {
+      const [{ downloadPdf, loadReportFonts }, { buildCurriculumReport, curriculumReportFileName },
+             { academicYearLabel }] = await Promise.all([
+        import('./pdf-fonts'), import('./curriculum-report'), import('./workload-report')
+      ]);
+      const fonts = await loadReportFonts();
+      const bytes = buildCurriculumReport({
+        plan,
+        specialtyCode: specialty.code ?? '',
+        specialtyName: specialty.name ?? '',
+        degree: specialty.degree ?? '',
+        facultyName: specialty.faculty?.name ?? '',
+        studyForms: this.studyForms(),
+        generatedAt,
+        fonts
+      });
+      downloadPdf(bytes, curriculumReportFileName(
+        specialty.code ?? '', specialty.degree ?? '', academicYearLabel(generatedAt)));
+    } catch (e: unknown) {
+      this.exportError.set(e instanceof Error ? e.message : 'Не вдалося сформувати PDF');
+    } finally {
+      this.exporting.set(false);
+    }
   }
 
   remove(item: CurriculumItem) {

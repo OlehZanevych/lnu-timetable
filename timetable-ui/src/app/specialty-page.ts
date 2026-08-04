@@ -5,11 +5,13 @@ import { GraphqlService } from './graphql.service';
 import { CurriculumEditor } from './curriculum-editor';
 import { CurriculumItemList } from './curriculum-item-list';
 import { WorkingCurriculumList } from './working-curriculum-list';
+import { WorkingCurriculumView } from './working-curriculum-view';
 import { AcademicGroupList } from './academic-group-list';
 import { SearchSelect } from './search-select';
 import { toOptions } from './entities';
 
-type SpecSection = 'info' | 'curriculaEditor' | 'curricula' | 'workingCurricula' | 'academicGroups';
+type SpecSection = 'info' | 'curriculaEditor' | 'curricula'
+                 | 'workingCurriculaEditor' | 'workingCurricula' | 'academicGroups';
 
 interface Specialty {
   id: string;
@@ -27,18 +29,26 @@ const DEGREE_LABELS: Record<string, string> = {
   DOCTOR_OF_SCIENCE:  'Доктор наук',
 };
 
+/**
+ * Both plans are edited on one tab and read on another: the editors are shaped for entering data
+ * (course-first blocks; a кафедра per block of hours), the two plain-named tabs for reading the
+ * document and printing it. Editing tabs therefore carry the «Редагування…» prefix and the
+ * documents keep the names people use for them.
+ */
 const SECTIONS: { key: SpecSection; label: string }[] = [
-  { key: 'info',            label: '&#x2139; Інформація' },
-  { key: 'curriculaEditor', label: '&#x270E; Редагування планів' },
-  { key: 'curricula',       label: '&#x1F4CB; Навчальні плани' },
-  { key: 'workingCurricula', label: '&#x1F5C2; Робочі навчальні плани' },
-  { key: 'academicGroups',  label: '&#x1F393; Академічні групи' },
+  { key: 'info',                   label: '&#x2139; Інформація' },
+  { key: 'curriculaEditor',        label: '&#x270E; Редагування планів' },
+  { key: 'curricula',              label: '&#x1F4CB; Навчальні плани' },
+  { key: 'workingCurriculaEditor', label: '&#x270E; Редагування робочих планів' },
+  { key: 'workingCurricula',       label: '&#x1F5C2; Робочі навчальні плани' },
+  { key: 'academicGroups',         label: '&#x1F393; Академічні групи' },
 ];
 
 @Component({
   selector: 'app-specialty-page',
   templateUrl: './specialty-page.html',
-  imports: [RouterLink, FormsModule, CurriculumEditor, CurriculumItemList, WorkingCurriculumList, AcademicGroupList, SearchSelect]
+  imports: [RouterLink, FormsModule, CurriculumEditor, CurriculumItemList, WorkingCurriculumList,
+            WorkingCurriculumView, AcademicGroupList, SearchSelect]
 })
 export class SpecialtyDetailPage implements OnInit {
   private route = inject(ActivatedRoute);

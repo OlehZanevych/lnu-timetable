@@ -313,6 +313,11 @@ export interface PdfTableCell {
   align?: Align;
   font?: string;
   colSpan?: number;
+  /**
+   * How many *header* rows the cell occupies. Only meaningful inside
+   * {@link PdfTableOptions.headerRows} — body rows are laid out one at a time and cannot span.
+   */
+  rowSpan?: number;
 }
 
 export type PdfCellInput = string | number | null | undefined | PdfTableCell;
@@ -328,6 +333,18 @@ export interface PdfTableOptions {
   x?: number;
   columns: PdfTableColumn[];
   rows: PdfTableRow[];
+  /**
+   * A header of several stacked rows whose cells may carry `colSpan` **and** `rowSpan`, so a column
+   * group reads on paper the way it is spoken: «Кількість годин» over «Аудиторні заняття» over
+   * «лекції / практичні / лабораторні». Given, it replaces the single row otherwise built from
+   * `columns[].title`, and it is the block repeated after every page break.
+   *
+   * Cells are placed left to right into the first column each row still has free, so a cell spanned
+   * into from the row above is simply not repeated — exactly as a merged cell is written out by
+   * hand. Row heights come from the single-row cells; a spanning cell only stretches the last row it
+   * touches, and only when what it already spans is too short for its text.
+   */
+  headerRows?: PdfTableRow[];
   size?: number;
   headerSize?: number;
   bodyFont?: string;
@@ -347,6 +364,25 @@ export interface PdfTableOptions {
   keepTogether?: boolean;
   /** Called after a page break, before the header row is repeated — for "продовження" captions. */
   onContinue?: () => void;
+}
+
+/** One placed cell of a multi-level header: where it sits and how many rows it owns. */
+interface HeaderBox {
+  text: string[];
+  align: Align;
+  font: string;
+  x: number;
+  width: number;
+  row: number;
+  rowSpan: number;
+}
+
+/** A laid-out multi-level header — measured once, painted on every page the table runs onto. */
+interface HeaderGrid {
+  boxes: HeaderBox[];
+  rowHeights: number[];
+  pitch: number;
+  height: number;
 }
 
 interface FontEntry {
@@ -576,7 +612,8 @@ export class PdfDocument {
     const bodyFont = options.bodyFont ?? this.defaultFontKey;
     const headFont = options.headFont ?? bodyFont;
     const strongFont = options.strongFont ?? headFont;
-    const showHeader = options.showHeader ?? columns.some((c) => c.title != null);
+    const showHeader = options.showHeader
+      ?? (options.headerRows?.length ? true : columns.some((c) => c.title != null));
 
     const headerRow: PdfTableRow = {
       cells: columns.map((c) => ({ text: c.title ?? '', align: c.headerAlign ?? 'center' })),
@@ -630,8 +667,17 @@ export class PdfDocument {
       this.y += height;
     };
 
+    // A multi-level header is laid out once — it depends only on the column widths — and the same
+    // block is then painted on every page the table runs onto.
+    const grid = options.headerRows?.length ? this.layoutHeaderGrid(options, columns, x0, padX, padY, headerSize, headFont) : null;
+    const headerHeight = () => (grid ? grid.height : measure(headerRow, true).height);
+    const paintHeader = () => {
+      if (grid) this.drawHeaderGrid(grid, columns, x0, padX, headerSize, options.headerFill, lineColor, lineWidth);
+      else draw(headerRow, true);
+    };
+
     if (options.keepTogether) {
-      const total = (showHeader ? measure(headerRow, true).height : 0)
+      const total = (showHeader ? headerHeight() : 0)
         + options.rows.reduce((sum, r) => sum + measure(r, false).height, 0);
       const pageHeight = this.contentBottom - this.margins.top;
       if (total <= pageHeight) this.ensure(total);
@@ -639,10 +685,10 @@ export class PdfDocument {
 
     if (showHeader) {
       // Never strand a header at the very bottom of a page.
-      if (this.y + measure(headerRow, true).height + this.lineHeight(size, 1.2) > this.contentBottom) {
+      if (this.y + headerHeight() + this.lineHeight(size, 1.2) > this.contentBottom) {
         this.addPage();
       }
-      draw(headerRow, true);
+      paintHeader();
     }
 
     for (const row of options.rows) {
@@ -650,10 +696,101 @@ export class PdfDocument {
       if (this.y + height > this.contentBottom && this.y > this.margins.top) {
         this.addPage();
         options.onContinue?.();
-        if (showHeader) draw(headerRow, true);
+        if (showHeader) paintHeader();
       }
       draw(row, false);
     }
+  }
+
+  /**
+   * Places every cell of a multi-level header on the column × header-row grid and works out how
+   * tall each header row has to be. Pure geometry: nothing is drawn and the cursor does not move,
+   * so the result can be measured for a page-break decision and reused on each continuation page.
+   */
+  private layoutHeaderGrid(options: PdfTableOptions, columns: PdfTableColumn[], x0: number,
+                           padX: number, padY: number, headerSize: number,
+                           headFont: string): HeaderGrid {
+    const rows = options.headerRows ?? [];
+    const pitch = this.lineHeight(headerSize, 1.2);
+    const taken = rows.map(() => new Array<boolean>(columns.length).fill(false));
+    const boxes: HeaderBox[] = [];
+    // Running left edge of each column, so a cell's x is a lookup rather than a re-summation.
+    const columnX: number[] = [];
+    let at = x0;
+    for (const c of columns) { columnX.push(at); at += c.width; }
+
+    rows.forEach((row, r) => {
+      let col = 0;
+      for (const raw of row.cells) {
+        while (col < columns.length && taken[r][col]) col++;
+        if (col >= columns.length) break;
+        const cell: PdfTableCell = typeof raw === 'object' && raw !== null
+          ? raw
+          : { text: raw == null ? '' : String(raw) };
+        const colSpan = Math.max(1, Math.min(cell.colSpan ?? 1, columns.length - col));
+        const rowSpan = Math.max(1, Math.min(cell.rowSpan ?? 1, rows.length - r));
+        let width = 0;
+        for (let k = 0; k < colSpan; k++) width += columns[col + k].width;
+        const font = cell.font ?? headFont;
+        boxes.push({
+          text: this.wrap(cell.text, width - padX * 2, headerSize, font),
+          align: cell.align ?? columns[col].headerAlign ?? 'center',
+          font, x: columnX[col], width, row: r, rowSpan
+        });
+        for (let rr = r; rr < r + rowSpan; rr++) {
+          for (let k = 0; k < colSpan; k++) taken[rr][col + k] = true;
+        }
+        col += colSpan;
+      }
+    });
+
+    const rowHeights = rows.map(() => 0);
+    for (const b of boxes) {
+      if (b.rowSpan === 1) rowHeights[b.row] = Math.max(rowHeights[b.row], b.text.length * pitch + padY * 2);
+    }
+    // A row made up entirely of cells spanned into from above still needs a line of its own,
+    // otherwise the levels below it collapse onto each other.
+    for (let r = 0; r < rowHeights.length; r++) {
+      if (rowHeights[r] === 0) rowHeights[r] = pitch + padY * 2;
+    }
+    for (const b of boxes) {
+      if (b.rowSpan === 1) continue;
+      const needed = b.text.length * pitch + padY * 2;
+      let available = 0;
+      for (let r = b.row; r < b.row + b.rowSpan; r++) available += rowHeights[r];
+      // Only the last row it touches grows: widening an upper row would push down every sibling
+      // group that shares it, for the sake of one long caption.
+      if (needed > available) rowHeights[b.row + b.rowSpan - 1] += needed - available;
+    }
+
+    return { boxes, rowHeights, pitch, height: rowHeights.reduce((sum, h) => sum + h, 0) };
+  }
+
+  /** Paints a laid-out header grid at the cursor and advances past it. */
+  private drawHeaderGrid(grid: HeaderGrid, columns: PdfTableColumn[], x0: number, padX: number,
+                         headerSize: number, fill: RGB | undefined, lineColor: RGB,
+                         lineWidth: number): void {
+    const top = this.y;
+    const totalWidth = columns.reduce((sum, c) => sum + c.width, 0);
+    if (fill) this.drawRect(x0, top, totalWidth, grid.height, { fill });
+
+    for (const b of grid.boxes) {
+      let y = top;
+      for (let r = 0; r < b.row; r++) y += grid.rowHeights[r];
+      let height = 0;
+      for (let r = b.row; r < b.row + b.rowSpan; r++) height += grid.rowHeights[r];
+      this.drawRect(b.x, y, b.width, height, { stroke: lineColor, lineWidth });
+      // Header captions sit in the middle of their box, the way a merged cell reads on paper —
+      // a two-line group title beside a one-line column name should not hang from the top.
+      const textTop = y + (height - b.text.length * grid.pitch) / 2;
+      b.text.forEach((line, i) => {
+        this.drawText(line, {
+          x: b.x + padX, y: textTop + grid.pitch * i + ptToMm(headerSize * 0.82),
+          size: headerSize, font: b.font, align: b.align, width: b.width - padX * 2
+        });
+      });
+    }
+    this.y = top + grid.height;
   }
 
   // ── Serialisation ─────────────────────────────────────────────────────────

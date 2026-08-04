@@ -9,14 +9,12 @@ import {
   CONTROL_FORM_OPTIONS, HALF_YEARS, HALF_YEAR_TITLES, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS,
   courseTypeLabel, courseYearOf, halfYearOf, termLabel
 } from './entities';
-import { downloadPdf, loadReportFonts } from './pdf-fonts';
 import { compareUk } from './sort';
 import {
   LecturerStats, SPLIT_HOUR_TYPES, STAT_HOUR_TYPES, StatWorkload, computeStats, deviationOf
 } from './workload-stats';
-import {
-  academicYearLabel, buildLecturerWorkloadReport, workloadReportFileName
-} from './workload-report';
+// `workload-report` and `pdf-fonts` are imported dynamically in downloadReport(): see the comment
+// there for why the PDF engine is kept out of the main bundle.
 import { loadDepartmentWorkloads } from './workload-tree';
 
 /** Every constraint type, grouped the way the assessment panel reads them. */
@@ -287,8 +285,14 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
    * memory by `workload-report.ts`, and written out by the project's own PDF writer, so no round
    * trip and no server-side rendering is involved. The only fetch is for the embedded font, and
    * only on the first export of a session.
+   *
+   * The document modules are **imported dynamically**. The PDF engine now serves three sheets
+   * (this one, «Навчальний план» and «Робочий навчальний план»), and none of them is on the path a
+   * user takes to look at a timetable — so the whole of it, `pdf-writer.ts` included, lives in a
+   * lazy chunk. This is the same bargain the font subsets already make: a user who never exports
+   * pays nothing for the ability to.
    */
-  downloadReport() {
+  async downloadReport() {
     const s = this.selected();
     const dept = this.department();
     if (!s || this.exporting()) return;
@@ -298,24 +302,26 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
     const profile = this.profileById()[s.lecturerId] ?? { position: '', academicDegree: '' };
     const generatedAt = new Date();
 
-    loadReportFonts()
-      .then((fonts) => {
-        const bytes = buildLecturerWorkloadReport({
-          stats: s,
-          facultyName: dept?.facultyName ?? '',
-          departmentName: dept?.name ?? '',
-          position: profile.position,
-          academicDegree: profile.academicDegree,
-          defaultMaxHours: this.defaultMaxHours(),
-          generatedAt,
-          fonts
-        });
-        downloadPdf(bytes, workloadReportFileName(s.name, academicYearLabel(generatedAt)));
-        this.exporting.set(false);
-      })
-      .catch((e: unknown) => {
-        this.exportError.set(e instanceof Error ? e.message : 'Не вдалося сформувати PDF');
-        this.exporting.set(false);
+    try {
+      const [{ downloadPdf, loadReportFonts },
+             { academicYearLabel, buildLecturerWorkloadReport, workloadReportFileName }] =
+        await Promise.all([import('./pdf-fonts'), import('./workload-report')]);
+      const fonts = await loadReportFonts();
+      const bytes = buildLecturerWorkloadReport({
+        stats: s,
+        facultyName: dept?.facultyName ?? '',
+        departmentName: dept?.name ?? '',
+        position: profile.position,
+        academicDegree: profile.academicDegree,
+        defaultMaxHours: this.defaultMaxHours(),
+        generatedAt,
+        fonts
       });
+      downloadPdf(bytes, workloadReportFileName(s.name, academicYearLabel(generatedAt)));
+    } catch (e: unknown) {
+      this.exportError.set(e instanceof Error ? e.message : 'Не вдалося сформувати PDF');
+    } finally {
+      this.exporting.set(false);
+    }
   }
 }

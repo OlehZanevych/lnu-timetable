@@ -1,52 +1,59 @@
-# Друкований розрахунок навчального навантаження (PDF)
+# The printable workload calculation (PDF)
 
-Кнопка **«Завантажити PDF»** на вкладці «Оцінка навантаження» (`/department/{id}`) формує
-документ «РОЗРАХУНОК НАВЧАЛЬНОГО НАВАНТАЖЕННЯ науково-педагогічного працівника на 20\_\_/20\_\_
-навчальний рік» для обраного викладача.
+The **«Завантажити PDF»** button on the "Оцінка навантаження" tab (`/department/{id}`) produces the
+document *«РОЗРАХУНОК НАВЧАЛЬНОГО НАВАНТАЖЕННЯ науково-педагогічного працівника на 20\_\_/20\_\_
+навчальний рік»* — the annual teaching-load calculation for one academic staff member.
 
-Документ формується **повністю на клієнті**: жоден байт не йде на сервер, файл віддається
-браузеру як `Blob`. Код: `pdf-writer.ts` (двигун), `workload-report.ts` (сам документ),
-`pdf-fonts.ts` (завантаження шрифтів і віддача файлу).
+The document is built **entirely on the client**: not one byte goes to the server, and the file is
+handed to the browser as a `Blob`. The code is `pdf-writer.ts` (the engine), `workload-report.ts`
+(the document itself) and `pdf-fonts.ts` (font loading and file delivery).
+
+> Ukrainian is kept throughout this document for anything that is *printed* — headings, column
+> captions, statutory wording — and for the names of laws and orders. Those strings are literals, not
+> descriptions, and translating them here would misrepresent what the sheet says. Everything that
+> explains or argues is in English.
 
 ---
 
-## 1. Нормативна основа
+## 1. Legal basis
 
-Єдиного загальнодержавного бланка немає. Те, на чому документ стоїть:
+**There is no single nationwide form.** What the document does rest on:
 
-| Що | Джерело | Як це видно в документі |
+| What | Source | How it shows up in the sheet |
 | --- | --- | --- |
-| 36-годинний робочий тиждень НПП; **максимум 600 годин** навчального навантаження на ставку за навчальний рік | Закон України «Про вищу освіту», **ст. 56** | рядок «Підстава» на титульній сторінці; «Максимальний обсяг навантаження, год» у зведених показниках |
-| Норми часу встановлює сам ЗВО | наказ МОН **№ 187 від 16.02.2022** визнав таким, що втратив чинність, наказ МОН № 450 від 07.08.2002 | документ **не посилається** на № 450; ліміти беруться з `lecturer_workload_constraints` / `default_max_hours_per_year` |
-| Оформлення організаційно-розпорядчих документів | **ДСТУ 4163:2020** | гриф ЗАТВЕРДЖУЮ, береги, гарнітура, нумерація сторінок, форма підпису |
+| The 36-hour working week of academic staff, and a ceiling of **600 hours** of teaching load per full post per academic year | Закон України «Про вищу освіту», **ст. 56** | the «Підстава» line on the title page; «Максимальний обсяг навантаження, год» among the summary figures |
+| Time norms are set by the institution itself | наказ МОН **№ 187 від 16.02.2022** repealed наказ МОН № 450 від 07.08.2002 | the document **does not cite** № 450; the ceilings come from `lecturer_workload_constraints` / `default_max_hours_per_year` |
+| Layout of organisational and administrative documents | **ДСТУ 4163:2020** | the ЗАТВЕРДЖУЮ approval block, margins, typeface, page numbering, signature form |
 
-> **Не цитуйте наказ № 450.** Він скасований з 2022 року. Правильна підстава — ст. 56 Закону
-> «Про вищу освіту» плюс внутрішнє положення ЗВО про норми часу.
+> **Do not cite наказ № 450.** It has been repealed since 2022. The correct basis is ст. 56 of the
+> Law «Про вищу освіту» together with the institution's own regulation on time norms.
 
-Форма самого бланка — спільний знаменник чинних положень КПІ ім. Сікорського (форми К-2 та
-К-4-Б(К)), ЗНУ, ХНЕУ ім. Кузнеця, ХНУМГ ім. Бекетова та ТНПУ: у всіх однакові шапка, семестровий
-поділ, підсумкові рядки і блок підписів. ЛНУ ім. І. Франка власного бланка публічно не оприлюднює
-(у Колективному договорі 2026–2030 є лише норма про 36-годинний тиждень), тому відтворено саме цей
-галузевий стандарт.
+The shape of the form is the common denominator of the regulations currently in force at КПІ
+ім. Сікорського (forms К-2 and К-4-Б(К)), ЗНУ, ХНЕУ ім. Кузнеця, ХНУМГ ім. Бекетова and ТНПУ: all
+five share the same header, the same split by half-year, the same summary rows and the same
+signature block. ЛНУ ім. І. Франка does not publish a form of its own — the 2026–2030 collective
+agreement carries only the 36-hour-week norm — so what is reproduced here is that sector-wide
+standard.
 
-## 2. Оформлення (ДСТУ 4163:2020)
+## 2. Layout (ДСТУ 4163:2020)
 
-| Параметр | Значення | Де в коді |
+| Parameter | Value | Where in the code |
 | --- | --- | --- |
-| Формат | А4 **альбомна**, 297 × 210 мм | `A4_LANDSCAPE` |
-| Береги | ліве 30, праве 10, верхнє 20, нижнє 20 мм | `MARGINS` |
-| Гарнітура | Liberation Serif — метрично сумісна з Times New Roman | `public/fonts/` |
-| Кегль | 8,5–14 пт: основний текст 10,5–11, назва 14, таблиці 8,5–10 | по секціях |
-| Гриф затвердження | «ЗАТВЕРДЖУЮ» у правому верхньому куті першого аркуша (реквізит 16) | `drawApprovalGrif` |
-| Підпис | «Власне ім’я ПРІЗВИЩЕ» — **ініціали стандартом не передбачені** | `drawSignatures` |
-| Нумерація | посередині верхнього берега, **перший аркуш не нумерується** | `drawPageFurniture` |
+| Page | A4 **landscape**, 297 × 210 mm | `A4_LANDSCAPE` |
+| Margins | left 30, right 10, top 20, bottom 20 mm | `MARGINS` |
+| Typeface | Liberation Serif — metrically compatible with Times New Roman | `public/fonts/` |
+| Type size | 8.5–14 pt: body text 10.5–11, title 14, tables 8.5–10 | per section |
+| Approval block | «ЗАТВЕРДЖУЮ» in the top right corner of the first sheet (реквізит 16) | `drawApprovalGrif` |
+| Signature | «Власне ім'я ПРІЗВИЩЕ» — **the standard does not provide for initials** | `drawSignatures` |
+| Page numbers | centred in the top margin, **the first sheet is not numbered** | `drawPageFurniture` |
 
-Альбомна орієнтація — через таблицю «Склад навчального навантаження» на дев’ять колонок: на
-книжковій А4 вона не читається. ДСТУ цього не забороняє, і так роблять усі ЗВО з широкими бланками.
+Landscape orientation is forced by the nine-column «Склад навчального навантаження» table: on
+portrait A4 it is unreadable. ДСТУ does not forbid landscape, and every institution with a wide form
+does the same.
 
-## 3. Структура документа
+## 3. Structure of the document
 
-### Аркуш 1 — титульний
+### Sheet 1 — the title page
 
 ```
                                         ЗАТВЕРДЖУЮ
@@ -54,7 +61,7 @@
                                         Львівського національного університету
                                         імені Івана Франка
                                         ___________   _______________________
-                                          (підпис)     (Власне ім’я ПРІЗВИЩЕ)
+                                          (підпис)     (Власне ім'я ПРІЗВИЩЕ)
                                         «___» ____________ 20___ р.
 
                  МІНІСТЕРСТВО ОСВІТИ І НАУКИ УКРАЇНИ
@@ -66,7 +73,7 @@
        науково-педагогічного працівника на 2026/2027 навчальний рік
 
   ┌─────────────────────┬──────────────┬──────────────┬──────────────┐
-  │ Прізвище, ім’я, …   │ <ПІБ>        │ Кафедра      │ <кафедра>    │
+  │ Прізвище, ім'я, …   │ <ПІБ>        │ Кафедра      │ <кафедра>    │
   │ Посада              │ <посада>     │ Факультет    │ <факультет>  │
   │ Науковий ступінь    │ <ступінь>    │ Навчальний рік│ 2026/2027   │
   └─────────────────────┴──────────────┴──────────────┴──────────────┘
@@ -74,88 +81,95 @@
   Підстава: стаття 56 Закону України «Про вищу освіту» — …
 ```
 
-Розрахунок **завжди** починається з нового аркуша, як у паперових бланках: читач знаходить
-таблиці на тому самому місці незалежно від того, наскільки довгим вийшов документ.
+The calculation **always** starts on a fresh sheet, as it does on the paper forms: the reader finds
+the tables in the same place regardless of how long the document turned out.
 
-### Розділ 1 — Зведені показники навчального навантаження
+### Section 1 — Зведені показники навчального навантаження
 
-Усього годин за рік · у т. ч. перше та друге півріччя · кількість дисциплін · кількість позицій ·
-мінімальний обсяг · максимальний обсяг (з позначкою «(типовий)», коли він узятий із
-`default_max_hours_per_year`, а не з власного обмеження викладача) · відхилення від допустимого
-обсягу («у межах допустимого обсягу», «+N (перевищення)» або «−N (недовантаження)»).
+Total hours for the year · of which first and second half-year · number of disciplines · number of
+load items · minimum volume · maximum volume (marked «(типовий)» when it comes from
+`default_max_hours_per_year` rather than from a ceiling set for this particular lecturer) ·
+deviation from the permitted volume, printed as «у межах допустимого обсягу», «+N (перевищення)» or
+«−N (недовантаження)».
 
-### Розділ 2 — Розподіл годин за видами навчальної роботи
+### Section 2 — Розподіл годин за видами навчальної роботи
 
-Матриця «категорія дисциплін × вид роботи»: Лекції, Практичні, Лабораторні, Консультації,
-Контрольні заходи, Разом — окремо всі дисципліни, обов’язкові та вибіркові.
+A "discipline category × kind of work" matrix: Лекції, Практичні, Лабораторні, Консультації,
+Контрольні заходи, Разом — given separately for all disciplines, for the mandatory ones and for the
+elective ones.
 
-### Розділ 3 — Склад навчального навантаження
+### Section 3 — Склад навчального навантаження
 
-Дві таблиці, по одній на півріччя, кожна зі своїм підсумком, і рядок «ВСЬОГО ЗА НАВЧАЛЬНИЙ РІК»:
+Two tables, one per half-year, each with its own subtotal, followed by a «ВСЬОГО ЗА НАВЧАЛЬНИЙ РІК»
+row:
 
 | № з/п | Курс | Навчальна дисципліна | Тип дисципліни | Спеціальність (освітня програма) | Вид навчальної роботи | Формат проведення | Академічні групи / студенти | Годин |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-Півріччя виводиться **навіть порожнім** («У цьому півріччі позицій навантаження немає») — саме
-такий перекіс вкладка «Оцінка навантаження» й існує, щоб показувати, і тихо ховати його не можна.
-Рядки впорядковано за курсом, потім за дисципліною (українським алфавітом, `compareUk`), потім за
-видом роботи у канонічному порядку `STAT_HOUR_TYPES` — лекції → практичні → лабораторні →
-консультації → контрольні заходи, так само, як їх перелічує розділ 2.
+A half-year is printed **even when it is empty** («У цьому півріччі позицій навантаження немає») —
+that imbalance is precisely what the "Оцінка навантаження" tab exists to show, and quietly hiding it
+is not an option. Rows are ordered by course year, then by discipline (Ukrainian alphabet,
+`compareUk`), then by kind of work in the canonical `STAT_HOUR_TYPES` order — lectures → practicals →
+labs → consultations → assessments — the same order in which section 2 lists them.
 
-### Блок підписів
+### The signature block
 
-Протокол засідання кафедри, далі три підписи — завідувач кафедри, декан факультету, сам
-науково-педагогічний працівник — і дата. Блок ніколи не розривається сторінкою.
+The minutes of the department meeting, then three signatures — head of department, dean of faculty,
+and the staff member — and the date. The block is never split across a page boundary.
 
-## 4. Що навмисно **не** увійшло
+## 4. What was deliberately left out
 
-- **«Відповідність обмеженням»** — окремим проханням. Ці межі (`lecturer_workload_constraints`) є
-  внутрішнім інструментом планування цієї системи, а не характеристикою навантаження, яку
-  затверджують підписом. Мінімум і максимум годин усе ж лишилися у зведених показниках: без них
-  відхилення нічого не означає.
-- **Ставка / частка ставки** та **планове навантаження на займану частку ставки** — у моделі даних
-  немає поля ставки (`Lecturer` зберігає `position` і `academicDegree`, більше нічого).
-- **Вчене звання** — `academicDegree` це науковий ступінь, не звання.
-- **Колонки «план / факт»** (як у формі К-2 КПІ) — система зберігає лише план.
+- **«Відповідність обмеженням»**, by explicit request. Those bounds
+  (`lecturer_workload_constraints`) are an internal planning instrument of this system, not a
+  property of the load that anyone approves with a signature. The minimum and maximum hours did stay
+  in the summary figures: without them the deviation means nothing.
+- **Ставка / частка ставки** (the fraction of a post held) and the planned load for that fraction —
+  the data model has no such field (`Lecturer` stores `position` and `academicDegree`, and nothing
+  else).
+- **Вчене звання** (academic title) — `academicDegree` is a scientific degree, not a title.
+- **«План / факт» columns**, as КПІ's form К-2 has — the system stores the plan only.
 
-Кожен із цих пунктів — це поле в `Lecturer` плюс колонка у `schema.sql`, а не переробка документа.
+Each of these is a field on `Lecturer` plus a column in `schema.sql`, not a redesign of the document.
 
-## 5. Технічні рішення
+## 5. Technical decisions
 
-### Чому власний двигун, а не jsPDF/pdfmake
+### Why a hand-written engine rather than jsPDF or pdfmake
 
-По-перше, у проєкті немає runtime-залежностей, і кожен алгоритм тут написаний вручну
-(`workload-generator.ts`, `workload-stats.ts`, `sort.ts`) — 300 КБ бібліотеки заради однієї кнопки
-непропорційні. По-друге, це й не зняло б головної складності: **чотирнадцять стандартних шрифтів
-PDF підтримують лише Latin-1**, тож українському документові потрібен вбудований Unicode-шрифт
-хай там яким шляхом іти.
+First, the project has no runtime dependencies, and every algorithm in it is hand-written
+(`workload-generator.ts`, `workload-stats.ts`, `sort.ts`) — 300 kB of library for the sake of one
+button is out of proportion. Second, a library would not have removed the hard part anyway: **the
+fourteen standard PDF fonts cover Latin-1 only**, so a Ukrainian document needs an embedded Unicode
+font whichever route you take.
 
-### Як влаштований `pdf-writer.ts`
+### How `pdf-writer.ts` works
 
-- `TtfFont.parse()` читає `head`, `hhea`, `hmtx`, `maxp` і `cmap` (формати 4, 6, 12) і зводить усі
-  метрики до 1000 одиниць на em — простір гліфів PDF.
-- Шрифт вбудовується як `CIDFontType2` з кодуванням `Identity-H`: текст у потоці — це послідовність
-  дворайтових ідентифікаторів гліфів, а не символів. Тому паралельно генерується `ToUnicode` CMap —
-  без неї документ не можна ні виділити, ні знайти пошуком, ні скопіювати.
-- Координати — **міліметри від лівого верхнього кута**; переведення у пункти від лівого нижнього
-  відбувається в одному місці, тож жоден шар компонування про це не думає.
-- Потоки не стискаються: `FlateDecode` вимагав би або власного deflate, або `CompressionStream`, а
-  за розміру шрифту ~16 КБ економія не варта складності. Типовий документ — 60–90 КБ.
-- `drawTable` переносить рядок цілком на наступну сторінку і повторює шапку; `keepTogether` для
-  коротких таблиць, які читаються як одне число, переносить таблицю цілком.
+- `TtfFont.parse()` reads `head`, `hhea`, `hmtx`, `maxp` and `cmap` (formats 4, 6 and 12) and scales
+  every metric to 1000 units per em — PDF's glyph space.
+- The font is embedded as a `CIDFontType2` under `Identity-H` encoding: text in the content stream is
+  a sequence of two-byte glyph identifiers, not of characters. That is why a `ToUnicode` CMap is
+  generated alongside it — without one the document cannot be selected, searched or copied from.
+- Coordinates are **millimetres from the top-left corner**; the conversion to points from the
+  bottom-left happens in exactly one place, so no layout layer above it ever has to think about it.
+- Streams are not compressed: `FlateDecode` would require either a hand-written deflate or
+  `CompressionStream`, and at a font size of ~16 kB the saving is not worth the complexity. A typical
+  document is 60–90 kB.
+- `drawTable` moves a row whole to the next page and repeats the header; `keepTogether`, for short
+  tables that read as a single figure, moves the entire table instead.
 
-### Шрифти
+### Fonts
 
-`public/fonts/LiberationSerif-{Regular,Bold}.ttf` — **підмножини** (латиниця, кирилиця, потрібна
-пунктуація): ~16 КБ замість ~340 КБ на накреслення. Завантажуються `fetch`-ем при першому експорті
-й кешуються на сесію; хто не експортує — не платить нічого. Ліцензія SIL OFL. Команду для
-перегенерації див. у [README](README.md#printable-workload-calculation-pdf-writerts-workload-reportts-pdf-fontsts).
+`public/fonts/LiberationSerif-{Regular,Bold}.ttf` are **subsets** (Latin, Cyrillic, and the
+punctuation actually needed): ~16 kB per weight instead of ~340 kB. They are fetched on the first
+export and cached for the session, so a user who never exports pays nothing. Licence: SIL OFL. The
+command to regenerate them is in the
+[README](README.md#printable-workload-calculation-pdf-writerts-workload-reportts-pdf-fontsts).
 
-Символ поза підмножиною виводиться як `.notdef` (порожній прямокутник), а не ламає генерацію.
+A character outside the subset is emitted as `.notdef` (an empty box) rather than breaking
+generation.
 
-### Тестування
+### Testing
 
-`workload-report.ts` і `pdf-writer.ts` не залежать ні від Angular, ні від DOM, тому документ
-рендериться під Node зі звичайних об’єктів — саме так перевірено верстку, розриви сторінок,
-порожнє навантаження та випадок на 120 позицій. Вивід валідовано `qpdf --check`, а
-`pdftotext` підтверджує, що кирилиця витягується коректно.
+`workload-report.ts` and `pdf-writer.ts` depend on neither Angular nor the DOM, so the document
+renders under Node from plain objects — which is how the layout, the page breaks, an empty load and a
+120-item case were all checked. The output is validated with `qpdf --check`, and `pdftotext`
+confirms that the Cyrillic extracts correctly.

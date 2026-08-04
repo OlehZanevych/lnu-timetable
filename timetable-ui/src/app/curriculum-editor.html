@@ -12,6 +12,15 @@
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 
+<!-- Computed from the drafts on screen, so the figures move while the plan is being edited. -->
+@if (plannedCount()) {
+  <app-curriculum-summary
+    [plan]="plan()"
+    [note]="hasUnsaved()
+      ? 'Показники враховують незбережені зміни на цій сторінці.'
+      : ''" />
+}
+
 <div class="ce-toolbar">
   <label class="ce-search">
     <span>Пошук дисципліни</span>

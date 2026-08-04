@@ -125,8 +125,32 @@ src/app/
 ├── academic-group-list.ts/.html      # child-list widget: academic groups within a specialty
 ├── curriculum-editor.ts/.html        # specialty tab: course-first inline curriculum editor —
 │                                     #   "Редагування планів" (see below)
-├── curriculum-item-list.ts/.html     # child-list widget: curriculum items (semester/course/ECTS/hours)
-├── working-curriculum-list.ts/.html  # child-list widget: working curriculum items under each hours block
+├── curriculum-item-list.ts/.html     # specialty tab: curriculum items (semester/course/ECTS/hours)
+│                                     #   and the printable «Навчальний план» — "Навчальні плани"
+├── curriculum-summary.ts/.html       # the programme's headline figures, shown on both curriculum
+│                                     #   tabs — presentational, renders a CurriculumPlan
+├── curriculum-plan.ts                # what a curriculum adds up to, and where it departs from
+│                                     #   the limits set for it — pure
+├── plan-limits.ts                    # those limits, read from global_properties — pure
+├── global-properties.service.ts      # GlobalPropertiesService: the settings table, loaded once
+├── curriculum-report.ts              # the printable «НАВЧАЛЬНИЙ ПЛАН» sheet — pure, returns bytes
+├── working-curriculum-list.ts/.html  # specialty tab: assign a department to each hours block —
+│                                     #   "Редагування робочих планів"
+├── working-curriculum-view.ts/.html  # specialty tab: the same plan read as a document, by course year,
+│                                     #   with the printable working curriculum — "Робочі навчальні плани"
+├── working-curriculum-summary.ts/.html # the working curriculum's headline figures, shown on both
+│                                     #   curriculum tabs — presentational
+├── working-curriculum-plan.ts        # which department delivers what, and what it adds up to
+│                                     #   per department — pure
+├── working-curriculum-report.ts      # the printable «РОБОЧИЙ НАВЧАЛЬНИЙ ПЛАН» — pure, returns bytes
+├── course-page.ts/.html              # "/course/:id" — one discipline across curricula, working
+│                                     #   curricula and workloads (lazy route)
+├── lecturer-page.ts/.html            # "/lecturer/:id" — one lecturer: classes and timetable (lazy)
+├── room-page.ts/.html                # "/room/:id" — one room: details and occupancy (lazy)
+├── timetable-grid.ts                 # timetable entries → the grid every view and the PDF read
+│                                     #   — pure
+├── timetable-view.ts/.html           # the one read-only timetable, mounted five ways
+├── timetable-report.ts               # the printable «РОЗКЛАД ЗАНЯТЬ» — pure, returns bytes
 ├── combined-working-curriculum-item-list.ts/.html  # department tab: propose/manage merges of
 │                                                    #   working curriculum items into a shared
 │                                                    #   CombinedWorkingCurriculumItem
@@ -161,7 +185,7 @@ src/app/
 
 ### The pure modules
 
-Six files carry the logic that is not UI. All of them are free of Angular, GraphQL and I/O: they
+Thirteen files carry the logic that is not UI. All of them are free of Angular, GraphQL and I/O: they
 take plain objects and return plain objects, so each can be unit-tested (or run under Node) on its
 own, and the components' only job is to map data in and apply results out. This is the single most
 load-bearing convention in the app — every algorithm here is hand-written, and none of them is
@@ -172,6 +196,13 @@ allowed to reach for a service.
 | `workload-generator.ts` | which lecturer delivers which working curriculum item | [WORKLOAD-GENERATION.md](./WORKLOAD-GENERATION.md) |
 | `timetable-solver.ts` | day / start time / room / week parity for every class session | [TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) |
 | `workload-stats.ts` | per-lecturer hour totals and deviation from the constraints | *Workload statistics*, below |
+| `plan-limits.ts` | the limits a plan is measured against, read from `global_properties` | *Curriculum limits are settings*, below |
+| `curriculum-plan.ts` | what a specialty's curriculum adds up to, and its compliance with those limits | [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) |
+| `curriculum-report.ts` | the printable «Навчальний план» sheet | [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) |
+| `working-curriculum-plan.ts` | which department delivers what, and the hours that projects onto each | [WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) |
+| `working-curriculum-report.ts` | the printable «Робочий навчальний план» sheet | [WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) |
+| `timetable-grid.ts` | timetable entries → day × class slot × subject, for every view and the sheet | *The four timetables*, below |
+| `timetable-report.ts` | the printable «Розклад занять» sheet | [TIMETABLE-PDF.md](./TIMETABLE-PDF.md) |
 | `workload-report.ts` | the printable «Розрахунок навчального навантаження» sheet | [WORKLOAD-PDF.md](./WORKLOAD-PDF.md) |
 | `pdf-writer.ts` | a PDF, from scratch, including the TrueType subsetting | *Printable workload calculation*, below |
 | `sort.ts` | `compareUk` — the one Ukrainian-alphabet comparator | *Ukrainian sorting*, below |
@@ -217,6 +248,14 @@ column is to show which row *is* the default one; `edit(row)` seeds the form wit
 rather than `?? ''`, because `''` would also be read as "empty"; and `buildInput` always sends the
 value, since an unticked box is a value rather than an absence. Without the last two, a set could
 be made the default but never un-made.
+
+An entity may also declare `detailRoute` — the path of its own drill-down page. Set it, and every
+generic table of that entity grows an **«Відкрити →»** link in its actions column: not only the
+standalone `/e/…` page but every embedding of it, so the faculty page's «Дисципліни» and «Аудиторії»
+tabs and the department page's «Викладачі» tab all lead somewhere without a line of their own.
+`Course`, `Lecturer`, `Room`, `Specialty` and `AcademicGroup` carry one. That the link is metadata
+rather than markup is the point: the alternative was the same anchor pasted into four call sites and
+forgotten in the fifth.
 
 A `ref` field may also carry `parentFilter: { namespace, list, label }`. That swaps its plain
 dropdown for `DeptFacultySelect` — a second select above it, loaded from that connection, which
@@ -294,12 +333,27 @@ and composing purpose-built child-list components rather than going through `Bas
   below), lecturer workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below), the
   department-wide summary (`DepartmentWorkloadSummary` — "Зведене навантаження") and the
   per-lecturer assessment (`LecturerWorkloadDetail` — "Оцінка навантаження", see below).
-- **`SpecialtyDetailPage`** (`/specialty/:id`): info, the course-first curriculum editor
-  (`CurriculumEditor`, "Редагування планів"), curriculum items (`CurriculumItemList`,
-  "Навчальні плани") and, in a separate tab, working curriculum items (`WorkingCurriculumList`)
-  per hour block — all three see below — plus academic groups (`AcademicGroupList`).
+- **`SpecialtyDetailPage`** (`/specialty/:id`): info, then **each plan twice — once to edit, once to
+  read** — plus academic groups (`AcademicGroupList`). The curriculum is entered course-first
+  (`CurriculumEditor`, "Редагування планів") and read as a table with its printable «Навчальний
+  план» (`CurriculumItemList`, "Навчальні плани"); the working curriculum is entered by hanging a
+  department off each hours block (`WorkingCurriculumList`, "Редагування робочих планів") and read as
+  a document with its own printable sheet (`WorkingCurriculumView`, "Робочі навчальні плани"). All
+  four see
+  below. The editors are shaped for *entering* data and the readers for *checking* it, which is why
+  neither shape serves both.
 - **`AcademicGroupDetailPage`** (`/academic-group/:id`): info, students. (No workload tab here —
   workloads are managed per-department, not per-group.)
+- **`CourseDetailPage`** (`/course/:id`), **`LecturerDetailPage`** (`/lecturer/:id`) and
+  **`RoomDetailPage`** (`/room/:id`): the three entities that were only ever rows in a table now have
+  pages of their own — all three see below. They are **lazy routes** (`loadComponent`), because each
+  is a whole screen with its own aggregate query, none is on the path to a timetable, and the main
+  bundle sits close to its budget.
+
+The faculty page gained two tabs in the same round: «Групи аудиторій» under *Структура* (the generic
+`RoomGroup` table, scoped and preset to the faculty — `room_groups_scope_check` forbids a group
+carrying both a faculty and a department, so presetting `facultyId` is what keeps a created row
+valid) and «Розклад факультету» under *Розклад*. The department page gained «Розклад кафедри».
 
 #### Editing a curriculum course-first (`CurriculumEditor`, specialty "Редагування планів" tab)
 
@@ -341,7 +395,52 @@ dropdown and the resulting curriculum table display a course's tags (`Course.tag
 above) after its name in parentheses, e.g. "Database Systems (англійською)"
 (`CurriculumItemList.courseLabel`).
 
-The "Робочі навчальні плани" tab of the specialty page renders, for every `CurriculumItem`:
+#### The programme's headline figures (`CurriculumSummary`, both curriculum tabs)
+
+Above both the table and the editor sits the same strip: programme volume in credits and hours, the
+mandatory components, the **share of elective components** (tinted red below the 25 % of ст. 62 ч. 1
+п. 15 of the Закон України «Про вищу освіту»), and the length of study the semesters span — then any
+statutory rule the plan breaks, one line each.
+
+`CurriculumSummary` is purely presentational: it renders a `CurriculumPlan` and computes nothing, so
+the two tabs and the PDF cannot show three different numbers. The two hosts build that plan
+differently, and deliberately: the table's comes from what is stored, while the **editor's is
+computed from the drafts on screen, unsaved edits included**, so the 25 % share moves as fields are
+typed into and a plan can be brought within ст. 5 and ст. 62 before anything is written. That works
+only because every editable value in `CurriculumEditor` is its own signal — a `computed()` over
+plain fields would memoise the first value it ever read (see the zoneless note above).
+
+#### The printable curriculum (`curriculum-plan.ts`, `curriculum-report.ts`)
+
+The "Навчальні плани" tab carries a **«Завантажити PDF»** button producing the sheet an academic
+council approves — «НАВЧАЛЬНИЙ ПЛАН підготовки здобувачів вищої освіти» — for the specialty being
+looked at.
+Written **entirely on the client**, like the workload sheet: nothing is sent to the server and the
+file downloads straight from a `Blob`, with the embedded font fetched once per session.
+
+- **`curriculum-plan.ts`** — the arithmetic and the norms. It folds the curriculum items into the
+  parts a Ukrainian plan is read in (mandatory and elective components, course works, practical
+  training, attestation, and optional subjects **outside** the programme), totals each of them and
+  each semester, and measures the result against the Закон України «Про вищу освіту»: programme
+  volume per degree (ст. 5), the 25 % elective share (ст. 62 ч. 1 п. 15), 30 hours per credit checked
+  position by position, and 60 credits per year (ст. 1 п. 14), plus two advisory checks — disciplines
+  and examinations per semester — labelled as **settled practice, not law**, so a deviation from them
+  never reads as a violation.
+- **`curriculum-report.ts`** — the document: a title sheet with the «ЗАТВЕРДЖЕНО / Вченою радою»
+  approval block (a curriculum is approved by a collegial body — ст. 36 ч. 2 п. 8 — so the form
+  differs from the workload sheet's «ЗАТВЕРДЖУЮ»), the summary figures, the summary by semester, the
+  fifteen-column «План освітнього процесу» under a three-level header, the distribution of hours by
+  kind of work, the compliance table and the signature chain.
+
+**There is no state template for a curriculum**, and citing one is the mistake to avoid: the single
+national form lived in the appendices to наказ МО України № 161 від 02.06.1993, which **was
+repealed** (наказ МОН № 1310 від 13.11.2014). What the law fixes is the content, not the layout —
+[CURRICULUM-PDF.md](./CURRICULUM-PDF.md) sets out which part of the document answers to which
+article, which parts are the common practice of Ukrainian institutions, and what the data model
+cannot yet fill in (the academic-year calendar, the name of the field of knowledge, the programme's
+ЄДЕБО identifier).
+
+The "Редагування робочих планів" tab of the specialty page renders, for every `CurriculumItem`:
 a header block ("Семестр 1, Дисципліна: …, Форма контролю: …, ECTS: …"), then one child block
 per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours block a table of
 `WorkingCurriculumItem` rows with an add/edit modal (`WorkingCurriculumList`) offering:
@@ -355,6 +454,145 @@ per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours 
   many-to-many mutation field), and
 - when the curriculum item's course is an `ELECTIVE_GROUP`, an extra **elective course**
   dropdown scoped to that group's child courses.
+
+#### Reading the working curriculum, and printing it (`WorkingCurriculumView`, `working-curriculum-plan.ts`, `working-curriculum-report.ts`)
+
+Both working-curriculum tabs open with the same strip — volume, **how many blocks of hours have been
+assigned to a department**, how many departments deliver them, and the projected load hours —
+rendered by `WorkingCurriculumSummary` from the plan below it. On the editing tab that is the point:
+a page of nested blocks cannot show whether the last block of hours has found an owner, and the
+coverage figure moves as departments are assigned. It covers every course year there, since the
+editor is not scoped to one; the reading tab's follows that tab's course-year filter.
+
+The "Робочі навчальні плани" tab is the same rows read as a document rather than edited. The tab
+above it nests three levels deep — curriculum item → hours block → working item — which is the right
+shape for assigning one department to one block of hours and the wrong one for seeing what a year
+actually looks like. This one flattens them into **one line per discipline**, carrying the department
+(or departments, named with the kinds of work each took) behind it, and never writes.
+
+A **course-year filter** scopes the page, because a working curriculum is drawn up **for one academic
+year** — the one thing every institutional regulation agrees on. The model stores no cohort or intake
+year, so
+the year is chosen here rather than read; «усі курси» is offered too, and both the page and the
+document say which of the two they are showing.
+
+Below the table, the same plan **per department**: positions, disciplines, hours by kind, and the hours
+each department is projected to teach. That projection is the point of the page — it is what
+`LecturerWorkloadList` will later have to fit real people into — and it applies **the rule
+`workload-stats.ts` already uses**: several lecturers on one position each accrue the *full* hours
+(parallel subgroups, not a shared stream), and `INDIVIDUALLY` costs `hours × students`. There is no
+state norm to apply — наказ МОН № 450 від 07.08.2002 was repealed (наказ МОН № 187 від 16.02.2022) —
+so the sheet states its rule in its own text rather than implying an authority for it.
+
+A discipline with hours nobody has been made responsible for is tinted, listed as «не закріплено»,
+and counted in the header: closing those gaps is the whole job of a working curriculum, and hours
+with no department behind them never become anyone's workload.
+
+**The working curriculum has no legal footing at all** — a stronger statement than the one about the
+curriculum. The only act that ever defined it (наказ МО України № 161 від 02.06.1993) said one
+sentence about it and was repealed in 2014; the Закон «Про вищу освіту» does not use the term; the
+Ліцензійні умови require a working curriculum of schools and kindergartens but ask higher education
+institutions only for the curriculum.
+[WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) has the full account,
+including the trap that two legislation aggregators print the repealed order's sentence *inside*
+ст. 10 ч. 4 of the current law.
+
+#### One discipline end to end (`CourseDetailPage`, `/course/:id`)
+
+A `Course` is referenced from four directions — it sits in curricula, those curricula's hour blocks
+are handed to departments as working curriculum items, those become lecturer workloads, and those
+become classes in the timetable. Until this page existed, seeing any of it meant walking the
+specialty and department pages one at a time and holding the result in your head.
+
+The page walks the chain once and opens with what it adds up to: how many curricula the discipline
+appears in and for how many credits, its contact hours against its normative volume, how many
+departments deliver it, and how many lecturers and scheduled classes are behind it. Three tabs then
+show the levels themselves — «Навчальні плани» (one row per curriculum item, with its hour
+breakdown), «Робочі навчальні плани» (one row per delivery position, with its department, format and
+groups) and
+«Навантаження викладачів» (the same positions with the lecturers actually carrying them, rows
+without one tinted).
+
+It needed one backend change: `curriculumItemConnection` gained a **`courseId` filter**. `Course` has
+no `curriculumItems` relation to walk — its `@OneToMany` fields are `childCourses` and `tags` — and a
+filter was narrower than a relation, which would have appeared on every `Course` selection in the
+schema.
+
+#### Lecturer and room pages (`LecturerDetailPage`, `RoomDetailPage`)
+
+The department pages already answer «who is overloaded?» and «who should take this?». The lecturer
+page answers what a lecturer asks themselves: «Дисципліни та заняття» lists the workloads they hold —
+discipline, kind of work, hours, semester, groups, and how many classes of each are actually
+scheduled — and «Розклад» renders their own timetable. Its headline tints when someone holds
+workloads but has nothing in the timetable, which is precisely the state that looks fine on every
+other screen.
+
+The room page is smaller: details, and the occupancy grid. That view is the one kind of timetable
+institutions essentially never publish — ЛНУ offers it as an internal mode of «ПС-Розклад», КПІ has
+no room filter at all — and the printed sheet says so.
+
+#### The four timetables (`timetable-grid.ts`, `TimetableView`)
+
+One grid, mounted five ways. `buildTimetableGrid(entries, { columnMode, academicHourMinutes })` puts
+the day and the class slot down the side and whatever is being compared across the top, and
+`columnMode` decides which of the four documents it is:
+
+| Where | `columnMode` | Scope passed | What it is |
+|---|---|---|---|
+| faculty → «Розклад факультету» | `group` | the faculty's academic groups | the timetable a faculty publishes |
+| department → «Розклад кафедри» | `lecturer` | the department's lecturers | the lecturer timetable a department works from |
+| `/lecturer/:id` → «Розклад» | `single` | that lecturer | one person's classes |
+| `/room/:id` → «Розклад» | `single` | that room | the room timetable |
+
+`timetableEntryConnection` has no `facultyId` or `departmentId` filter — it filters by
+`academicGroupIds`, `lecturerIds` and `roomIds` — so the faculty and department pages resolve their
+ids first and pass them in. That is also why the grid is a *pure* module and the loading lives in
+`TimetableView`: four pages sharing one query, one grid, one semester filter and one export is four
+fewer chances for the same timetable to render four different ways.
+
+An entry appears **once per column it belongs to**: a lecture given to three groups occupies three
+cells of a group-column grid. That is what makes a group's column readable top to bottom, and it is
+how the published sheets look.
+
+**The semester filter is on by default, and it matters.** `timetable_entries` carry no semester of
+their own — it lives two joins away on the curriculum item — so an unfiltered grid overlays autumn
+and spring, and rooms appear double-booked when they are not. Each view passes the backend's
+`semesterParity` relation filter, defaulting to the `current_semester_parity` setting. The older
+read-only `/timetable` page still has no such filter; see [Notes / known
+limitations](#notes--known-limitations).
+
+The one number the grid needs — how long an academic hour is — comes from `global_properties` rather
+than a constant, because institutions genuinely differ: ЛНУ and ЗНУ use 40 minutes, КПІ and
+Грінченка 45, and a class runs 80 minutes at ЛНУ against 95 at КПІ.
+
+#### The printable class timetable (`timetable-report.ts`)
+
+All four views carry a **«Завантажити PDF»** button, and all four produce the layout ЛНУ actually
+publishes — verified against the current sheets of the faculty of applied mathematics and
+informatics and the economics and philosophy faculties: day → class slot down the side, groups
+across, and a cell reading discipline → kind of class → room → position and surname.
+
+**Only the faculty sheet is a document anyone signs**, and the split runs through one predicate,
+`isOfficial(kind)`. The faculty sheet carries the «ЗАТВЕРДЖУЮ» approval block, the МОН → university
+→ faculty letterhead, a «ПОГОДЖЕНО» countersignature and a signature block; the department, lecturer
+and room sheets carry a compact heading, the grid, the bells and the line «Довідковий документ.
+Затвердженню не підлягає». This is not tidiness — it is what institutions do. What they approve and
+publish is the timetable of academic groups; a lecturer timetable is served from a web service rather
+than issued on paper, and a room timetable is an internal instrument of the dispatch office. An
+approval block on those would assert an approval that never happened.
+
+A sheet about **one** subject is laid out as a **list** rather than a one-column grid — day · slot ·
+time · week · discipline · kind of class · room · plus the other party — because a lecturer reading
+their own timetable wants "when and where" in order, and one column stretched across a landscape
+sheet gives them neither.
+
+**The class timetable has no legal existence at all**, which is a stronger statement than for either
+plan: the term is absent from the Закон «Про вищу освіту», absent from the list of documents
+ст. 30 ч. 2 of the Закон «Про освіту» requires an institution to publish, and named in the Ліцензійні
+умови only for schools and kindergartens. Even «академічна година 45 хв» and «пара = дві академічні
+години» come from the repealed наказ № 161. [TIMETABLE-PDF.md](./TIMETABLE-PDF.md) has the full account, the
+per-institution spread of every figure, and what the data model cannot yet express (two-shift days,
+per-building bell grids, the order a timetable is put into effect by).
 
 #### Workload constraints (`LecturerConstraintList`, department "Обмеження навантаження" tab)
 
@@ -556,13 +794,24 @@ Three files, and the split matters:
   `ToUnicode` CMap so the result stays selectable and searchable, and offers text, wrapping, lines,
   rectangles and a bordered table renderer that breaks across pages and repeats its header.
   Coordinates are **millimetres from the top-left corner**, because that is the vocabulary the
-  document rules are written in; font sizes stay in points, as in Word.
+  document rules are written in; font sizes stay in points, as in Word. A table header may also be
+  a **grid of several rows** (`headerRows`, whose cells carry `colSpan` *and* `rowSpan`), which is
+  what lets the curriculum sheet write «Кількість годин» over «Аудиторні заняття» over «лекції /
+  практичні / лабораторні» the way it is spoken; the block is measured once and repainted on every
+  page the table runs onto.
 - **`workload-report.ts`** — the document itself, pure and framework-free like `workload-stats.ts`:
   it takes a `LecturerStats` plus the department context and returns bytes, so it can be rendered
   under Node in a test as easily as in the browser. It does no arithmetic of its own beyond summing
   rows, so the sheet and the screen cannot disagree.
 - **`pdf-fonts.ts`** — the browser-side glue: fetches the font subsets lazily on the first export,
   caches the parsed faces for the session, and triggers the download.
+
+**The whole engine is a lazy chunk.** Every export handler reaches its report through a dynamic
+`import()` — `pdf-fonts`, the report module and `workload-report` are pulled in only when the button
+is pressed. Three sheets now share `pdf-writer.ts`, none of them on the path a user takes to look at
+a timetable, and together they are ~90 kB of the bundle; keeping them out of `main` is the same
+bargain the font subsets already make, and it is what brings the build back under its 1 MB budget.
+The cost is that the three `downloadX()` methods are `async` and set `exporting` in a `finally`.
 
 **Why a hand-written writer rather than jsPDF/pdfmake.** Two reasons. The project has no runtime
 dependencies to speak of and every algorithm here is hand-written (`workload-generator.ts`,
@@ -589,11 +838,11 @@ A character outside that set renders as `.notdef` rather than failing — add it
 re-subset if one is ever needed.
 
 The document's structure, and what in Ukrainian practice each part answers to, is written up in
-[WORKLOAD-PDF.md](WORKLOAD-PDF.md). In short: гриф ЗАТВЕРДЖУЮ, шапка МОН → ЗВО → факультет →
-кафедра, назва, дані працівника and the legal basis on the title sheet; then зведені показники,
-розподіл годин за видами навчальної роботи, склад навантаження за півріччями with per-half and
-annual totals, and a signature block. Landscape А4, береги 30/10/20/20 мм, page numbers from the
-second sheet — ДСТУ 4163:2020.
+[WORKLOAD-PDF.md](WORKLOAD-PDF.md). In short: the «ЗАТВЕРДЖУЮ» approval block, the МОН → university
+→ faculty → department letterhead, the title, the staff member's details and the legal basis on the
+title sheet; then the summary figures, the distribution of hours by kind of work, and the load itself
+by half-year with per-half and annual totals, followed by a signature block. Landscape A4, margins
+30/10/20/20 mm, page numbers from the second sheet — ДСТУ 4163:2020.
 
 **"Відповідність обмеженням" is deliberately left out.** Those bounds are an internal planning aid
 of this system, not a reviewable attribute of the workload, and a signed form should not carry
@@ -604,7 +853,7 @@ them.
 The "Навантаження викладачів" tab opens with a generation panel offering two modes: **лише
 незаповнені та неповні** (fill workloads with no lecturers, or fewer than their item's
 `lecturerCount` — a lab needing two with only one assigned) and **перевизначити всіх** (reassign the
-whole department from scratch). Nothing is written until you press Застосувати: generation produces
+whole department from scratch). Nothing is written until you press «Застосувати»: generation produces
 a plan, and the panel shows what would change, which slots it couldn't fill, and which lecturer
 minimums remain unmet.
 
@@ -722,14 +971,60 @@ Three things about it are specific to scheduling *one faculty inside a shared un
   already had and is reported as «не переплановано» — a heuristic running out of options is not a
   reason to remove a class.
 
+#### Curriculum limits are settings (`plan-limits.ts`, `GlobalPropertiesService`)
+
+Every figure a plan is measured against — hours per ЄКТС credit, programme volume per degree, the
+elective share, the ceilings on disciplines and examinations per semester, the annual volume and its
+tolerance — is a row in `global_properties`, not a constant. Fourteen of them, seeded by `data.sql`
+with the figures the Закон «Про вищу освіту» states, and every one editable on «Глобальні
+властивості».
+
+They had to move for two different reasons. The statutory ones change when the law does — ст. 62
+ч. 1 п. 15 was rewritten by Закон № 3642-IX in 2024 — and the practice ones differ between
+institutions by design, since ст. 32 leaves the form of the educational process to each institution.
+Neither is something an institution should have to fork the client to change.
+
+Three consequences worth knowing:
+
+- **A cleared limit is not a limit.** An emptied field means «не встановлено», and the check resting
+  on it is dropped from the screens *and* from the printed «Відповідність» table — a signed sheet
+  must not carry a verdict against a rule nobody put in force. `hours_per_ects_credit` is the sole
+  exception: it is arithmetic rather than a rule, every total is computed from it, so clearing it
+  falls back to 30 instead of leaving the totals undefined.
+- **The screens name the figure, the documents name its source.** A `ComplianceCheck` now carries
+  `norm` (a bare «180–240 кредитів ЄКТС») and `source` (ст. 5 …) separately. The tabs render `norm`
+  alone — quoting an article beside a number an administrator chose would attribute their decision
+  to the legislature — while the PDFs keep the citation, in a «Підстава норми» column of their own.
+- **`GlobalPropertiesService` holds the table**, loaded once per session and re-read after a save,
+  so a changed limit reaches all four plan tabs rather than only the page it was edited on. Its
+  `limits` is a **computed signal**, which is what makes a component's own `computed()` re-run when
+  the settings arrive instead of memoising the defaults (see the zoneless note above). Two older
+  screens still fetch `default_max_hours_per_year` with a query of their own — see [Notes / known
+  limitations](#notes--known-limitations).
+
 #### Global settings (`GlobalPropertiesPage`, `/global-properties`)
 
-Lists every row of the backend's `global_properties` table (name/type/value) with an inline
-editable value: `INTEGER`/`DECIMAL` types render a number input, `current_semester_parity`
-(the only `ENUM`-typed property today) gets a dedicated ODD/EVEN `SearchSelect` since
-`global_properties` carries no allowed-values metadata to derive that generically from, and
-everything else falls back to a plain text input. Saves go through the single
-`updateGlobalProperty(name, value)` mutation described in the backend README.
+The settings editor, **grouped and type-driven**. The table is a flat name/type/value store, and a
+flat list of it reads as unrelated switches; what an administrator wants is "what an academic year
+is" in one place and "what a curriculum must look like" in another. So the page renders five
+sections —
+Освітній процес · Навчальне навантаження · Обсяг освітньої програми · Обсяг за освітніми ступенями ·
+Обмеження навчального плану — each with a sentence saying what it governs, and each property with a
+hint under its label. A row seeded straight into the database that this build does not know about
+still appears, under «Інші налаштування», labelled by its raw name: unknown is not the same as
+uneditable.
+
+**The type drives the editor and the validation instead of being a column.** `INTEGER` gets a
+whole-number field that refuses a fraction, `DECIMAL` a fractional one, `BOOLEAN` a checkbox, `ENUM`
+a dropdown (`current_semester_parity` is still the only one, and its ODD/EVEN options are still
+hard-coded, since `global_properties` carries no allowed-values metadata). A column reading
+"INTEGER" told a reader nothing they could act on; a field that will not accept `3.5`, and a save
+button that stays disabled with «Потрібне ціле число» beside it, say the same thing where it
+matters. A limit marked optional may be emptied — that is how a check is switched off — while a
+property the system computes from is required and says so.
+
+Saves still go through the single `updateGlobalProperty(name, value)` mutation described in the
+backend README, and then refresh `GlobalPropertiesService` so the plan screens follow.
 
 ### Reusable form controls
 
@@ -777,9 +1072,12 @@ group by `halfYearOf(...)` across the whole programme and still show the course 
 only stays consistent while both read the same helper.
 
 This vocabulary is applied in the two workload assessment views ("Зведене навантаження" and
-"Оцінка навантаження"). The workload tree itself, the curriculum editor, the curriculum item and
-working curriculum item tables, the combined-items section and the schedule builder still label
-things "Семестр N" — see [Notes / known limitations](#notes--known-limitations).
+"Оцінка навантаження"), and half-applied in "Робочі навчальні плани", which shows the course year
+and the semester as separate columns because a working curriculum is scoped by the first and ordered
+by the second. The workload
+tree itself, the curriculum editor, the curriculum item and working curriculum item tables, the
+combined-items section and the schedule builder still label things "Семестр N" — see [Notes / known
+limitations](#notes--known-limitations).
 
 ### Ukrainian sorting (`sort.ts`)
 
@@ -815,6 +1113,9 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 | `/department/:id` | `DepartmentDetailPage` | department detail |
 | `/specialty/:id` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
 | `/academic-group/:id` | `AcademicGroupDetailPage` | group detail |
+| `/course/:id` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads |
+| `/lecturer/:id` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable |
+| `/room/:id` | `RoomDetailPage` | **lazy** — one room and its occupancy |
 | `/timetable` | `Timetable` | weekly grid |
 | `/global-properties` | `GlobalPropertiesPage` | system-wide settings editor |
 | `/e/building` | `BuildingHome` | building tiles (overrides the generic table for this entity) |
@@ -828,6 +1129,17 @@ settings page ("Глобальні властивості"), and — only for an
 signed-in user's name, an «АДМІН» badge where it applies, and the password / sign-out controls.
 `CombinedGroup` has no sidebar link of its own — it's only reachable embedded in the Faculty page's
 "Об'єднані групи" tab (see above), not as a standalone `/e/…` route.
+
+The three detail pages added last — `/course/:id`, `/lecturer/:id`, `/room/:id` — have no sidebar
+link either, and that is deliberate: nobody navigates to a discipline or a room from a menu, they
+arrive from the list they were already reading. Every such list carries an «Відкрити →» link in its
+last column, driven by `EntityMeta.detailRoute` (see [Generic CRUD
+tables](#generic-crud-tables-entitiests--baseentity)), so the route is reachable from wherever the
+entity is mentioned rather than from one place. They are also the only three `loadComponent` routes
+in the file. Each pulls in `TimetableView`, the grid and — on the Course page — the whole aggregation
+of curricula and workloads; eagerly bundled they took the initial chunk to 995.66 kB against a
+1.00 MB error budget. Lazily loaded it sits at 963.53 kB, and the cost is one extra request the
+first time a user opens one of the three.
 
 ---
 
@@ -975,6 +1287,12 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   to its limit, and of what it does show, autumn and spring classes appear to share rooms and slots.
   Every other consumer of that table filters by semester for exactly this reason (see the backend
   README's *Reading the current timetable*); this page predates the filter and has not been updated.
+  The contrast is now visible inside the app: the four `TimetableView` screens — faculty, department,
+  lecturer and room — each open on `current_semester_parity` and let the reader switch, so the
+  same underlying rows read one way on `/timetable` and another on `/faculty/:id`. Reconciling them
+  means giving `/timetable` the same filter, or replacing it with `TimetableView` in `columnMode:
+  'group'` and a faculty picker — the second is the smaller change, since that component already
+  does everything the page does.
 - **A route deeper than three path segments would 404 on reload** when the app is served from the
   packaged jar rather than from `ng serve`. The service's deep-link fallback matches a fixed list of
   patterns rather than a catch-all, so that requests for real files still reach the static resource
@@ -991,6 +1309,36 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   `BuildingPage`, is dead code: `/e/building` is claimed by `BuildingHome`, and the `BuildingPage`
   that `app.routes.ts` imports is the unrelated drill-down component from `building-page.ts`. Two
   different classes share the name, and the generic one has no importer.
+- **The printed curriculum measures every specialty against the 25 % elective share of
+  ст. 62 ч. 1 п. 15, including those it should measure against 10 %.** The Закон № 3642-IX revision
+  of that clause lowers the floor to 10 % for specialties giving access to professions under
+  additional regulation (medicine, law, teacher training, …), but `specialties` carries no such flag,
+  so the check always applies the stricter bound. Its verdict on a regulated specialty is therefore a
+  lower bound, not a finding. The same section of [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) lists what
+  else the model cannot fill in — the academic-year calendar, the name of the field of knowledge, the
+  programme's ЄДЕБО identifier, the year of intake — each a field in `Specialty` rather than a change
+  to the document.
+- **The working curriculum has no year of its own.** It belongs to one academic year and one intake,
+  but `Specialty` stores neither, so the course year is picked with a filter and the academic year
+  comes from the date the file is generated. Two consequences: a sheet printed in July and one
+  printed in September of the same planning round carry different years in their titles (the cutover
+  is 1 August, matching `academicYearLabel`), and «усі курси» produces a document that is not a
+  working curriculum in the usual sense — which is why the page says so and the sheet repeats it in
+  its notes.
+- **Two screens still read `default_max_hours_per_year` with a query of their own.**
+  `department-workload-summary.ts` and `lecturer-workload-detail.ts` predate
+  `GlobalPropertiesService` and each fetch that one property directly, so a change made on «Глобальні
+  властивості» reaches them on their next load rather than immediately, and costs a round trip per
+  screen. Moving them over is a two-line change in each; it was left out of the settings work to keep
+  that change to the curriculum limits.
+- **The faculty page's «Групи аудиторій» tab can only ever produce faculty-scoped groups.** It
+  presets and filters on `facultyId`, which is what makes a row created there satisfy
+  `room_groups_scope_check` (a group may carry a faculty **or** a department, not both). The
+  consequence is that a department-scoped group is invisible on the faculty page even when it
+  belongs to one of that faculty's departments, and can only be created from `/e/room-group` or from
+  the department page's own list. The tab is a scoped view, not the full picture — which is the
+  right default, since a faculty-level group is the common case, but it means "this faculty has no
+  room groups" should be read as "no faculty-scoped ones".
 - Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
   `CurriculumEditor` renders a block per course of the specialty, which can be 240 of them on the
   largest — hence its name filter and "лише заплановані" toggle rather than pagination.
@@ -1003,7 +1351,7 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   *added* through it (an existing one is preserved and editable). The roster is also fetched with
   `limit: 500` per group and has no filter of its own — fine for a group, awkward for an item
   spanning many.
-- The курс / півріччя vocabulary (see [Academic terms](#academic-terms-entitiests)) has only been
+- The course-year / half-year vocabulary (see [Academic terms](#academic-terms-entitiests)) has only been
   rolled out across the two assessment views — "Зведене навантаження" and "Оцінка навантаження".
   Six other places still speak in raw semester numbers: the curriculum editor, `CurriculumItemList`,
   `WorkingCurriculumList`, `CombinedWorkingCurriculumItemList`, the schedule builder's parity filter
@@ -1011,11 +1359,11 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   the same stored number — but the same semester reads two different ways depending on which tab
   you are on. `termLabel`/`termLabelShort` exist precisely so that sweep is a rename, not a
   rewrite; `termLabelShort` currently has no caller.
-- The PDF report has no ставка (частка ставки) field, because the data model has none: `Lecturer`
-  stores посада and науковий ступінь but not the fraction of a post held, so the form shows the
-  norm and the actual load without the "планове навантаження на займану частку ставки" line a
-  paper розрахунок usually carries. Вчене звання is likewise absent — `academicDegree` is a
-  degree, not a title. Both would be a `Lecturer` field plus a column in `schema.sql`.
+- The PDF report has no field for the fraction of a post held (ставка), because the data model has
+  none: `Lecturer` stores position and academic degree but not that fraction, so the form shows the
+  norm and the actual load without the «планове навантаження на займану частку ставки» line a paper
+  calculation usually carries. An academic title (вчене звання) is likewise absent — `academicDegree`
+  is a degree, not a title. Both would be a `Lecturer` field plus a column in `schema.sql`.
 - `workload-report.ts` never inflects a stored name. Ukrainian needs the genitive for "завідувач
   кафедри *прикладної математики*" and "декан *механіко-математичного факультету*", and that
   cannot be derived reliably from a nominative name, so the signature block says just «Завідувач

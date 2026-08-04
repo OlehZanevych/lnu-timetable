@@ -9,9 +9,10 @@ import { TimetableConstraintList } from './timetable-constraint-list';
 import { LecturerWorkloadDetail } from './lecturer-workload-detail';
 import { LecturerWorkloadList } from './lecturer-workload-list';
 import { CombinedWorkingCurriculumItemList } from './combined-working-curriculum-item-list';
+import { TimetableView } from './timetable-view';
 
 type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'constraints'
-  | 'timetableConstraints' | 'workloads' | 'workloadSummary' | 'workloadDetail';
+  | 'timetableConstraints' | 'workloads' | 'workloadSummary' | 'workloadDetail' | 'timetable';
 
 interface Department {
   id: string;
@@ -27,7 +28,7 @@ interface Department {
   templateUrl: './department-page.html',
   imports: [RouterLink, FormsModule, LecturerPage, LecturerConstraintList, TimetableConstraintList,
             LecturerWorkloadList, DepartmentWorkloadSummary, LecturerWorkloadDetail,
-            CombinedWorkingCurriculumItemList]
+            CombinedWorkingCurriculumItemList, TimetableView]
 })
 export class DepartmentDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
@@ -42,11 +43,27 @@ export class DepartmentDetailPage implements OnInit {
   /** Set when a lecturer is picked in the summary, so the assessment opens on them. */
   focusLecturerId = signal('');
 
+  /** Every lecturer of the department — the columns of the викладацький розклад. */
+  lecturerIds = signal<string[]>([]);
+
   showEditForm = signal(false);
   editError = signal('');
   editForm: Record<string, any> = {};
 
-  ngOnInit() { this.load(); }
+  ngOnInit() { this.load(); this.loadLecturerIds(); }
+
+  /**
+   * A department's timetable is its lecturers' timetable: `timetableEntryConnection` filters by
+   * `lecturerIds`, so they are resolved first and passed in.
+   */
+  private loadLecturerIds() {
+    const q = `{ lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes { id } } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => this.lecturerIds.set(
+        d.lecturers.lecturerConnection.nodes.map((l: any) => String(l.id))),
+      error: () => this.lecturerIds.set([])
+    });
+  }
 
   private load() {
     const q = `{ departments { department(id: "${this.departmentId}") { id name abbreviation email phone faculty { id name } } } }`;

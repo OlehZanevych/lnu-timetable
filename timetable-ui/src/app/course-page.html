@@ -1,0 +1,253 @@
+@let c = course();
+@let s = summary();
+
+<div class="faculty-header">
+  @if (c?.department) {
+    <a [routerLink]="['/department', c!.department!.id]" class="back-link">&#x2190; {{ c!.department!.name }}</a>
+  } @else if (c?.faculty) {
+    <a [routerLink]="['/faculty', c!.faculty!.id]" class="back-link">&#x2190; {{ c!.faculty!.name }}</a>
+  }
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ c?.name ?? '&#x2026;' }}</h2>
+      <p class="muted">
+        {{ c ? courseTypeLabel(c.courseType) : '' }}
+        @if (tagList()) { &middot; {{ tagList() }} }
+      </p>
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="faculty-layout">
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Дисципліна</p>
+    @for (sec of sections; track sec.key) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === sec.key"
+              (click)="selectSection(sec.key)"
+              [innerHTML]="sec.label"></button>
+    }
+  </nav>
+
+  <div class="faculty-section">
+    @switch (activeSection()) {
+
+      <!-- ── Info: the aggregate across all four levels ── -->
+      @case ('info') {
+        <div class="page-header"><h2>Інформація про дисципліну</h2></div>
+
+        <div class="card cp-summary">
+          <div class="cp-tiles">
+            <div class="cp-tile">
+              <span class="cp-tile-label">У навчальних планах</span>
+              <strong>{{ s.curriculumItems }} позиц.</strong>
+              <span class="muted">{{ s.specialties }} спеціальн. &middot; {{ fmtNumber(s.credits) }} кредитів</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Контактних годин</span>
+              <strong>{{ fmtNumber(s.contactHours) }}</strong>
+              <span class="muted">із {{ fmtNumber(s.normativeHours) }} год загального обсягу</span>
+            </div>
+            <div class="cp-tile" [class.over]="s.curriculumItems > 0 && s.positions === 0">
+              <span class="cp-tile-label">Кафедри-виконавці</span>
+              <strong>{{ s.departments }}</strong>
+              <span class="muted">{{ s.positions }} позицій РНП</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Викладачі та групи</span>
+              <strong>{{ s.lecturers }} викл.</strong>
+              <span class="muted">{{ s.groups }} груп &middot; {{ s.scheduledClasses }} занять у розкладі</span>
+            </div>
+          </div>
+        </div>
+
+        @if (c) {
+          <div class="card info-card">
+            <table class="info-table">
+              <tbody>
+                <tr><th>Назва</th><td>{{ c.name }}</td></tr>
+                <tr><th>Тип</th><td>{{ courseTypeLabel(c.courseType) }}</td></tr>
+                <tr>
+                  <th>Кафедра</th>
+                  <td>
+                    @if (c.department) {
+                      <a [routerLink]="['/department', c.department.id]">{{ c.department.name }}</a>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
+                <tr>
+                  <th>Факультет</th>
+                  <td>
+                    @let fac = c.faculty ?? c.department?.faculty;
+                    @if (fac) { <a [routerLink]="['/faculty', fac.id]">{{ fac.name }}</a> } @else { &mdash; }
+                  </td>
+                </tr>
+                @if (c.parentCourse) {
+                  <tr>
+                    <th>Група вибіркових</th>
+                    <td><a [routerLink]="['/course', c.parentCourse.id]">{{ c.parentCourse.name }}</a></td>
+                  </tr>
+                }
+                @if (c.childCourses?.length) {
+                  <tr>
+                    <th>Вибіркові дисципліни</th>
+                    <td>
+                      @for (child of c.childCourses; track child.id) {
+                        <div><a [routerLink]="['/course', child.id]">{{ child.name }}</a></div>
+                      }
+                    </td>
+                  </tr>
+                }
+                <tr>
+                  <th>Спеціальності</th>
+                  <td>
+                    @for (sp of c.specialties ?? []; track sp.id) {
+                      <div><a [routerLink]="['/specialty', sp.id]">{{ sp.code }} {{ sp.name }}</a></div>
+                    } @empty { &mdash; }
+                  </td>
+                </tr>
+                <tr><th>Теги</th><td>{{ tagList() || '&mdash;' }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- ── Curricula ── -->
+      @case ('curricula') {
+        <div class="page-header">
+          <div>
+            <h2>Навчальні плани</h2>
+            <p class="muted">{{ curricula().length }} позиц. у планах спеціальностей</p>
+          </div>
+        </div>
+        <div class="card">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Спеціальність</th>
+                <th>Семестр</th>
+                <th>Курс</th>
+                <th>Форма контролю</th>
+                <th class="num">ECTS</th>
+                <th>Години за видами</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of curricula(); track item.id) {
+                <tr>
+                  <td>
+                    @if (item.specialty) {
+                      <a [routerLink]="['/specialty', item.specialty.id]">{{ item.specialty.name }}</a>
+                    } @else { &mdash; }
+                  </td>
+                  <td>{{ item.semester }}</td>
+                  <td>{{ termLabelShort(item.semester) }}</td>
+                  <td>{{ controlFormLabel(item.controlForm) }}</td>
+                  <td class="num">{{ item.ectsCredits ?? '&mdash;' }}</td>
+                  <td>
+                    @for (h of item.hours; track h.id) {
+                      <span class="cp-chip">{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</span>
+                    } @empty { <span class="muted">&mdash;</span> }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="6" class="muted">Дисципліну ще не внесено до жодного навчального плану.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ── Working curricula ── -->
+      @case ('working') {
+        <div class="page-header">
+          <div>
+            <h2>Робочі навчальні плани</h2>
+            <p class="muted">{{ deliveries().length }} позицій РНП</p>
+          </div>
+        </div>
+        <div class="card">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Спеціальність</th>
+                <th>Сем.</th>
+                <th>Вид роботи</th>
+                <th class="num">Годин</th>
+                <th>Кафедра</th>
+                <th>Формат</th>
+                <th>Академічні групи</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of deliveries(); track d.id) {
+                <tr>
+                  <td>{{ d.specialtyName }}</td>
+                  <td>{{ d.semester }}</td>
+                  <td>{{ hourTypeLabel(d.hourType) }}</td>
+                  <td class="num">{{ fmtNumber(d.hours) }}</td>
+                  <td>
+                    @if (d.departmentId) {
+                      <a [routerLink]="['/department', d.departmentId]">{{ d.departmentName }}</a>
+                    } @else { &mdash; }
+                  </td>
+                  <td>{{ teachingFormatLabel(d.teachingFormat) }}@if (d.lecturerCount > 1) { &middot; {{ d.lecturerCount }} викл.}</td>
+                  <td>{{ d.groupNames || '&mdash;' }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="muted">Дисципліну ще не закріплено за жодною кафедрою.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- ── Workloads ── -->
+      @case ('workloads') {
+        <div class="page-header">
+          <div>
+            <h2>Навантаження викладачів</h2>
+            <p class="muted">{{ s.lecturers }} викладач(ів) &middot; {{ s.scheduledClasses }} занять у розкладі</p>
+          </div>
+        </div>
+        <div class="card">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Спеціальність</th>
+                <th>Сем.</th>
+                <th>Вид роботи</th>
+                <th>Кафедра</th>
+                <th>Викладачі</th>
+                <th class="num">Позицій навантаження</th>
+                <th class="num">Занять у розкладі</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of deliveries(); track d.id) {
+                <tr [class.wv-gap]="!d.lecturerNames">
+                  <td>{{ d.specialtyName }}</td>
+                  <td>{{ d.semester }}</td>
+                  <td>{{ hourTypeShort(d.hourType) }}</td>
+                  <td>{{ d.departmentName }}</td>
+                  <td>
+                    @if (d.lecturerNames) { {{ d.lecturerNames }} }
+                    @else { <span class="wv-unassigned">викладача не призначено</span> }
+                  </td>
+                  <td class="num">{{ d.workloadCount }}</td>
+                  <td class="num">{{ d.scheduledClasses }}</td>
+                </tr>
+              } @empty {
+                <tr><td colspan="7" class="muted">Навантаження за цією дисципліною ще не сформовано.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+    }
+  </div>
+</div>

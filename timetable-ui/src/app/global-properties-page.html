@@ -1,46 +1,64 @@
 <div class="page-header">
   <div>
     <h2>Глобальні властивості</h2>
-    <p class="muted">{{ properties().length }} запис(ів)</p>
+    <p class="muted">{{ properties().length }} налаштувань</p>
   </div>
 </div>
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 @if (saveError()) { <p class="error">{{ saveError() }}</p> }
 
-<div class="card">
-  <table>
-    <thead>
-      <tr>
-        <th>Властивість</th>
-        <th>Тип</th>
-        <th>Значення</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      @for (p of properties(); track p.name) {
-        <tr>
-          <td>{{ label(p) }}</td>
-          <td>{{ p.type }}</td>
-          <td>
-            @if (isSemesterParity(p)) {
-              <app-search-select [options]="semesterParityOptions" [(ngModel)]="draft[p.name]"
-                                  [name]="p.name" [ngModelOptions]="{ standalone: true }" />
-            } @else {
-              <input [type]="inputType(p)" [(ngModel)]="draft[p.name]" [name]="p.name"
-                     [ngModelOptions]="{ standalone: true }" />
-            }
-          </td>
-          <td class="row-actions">
-            <button type="button" [disabled]="!isDirty(p) || savingName() === p.name" (click)="save(p)">
-              {{ savingName() === p.name ? 'Збереження…' : 'Зберегти' }}
-            </button>
-          </td>
-        </tr>
-      } @empty {
-        <tr><td colspan="4" class="muted">Властивостей ще немає.</td></tr>
-      }
-    </tbody>
-  </table>
-</div>
+@for (group of groups(); track group.title) {
+  <section class="gp-group">
+    <h3 class="gp-group-title">{{ group.title }}</h3>
+    @if (group.description) { <p class="muted gp-group-note">{{ group.description }}</p> }
+
+    <div class="card">
+      <table class="gp-table">
+        <tbody>
+          @for (p of group.rows; track p.row.name) {
+            @let issue = problem(p);
+            <tr [class.gp-invalid]="issue">
+              <th>
+                {{ p.label }}
+                @if (p.hint) { <span class="gp-hint">{{ p.hint }}</span> }
+              </th>
+              <td class="gp-value">
+                @switch (p.control) {
+                  @case ('select') {
+                    <app-search-select [options]="semesterParityOptions" [(ngModel)]="draft[p.row.name]"
+                                        [name]="p.row.name" [ngModelOptions]="{ standalone: true }" />
+                  }
+                  @case ('checkbox') {
+                    <input type="checkbox" class="entity-check"
+                           [ngModel]="checked(p)" (ngModelChange)="setChecked(p, $event)"
+                           [name]="p.row.name" [ngModelOptions]="{ standalone: true }" />
+                  }
+                  @case ('number') {
+                    <input type="number" [step]="p.step" [attr.min]="p.min"
+                           [(ngModel)]="draft[p.row.name]" [name]="p.row.name"
+                           [ngModelOptions]="{ standalone: true }"
+                           [placeholder]="p.optional ? 'не встановлено' : ''" />
+                  }
+                  @default {
+                    <input type="text" [(ngModel)]="draft[p.row.name]" [name]="p.row.name"
+                           [ngModelOptions]="{ standalone: true }"
+                           [placeholder]="p.optional ? 'не встановлено' : ''" />
+                  }
+                }
+                @if (issue) { <span class="gp-problem">{{ issue }}</span> }
+              </td>
+              <td class="row-actions">
+                <button type="button" [disabled]="!canSave(p)" (click)="save(p)">
+                  {{ savingName() === p.row.name ? 'Збереження…' : 'Зберегти' }}
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+} @empty {
+  <p class="muted">Властивостей ще немає.</p>
+}
