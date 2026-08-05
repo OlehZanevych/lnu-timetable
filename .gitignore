@@ -1,0 +1,5 @@
+# macOS
+.DS_Store
+
+# Scratch space used when the repo is edited from a sandbox that cannot delete files.
+_to_delete/

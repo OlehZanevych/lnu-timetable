@@ -1,0 +1,9 @@
+scenario,points,alpha_time_vs_lecturers,r2_time_vs_lecturers,alpha_time_vs_slots,r2_time_vs_slots,alpha_greedy_vs_slots,alpha_repair_vs_slots,alpha_improve_vs_slots,alpha_cantake_vs_slots
+baseline,6,0.842,0.9855,0.797,0.9656,0.892,0.922,0.818,1.056
+dense-candidates,6,0.948,0.9909,0.973,0.995,1.051,1.148,0.727,1.016
+gaps-mode,6,1.068,0.9761,0.969,0.9466,1.203,0.99,1.192,1.116
+oversubscribed,6,1.046,0.9956,1.043,0.9954,1.173,1.107,0.962,1.023
+sparse-candidates,6,1.038,0.9783,0.931,0.9627,1.142,0.998,1.116,1.058
+tight-ceilings,6,0.998,0.9539,1.001,0.9736,1.165,0.43,0.919,1.013
+tight-floors,6,1.02,0.9907,1.032,0.9962,1.211,0.944,0.943,0.996
+unconstrained,6,0.994,0.9933,1.008,0.9939,1.133,0.418,1.113,1.028

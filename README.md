@@ -164,6 +164,7 @@ database once first.
 | [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files), the generated GraphQL surface and its query catalogue, N+1-safe relation batching, authentication and the permission cascade |
 | [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
+| [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, a traced example, complexity, and the code map |
 | [`timetable-ui/CURRICULUM-PDF.md`](./timetable-ui/CURRICULUM-PDF.md) | the printable curriculum — which of its parts are required by the Закон України «Про вищу освіту» and which are settled practice, the compliance checks it carries, and what the data model cannot yet fill in |
 | [`timetable-ui/WORKING-CURRICULUM-PDF.md`](./timetable-ui/WORKING-CURRICULUM-PDF.md) | the printable working curriculum — why it has no legal footing at all since 1993, what institutional practice actually puts in one, and how department teaching hours are projected from it |
@@ -189,6 +190,13 @@ arithmetic and its statutory checks, the PDF engine and the Ukrainian collator a
 modules in `timetable-ui/src/app`, free of Angular, GraphQL and I/O, so each can be run and tested
 on plain objects. The timetable solver additionally
 runs in a Web Worker, because it is a search with a time budget rather than a computation.
+
+That the algorithms are free of the framework is not a stylistic preference — it is what lets them be
+*measured*. `timetable-ui/scripts/workload-bench` runs the shipped workload generator, unmodified,
+under Node across 48 generated department instances and re-checks every plan it produces against the
+database's own constraint semantics. The one time that harness was pointed at the code it found a
+quadratic in the search and a class of constraint breach nobody had noticed; the same approach is
+open to the timetable solver, which has no equivalent yet.
 
 **The contract between them is the generated schema**, and the service README's *The query
 catalogue* is worth reading before adding a query — several connections carry `EXISTS`-subquery
@@ -225,7 +233,11 @@ lnu-timetable/
 └── timetable-ui/         the Angular client
     ├── src/app/          pages, child-list widgets, form controls, and the pure modules
     ├── src/styles.css    every style in the app is global and lives here
-    └── public/fonts/     Liberation Serif subsets, fetched on demand by the PDF export
+    ├── public/fonts/     Liberation Serif subsets, fetched on demand by the PDF export
+    └── scripts/
+        └── workload-bench/  the benchmark for the workload generator: two Node scripts,
+                             48 generated department instances, and the measured
+                             before-and-after — see its own README
 ```
 
 ---
