@@ -38,6 +38,17 @@ backend must be running. Then open **http://localhost:4200**.
 npm run build      # production build into dist/
 ```
 
+The workload generator has a benchmark of its own, which needs neither the service nor a browser —
+it runs the shipped TypeScript under Node:
+
+```bash
+npm run bench:generate     # rebuild the 48 test instances (deterministic)
+npm run bench              # measure, write scripts/workload-bench/results/
+npm run bench:check-data   # verify the committed instances match a fresh build
+```
+
+See [Measuring the workload generator](#measuring-the-workload-generator-scriptsworkload-bench).
+
 ### Served from the service
 
 `npm run build` is also the first half of the deployment path. `scripts/build-ui.sh` in the
@@ -593,6 +604,31 @@ plan: the term is absent from the Закон «Про вищу освіту», a
 години» come from the repealed наказ № 161. [TIMETABLE-PDF.md](./TIMETABLE-PDF.md) has the full account, the
 per-institution spread of every figure, and what the data model cannot yet express (two-shift days,
 per-building bell grids, the order a timetable is put into effect by).
+
+#### Measuring the workload generator (`scripts/workload-bench/`)
+
+`workload-generator.ts` is the one algorithm in the app with a benchmark of its own, because it is
+the one whose cost grows with the size of the department rather than with what is on screen.
+
+Two Node scripts, no new dependencies. `generate-datasets.mjs` writes 48 synthetic but believable
+department instances — eight scenarios × six sizes from 10 to 320 lecturers, exercising all 21
+constraint types, both candidate constraints, every teaching format and both generation modes.
+`run-benchmark.mjs` runs the **shipped TypeScript file** over all of them (loaded through Node's
+type stripping, not a compiled copy) and reports wall-clock by phase, machine-independent operation
+counts, solution quality against an upper bound, and an independent re-check of every plan against
+`schema.sql`'s constraint semantics.
+
+```bash
+npm run bench:generate     # rebuild data/ — deterministic, byte-identical on any machine
+npm run bench              # measure, write results/
+npm run bench:check-data   # verify the committed fixtures match a fresh build
+```
+
+It was written to answer a specific question and did: the search was quadratic, 87 % of the time sat
+in one statement, and fixing it made the whole 48-instance sweep 550× faster while cutting the hours
+of load assigned above the statutory ceiling by 98 %. `scripts/workload-bench/README.md` has the
+instances, the metric definitions, the before-and-after table, and a list of the things that were
+tried and did not work.
 
 #### Workload constraints (`LecturerConstraintList`, department "Обмеження навантаження" tab)
 
@@ -1299,11 +1335,16 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   handler; nothing today comes close (`/faculty/:id` is the deepest route in `app.routes.ts`), but
   adding one means adding a pattern in `FrontendController` too. See the [service
   README](../timetable/README.md#serving-the-frontend-from-this-service).
-- **There is no test infrastructure in the frontend at all** — no `*.spec.ts`, no runner in
-  `devDependencies`, and `npm test` (`ng test`) fails. The pure modules (see [The pure
-  modules](#the-pure-modules)) are written to be testable and are exercised only by hand; the
-  backend, by contrast, has `SchemaBuildTest`. Anywhere this README says a module *can* be
-  unit-tested, read it as a property of the code, not as a claim that it is.
+- **There is no unit-test suite in the frontend** — no `*.spec.ts`, no runner in `devDependencies`,
+  and `npm test` (`ng test`) fails. Anywhere this README says a module *can* be unit-tested, read it
+  as a property of the code, not as a claim that it is. One module is an exception in practice rather
+  than in form: `workload-generator.ts` is covered by
+  [`scripts/workload-bench`](./scripts/workload-bench/README.md), which runs it over 48 generated
+  department instances and re-derives every constraint check independently of the generator's own
+  bookkeeping — feasibility, determinism and structural integrity, on every run. That is not a
+  substitute for unit tests of the constraint families, and it says nothing about the GraphQL-tree →
+  `GenInput` mapping in `lecturer-workload-list.ts`, which remains untested code. The backend, by
+  contrast, has `SchemaBuildTest`.
 - **`entity-pages.ts` declares fifteen components but routes thirteen.** `CombinedGroupPage` is
   deliberately unrouted (it is embedded in the Faculty page's "Об'єднані групи" tab). The other,
   `BuildingPage`, is dead code: `/e/building` is claimed by `BuildingHome`, and the `BuildingPage`

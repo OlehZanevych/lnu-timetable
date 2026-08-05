@@ -41,16 +41,19 @@
       <span class="muted">сумарна бажаність {{ plan.totalDesirability }}</span>
     </div>
 
-    @if (issuesOf('no-candidates').length || issuesOf('unfilled').length) {
+    <!-- Tracked by index, not by message: a workload with two unfillable slots reports the same
+         text twice, and a duplicate track key is a hard @for error in Angular. -->
+    @if (issuesOf('no-candidates').length || issuesOf('unfilled').length || issuesOf('over-ceiling').length) {
       <ul class="gen-issues error-list">
-        @for (i of issuesOf('no-candidates'); track i.message) { <li>{{ i.message }}</li> }
-        @for (i of issuesOf('unfilled'); track i.message) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('no-candidates'); track $index) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('unfilled'); track $index) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('over-ceiling'); track $index) { <li>{{ i.message }}</li> }
       </ul>
     }
     @if (issuesOf('unmet-minimum').length || issuesOf('no-students').length) {
       <ul class="gen-issues warn-list">
-        @for (i of issuesOf('unmet-minimum'); track i.message) { <li>{{ i.message }}</li> }
-        @for (i of issuesOf('no-students'); track i.message) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('unmet-minimum'); track $index) { <li>{{ i.message }}</li> }
+        @for (i of issuesOf('no-students'); track $index) { <li>{{ i.message }}</li> }
       </ul>
     }
 
@@ -137,7 +140,7 @@
                     @if (candidateLabels(w).length) {
                       <div class="lw-candidate-note">
                         <span>кандидати:</span>
-                        @for (line of candidateLabels(w); track line) {
+                        @for (line of candidateLabels(w); track $index) {
                           <div>{{ line }}</div>
                         }
                       </div>
@@ -227,7 +230,7 @@
                         @if (candidateLabels(w).length) {
                           <div class="lw-candidate-note">
                             <span>кандидати:</span>
-                            @for (line of candidateLabels(w); track line) {
+                            @for (line of candidateLabels(w); track $index) {
                               <div>{{ line }}</div>
                             }
                           </div>
@@ -246,7 +249,7 @@
                         @if (candidateLabels(w).length) {
                           <div class="lw-candidate-note">
                             <span>кандидати:</span>
-                            @for (line of candidateLabels(w); track line) {
+                            @for (line of candidateLabels(w); track $index) {
                               <div>{{ line }}</div>
                             }
                           </div>

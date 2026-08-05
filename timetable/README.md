@@ -554,6 +554,13 @@ The service enforces none of these as scheduling rules; they are data the genera
 guarantees the database makes are structural — value ranges, uniqueness, and the cascades that keep
 them from outliving their parents.
 
+Worth knowing if you change any of these four tables: the generator's benchmark
+([`timetable-ui/scripts/workload-bench`](../timetable-ui/scripts/workload-bench/README.md)) builds
+synthetic departments **against exactly this shape**, and its independent validator re-implements the
+constraint semantics of `lecturer_workload_constraints` straight from `schema.sql` rather than from
+the generator. Adding a constraint type here means adding it there too, or the benchmark will keep
+reporting full coverage of a set that has grown.
+
 ### `users` / `groups` / `permissions` — outside the entity framework
 
 Like `global_properties`, the four auth tables have no `@GraphQLEntity` domain class — a `User`'s
