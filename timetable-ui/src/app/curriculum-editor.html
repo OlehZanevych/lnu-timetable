@@ -36,7 +36,7 @@
 @for (block of visibleBlocks(); track block.courseId) {
   <div class="card ce-course-card">
     <div class="ce-course-header">
-      <strong>{{ block.label }}</strong>
+      <strong><a class="ent-link" [routerLink]="['/course', block.courseId]">{{ block.label }}</a></strong>
       @if (block.items().length === 0) {
         <span class="ce-badge-empty">без позицій плану</span>
       }

@@ -1,6 +1,7 @@
 import {
   Component, Input, OnChanges, OnInit, SimpleChanges, computed, inject, signal
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
@@ -48,7 +49,7 @@ interface Compliance {
 @Component({
   selector: 'app-lecturer-workload-detail',
   templateUrl: './lecturer-workload-detail.html',
-  imports: [FormsModule, SearchSelect]
+  imports: [FormsModule, RouterLink, SearchSelect]
 })
 export class LecturerWorkloadDetail implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

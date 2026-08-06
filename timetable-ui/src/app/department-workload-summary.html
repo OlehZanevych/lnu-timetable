@@ -76,12 +76,17 @@
         @for (row of list; track row.lecturerId) {
           <tr [class.over]="row.deviation > 0" [class.under]="row.deviation < 0"
               [class.ws-idle]="!row.totalHours">
+            <!-- When the table is a picker, the surname keeps its own job (choosing whom to assess)
+                 and the arrow beside it is what leads to the lecturer's page; when it is not, the
+                 surname is the link. -->
             <td class="ws-name">
               @if (selectable) {
                 <button type="button" class="ws-link" (click)="select(row)"
                         title="Детальна оцінка навантаження">{{ row.name }}</button>
+                <a class="ent-link-arrow" [routerLink]="['/lecturer', row.lecturerId]"
+                   title="Сторінка викладача">&#x2197;</a>
               } @else {
-                {{ row.name }}
+                <a class="ent-link" [routerLink]="['/lecturer', row.lecturerId]">{{ row.name }}</a>
               }
             </td>
             <td class="ws-total">{{ row.totalHours }}</td>
@@ -147,6 +152,11 @@
     студентів. Підсумки в шапці та в рядку &laquo;Разом по кафедрі&raquo; завжди рахуються по всіх
     викладачах кафедри й не залежать від фільтрів; окремий рядок &laquo;Разом за фільтром&raquo;
     з&#39;являється, коли частину викладачів приховано.
-    @if (selectable) { Натисніть прізвище, щоб перейти до детальної оцінки навантаження. }
+    @if (selectable) {
+      Натисніть прізвище, щоб перейти до детальної оцінки навантаження, або &#x2197; поруч
+      &mdash; щоб відкрити сторінку викладача.
+    } @else {
+      Прізвище веде на сторінку викладача.
+    }
   </p>
 </div>

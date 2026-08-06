@@ -15,6 +15,11 @@
         @if (r?.capacity) { &middot; {{ r!.capacity }} місць }
       </p>
     </div>
+    <div class="faculty-header-actions">
+      @if (activeSection() === 'info' && canModifyRoom()) {
+        <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+      }
+    </div>
   </div>
 </div>
 
@@ -35,7 +40,12 @@
     @switch (activeSection()) {
 
       @case ('info') {
-        <div class="page-header"><h2>Інформація про аудиторію</h2></div>
+        <div class="page-header">
+          <div><h2>Інформація про аудиторію</h2></div>
+          @if (canModifyRoom()) {
+            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          }
+        </div>
         @if (r) {
           <div class="card info-card">
             <table class="info-table">
@@ -79,3 +89,79 @@
     }
   </div>
 </div>
+
+<!-- ── Edit modal ──────────────────────────────────────────────────────────── -->
+
+@if (showEditForm()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування аудиторії</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+
+      @if (editError()) {
+        <p class="error">{{ editError() }}</p>
+      }
+
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Номер *</span>
+          <input type="text" [(ngModel)]="editForm['number']" name="number" required />
+        </label>
+        <label>
+          <span>Назва</span>
+          <input type="text" [(ngModel)]="editForm['name']" name="name" />
+        </label>
+        <label>
+          <span>Місткість</span>
+          <input type="number" [(ngModel)]="editForm['capacity']" name="capacity" />
+        </label>
+        <label>
+          <span>Тип</span>
+          <app-search-select [options]="roomKindOptions" [(ngModel)]="editForm['kind']" name="kind" />
+        </label>
+        <label>
+          <span>Факультет</span>
+          <app-search-select [options]="facultyOptions()" [(ngModel)]="editForm['facultyId']" name="facultyId" />
+        </label>
+        <label>
+          <span>Корпус</span>
+          <app-search-select [options]="buildingOptions()" [(ngModel)]="editForm['buildingId']" name="buildingId" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirmation modal ──────────────────────────────────────────── -->
+
+@if (showDeleteConfirm()) {
+  <div class="modal-backdrop" (click)="closeDelete()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення аудиторії</h3>
+        <button type="button" class="close" (click)="closeDelete()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Ви впевнені, що хочете видалити аудиторію<br>
+        <strong>{{ label() }}</strong>?<br>
+        <span class="muted">Цю дію неможливо скасувати.</span>
+      </p>
+
+      @if (deleteError()) {
+        <p class="error">{{ deleteError() }}</p>
+      }
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmDelete()">Так, видалити</button>
+        <button type="button" class="ghost" (click)="closeDelete()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}

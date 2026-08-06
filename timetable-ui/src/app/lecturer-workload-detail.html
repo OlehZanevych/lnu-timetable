@@ -29,7 +29,7 @@
   <!-- ── Totals ── -->
   <div class="card wd-card">
     <div class="ws-header">
-      <strong>{{ s.name }}</strong>
+      <strong><a class="ent-link" [routerLink]="['/lecturer', s.lecturerId]">{{ s.name }}</a></strong>
       <span class="muted">
         {{ s.distinctCourses }} дисциплін(и) &middot; {{ s.items.length }} позицій навантаження
       </span>
@@ -150,7 +150,9 @@
                   <tr>
                     <td>{{ courseYear(item.semester) }}</td>
                     <td>
-                      {{ item.courseName }}
+                      @if (item.courseId) {
+                        <a class="ent-link" [routerLink]="['/course', item.courseId]">{{ item.courseName }}</a>
+                      } @else { {{ item.courseName }} }
                       @if (item.combined) { <em class="wd-flag">об'єднана</em> }
                     </td>
                     <td>{{ courseTypeLabel(item.courseType) }}</td>

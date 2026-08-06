@@ -592,6 +592,18 @@ button.danger:hover { background: #991b1b !important; }
   text-decoration: none; white-space: nowrap; }
 .open-link:hover { text-decoration: underline; }
 
+/* ── ent-link: a course / lecturer / room named anywhere in a plan, a workload or the timetable
+      grid, linking to its own page. Plain text until hovered — the rule the faculty and building
+      lists already use for their names — because these appear several to a cell and ordinary link
+      colouring would turn a 6×8 grid into a wall of blue. ── */
+.ent-link { color: inherit; text-decoration: none; }
+.ent-link:hover { text-decoration: underline; color: var(--blue); }
+
+/* The arrow form, for the one place where the name itself is already a control: the selectable
+   surname in «Зведене навантаження». */
+.ent-link-arrow { margin-left: 5px; font-size: 11px; color: var(--blue); text-decoration: none; }
+.ent-link-arrow:hover { text-decoration: underline; }
+
 /* ── Timetable grid, shared by the faculty, department, lecturer and room views ── */
 .tv-toolbar { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
 .tv-picker { min-width: 260px; }

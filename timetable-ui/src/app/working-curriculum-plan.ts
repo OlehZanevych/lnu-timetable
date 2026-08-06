@@ -118,6 +118,8 @@ export interface WorkingPosition {
 /** One discipline of the year, as the main РНП table prints it. */
 export interface WorkingPlanRow {
   id: string;
+  /** `courses.id` behind {@link name} — what the table links to. Blank when the item names none. */
+  courseId: string;
   name: string;
   courseType: string;
   semester: number;
@@ -314,6 +316,7 @@ export function buildWorkingCurriculumPlan(
 
     rows.push({
       id: item.id,
+      courseId: item.course?.id ?? '',
       name: item.course?.name ?? '—',
       courseType: item.course?.courseType ?? '',
       semester: item.semester,

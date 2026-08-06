@@ -113,6 +113,8 @@ export interface GridEntry {
   roomId: string;
   /** «265» or «265 (Універсальна)». */
   roomLabel: string;
+  /** `courses.id` of the discipline named below — what the cell links to. Blank if unresolved. */
+  courseId: string;
   courseName: string;
   /** Raw `curriculum_item_hours.hour_type` of the block this class delivers. */
   hourType: string;
@@ -178,17 +180,19 @@ const addMinutes = (startTime: string, minutes: number): string => {
  * when that course is an `ELECTIVE_GROUP` (an umbrella students choose within), the discipline
  * actually taught is the elective on the working item itself.
  */
-const courseOf = (ref: RawCourseRef | null | undefined): { name: string; hourType: string;
+const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: string; hourType: string;
                                                            semester: number | null;
                                                            specialtyName: string;
                                                            departmentId: string;
                                                            departmentName: string } => {
   const ci = ref?.curriculumItemHours?.curriculumItem;
   const umbrella = ci?.course;
-  const name = umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course
-    ? ref.course.name
-    : (umbrella?.name ?? '');
+  // The id follows the name: a cell that names the elective must link to the elective, not to the
+  // umbrella group nobody is actually taught.
+  const elective = umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course ? ref.course : null;
+  const name = elective ? elective.name : (umbrella?.name ?? '');
   return {
+    id: elective ? elective.id : (umbrella?.id ?? ''),
     name,
     hourType: ref?.curriculumItemHours?.hourType ?? '',
     semester: ci?.semester ?? null,
@@ -227,6 +231,7 @@ export function toGridEntry(entry: RawEntry, academicHourMinutes: number): GridE
     roomLabel: entry.room
       ? (entry.room.name ? `${entry.room.number} (${entry.room.name})` : entry.room.number)
       : '',
+    courseId: course.id,
     courseName: course.name,
     hourType: course.hourType,
     hourTypeShort: HOUR_TYPE_SHORT[course.hourType] ?? '',

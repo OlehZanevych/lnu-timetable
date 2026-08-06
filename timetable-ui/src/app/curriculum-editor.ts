@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnInit, WritableSignal, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
@@ -80,7 +81,7 @@ interface CourseBlock {
 @Component({
   selector: 'app-curriculum-editor',
   templateUrl: './curriculum-editor.html',
-  imports: [FormsModule, SearchSelect, CurriculumSummary]
+  imports: [FormsModule, RouterLink, SearchSelect, CurriculumSummary]
 })
 export class CurriculumEditor implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

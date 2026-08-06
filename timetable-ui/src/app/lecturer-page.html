@@ -13,6 +13,11 @@
         @if (l?.academicDegree) { &middot; {{ l!.academicDegree!.name }} }
       </p>
     </div>
+    <div class="faculty-header-actions">
+      @if (activeSection() === 'info' && canModifyLecturer()) {
+        <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+      }
+    </div>
   </div>
 </div>
 
@@ -33,7 +38,12 @@
     @switch (activeSection()) {
 
       @case ('info') {
-        <div class="page-header"><h2>Інформація про викладача</h2></div>
+        <div class="page-header">
+          <div><h2>Інформація про викладача</h2></div>
+          @if (canModifyLecturer()) {
+            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          }
+        </div>
 
         <div class="card cp-summary">
           <div class="cp-tiles">
@@ -154,3 +164,85 @@
     }
   </div>
 </div>
+
+<!-- ── Edit modal ──────────────────────────────────────────────────────────── -->
+
+@if (showEditForm()) {
+  <div class="modal-backdrop" (click)="closeEdit()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Редагування викладача</h3>
+        <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
+      </div>
+
+      @if (editError()) {
+        <p class="error">{{ editError() }}</p>
+      }
+
+      <!-- Прізвище first, matching the order this page's own info table names them in. -->
+      <form (ngSubmit)="saveEdit()" class="entity-form">
+        <label>
+          <span>Прізвище *</span>
+          <input type="text" [(ngModel)]="editForm['lastName']" name="lastName" required />
+        </label>
+        <label>
+          <span>Ім&rsquo;я *</span>
+          <input type="text" [(ngModel)]="editForm['firstName']" name="firstName" required />
+        </label>
+        <label>
+          <span>По батькові</span>
+          <input type="text" [(ngModel)]="editForm['middleName']" name="middleName" />
+        </label>
+        <label>
+          <span>Ел. пошта</span>
+          <input type="text" [(ngModel)]="editForm['email']" name="email" />
+        </label>
+        <label>
+          <span>Посада</span>
+          <app-search-select [options]="positionOptions" [(ngModel)]="editForm['position']" name="position" />
+        </label>
+        <label>
+          <span>Науковий ступінь</span>
+          <app-search-select [options]="degreeOptions()" [(ngModel)]="editForm['academicDegreeId']" name="academicDegreeId" />
+        </label>
+        <label>
+          <span>Кафедра *</span>
+          <app-dept-faculty-select [deptOptions]="departmentOptions()" [parentOptions]="facultyOptions()"
+                                   [(ngModel)]="editForm['departmentId']" name="departmentId" />
+        </label>
+        <div class="actions">
+          <button type="submit">Зберегти</button>
+          <button type="button" class="ghost" (click)="closeEdit()">Скасувати</button>
+        </div>
+      </form>
+    </div>
+  </div>
+}
+
+<!-- ── Delete confirmation modal ──────────────────────────────────────────── -->
+
+@if (showDeleteConfirm()) {
+  <div class="modal-backdrop" (click)="closeDelete()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення викладача</h3>
+        <button type="button" class="close" (click)="closeDelete()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Ви впевнені, що хочете видалити викладача<br>
+        <strong>{{ fullName() }}</strong>?<br>
+        <span class="muted">Цю дію неможливо скасувати.</span>
+      </p>
+
+      @if (deleteError()) {
+        <p class="error">{{ deleteError() }}</p>
+      }
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmDelete()">Так, видалити</button>
+        <button type="button" class="ghost" (click)="closeDelete()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
