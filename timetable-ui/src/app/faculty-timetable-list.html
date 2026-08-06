@@ -50,7 +50,12 @@
 @for (b of blocks(); track b.key) {
   <div class="card wci-item-card tt-block" [class.unscheduled]="b.dayOfWeek == null">
     <div class="wci-item-header">
-      <strong>Дисципліна: {{ b.courseName }}</strong>
+      <strong>
+        Дисципліна:
+        @if (b.courseId) {
+          <a class="ent-link" [routerLink]="['/course', b.courseId]">{{ b.courseName }}</a>
+        } @else { {{ b.courseName }} }
+      </strong>
       <span>Тип заняття: {{ hourTypeLabel(b.hourType) }}</span>
       @if (b.isBiweekly) {
         <span class="badge">через тиждень</span>
@@ -60,7 +65,12 @@
     <div class="lw-record">
       <div class="lw-record-header">
         <span>Академічні групи: {{ groupNames(b) }}</span>
-        <span>Викладачі: {{ lecturerNamesLabel(b) }}</span>
+        <span>
+          Викладачі:
+          @for (l of lecturerRefs(b); track l.id) {
+            <a class="ent-link" [routerLink]="['/lecturer', l.id]">{{ l.name }}</a>@if (!$last) { , }
+          } @empty { &mdash; }
+        </span>
         @if (b.classStartTimeSetName) {
           <span>Дзвінки: {{ b.classStartTimeSetName }}</span>
         }

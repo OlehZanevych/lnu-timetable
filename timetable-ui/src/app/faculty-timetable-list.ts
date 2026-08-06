@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { GraphqlService } from './graphql.service';
@@ -108,6 +109,8 @@ interface RawCombinedItem {
  *  item directly or a combined_working_curriculum_item. */
 interface WorkloadSource {
   workloadId: string;
+  /** `courses.id` behind courseName — what the block's heading links to. */
+  courseId: string;
   courseName: string;
   hourType: string;
   hours: number;
@@ -128,6 +131,7 @@ interface Block {
   key: string;
   workloadId: string;
   entryId: string | null;
+  courseId: string;
   courseName: string;
   hourType: string;
   durationHours: number;
@@ -213,7 +217,7 @@ const EXTERNAL_ENTRY_SELECTION = `nodes {
 @Component({
   selector: 'app-faculty-timetable-list',
   templateUrl: './faculty-timetable-list.html',
-  imports: [FormsModule, SearchSelect]
+  imports: [FormsModule, RouterLink, SearchSelect]
 })
 export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   private gql = inject(GraphqlService);
@@ -533,18 +537,19 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
    * curriculum item's course is just the umbrella group — the actual discipline being taught is
    * the specific elective referenced by working_curriculum_items.course_id.
    */
-  private courseNameFor(wci: { course?: { id: string; name: string } | null; curriculumItemHours: { curriculumItem: { course: { name: string; courseType: string } } } }): string {
+  private courseRefFor(wci: { course?: { id: string; name: string } | null; curriculumItemHours: { curriculumItem: { course: { id: string; name: string; courseType: string } } } }): { id: string; name: string } {
     const ci = wci.curriculumItemHours.curriculumItem;
-    if (ci.course.courseType === 'ELECTIVE_GROUP' && wci.course) return wci.course.name;
-    return ci.course.name;
+    if (ci.course.courseType === 'ELECTIVE_GROUP' && wci.course) return wci.course;
+    return { id: ci.course.id, name: ci.course.name };
   }
 
-  private toSource(w: RawWorkload, courseName: string, hourType: string, hours: number): WorkloadSource {
+  private toSource(w: RawWorkload, course: { id: string; name: string }, hourType: string, hours: number): WorkloadSource {
     const groups = this.academicGroupsFor(w);
     const rooms = this.eligibleRoomsFor(w);
     return {
       workloadId: w.id,
-      courseName,
+      courseId: course.id,
+      courseName: course.name,
       hourType,
       hours,
       durationHours: w.durationHours,
@@ -567,8 +572,8 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     for (const wci of this.wciItems()) {
       if ((wci.combinedWorkingCurriculumItems ?? []).length > 0) continue;
       const cih = wci.curriculumItemHours;
-      const courseName = this.courseNameFor(wci);
-      for (const w of wci.workloads ?? []) out.push(this.toSource(w, courseName, cih.hourType, cih.hours));
+      const course = this.courseRefFor(wci);
+      for (const w of wci.workloads ?? []) out.push(this.toSource(w, course, cih.hourType, cih.hours));
     }
 
     // Already scoped to this faculty and semester parity server-side (see loadCombinedItems), no
@@ -577,8 +582,8 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       const first = c.workingCurriculumItems[0];
       if (!first) continue;
       const cih = first.curriculumItemHours;
-      const courseName = this.courseNameFor(first);
-      for (const w of c.workloads ?? []) out.push(this.toSource(w, courseName, cih.hourType, cih.hours));
+      const course = this.courseRefFor(first);
+      for (const w of c.workloads ?? []) out.push(this.toSource(w, course, cih.hourType, cih.hours));
     }
 
     return out;
@@ -626,6 +631,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       key,
       workloadId: s.workloadId,
       entryId: entry?.id ?? null,
+      courseId: s.courseId,
       courseName: s.courseName,
       hourType: s.hourType,
       durationHours: s.durationHours,
@@ -685,6 +691,14 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
 
   groupNames(b: Block): string {
     return b.academicGroupNames.join(', ') || '—';
+  }
+
+  /**
+   * The block's lecturers as ids and names, so the header can link each to their own page.
+   * `lecturerNames` and `lecturerIds` are parallel arrays built together in {@link toSource}.
+   */
+  lecturerRefs(b: Block): { id: string; name: string }[] {
+    return b.lecturerIds.map((id, i) => ({ id, name: b.lecturerNames[i] ?? '' }));
   }
 
   lecturerNamesLabel(b: Block): string {

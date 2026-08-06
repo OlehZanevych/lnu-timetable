@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
@@ -183,7 +184,7 @@ const HOUR_TYPE_ORDER = ['LECTURE', 'PRACTICAL', 'LAB', 'CONSULTATION', 'ASSESSM
 @Component({
   selector: 'app-lecturer-workload-list',
   templateUrl: './lecturer-workload-list.html',
-  imports: [FormsModule, MultiSelect, SearchSelect]
+  imports: [FormsModule, RouterLink, MultiSelect, SearchSelect]
 })
 export class LecturerWorkloadList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
@@ -695,12 +696,22 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   /**
+   * The same lecturers as {@link lecturerNames}, but as ids and names rather than one joined string,
+   * so the cell can link each of them to their own page. The string form is kept because the
+   * generated-plan preview and the PDF still want one label.
+   */
+  lecturerRefs(w: Workload): { id: string; name: string }[] {
+    return (w.lecturers ?? []).map((l) => ({ id: l.id, name: this.lecturerName(l) }));
+  }
+
+  /**
    * The workload's lecturer<->student pairings, rendered as two aligned columns for INDIVIDUALLY
    * items. Both cells iterate this one list in the same order, so line N of "Викладач" always
    * belongs with line N of "Студент".
    */
-  pairRows(w: Workload): { lecturer: string; student: string }[] {
+  pairRows(w: Workload): { lecturerId: string; lecturer: string; student: string }[] {
     return (w.studentAssignments ?? []).map((a) => ({
+      lecturerId: a.lecturer.id,
       lecturer: this.lecturerName(a.lecturer),
       student: this.studentName(a.student)
     }));
@@ -737,6 +748,18 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     return parts.length ? parts.join(', ') : 'будь-яка';
   }
 
+  /**
+   * The same list as {@link roomRestrictionLabel}, itemised so each named аудиторія can link to its
+   * own page. A room group has no page of its own, so it carries a blank `roomId` and renders as
+   * plain text; an empty result means "no restriction", which the cell still says in words.
+   */
+  roomRefs(w: Workload): { roomId: string; label: string }[] {
+    return [
+      ...(w.rooms ?? []).map((r) => ({ roomId: r.id, label: r.number })),
+      ...(w.roomGroups ?? []).map((g) => ({ roomId: '', label: `${g.name} (група)` }))
+    ];
+  }
+
   /** True once this working curriculum item has been merged into a combined item — such items are
    *  excluded from the tree in buildGroups() and shown only in the "Об'єднані позиції" section. */
   private isMerged(wci: WorkingItem): boolean {
@@ -745,10 +768,22 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
   /** "Дисципліна · Семестр N · Тип годин: H год." summary line for a combined item's card header. */
   combinedSummary(c: CombinedItem): string {
+    const ref = this.combinedCourseRef(c);
+    return ref ? `${ref.name}${this.combinedSummaryTail(c)}` : '';
+  }
+
+  /** The discipline of a combined item's card header, split out so the header can link it. */
+  combinedCourseRef(c: CombinedItem): { id: string; name: string } | null {
+    const ci = c.workingCurriculumItems[0]?.curriculumItemHours?.curriculumItem;
+    return ci ? { id: ci.course.id, name: ci.course.name } : null;
+  }
+
+  /** Everything after the discipline in that header — " · Семестр N · Лекції: 32 год." */
+  combinedSummaryTail(c: CombinedItem): string {
     const first = c.workingCurriculumItems[0];
     if (!first) return '';
     const ci = first.curriculumItemHours.curriculumItem;
-    return `${ci.course.name} · Семестр ${ci.semester} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)}: ${first.curriculumItemHours.hours} год.`;
+    return ` · Семестр ${ci.semester} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)}: ${first.curriculumItemHours.hours} год.`;
   }
 
   combinedMemberLabel(m: CombinedMember): string {

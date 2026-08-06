@@ -18,7 +18,12 @@
   <div class="card wci-item-card">
     <div class="wci-item-header">
       <strong>Семестр {{ item.semester }}</strong>
-      <span>Дисципліна: {{ item.course?.name || '&mdash;' }}</span>
+      <span>
+        Дисципліна:
+        @if (item.course) {
+          <a class="ent-link" [routerLink]="['/course', item.course.id]">{{ item.course.name }}</a>
+        } @else { &mdash; }
+      </span>
       <span>Форма контролю: {{ controlFormLabel(item.controlForm) }}</span>
       <span>ECTS: {{ item.ectsCredits ?? '&mdash;' }}</span>
     </div>
@@ -53,7 +58,11 @@
                   <td>{{ teachingFormatLabel(wci.teachingFormat) }}</td>
                   <td>{{ groupNames(wci) }}</td>
                   @if (isElectiveGroupCourse(item)) {
-                    <td>{{ wci.course?.name || '&mdash;' }}</td>
+                    <td>
+                      @if (wci.course) {
+                        <a class="ent-link" [routerLink]="['/course', wci.course.id]">{{ wci.course.name }}</a>
+                      } @else { &mdash; }
+                    </td>
                   }
                   <td class="row-actions">
                     <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>

@@ -155,9 +155,11 @@ src/app/
 │                                     #   per department — pure
 ├── working-curriculum-report.ts      # the printable «РОБОЧИЙ НАВЧАЛЬНИЙ ПЛАН» — pure, returns bytes
 ├── course-page.ts/.html              # "/course/:id" — one discipline across curricula, working
-│                                     #   curricula and workloads (lazy route)
-├── lecturer-page.ts/.html            # "/lecturer/:id" — one lecturer: classes and timetable (lazy)
-├── room-page.ts/.html                # "/room/:id" — one room: details and occupancy (lazy)
+│                                     #   curricula and workloads; edits/deletes it (lazy route)
+├── lecturer-page.ts/.html            # "/lecturer/:id" — one lecturer: classes and timetable;
+│                                     #   edits/deletes them (lazy)
+├── room-page.ts/.html                # "/room/:id" — one room: details and occupancy;
+│                                     #   edits/deletes it (lazy)
 ├── timetable-grid.ts                 # timetable entries → the grid every view and the PDF read
 │                                     #   — pure
 ├── timetable-view.ts/.html           # the one read-only timetable, mounted five ways
@@ -538,6 +540,14 @@ no `curriculumItems` relation to walk — its `@OneToMany` fields are `childCour
 filter was narrower than a relation, which would have appeared on every `Course` selection in the
 schema.
 
+Its «Інформація» tab also **edits and deletes the discipline**, on the pattern set out under
+[Editing and deleting from a drill-down page](#editing-and-deleting-from-a-drill-down-page) below.
+The modal covers every `Course` field the generic table offers, `specialtyIds` and `tags` included —
+so a discipline no longer has to be opened twice, once here to read it and once at `/e/course` to
+change it. The one departure is the **«Група вибіркових»** picker: it lists the `ELECTIVE_GROUP`
+courses rather than all several thousand, plus whatever is currently stored even if it is not one,
+because an edit form must never silently drop a value the database holds.
+
 #### Lecturer and room pages (`LecturerDetailPage`, `RoomDetailPage`)
 
 The department pages already answer «who is overloaded?» and «who should take this?». The lecturer
@@ -550,6 +560,88 @@ other screen.
 The room page is smaller: details, and the occupancy grid. That view is the one kind of timetable
 institutions essentially never publish — ЛНУ offers it as an internal mode of «ПС-Розклад», КПІ has
 no room filter at all — and the printed sheet says so.
+
+Both «Інформація» tabs **edit and delete their subject** as well, on the pattern below.
+
+#### Editing and deleting from a drill-down page
+
+`/course/:id`, `/lecturer/:id` and `/room/:id` carry the same two controls `FacultyPage` has always
+had, and carry them the same way: **«✎ Редагувати»** in the info tab's `page-header` opening a modal
+over the entity's own fields, **«Видалити»** in the page header — shown only while the info tab is
+open, since the button acts on the page's subject and not on whatever list is on screen — and a
+confirmation modal naming what is about to go. Both are gated on
+`canModifyIds('COURSE' | 'LECTURER' | 'ROOM', [id])`, admins short-circuited, exactly as described
+under [Hiding UI the user can't use](#hiding-ui-the-user-cant-use); the mutation is re-checked
+server-side regardless.
+
+Three things about the payload are worth stating, because two of them are silent-data-loss traps
+rather than preferences:
+
+- **A cleared optional field is sent as an explicit `null`**, following `BaseEntity#buildInput`
+  rather than the older `FacultyPage`/`BuildingPage` habit of omitting empty values — a field the
+  update omits is left as it was, so on those two pages emptying a box still does nothing.
+- **`specialtyIds` and `tags` are always sent in full.** Omitting a many-to-many field leaves the
+  join table untouched and omitting a nested list leaves its rows untouched, so "I removed the last
+  one" has to travel as an empty array.
+- **Nothing else nested is sent at all**, and that is the point. `updateLecturer`'s payload also
+  accepts `workloadConstraints` and `timetableConstraints`, and `updateRoom`'s accepts
+  `timetableConstraints` — a *present* list reconciles, which would delete every rule not repeated
+  in it. Leaving them out is what keeps «Обмеження навантаження» and «Обмеження розкладу» the sole
+  writers of those rows.
+
+After a delete each page navigates back to where its subject was reached from — a course to its
+кафедра then its факультет, a lecturer to their кафедра, a room to its корпус then its факультет —
+falling back to the generic `/e/…` table, because staying on the page of a row that no longer exists
+would only render an empty shell.
+
+#### Getting to those pages (`.ent-link`)
+
+A page nobody can reach is a page nobody uses, and `EntityMeta.detailRoute`'s «Відкрити →» only
+covers the *generic* tables. The hand-written screens name the same three entities constantly —
+every plan names disciplines, every workload names lecturers and rooms, every timetable cell names
+all three — and until now every one of those was dead text. They are now links, everywhere they are
+named:
+
+| Screen | Links |
+|---|---|
+| specialty → «Навчальні плани» (`CurriculumItemList`) | discipline |
+| specialty → «Редагування планів» (`CurriculumEditor`) | discipline, on each course block's heading |
+| specialty → «Робочі навчальні плани» (`WorkingCurriculumView`) | discipline |
+| specialty → «Редагування робочих планів» (`WorkingCurriculumList`) | discipline, and the elective actually taught |
+| department → «Навантаження викладачів» (`LecturerWorkloadList`) | discipline (plain, elective and combined), every lecturer, every named аудиторія |
+| department → «Зведене навантаження» (`DepartmentWorkloadSummary`) | lecturer |
+| department → «Оцінка навантаження» (`LecturerWorkloadDetail`) | lecturer, and the discipline on every line |
+| faculty → «Формування розкладу» (`FacultyTimetableList`) | discipline, every lecturer |
+| the timetable grid (`TimetableView`, all five mounts) | discipline and аудиторія in every cell; the lecturer in the cell, or in the column header where the column *is* the lecturer |
+
+**The grid links its column headers too**, and that is not symmetry for its own sake: in
+`columnMode: 'lecturer'` — the department's «Розклад кафедри» — the cell deliberately omits the
+lecturer, because repeating the column's own name under every class of that column is noise. The
+header is therefore the *only* place that lecturer is named, and leaving it plain would have made
+the one sheet that is entirely about lecturers the one sheet with no link to any of them. `room`
+mode gets the same treatment; `group` and `single` headers stay plain (an academic group's page is
+out of this pass's scope, and a single column names nothing).
+
+**One class carries all of them.** `.ent-link` in `styles.css` renders as plain text and only
+colours and underlines on hover — the rule `.faculty-list-name` and `.building-list-name` already
+used. That is not decoration: a timetable cell names three linkable things and a plan table one per
+row, so ordinary link colouring would turn a 6×8 grid into a wall of blue and make the *text* harder
+to read than it was before. `.ent-link-arrow` is the variant for the one place where the name is
+already a control — the surname in «Зведене навантаження» stays the "assess this lecturer" button it
+has always been, and a small ↗ beside it goes to their page.
+
+Four small additions to the pure modules carry the ids the templates needed, all of them alongside a
+name that was already there: `GridEntry.courseId`, `WorkingPlanRow.courseId`, `StatItem.courseId` and
+`WorkloadSource`/`Block.courseId` in the schedule builder. In each case **the id follows the name**:
+where a view names the elective actually taught rather than its umbrella `ELECTIVE_GROUP`, the link
+goes to the elective — `timetable-grid.ts`'s `courseOf` and `faculty-timetable-list.ts`'s
+`courseRefFor` now resolve both together, precisely so the two cannot drift apart.
+
+Two places are deliberately left as plain text. The **room picker** in «Формування розкладу» is a
+`<select>`, not a label — the аудиторія there is being *chosen*, and it is reachable from the
+timetable grid the moment it is saved. And the generated-plan **preview tables** («Показати зміни»)
+describe a plan that has not been applied yet: navigating away from an unapplied plan discards it,
+so an inviting link in that table would be a trap.
 
 #### «Мій кабінет» (`MyDeskPage`, `/me`)
 
@@ -875,9 +967,11 @@ Three views read the same numbers, so they cannot disagree:
   rows that deviate. **Filtering never changes the department's totals**: the page header and the
   "Разом по кафедрі" footer row always count every lecturer, and a separate "Разом за фільтром" row
   appears above it while rows are hidden — a total that silently switches to meaning "this one
-  lecturer" is worse than no total. Clicking a name opens that lecturer's assessment;
+  lecturer" is worse than no total. Clicking a name opens that lecturer's assessment, and the ↗
+  beside it opens their own page;
 - the **same table embedded** at the top of "Обмеження навантаження" (`embedded` mode: no header,
-  no toolbar, no links), so a limit can be read beside the load it governs;
+  no toolbar, no assessment link — the surname there is a plain link to the lecturer's page), so a
+  limit can be read beside the load it governs;
 - a **per-lecturer drill-down**, "Оцінка навантаження", where a picker selects one lecturer and
   shows the same totals, then every constraint measured against what they actually carry, then every
   position they deliver grouped into the first and second half-year, each with its own subtotal.
@@ -1159,7 +1253,10 @@ All are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
   carrying a `parentFilter` — `Lecturer.departmentId` and `RoomGroup.departmentId`; the two drill-down child lists
   (`curriculum-item-list.ts`, `working-curriculum-list.ts`) build the same behaviour inline from a
   `filteredDepartmentOptions` computed signal, because their department select sits inside a larger
-  hand-written form rather than the metadata-driven one.
+  hand-written form rather than the metadata-driven one. `LecturerDetailPage`'s edit modal is the
+  third kind of consumer and the simplest: a hand-written form that mounts the component itself,
+  since a кафедра picker with no faculty filter over every department in the university is the one
+  field of that form nobody could use.
 
 ### Academic terms (`entities.ts`)
 
@@ -1227,9 +1324,9 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 | `/department/:id` | `DepartmentDetailPage` | department detail |
 | `/specialty/:id` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
 | `/academic-group/:id` | `AcademicGroupDetailPage` | group detail |
-| `/course/:id` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads |
-| `/lecturer/:id` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable |
-| `/room/:id` | `RoomDetailPage` | **lazy** — one room and its occupancy |
+| `/course/:id` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads; edits/deletes it |
+| `/lecturer/:id` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable; edits/deletes them |
+| `/room/:id` | `RoomDetailPage` | **lazy** — one room and its occupancy; edits/deletes it |
 | `/me` | `MyDeskPage` | **lazy** — «Мій кабінет»: own workload or curriculum, and own timetable |
 | `/global-properties` | `GlobalPropertiesPage` | system-wide settings editor |
 | `/e/building` | `BuildingHome` | building tiles (overrides the generic table for this entity) |
@@ -1330,6 +1427,11 @@ same pattern:
    check instead — e.g. `DepartmentList` calls `canModifyIds('FACULTY', [facultyId])` on its own
    parent faculty, since creating a `Department` requires modify permission on the `Faculty` it
    would belong to (`PermissionService#canCreate` on the backend walks the same edge).
+
+A **detail page** does the same check for a batch of one: `FacultyPage`, `CourseDetailPage`,
+`LecturerDetailPage` and `RoomDetailPage` each call `canModifyIds(<TYPE>, [routeId])` in `ngOnInit`
+and gate their own «Редагувати»/«Видалити» on the result — see [Editing and deleting from a
+drill-down page](#editing-and-deleting-from-a-drill-down-page).
 
 `resourceType.ts`'s `toResourceType()` converts an entity's PascalCase name (`WorkingCurriculumItem`)
 to the `UPPER_SNAKE_CASE` identifier the backend's grants use (`WORKING_CURRICULUM_ITEM`) —

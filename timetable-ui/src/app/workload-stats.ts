@@ -50,6 +50,8 @@ export interface StatWorkload {
 /** One line of a lecturer's detailed breakdown. */
 export interface StatItem {
   workloadId: string;
+  /** `courses.id` behind {@link courseName} — what the breakdown links each line to. */
+  courseId: string;
   courseName: string;
   courseType: string;
   semester: number;
@@ -166,6 +168,7 @@ export function computeStats(input: StatsInput): LecturerStats[] {
 
       s.items.push({
         workloadId: w.workloadId,
+        courseId: w.courseId,
         courseName: w.courseName,
         courseType: w.courseType,
         semester: w.semester,

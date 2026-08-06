@@ -68,7 +68,11 @@
             <td>{{ i + 1 }}</td>
             <td>{{ row.courseYear }}</td>
             <td>{{ row.semester }}</td>
-            <td>{{ row.name }}</td>
+            <td>
+              @if (row.courseId) {
+                <a class="ent-link" [routerLink]="['/course', row.courseId]">{{ row.name }}</a>
+              } @else { {{ row.name }} }
+            </td>
             <td>{{ controlFormLabel(row.controlForm) }}</td>
             <td class="num">{{ fmtNumber(row.credits) }}</td>
             <td class="num">{{ fmtNumber(row.totalHours) }}</td>

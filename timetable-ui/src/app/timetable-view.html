@@ -50,8 +50,21 @@
         <tr>
           <th class="tv-day-col">День</th>
           <th class="tv-slot-col">Пара</th>
+          <!-- In lecturer and room column modes the column *is* an entity, and in lecturer mode it
+               is the only place that lecturer is named — the cell below suppresses the name it
+               would otherwise repeat under every class. So the header carries the link there. -->
           @for (col of g.columns; track col.id) {
-            <th>{{ col.label || 'Заняття' }}</th>
+            <th>
+              @switch (columnMode) {
+                @case ('lecturer') {
+                  <a class="ent-link" [routerLink]="['/lecturer', col.id]">{{ col.label }}</a>
+                }
+                @case ('room') {
+                  <a class="ent-link" [routerLink]="['/room', col.id]">{{ col.label }}</a>
+                }
+                @default { {{ col.label || 'Заняття' }} }
+              }
+            </th>
           }
         </tr>
       </thead>
@@ -73,13 +86,24 @@
                       @if (isBiweekly(e)) {
                         <span class="tv-parity">{{ parityLabel(e.weekParity) }}</span>
                       }
-                      <span class="tv-course">{{ e.courseName }}</span>
+                      <span class="tv-course">
+                        @if (e.courseId) {
+                          <a class="ent-link" [routerLink]="['/course', e.courseId]">{{ e.courseName }}</a>
+                        } @else { {{ e.courseName }} }
+                      </span>
                       <span class="tv-meta">
                         @if (e.hourTypeShort) { {{ e.hourTypeShort }} }
-                        @if (e.roomLabel) { &middot; ауд. {{ e.roomLabel }} }
+                        @if (e.roomLabel) {
+                          &middot; ауд.
+                          @if (e.roomId) {
+                            <a class="ent-link" [routerLink]="['/room', e.roomId]">{{ e.roomLabel }}</a>
+                          } @else { {{ e.roomLabel }} }
+                        }
                       </span>
                       @if (columnMode !== 'lecturer' && e.lecturers.length) {
-                        <span class="tv-meta">{{ e.lecturers[0].withPosition }}@if (e.lecturers.length > 1) { &nbsp;та ін.}</span>
+                        <span class="tv-meta">
+                          <a class="ent-link" [routerLink]="['/lecturer', e.lecturers[0].id]">{{ e.lecturers[0].withPosition }}</a>@if (e.lecturers.length > 1) { &nbsp;та ін.}
+                        </span>
                       }
                       @if (columnMode !== 'group' && e.groupNames) {
                         <span class="tv-meta">{{ e.groupNames }}</span>

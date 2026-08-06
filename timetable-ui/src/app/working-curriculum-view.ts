@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { GlobalPropertiesService } from './global-properties.service';
@@ -31,7 +32,7 @@ import type { CurriculumSpecialty } from './curriculum-item-list';
 @Component({
   selector: 'app-working-curriculum-view',
   templateUrl: './working-curriculum-view.html',
-  imports: [FormsModule, SearchSelect, WorkingCurriculumSummary]
+  imports: [FormsModule, RouterLink, SearchSelect, WorkingCurriculumSummary]
 })
 export class WorkingCurriculumView implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

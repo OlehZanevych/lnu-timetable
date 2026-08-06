@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { GlobalPropertiesService } from './global-properties.service';
@@ -36,7 +37,7 @@ export interface TimetableReportContext {
 @Component({
   selector: 'app-timetable-view',
   templateUrl: './timetable-view.html',
-  imports: [FormsModule, SearchSelect]
+  imports: [FormsModule, RouterLink, SearchSelect]
 })
 export class TimetableView implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

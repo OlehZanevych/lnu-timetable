@@ -1,11 +1,15 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
 import { GlobalPropertiesService } from './global-properties.service';
-import { courseTypeLabel, CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS,
-         termLabelShort } from './entities';
+import { courseTypeLabel, CONTROL_FORM_OPTIONS, COURSE_TYPE_OPTIONS, HOUR_TYPE_OPTIONS,
+         TEACHING_FORMAT_OPTIONS, termLabelShort, toOptions } from './entities';
 import { fmtNumber, fmtOrDash } from './curriculum-plan';
 import { HOUR_TYPE_SHORT, POSITION_SHORT } from './timetable-grid';
+import { SearchSelect, Option } from './search-select';
+import { MultiSelect } from './multi-select';
 import { compareUk } from './sort';
 
 type CourseSection = 'info' | 'curricula' | 'working' | 'workloads';
@@ -78,22 +82,30 @@ interface DeliveryRow {
  * walk the specialty and department pages one at a time. This page walks the chain once, in a
  * single query, and shows what it adds up to: which curricula the discipline appears in, which
  * кафедри deliver it to which groups, and which lecturers actually carry it.
+ *
+ * The info tab also edits and deletes the discipline, exactly as `FacultyPage` does for a faculty:
+ * a modal over the entity's own fields — including the `specialtyIds` many-to-many and the `tags`
+ * nested list the generic table offers — and a confirmation before `deleteCourse`, both hidden
+ * unless `canModifyIds('COURSE', …)` says this account may.
  */
 @Component({
   selector: 'app-course-page',
   templateUrl: './course-page.html',
-  imports: [RouterLink]
+  imports: [RouterLink, FormsModule, SearchSelect, MultiSelect]
 })
 export class CourseDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private gql = inject(GraphqlService);
   private settings = inject(GlobalPropertiesService);
+  auth = inject(AuthService);
 
   readonly courseId: string = this.route.snapshot.paramMap.get('id')!;
   readonly courseTypeLabel = courseTypeLabel;
   readonly termLabelShort = termLabelShort;
   readonly fmtNumber = fmtNumber;
   readonly fmtOrDash = fmtOrDash;
+  readonly courseTypeOptions = toOptions(COURSE_TYPE_OPTIONS);
 
   readonly sections: { key: CourseSection; label: string }[] = [
     { key: 'info',      label: '&#x2139; Інформація' },
@@ -107,6 +119,34 @@ export class CourseDetailPage implements OnInit {
   error = signal('');
   loading = signal(false);
   activeSection = signal<CourseSection>('info');
+
+  /** Whether the current user may edit/delete this Course — see AuthService#canModifyIds. */
+  canModifyCourse = signal(false);
+
+  showEditForm = signal(false);
+  editError = signal('');
+  editForm: Record<string, any> = {};
+
+  showDeleteConfirm = signal(false);
+  deleteError = signal('');
+
+  facultyOptions = signal<Option[]>([]);
+  departmentOptions = signal<Option[]>([]);
+  specialtyOptions = signal<Option[]>([]);
+  /** Every course, kept whole so the umbrella picker below can be derived from it. */
+  private allCourses = signal<{ id: string; name: string; courseType: string }[]>([]);
+
+  /**
+   * A `parentCourse` is only ever an umbrella `ELECTIVE_GROUP`, so the picker offers those rather
+   * than the several thousand courses the generic form lists — plus whatever is currently stored,
+   * even if it is not one, because opening an edit form must never silently drop a stored value.
+   */
+  parentCourseOptions = computed<Option[]>(() => {
+    const current = this.course()?.parentCourse?.id ?? '';
+    return this.allCourses()
+      .filter((c) => c.id !== this.courseId && (c.courseType === 'ELECTIVE_GROUP' || c.id === current))
+      .map((c) => ({ id: c.id, label: c.name }));
+  });
 
   /** Every delivery position of this course, flattened out of the curriculum tree. */
   deliveries = computed<DeliveryRow[]>(() => {
@@ -191,6 +231,13 @@ export class CourseDetailPage implements OnInit {
   ngOnInit() {
     this.settings.ensureLoaded();
     this.load();
+    this.loadFormOptions();
+    if (this.auth.isAdmin()) {
+      this.canModifyCourse.set(true);
+    } else {
+      this.auth.canModifyIds('COURSE', [this.courseId])
+        .subscribe((ids) => this.canModifyCourse.set(ids.has(this.courseId)));
+    }
   }
 
   selectSection(key: CourseSection) { this.activeSection.set(key); }
@@ -263,6 +310,114 @@ export class CourseDetailPage implements OnInit {
         this.loading.set(false);
       },
       error: (e) => { this.error.set(e.message); this.loading.set(false); }
+    });
+  }
+
+  // ── Option lists for the edit form ────────────────────────────────────────
+
+  private loadFormOptions() {
+    const q = `{
+      faculties { facultyConnection(limit: 200) { nodes { id name } } }
+      departments { departmentConnection(limit: 1000) { nodes { id name } } }
+      specialties { specialtyConnection(limit: 1000) { nodes { id code name } } }
+      courses { courseConnection(limit: 1000) { nodes { id name courseType } } }
+    }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => {
+        this.facultyOptions.set(
+          d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name })));
+        this.departmentOptions.set(
+          d.departments.departmentConnection.nodes.map((x: any) => ({ id: x.id, label: x.name })));
+        this.specialtyOptions.set(
+          d.specialties.specialtyConnection.nodes.map((sp: any) => ({
+            id: sp.id, label: `${sp.code ?? ''} ${sp.name}`.trim()
+          })));
+        this.allCourses.set(d.courses.courseConnection.nodes ?? []);
+      },
+      error: () => {}
+    });
+  }
+
+  // ── Edit ──────────────────────────────────────────────────────────────────
+
+  openEdit() {
+    const c = this.course();
+    if (!c) return;
+    this.editForm = {
+      name: c.name ?? '',
+      courseType: c.courseType ?? '',
+      facultyId: c.faculty?.id ?? '',
+      departmentId: c.department?.id ?? '',
+      parentCourseId: c.parentCourse?.id ?? '',
+      specialtyIds: (c.specialties ?? []).map((sp) => String(sp.id)),
+      tags: (c.tags ?? []).map((t) => t.tag).filter(Boolean).join(', '),
+    };
+    this.editError.set('');
+    this.showEditForm.set(true);
+  }
+
+  closeEdit() { this.showEditForm.set(false); this.editError.set(''); }
+
+  /**
+   * Follows `BaseEntity#buildInput` on all three counts, because the same backend rules apply:
+   * a cleared optional scalar/FK is sent as an explicit `null` so the column is actually cleared;
+   * `specialtyIds` is always sent in full, since omitting a many-to-many field leaves the join
+   * table untouched rather than emptying it; and `tags` — a nested list — is likewise always sent,
+   * so a removed tag is deleted by not being in the list.
+   */
+  saveEdit() {
+    const required = new Set(['name', 'courseType']);
+    const input: Record<string, any> = {
+      specialtyIds: Array.isArray(this.editForm['specialtyIds']) ? this.editForm['specialtyIds'] : [],
+      tags: String(this.editForm['tags'] ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .map((tag) => ({ tag })),
+    };
+    for (const f of ['name', 'courseType', 'facultyId', 'departmentId', 'parentCourseId']) {
+      const v = this.editForm[f];
+      if (v === undefined || v === null || v === '') {
+        if (!required.has(f)) input[f] = null;
+        continue;
+      }
+      input[f] = v;
+    }
+    const q = `mutation($id: ID!, $input: CourseInputPayload!) { courses { updateCourse(id: $id, course: $input) { isSuccess errorStatus } } }`;
+    this.gql.request(q, { id: this.courseId, input }).subscribe({
+      next: (d: any) => {
+        const res = d.courses.updateCourse;
+        if (res.isSuccess) { this.closeEdit(); this.load(); }
+        else this.editError.set(res.errorStatus || 'Помилка операції');
+      },
+      error: (e) => this.editError.set(e.message)
+    });
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  openDelete() { this.deleteError.set(''); this.showDeleteConfirm.set(true); }
+  closeDelete() { this.showDeleteConfirm.set(false); this.deleteError.set(''); }
+
+  /** Back where the discipline was reached from — its кафедра, its факультет, or the plain table. */
+  private afterDeleteRoute(): any[] {
+    const c = this.course();
+    if (c?.department) return ['/department', c.department.id];
+    const fac = c?.faculty ?? c?.department?.faculty;
+    if (fac) return ['/faculty', fac.id];
+    return ['/e/course'];
+  }
+
+  confirmDelete() {
+    const back = this.afterDeleteRoute();
+    const q = `mutation($id: ID!) { courses { deleteCourse(id: $id) { isSuccess errorStatus } } }`;
+    this.gql.request(q, { id: this.courseId }).subscribe({
+      next: (d: any) => {
+        const res = d.courses.deleteCourse;
+        if (res.isSuccess) this.router.navigate(back);
+        else this.deleteError.set(res.errorStatus || 'Помилка видалення');
+      },
+      error: (e) => this.deleteError.set(e.message)
     });
   }
 }

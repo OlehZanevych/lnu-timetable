@@ -95,7 +95,11 @@
         <thead><tr><th>Викладач</th><th>Годин на рік</th><th>Дисциплін</th></tr></thead>
         <tbody>
           @for (l of plan.load; track l.lecturerId) {
-            <tr><td>{{ l.name }}</td><td>{{ l.hours }}</td><td>{{ l.courses }}</td></tr>
+            <tr>
+              <td><a class="ent-link" [routerLink]="['/lecturer', l.lecturerId]">{{ l.name }}</a></td>
+              <td>{{ l.hours }}</td>
+              <td>{{ l.courses }}</td>
+            </tr>
           }
         </tbody>
       </table>
@@ -109,7 +113,11 @@
   @for (c of combinedItems(); track c.id) {
     <div class="card wci-item-card">
       <div class="wci-item-header">
-        <strong>{{ combinedSummary(c) }}</strong>
+        <strong>
+          @if (combinedCourseRef(c); as cr) {
+            <a class="ent-link" [routerLink]="['/course', cr.id]">{{ cr.name }}</a>
+          }{{ combinedSummaryTail(c) }}
+        </strong>
       </div>
       <div class="wci-hours-block">
         <div class="wci-hours-header">
@@ -136,7 +144,9 @@
               @for (w of c.workloads; track w.id) {
                 <tr>
                   <td>
-                    {{ lecturerNames(w) }}
+                    @for (l of lecturerRefs(w); track l.id) {
+                      <a class="ent-link" [routerLink]="['/lecturer', l.id]">{{ l.name }}</a>@if (!$last) { , }
+                    } @empty { &mdash; }
                     @if (candidateLabels(w).length) {
                       <div class="lw-candidate-note">
                         <span>кандидати:</span>
@@ -149,7 +159,13 @@
                   <td>{{ academicGroupNames(w.academicGroups) }}</td>
                   <td>{{ w.durationHours }} год.</td>
                   <td class="cell-info">{{ startTimeSetName(w) }}</td>
-                  <td class="cell-info" [title]="roomRestrictionLabel(w)">{{ roomRestrictionLabel(w) }}</td>
+                  <td class="cell-info" [title]="roomRestrictionLabel(w)">
+                    @for (r of roomRefs(w); track $index) {
+                      @if (r.roomId) {
+                        <a class="ent-link" [routerLink]="['/room', r.roomId]">{{ r.label }}</a>
+                      } @else { {{ r.label }} }@if (!$last) { , }
+                    } @empty { будь-яка }
+                  </td>
                   <td class="row-actions">
                     <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
                     <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
@@ -173,7 +189,7 @@
     <div class="wci-item-header">
       <strong>Семестр {{ group.semester }}</strong>
       <span>Спеціальність: {{ group.specialty.name }}</span>
-      <span>Дисципліна: {{ group.course.name }}</span>
+      <span>Дисципліна: <a class="ent-link" [routerLink]="['/course', group.course.id]">{{ group.course.name }}</a></span>
       <span>Форма контролю: {{ controlFormLabel(group.controlForm) }}</span>
       <span>ECTS: {{ group.ectsCredits ?? '&mdash;' }}</span>
     </div>
@@ -191,7 +207,12 @@
               <span>Формат викладання: {{ teachingFormatLabel(wci.teachingFormat) }}</span>
               <span>Академічні групи: {{ academicGroupNames(wci.academicGroups) }}</span>
               @if (isElectiveGroupCourse(group)) {
-                <span>Вибіркова дисципліна: {{ wci.course?.name || '&mdash;' }}</span>
+                <span>
+                  Вибіркова дисципліна:
+                  @if (wci.course) {
+                    <a class="ent-link" [routerLink]="['/course', wci.course.id]">{{ wci.course.name }}</a>
+                  } @else { &mdash; }
+                </span>
               }
               <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
             </div>
@@ -223,7 +244,9 @@
                     @if (isIndividuallyItem(wci)) {
                       <td>
                         @for (pair of pairRows(w); track $index) {
-                          <div class="lw-pair-line">{{ pair.lecturer }}</div>
+                          <div class="lw-pair-line">
+                            <a class="ent-link" [routerLink]="['/lecturer', pair.lecturerId]">{{ pair.lecturer }}</a>
+                          </div>
                         } @empty {
                           <span class="muted">&mdash;</span>
                         }
@@ -245,7 +268,9 @@
                       </td>
                     } @else {
                       <td>
-                        {{ lecturerNames(w) }}
+                        @for (l of lecturerRefs(w); track l.id) {
+                          <a class="ent-link" [routerLink]="['/lecturer', l.id]">{{ l.name }}</a>@if (!$last) { , }
+                        } @empty { &mdash; }
                         @if (candidateLabels(w).length) {
                           <div class="lw-candidate-note">
                             <span>кандидати:</span>
@@ -264,7 +289,13 @@
                       <td>{{ w.durationHours }} год.</td>
                     }
                     <td class="cell-info">{{ startTimeSetName(w) }}</td>
-                    <td class="cell-info" [title]="roomRestrictionLabel(w)">{{ roomRestrictionLabel(w) }}</td>
+                    <td class="cell-info" [title]="roomRestrictionLabel(w)">
+                      @for (r of roomRefs(w); track $index) {
+                        @if (r.roomId) {
+                          <a class="ent-link" [routerLink]="['/room', r.roomId]">{{ r.label }}</a>
+                        } @else { {{ r.label }} }@if (!$last) { , }
+                      } @empty { будь-яка }
+                    </td>
                     <td class="row-actions">
                       <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
                       <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>

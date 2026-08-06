@@ -1,6 +1,7 @@
 import {
   Component, EventEmitter, Input, OnChanges, OnInit, Output, computed, inject, signal
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
@@ -29,7 +30,7 @@ type SortKey = 'name' | 'total' | 'half1' | 'half2' | 'deviation';
 @Component({
   selector: 'app-department-workload-summary',
   templateUrl: './department-workload-summary.html',
-  imports: [FormsModule]
+  imports: [FormsModule, RouterLink]
 })
 export class DepartmentWorkloadSummary implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

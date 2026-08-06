@@ -1,4 +1,5 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { GlobalPropertiesService } from './global-properties.service';
@@ -94,7 +95,7 @@ const toWorkingPlanItem = (item: CurriculumItemNode): WorkingPlanItemInput => ({
 @Component({
   selector: 'app-working-curriculum-list',
   templateUrl: './working-curriculum-list.html',
-  imports: [FormsModule, SearchSelect, MultiSelect, WorkingCurriculumSummary]
+  imports: [FormsModule, RouterLink, SearchSelect, MultiSelect, WorkingCurriculumSummary]
 })
 export class WorkingCurriculumList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);

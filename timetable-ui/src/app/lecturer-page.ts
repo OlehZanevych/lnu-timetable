@@ -1,10 +1,15 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
-import { HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, positionLabel, termLabelShort } from './entities';
+import { AuthService } from './auth.service';
+import { HOUR_TYPE_OPTIONS, POSITION_OPTIONS, TEACHING_FORMAT_OPTIONS, positionLabel,
+         termLabelShort, toOptions } from './entities';
 import { fmtNumber } from './curriculum-plan';
 import { HOUR_TYPE_SHORT } from './timetable-grid';
 import { TimetableView } from './timetable-view';
+import { SearchSelect, Option } from './search-select';
+import { DeptFacultySelect, DeptOption } from './dept-faculty-select';
 import { compareUk } from './sort';
 
 type LecturerSection = 'info' | 'classes' | 'timetable';
@@ -45,20 +50,28 @@ interface ClassRow {
  * page answers the question a lecturer themselves asks — what am I carrying, and where do I have to
  * be. The «Заняття» tab lists the workloads they hold, and «Розклад» renders the same grid the
  * faculty publishes, scoped to them.
+ *
+ * The info tab also edits and deletes the lecturer, exactly as `FacultyPage` does for a faculty: a
+ * modal over the entity's own fields and a confirmation before `deleteLecturer`, both hidden unless
+ * `canModifyIds('LECTURER', …)` says this account may — see the README's *Hiding UI the user can't
+ * use*.
  */
 @Component({
   selector: 'app-lecturer-page',
   templateUrl: './lecturer-page.html',
-  imports: [RouterLink, TimetableView]
+  imports: [RouterLink, FormsModule, SearchSelect, DeptFacultySelect, TimetableView]
 })
 export class LecturerDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private gql = inject(GraphqlService);
+  auth = inject(AuthService);
 
   readonly lecturerId: string = this.route.snapshot.paramMap.get('id')!;
   readonly positionLabel = positionLabel;
   readonly termLabelShort = termLabelShort;
   readonly fmtNumber = fmtNumber;
+  readonly positionOptions = toOptions(POSITION_OPTIONS);
 
   readonly sections: { key: LecturerSection; label: string }[] = [
     { key: 'info',      label: '&#x2139; Інформація' },
@@ -71,6 +84,20 @@ export class LecturerDetailPage implements OnInit {
   error = signal('');
   loading = signal(false);
   activeSection = signal<LecturerSection>('info');
+
+  /** Whether the current user may edit/delete this Lecturer — see AuthService#canModifyIds. */
+  canModifyLecturer = signal(false);
+
+  showEditForm = signal(false);
+  editError = signal('');
+  editForm: Record<string, any> = {};
+
+  showDeleteConfirm = signal(false);
+  deleteError = signal('');
+
+  degreeOptions = signal<Option[]>([]);
+  departmentOptions = signal<DeptOption[]>([]);
+  facultyOptions = signal<Option[]>([]);
 
   /** Ids for the timetable view; an array so the shared component's filter shape fits. */
   readonly lecturerIds = computed(() => [this.lecturerId]);
@@ -97,7 +124,18 @@ export class LecturerDetailPage implements OnInit {
     };
   });
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.load();
+    this.loadDegrees();
+    this.loadDepartments();
+    this.loadFaculties();
+    if (this.auth.isAdmin()) {
+      this.canModifyLecturer.set(true);
+    } else {
+      this.auth.canModifyIds('LECTURER', [this.lecturerId])
+        .subscribe((ids) => this.canModifyLecturer.set(ids.has(this.lecturerId)));
+    }
+  }
 
   selectSection(key: LecturerSection) { this.activeSection.set(key); }
 
@@ -190,5 +228,108 @@ export class LecturerDetailPage implements OnInit {
     return rows.sort((a, b) => a.semester - b.semester
       || compareUk(a.courseName, b.courseName)
       || compareUk(a.hourType, b.hourType));
+  }
+
+  // ── Option lists for the edit form ────────────────────────────────────────
+
+  private loadDegrees() {
+    const q = `{ academicDegrees { academicDegreeConnection(limit: 200) { nodes { id name } } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => this.degreeOptions.set(
+        d.academicDegrees.academicDegreeConnection.nodes.map((x: any) => ({ id: x.id, label: x.name }))),
+      error: () => {}
+    });
+  }
+
+  /** Departments carry their faculty so `DeptFacultySelect` can narrow them — see that component. */
+  private loadDepartments() {
+    const q = `{ departments { departmentConnection(limit: 1000) { nodes { id name faculty { id name } } } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => this.departmentOptions.set(
+        d.departments.departmentConnection.nodes.map((x: any) => ({
+          id: x.id, label: x.name, facultyId: x.faculty?.id ?? ''
+        }))),
+      error: () => {}
+    });
+  }
+
+  private loadFaculties() {
+    const q = `{ faculties { facultyConnection(limit: 200) { nodes { id name } } } }`;
+    this.gql.request(q).subscribe({
+      next: (d: any) => this.facultyOptions.set(
+        d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name }))),
+      error: () => {}
+    });
+  }
+
+  // ── Edit ──────────────────────────────────────────────────────────────────
+
+  openEdit() {
+    const l = this.lecturer();
+    if (!l) return;
+    this.editForm = {
+      lastName: l.lastName ?? '',
+      firstName: l.firstName ?? '',
+      middleName: l.middleName ?? '',
+      email: l.email ?? '',
+      position: l.position ?? '',
+      academicDegreeId: l.academicDegree?.id ?? '',
+      departmentId: l.department?.id ?? '',
+    };
+    this.editError.set('');
+    this.showEditForm.set(true);
+  }
+
+  closeEdit() { this.showEditForm.set(false); this.editError.set(''); }
+
+  /**
+   * Sends an explicit `null` for a cleared optional field, as `BaseEntity#buildInput` does, so
+   * emptying a box actually clears the column. The two required fields and the department are
+   * simply omitted when empty rather than nulled, since the column will not take a null.
+   *
+   * Neither `workloadConstraints` nor `timetableConstraints` is in the payload, deliberately: a
+   * nested list absent from an update leaves its rows untouched (see `reconcileNestedLists` on the
+   * service), so this form cannot wipe the ceilings «Обмеження навантаження» and the rules
+   * «Обмеження розкладу» own.
+   */
+  saveEdit() {
+    const required = new Set(['firstName', 'lastName', 'departmentId']);
+    const input: Record<string, any> = {};
+    for (const f of ['firstName', 'middleName', 'lastName', 'email', 'position', 'academicDegreeId', 'departmentId']) {
+      const v = this.editForm[f];
+      if (v === undefined || v === null || v === '') {
+        if (!required.has(f)) input[f] = null;
+        continue;
+      }
+      input[f] = v;
+    }
+    const q = `mutation($id: ID!, $input: LecturerInputPayload!) { lecturers { updateLecturer(id: $id, lecturer: $input) { isSuccess errorStatus } } }`;
+    this.gql.request(q, { id: this.lecturerId, input }).subscribe({
+      next: (d: any) => {
+        const res = d.lecturers.updateLecturer;
+        if (res.isSuccess) { this.closeEdit(); this.load(); }
+        else this.editError.set(res.errorStatus || 'Помилка операції');
+      },
+      error: (e) => this.editError.set(e.message)
+    });
+  }
+
+  // ── Delete ────────────────────────────────────────────────────────────────
+
+  openDelete() { this.deleteError.set(''); this.showDeleteConfirm.set(true); }
+  closeDelete() { this.showDeleteConfirm.set(false); this.deleteError.set(''); }
+
+  confirmDelete() {
+    const dept = this.lecturer()?.department;
+    const back = dept ? ['/department', dept.id] : ['/e/lecturer'];
+    const q = `mutation($id: ID!) { lecturers { deleteLecturer(id: $id) { isSuccess errorStatus } } }`;
+    this.gql.request(q, { id: this.lecturerId }).subscribe({
+      next: (d: any) => {
+        const res = d.lecturers.deleteLecturer;
+        if (res.isSuccess) this.router.navigate(back);
+        else this.deleteError.set(res.errorStatus || 'Помилка видалення');
+      },
+      error: (e) => this.deleteError.set(e.message)
+    });
   }
 }
