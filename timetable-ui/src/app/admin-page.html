@@ -14,7 +14,7 @@
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Ел. пошта</th><th>Ім'я</th><th>Прізвище</th><th>Тимч. пароль</th><th>Активний</th><th></th>
+        <th>#</th><th>Ел. пошта</th><th>Ім'я</th><th>Прізвище</th><th>Особа</th><th>Тимч. пароль</th><th>Активний</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -24,9 +24,13 @@
           <td>{{ u.email }}</td>
           <td>{{ u.firstName }}</td>
           <td>{{ u.lastName }}</td>
+          <td>
+            @if (personLabel(u)) { {{ personLabel(u) }} } @else { <span class="muted">&mdash;</span> }
+          </td>
           <td>{{ u.mustChangePassword ? 'Так' : 'Ні' }}</td>
           <td>{{ u.isActive ? 'Так' : 'Ні' }}</td>
           <td class="row-actions">
+            <button type="button" class="ghost" (click)="editPersonLink(u)">Прив&rsquo;язати</button>
             @if (u.isActive) {
               <button type="button" class="ghost danger" (click)="setUserActive(u, false)">Деактивувати</button>
             } @else {
@@ -35,7 +39,7 @@
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="7" class="muted">Користувачів ще немає.</td></tr>
+        <tr><td colspan="8" class="muted">Користувачів ще немає.</td></tr>
       }
     </tbody>
   </table>
@@ -61,8 +65,78 @@
       <span>Тимчасовий пароль *</span>
       <input type="text" [(ngModel)]="newUser.temporaryPassword" name="newUserPassword" required minlength="8" />
     </label>
+    <label>
+      <span>Хто це</span>
+      <select [(ngModel)]="newUserLink.kind" name="newUserLinkKind">
+        <option value="NONE">Працівник деканату / адміністратор</option>
+        <option value="LECTURER">Викладач</option>
+        <option value="STUDENT">Студент</option>
+      </select>
+    </label>
+    @if (newUserLink.kind === 'LECTURER') {
+      <label style="width: 100%">
+        <span>Викладач *</span>
+        <app-search-select [options]="lecturerOptions()" [(ngModel)]="newUserLink.lecturerId"
+                           name="newUserLecturer" placeholder="Оберіть викладача" />
+      </label>
+    } @else if (newUserLink.kind === 'STUDENT') {
+      <label style="width: 100%">
+        <span>Студент *</span>
+        <app-search-select [options]="studentOptions()" [(ngModel)]="newUserLink.studentId"
+                           name="newUserStudent" placeholder="Оберіть студента" />
+      </label>
+    }
     <div class="actions">
       <button type="submit">+ Створити користувача</button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Person link ── -->
+
+<h3 class="hours-title" style="margin-top: 28px;">Прив&rsquo;язка до викладача або студента</h3>
+<p class="muted">
+  Обліковий запис може належати викладачеві або студентові &mdash; або нікому з них, як у працівників
+  деканату. Прив&rsquo;язка не дає жодних прав: вона лише визначає, чиє навантаження, чий навчальний
+  план і чий розклад показує сторінка «Мій кабінет». Права надаються нижче, окремо.
+</p>
+
+<div class="card" style="padding: 16px 20px;">
+  @if (personLinkError()) { <p class="error">{{ personLinkError() }}</p> }
+  @if (personLinkSuccess()) { <p class="muted">{{ personLinkSuccess() }}</p> }
+  <form class="entity-form">
+    <label style="width: 100%">
+      <span>Обліковий запис *</span>
+      <select [(ngModel)]="personLink.userId" name="personLinkUser">
+        <option value="">&mdash;</option>
+        @for (u of users(); track u.id) {
+          <option [value]="u.id">{{ u.lastName }} {{ u.firstName }} &mdash; {{ u.email }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      <span>Хто це *</span>
+      <select [(ngModel)]="personLink.kind" name="personLinkKind">
+        <option value="NONE">Без прив&rsquo;язки</option>
+        <option value="LECTURER">Викладач</option>
+        <option value="STUDENT">Студент</option>
+      </select>
+    </label>
+    @if (personLink.kind === 'LECTURER') {
+      <label style="width: 100%">
+        <span>Викладач *</span>
+        <app-search-select [options]="lecturerOptions()" [(ngModel)]="personLink.lecturerId"
+                           name="personLinkLecturer" placeholder="Оберіть викладача" />
+      </label>
+    } @else if (personLink.kind === 'STUDENT') {
+      <label style="width: 100%">
+        <span>Студент *</span>
+        <app-search-select [options]="studentOptions()" [(ngModel)]="personLink.studentId"
+                           name="personLinkStudent" placeholder="Оберіть студента" />
+      </label>
+    }
+    <div class="actions">
+      <button type="button" (click)="savePersonLink()">Зберегти прив&rsquo;язку</button>
     </div>
   </form>
 </div>

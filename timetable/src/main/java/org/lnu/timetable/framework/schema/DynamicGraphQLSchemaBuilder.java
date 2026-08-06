@@ -391,6 +391,10 @@ public class DynamicGraphQLSchemaBuilder {
             .field(newFieldDefinition().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
             .field(newFieldDefinition().name("mustChangePassword").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
             .field(newFieldDefinition().name("isActive").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("lecturerId").type(GraphQLID)
+                .description("The lecturer this account belongs to, if any. At most one of lecturerId and studentId is ever set — a user is a Lecturer or a Student, or neither"))
+            .field(newFieldDefinition().name("studentId").type(GraphQLID)
+                .description("The student this account belongs to, if any"))
             .field(newFieldDefinition().name("groups").type(GraphQLNonNull.nonNull(
                 GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))))
             .build();
@@ -427,6 +431,10 @@ public class DynamicGraphQLSchemaBuilder {
             .field(newFieldDefinition().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
             .field(newFieldDefinition().name("mustChangePassword").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
             .field(newFieldDefinition().name("isAdmin").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("lecturerId").type(GraphQLID)
+                .description("The lecturer this account belongs to, if any. At most one of lecturerId and studentId is ever set — a user is a Lecturer or a Student, or neither"))
+            .field(newFieldDefinition().name("studentId").type(GraphQLID)
+                .description("The student this account belongs to, if any"))
             .field(newFieldDefinition().name("groups").type(GraphQLNonNull.nonNull(
                 GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))))
             .field(newFieldDefinition().name("permissions").type(GraphQLNonNull.nonNull(
@@ -460,6 +468,9 @@ public class DynamicGraphQLSchemaBuilder {
 
         GraphQLEnumType createUserErrorEnum = newEnum().name("CreateUserErrorStatus")
             .value("DUPLICATE_EMAIL", "DUPLICATE_EMAIL", "A user with this email already exists")
+            .value("BOTH_LINKS_SET", "BOTH_LINKS_SET", "lecturerId and studentId cannot both be set")
+            .value("ALREADY_LINKED", "ALREADY_LINKED", "That lecturer or student already has an account")
+            .value("INVALID_LINK", "INVALID_LINK", "The lecturer or student does not exist")
             .build();
         builtEnumTypes.put("CreateUserErrorStatus", createUserErrorEnum);
 
@@ -522,7 +533,19 @@ public class DynamicGraphQLSchemaBuilder {
             .argument(newArgument().name("email").type(GraphQLNonNull.nonNull(GraphQLString)))
             .argument(newArgument().name("firstName").type(GraphQLNonNull.nonNull(GraphQLString)))
             .argument(newArgument().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
-            .argument(newArgument().name("temporaryPassword").type(GraphQLNonNull.nonNull(GraphQLString))));
+            .argument(newArgument().name("temporaryPassword").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("lecturerId").type(GraphQLID)
+                .description("Optionally link the new account to a lecturer; mutually exclusive with studentId"))
+            .argument(newArgument().name("studentId").type(GraphQLID)
+                .description("Optionally link the new account to a student; mutually exclusive with lecturerId")));
+
+        mutationBuilder.field(newFieldDefinition().name("setUserLink").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .description("Administrator-only: says which lecturer or student an account belongs to. " +
+                "Pass neither id to clear the link; passing both fails with BOTH_LINKS_SET, and a " +
+                "lecturer or student another account already claims fails with ALREADY_LINKED")
+            .argument(newArgument().name("userId").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .argument(newArgument().name("lecturerId").type(GraphQLID))
+            .argument(newArgument().name("studentId").type(GraphQLID)));
 
         mutationBuilder.field(newFieldDefinition().name("setUserActive").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
             .description("Administrator-only: activates or deactivates a user account")
@@ -568,6 +591,7 @@ public class DynamicGraphQLSchemaBuilder {
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "changePassword"), fetchers.changePassword());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "createUser"), fetchers.createUser());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "setUserActive"), fetchers.setUserActive());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "setUserLink"), fetchers.setUserLink());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "createGroup"), fetchers.createGroup());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "addUserToGroup"), fetchers.addUserToGroup());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "removeUserFromGroup"), fetchers.removeUserFromGroup());

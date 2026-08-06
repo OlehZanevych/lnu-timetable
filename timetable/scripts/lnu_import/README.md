@@ -155,10 +155,26 @@ the `'прикладна математика'` / `'семестр 7'` conventio
 | `--no-auth` | omit the seeded users/groups/permissions |
 | `--no-check` | skip the constraint self-check |
 
-By default the script also emits the three seeded accounts from the previous
-`data.sql` (`admin@lnu.edu.ua` / `Admin#2026`, plus the two `Temp#12345`
-accounts) with the same BCrypt hashes, so the application is usable straight
-after loading. `--no-auth` drops them.
+By default the script also emits three seeded accounts
+(`admin@lnu.edu.ua` / `Admin#2026`, plus `dean.fpmi@lnu.edu.ua` and
+`o.melnyk@lnu.edu.ua` / `Temp#12345`) with the same BCrypt hashes, so the
+application is usable straight after loading. `--no-auth` drops them.
+
+**This no longer matches the checked-in `data.sql`, which seeds only the
+administrator** — the other two accounts, their group memberships and the
+`DEPARTMENT` grant were removed by hand. Regenerating `data.sql` from this
+pipeline therefore brings them back. The generated `INSERT` also predates
+`users.lecturer_id` / `users.student_id`, which is harmless (both are nullable,
+so the rows load and the accounts are simply linked to nobody), but it means the
+pipeline cannot seed the person link «Мій кабінет» reads. Both are one edit in
+`build_sql.py`'s `auth_block`, and neither is a reason to avoid re-running the
+scrape — just re-apply the account decisions afterwards.
+
+The same caveat applies to ids in general: `departments`, `lecturers` and
+`specialties` in the checked-in `data.sql` have been renumbered by hand since
+this pipeline last wrote it (the кафедра/викладачі/спеціальності of прикладна
+математика were moved to the low ids), so a regenerated file will not agree with
+it row for row.
 
 The self-check runs before the file is written and reports foreign keys, unique
 keys, enum labels, `CHECK` constraints and `VARCHAR` widths; violations set exit

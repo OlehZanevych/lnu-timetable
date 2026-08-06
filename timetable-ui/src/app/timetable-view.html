@@ -26,20 +26,22 @@
 
 <!-- timetable_entries carry no semester of their own — it lives on the curriculum item two joins
      away — so without this filter autumn and spring overlap and rooms look double-booked. -->
-<div class="tv-toolbar">
-  <label class="tv-picker">
-    <span>Семестр</span>
-    <app-search-select [options]="parityOptions"
-                       [ngModel]="semesterParity()" (ngModelChange)="onParityChange($event)"
-                       name="semesterParity" [ngModelOptions]="{ standalone: true }" />
-  </label>
-  @if (semesterParity() === '') {
-    <p class="muted tv-scope-note">
-      Показано обидва семестри одразу &mdash; заняття різних півріч у сітці накладаються.
-      Оберіть семестр, щоб побачити розклад, за яким справді навчаються.
-    </p>
-  }
-</div>
+@if (externalSemesterParity === null) {
+  <div class="tv-toolbar">
+    <label class="tv-picker">
+      <span>Семестр</span>
+      <app-search-select [options]="parityOptions"
+                         [ngModel]="semesterParity()" (ngModelChange)="onParityChange($event)"
+                         name="semesterParity" [ngModelOptions]="{ standalone: true }" />
+    </label>
+    @if (semesterParity() === '') {
+      <p class="muted tv-scope-note">
+        Показано обидва семестри одразу &mdash; заняття різних півріч у сітці накладаються.
+        Оберіть семестр, щоб побачити розклад, за яким справді навчаються.
+      </p>
+    }
+  </div>
+}
 
 @if (g.entries.length) {
   <div class="card tv-card">

@@ -1,8 +1,11 @@
 package org.lnu.timetable.security;
 
 import graphql.schema.DataFetcher;
+import io.r2dbc.spi.R2dbcException;
 import org.lnu.timetable.framework.metadata.EntityMetadata;
 import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -73,6 +76,11 @@ public class AuthDataFetchers {
                 m.put("firstName", principal.firstName());
                 m.put("lastName", principal.lastName());
                 m.put("mustChangePassword", principal.mustChangePassword());
+                // Who this account *is* — what «Мій кабінет» resolves its навантаження / навчальний
+                // план / розклад from. At most one is ever set; both null means "nobody in
+                // particular", which is the normal case for deanery staff and the administrator.
+                m.put("lecturerId", principal.lecturerId());
+                m.put("studentId", principal.studentId());
                 m.put("isAdmin", tuple.getT1());
                 m.put("permissions", tuple.getT2().stream().map(this::permissionToMap).toList());
                 m.put("groups", tuple.getT3().stream().map(this::groupToMap).toList());
@@ -183,13 +191,90 @@ public class AuthDataFetchers {
             String firstName = env.getArgument("firstName");
             String lastName = env.getArgument("lastName");
             String temporaryPassword = env.getArgument("temporaryPassword");
+            Long lecturerId = idArgument(env, "lecturerId");
+            Long studentId = idArgument(env, "studentId");
+            // An account is a lecturer's or a student's, or nobody's — the same rule
+            // users_person_link_check enforces, checked here so the caller gets a named status
+            // instead of the generic integrity-violation error (see the service README's
+            // "A CHECK-constraint failure is reported as if a related row were missing").
+            if (lecturerId != null && studentId != null) {
+                return Mono.just(createResult(false, null, "BOTH_LINKS_SET"));
+            }
             return permissionRepo.findUserByEmail(email)
                 .flatMap(existing -> Mono.just(createResult(false, null, "DUPLICATE_EMAIL")))
-                .switchIfEmpty(permissionRepo.insertUser(email, firstName, lastName, passwordEncoder.encode(temporaryPassword))
-                    .map(id -> createResult(true, Map.of(
-                        "id", id, "email", email, "firstName", firstName, "lastName", lastName,
-                        "mustChangePassword", true, "isActive", true), null)));
+                .switchIfEmpty(permissionRepo.insertUser(email, firstName, lastName,
+                        passwordEncoder.encode(temporaryPassword), lecturerId, studentId)
+                    .<Map<String, Object>>map(id -> {
+                        Map<String, Object> data = new LinkedHashMap<>();
+                        data.put("id", id);
+                        data.put("email", email);
+                        data.put("firstName", firstName);
+                        data.put("lastName", lastName);
+                        data.put("mustChangePassword", true);
+                        data.put("isActive", true);
+                        data.put("lecturerId", lecturerId);
+                        data.put("studentId", studentId);
+                        return createResult(true, data, null);
+                    })
+                    .onErrorResume(DataIntegrityViolationException.class,
+                        e -> Mono.just(createResult(false, null, linkErrorStatus(e)))));
         }).toFuture();
+    }
+
+    /**
+     * Points an existing account at the lecturer or the student it belongs to — or, with both
+     * arguments omitted, at nobody, which is how a link is cleared. Administrator-only, like the
+     * rest of account management: the link decides whose навантаження and розклад «Мій кабінет»
+     * shows, so letting a user set it themselves would let anyone read anyone else's.
+     */
+    public DataFetcher<?> setUserLink() {
+        return env -> requireAdmin(env).flatMap(admin -> {
+            Long userId = Long.parseLong(env.getArgument("userId").toString());
+            Long lecturerId = idArgument(env, "lecturerId");
+            Long studentId = idArgument(env, "studentId");
+            if (lecturerId != null && studentId != null) {
+                return Mono.just(simpleResult(false, "BOTH_LINKS_SET"));
+            }
+            return permissionRepo.setUserLink(userId, lecturerId, studentId)
+                .map(rows -> simpleResult(rows > 0, rows > 0 ? null : "USER_NOT_FOUND"))
+                .onErrorResume(DataIntegrityViolationException.class,
+                    e -> Mono.just(simpleResult(false, linkErrorStatus(e))));
+        }).toFuture();
+    }
+
+    /** Optional `ID` argument → Long, tolerating both the absent and the explicit-null forms. */
+    private Long idArgument(graphql.schema.DataFetchingEnvironment env, String name) {
+        Object raw = env.getArgument(name);
+        return raw == null || raw.toString().isBlank() ? null : Long.parseLong(raw.toString());
+    }
+
+    /**
+     * The three ways the database can reject a person link, told apart by SQLSTATE rather than by
+     * the text of the message — R2DBC surfaces all of them as one
+     * {@link DataIntegrityViolationException}, and only the state code is a contract.
+     * <p>
+     * This is deliberately narrower than the generic handler in {@code DynamicDataFetchers}, which
+     * maps every integrity violation to whichever declared status contains {@code "NOT_FOUND"} and
+     * therefore cannot tell a failed {@code CHECK} from a missing row (see the service README's
+     * <em>Known limitations</em>). The callers pair it with
+     * {@code onErrorResume(DataIntegrityViolationException.class, …)}, so a connection failure or a
+     * statement timeout still propagates as a GraphQL error instead of being reported to an
+     * administrator as "that lecturer does not exist".
+     */
+    private String linkErrorStatus(Throwable e) {
+        Throwable root = NestedExceptionUtils.getMostSpecificCause(e);
+        String state = root instanceof R2dbcException r && r.getSqlState() != null ? r.getSqlState() : "";
+        return switch (state) {
+            // 23505 is unique_violation, and `users` has three unique constraints, not one: the two
+            // partial person-link indexes and `users.email`. The e-mail one is reachable from
+            // createUser, whose lower(email) pre-check can lose a race, so the constraint name is
+            // consulted *inside* the already-narrowed case. That is a secondary discriminator, not
+            // the handle — the state code still decides which family of problem this is.
+            case "23505" -> String.valueOf(root.getMessage()).contains("users_email_key")
+                ? "DUPLICATE_EMAIL" : "ALREADY_LINKED";
+            case "23514" -> "BOTH_LINKS_SET";  // check_violation — users_person_link_check
+            default      -> "INVALID_LINK";    // 23503 foreign_key_violation, and anything else
+        };
     }
 
     private Map<String, Object> createResult(boolean success, Map<String, Object> data, String errorStatus) {
@@ -290,7 +375,7 @@ public class AuthDataFetchers {
         return env -> {
             Map<String, Object> source = env.getSource();
             Long groupId = (Long) source.get("id");
-            return permissionRepo.usersInGroup(groupId).map(this::userToMap).collectList().toFuture();
+            return permissionRepo.usersInGroup(groupId).map(this::identityOnly).collectList().toFuture();
         };
     }
 
@@ -299,7 +384,7 @@ public class AuthDataFetchers {
             Map<String, Object> source = env.getSource();
             Long userId = (Long) source.get("_userId");
             if (userId == null) return Mono.empty().toFuture();
-            return permissionRepo.findUserById(userId).map(this::userToMap).toFuture();
+            return permissionRepo.findUserById(userId).map(this::identityOnly).toFuture();
         };
     }
 
@@ -317,7 +402,7 @@ public class AuthDataFetchers {
             Map<String, Object> source = env.getSource();
             Long grantedBy = (Long) source.get("_grantedBy");
             if (grantedBy == null) return Mono.empty().toFuture();
-            return permissionRepo.findUserById(grantedBy).map(this::userToMap).toFuture();
+            return permissionRepo.findUserById(grantedBy).map(this::identityOnly).toFuture();
         };
     }
 
@@ -371,6 +456,25 @@ public class AuthDataFetchers {
         m.put("lastName", u.lastName());
         m.put("mustChangePassword", u.mustChangePassword());
         m.put("isActive", u.active());
+        m.put("lecturerId", u.lecturerId());
+        m.put("studentId", u.studentId());
+        return m;
+    }
+
+    /**
+     * The same {@code User} type with the person link left out — for the three places a user is
+     * named rather than administered: {@code Group.members}, {@code PermissionGrant.user} and
+     * {@code PermissionGrant.grantedBy}.
+     * <p>
+     * {@code Query.users} is administrator-only, but {@code Query.groups} is open to any signed-in
+     * caller and {@code grantsForResource} only asks for rights on the one resource, so without
+     * this both would let anyone enumerate which lecturer or student every account belongs to.
+     * Those fields answer "who is this person", and the link is not part of that answer.
+     */
+    private Map<String, Object> identityOnly(PermissionRepository.UserRow u) {
+        Map<String, Object> m = userToMap(u);
+        m.remove("lecturerId");
+        m.remove("studentId");
         return m;
     }
 

@@ -1,0 +1,304 @@
+@let who = role();
+@let lect = lecturer();
+@let stud = student();
+
+<div class="faculty-header">
+  <div class="faculty-header-title">
+    <div>
+      <h2>Мій кабінет</h2>
+      <p class="muted">
+        @if (who === 'lecturer') {
+          {{ lect?.fullName || '…' }}
+          @if (lect?.position) { &middot; {{ positionLabel(lect!.position) }} }
+          @if (lect?.departmentName) { &middot; {{ lect!.departmentName }} }
+        } @else if (who === 'student') {
+          {{ stud?.fullName || '…' }}
+          @if (stud?.groupName) { &middot; група {{ stud!.groupName }} }
+          @if (stud?.courseYear) { &middot; {{ stud!.courseYear }} курс }
+        } @else {
+          Обліковий запис не пов’язаний ні з викладачем, ні зі студентом
+        }
+      </p>
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@if (!who) {
+  <!-- Deanery staff and administrators land here only by typing the address: they have no
+       навантаження and no навчальний план of their own, and every timetable is already reachable
+       from the faculty, department, lecturer and room pages. Saying so beats an empty grid. -->
+  <div class="card info-card">
+    <p style="padding: 18px 20px; margin: 0;">
+      Ця сторінка показує власне навантаження викладача або навчальний план і розклад студента.
+      Ваш обліковий запис не пов’язаний із жодним із них — це нормально для працівників деканату
+      та адміністраторів.
+    </p>
+    <p class="muted" style="padding: 0 20px 18px; margin: 0;">
+      Щоб пов’язати запис із викладачем чи студентом, адміністратор робить це на сторінці
+      <a routerLink="/admin">«Користувачі та права»</a>. Розклади факультетів, кафедр, викладачів
+      і аудиторій доступні з відповідних сторінок незалежно від цього.
+    </p>
+  </div>
+} @else {
+
+<div class="faculty-layout">
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">{{ who === 'lecturer' ? 'Викладач' : 'Студент' }}</p>
+    @for (sec of sections(); track sec.key) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === sec.key"
+              (click)="selectSection(sec.key)"
+              [innerHTML]="sec.label"></button>
+    }
+  </nav>
+
+  <div class="faculty-section">
+
+    <!-- One semester control for the whole page: the plan and the timetable beside it have to be
+         talking about the same half-year, or comparing them means nothing. -->
+    <div class="tv-toolbar">
+      <label class="tv-picker">
+        <span>Семестр</span>
+        <app-search-select [options]="parityOptions"
+                           [ngModel]="semesterParity()" (ngModelChange)="semesterParity.set($event)"
+                           name="deskParity" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <p class="muted tv-scope-note">Показано {{ parityTitle() }}.</p>
+    </div>
+
+    @switch (activeSection()) {
+
+      <!-- ── A lecturer's own workload ── -->
+      @case ('workload') {
+        @let w = workloadSummary();
+        <div class="page-header">
+          <div>
+            <h2>Моє навантаження</h2>
+            <p class="muted">
+              {{ w.positions }} позицій &middot; {{ fmtNumber(w.hours) }} год за обраний період
+            </p>
+          </div>
+        </div>
+
+        <div class="card cp-summary">
+          <div class="cp-tiles">
+            <div class="cp-tile">
+              <span class="cp-tile-label">Годин за період</span>
+              <strong>{{ fmtNumber(w.hours) }}</strong>
+              <span class="muted">{{ parityTitle() }}</span>
+            </div>
+            <div class="cp-tile" [class.over]="w.deviation !== 0">
+              <span class="cp-tile-label">Річне навантаження</span>
+              <strong>{{ fmtNumber(w.annualHours) }}</strong>
+              <span class="muted">
+                @if (w.minHours !== null) { мін. {{ fmtNumber(w.minHours) }} · }
+                @if (w.maxHours !== null) {
+                  макс. {{ fmtNumber(w.maxHours) }}@if (w.maxIsDefault) { (типове) }
+                } @else { без верхньої межі }
+                @if (w.deviation !== 0) { &middot; {{ deviationLabel(w.deviation) }} год }
+              </span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Дисциплін</span>
+              <strong>{{ w.courses }}</strong>
+              <span class="muted">лекції, практичні, лабораторні</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Академічних груп</span>
+              <strong>{{ w.groups }}</strong>
+            </div>
+          </div>
+        </div>
+
+        @let byType = workloadByHourType();
+        <div class="card" style="margin-top: 14px;">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                @for (t of STAT_HOUR_TYPES; track t) { <th class="num">{{ hourTypeLabel(t) }}</th> }
+                <th class="num">Разом</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                @for (t of STAT_HOUR_TYPES; track t) { <td class="num">{{ fmtNumber(byType[t] || 0) }}</td> }
+                <td class="num"><strong>{{ fmtNumber(w.hours) }}</strong></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="margin-top: 14px;">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Дисципліна</th>
+                <th>Вид роботи</th>
+                <th class="num">Годин</th>
+                <th>Семестр</th>
+                <th>Спеціальність</th>
+                <th>Академічні групи</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of workloadItems(); track row.workloadId + row.hourType) {
+                <tr>
+                  <td>
+                    {{ row.courseName }}
+                    @if (row.combined) { <span class="cp-chip">об&rsquo;єднана позиція</span> }
+                  </td>
+                  <td>{{ hourTypeLabel(row.hourType) }}</td>
+                  <td class="num">
+                    {{ fmtNumber(row.hours) }}
+                    @if (row.students) { <span class="muted">({{ row.students }} студ.)</span> }
+                  </td>
+                  <td>{{ row.semester ? termLabel(row.semester) : '&mdash;' }}</td>
+                  <td>{{ row.specialtyName || '&mdash;' }}</td>
+                  <td>{{ row.groupNames.length ? row.groupNames.join(', ') : '&mdash;' }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="muted">
+                    @if (loading()) { Завантаження&hellip; }
+                    @else { За обраний період навантаження не призначено. }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (lect?.departmentId) {
+          <p class="muted" style="margin-top: 10px;">
+            Ці ж години показані у зведеному навантаженні кафедри
+            <a [routerLink]="['/department', lect!.departmentId]">{{ lect!.departmentName }}</a> —
+            обрахунок спільний, тож розбіжностей між сторінками бути не може.
+          </p>
+        }
+      }
+
+      <!-- ── A student's own curriculum ── -->
+      @case ('curriculum') {
+        @let c = curriculumSummary();
+        <div class="page-header">
+          <div>
+            <h2>Мій навчальний план</h2>
+            <p class="muted">
+              @if (stud) {
+                {{ stud.specialtyCode ? stud.specialtyCode + ' ' : '' }}{{ stud.specialtyName }}
+                @if (stud.studyForm) { &middot; {{ studyFormLabel(stud.studyForm) }} форма }
+                &middot; {{ stud.courseYear }} курс
+              }
+            </p>
+          </div>
+        </div>
+
+        <div class="card cp-summary">
+          <div class="cp-tiles">
+            <div class="cp-tile">
+              <span class="cp-tile-label">Дисциплін</span>
+              <strong>{{ c.courses }}</strong>
+              <span class="muted">{{ parityTitle() }}</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Кредитів ЄКТС</span>
+              <strong>{{ fmtNumber(c.credits) }}</strong>
+              <span class="muted">{{ fmtNumber(c.totalHours) }} год усього</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Аудиторних годин</span>
+              <strong>{{ fmtNumber(c.contactHours) }}</strong>
+              <span class="muted">лекції, практичні, лабораторні</span>
+            </div>
+            <div class="cp-tile">
+              <span class="cp-tile-label">Форми контролю</span>
+              <strong>{{ c.exams }}</strong>
+              <span class="muted">екзаменів &middot; {{ c.credited }} заліків</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 14px;">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Дисципліна</th>
+                <th>Семестр</th>
+                <th>Форма контролю</th>
+                <th class="num">ЄКТС</th>
+                <th class="num">Лек.</th>
+                <th class="num">Практ.</th>
+                <th class="num">Лаб.</th>
+                <th class="num">Ауд.</th>
+                <th class="num">Сам. робота</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of curriculumRows(); track row.id) {
+                <tr>
+                  <td>
+                    {{ row.courseName }}
+                    <span class="muted">{{ courseTypeLabel(row.courseType) }}</span>
+                  </td>
+                  <td>{{ row.semester ? termLabelShort(row.semester) : '&mdash;' }}</td>
+                  <td>{{ controlFormLabel(row.controlForm) }}</td>
+                  <td class="num">{{ fmtNumber(row.ectsCredits) }}</td>
+                  <td class="num">{{ fmtNumber(row.hours['LECTURE'] || 0) }}</td>
+                  <td class="num">{{ fmtNumber(row.hours['PRACTICAL'] || 0) }}</td>
+                  <td class="num">{{ fmtNumber(row.hours['LAB'] || 0) }}</td>
+                  <td class="num"><strong>{{ fmtNumber(row.contactHours) }}</strong></td>
+                  <td class="num">{{ fmtNumber(row.hours['INDEPENDENT_WORK'] || 0) }}</td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="9" class="muted">
+                    @if (loading()) { Завантаження&hellip; }
+                    @else { На обраний період навчальний план спеціальності не містить дисциплін. }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        @if (stud?.specialtyId) {
+          <p class="muted" style="margin-top: 10px;">
+            Повний план спеціальності, разом із перевіркою на відповідність Закону України «Про вищу
+            освіту» та друкованою формою, —
+            на сторінці <a [routerLink]="['/specialty', stud!.specialtyId]">{{ stud!.specialtyName }}</a>.
+          </p>
+        }
+      }
+
+      <!-- ── The timetable, scoped to whoever this is ── -->
+      @case ('timetable') {
+        @if (who === 'lecturer') {
+          <app-timetable-view
+            [lecturerIds]="lecturerIds()"
+            columnMode="single"
+            [externalSemesterParity]="semesterParity()"
+            heading="Мій розклад занять"
+            [report]="{ kind: 'LECTURER', subjectName: timetableSubject(),
+                        facultyName: timetableFaculty() }" />
+        } @else {
+          <!-- 'single' rather than 'group': the grid builds one column per academic group it finds
+               in the entries, and a lecture shared with a neighbouring group would otherwise add a
+               column that is not this student's. One column, with the groups named in the cell,
+               says the same thing without pretending to be a faculty sheet. -->
+          <app-timetable-view
+            [academicGroupIds]="academicGroupIds()"
+            columnMode="single"
+            [externalSemesterParity]="semesterParity()"
+            heading="Мій розклад занять"
+            [report]="{ kind: 'ACADEMIC_GROUP', subjectName: timetableSubject(),
+                        facultyName: timetableFaculty() }" />
+        }
+      }
+
+    }
+  </div>
+</div>
+
+}

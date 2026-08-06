@@ -1,5 +1,7 @@
 package org.lnu.timetable.security;
 
+import io.r2dbc.spi.Parameters;
+import io.r2dbc.spi.R2dbcType;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
@@ -20,8 +22,14 @@ import java.util.stream.Collectors;
 @Component
 public class PermissionRepository {
 
+    /**
+     * {@code lecturerId} / {@code studentId} are the optional, mutually exclusive link to the person
+     * this account is (see {@code users_person_link_check} in {@code schema.sql}). Both are null for
+     * the accounts that are nobody in particular — deanery staff, the administrator.
+     */
     public record UserRow(Long id, String email, String firstName, String lastName,
-                           String passwordHash, boolean mustChangePassword, boolean active) {}
+                           String passwordHash, boolean mustChangePassword, boolean active,
+                           Long lecturerId, Long studentId) {}
 
     public record GroupRow(Long id, String name, String description) {}
 
@@ -37,7 +45,7 @@ public class PermissionRepository {
     // --- users ---
 
     public Mono<UserRow> findUserByEmail(String email) {
-        return db.sql("SELECT id, email, first_name, last_name, password_hash, must_change_password, is_active " +
+        return db.sql("SELECT id, email, first_name, last_name, password_hash, must_change_password, is_active, lecturer_id, student_id " +
                 "FROM users WHERE lower(email) = lower(:email)")
             .bind("email", email)
             .map(this::mapUser)
@@ -46,7 +54,7 @@ public class PermissionRepository {
     }
 
     public Mono<UserRow> findUserById(Long id) {
-        return db.sql("SELECT id, email, first_name, last_name, password_hash, must_change_password, is_active " +
+        return db.sql("SELECT id, email, first_name, last_name, password_hash, must_change_password, is_active, lecturer_id, student_id " +
                 "FROM users WHERE id = :id")
             .bind("id", id)
             .map(this::mapUser)
@@ -55,18 +63,41 @@ public class PermissionRepository {
     }
 
     public Flux<UserRow> listUsers() {
-        return db.sql("SELECT id, email, first_name, last_name, password_hash, must_change_password, is_active " +
+        return db.sql("SELECT id, email, first_name, last_name, password_hash, must_change_password, is_active, lecturer_id, student_id " +
                 "FROM users ORDER BY last_name, first_name")
             .map(this::mapUser)
             .all();
     }
 
-    public Mono<Long> insertUser(String email, String firstName, String lastName, String passwordHash) {
-        return db.sql("INSERT INTO users (email, first_name, last_name, password_hash, must_change_password, is_active) " +
-                "VALUES (:email, :firstName, :lastName, :hash, TRUE, TRUE) RETURNING id")
+    public Mono<Long> insertUser(String email, String firstName, String lastName, String passwordHash,
+                                  Long lecturerId, Long studentId) {
+        return db.sql("INSERT INTO users (email, first_name, last_name, password_hash, must_change_password, is_active, " +
+                "lecturer_id, student_id) " +
+                "VALUES (:email, :firstName, :lastName, :hash, TRUE, TRUE, :lecturerId, :studentId) RETURNING id")
             .bind("email", email).bind("firstName", firstName).bind("lastName", lastName).bind("hash", passwordHash)
+            .bind("lecturerId", Parameters.in(R2dbcType.BIGINT, lecturerId))
+            .bind("studentId", Parameters.in(R2dbcType.BIGINT, studentId))
             .map(row -> (Long) row.get("id"))
             .one();
+    }
+
+    /**
+     * Points an account at the lecturer or the student it belongs to, or at neither (both null).
+     * Passing both is rejected before this is reached ({@code AuthDataFetchers#setUserLink}) and
+     * again by {@code users_person_link_check} if it somehow is not; a lecturer or student already
+     * claimed by another account trips {@code users_unique_lecturer} / {@code users_unique_student}.
+     * Both surface as an <em>error</em> signal, which
+     * {@code AuthDataFetchers#setUserLink} translates into a named status by SQLSTATE. A user id
+     * that matches nothing is not an error: {@code rowsUpdated()} always emits, so the caller reads
+     * 0 and reports {@code USER_NOT_FOUND}.
+     */
+    public Mono<Long> setUserLink(Long userId, Long lecturerId, Long studentId) {
+        return db.sql("UPDATE users SET lecturer_id = :lecturerId, student_id = :studentId, updated_at = now() " +
+                "WHERE id = :id")
+            .bind("lecturerId", Parameters.in(R2dbcType.BIGINT, lecturerId))
+            .bind("studentId", Parameters.in(R2dbcType.BIGINT, studentId))
+            .bind("id", userId)
+            .fetch().rowsUpdated();
     }
 
     public Mono<Long> updatePassword(Long userId, String passwordHash, boolean mustChangePassword) {
@@ -89,7 +120,9 @@ public class PermissionRepository {
             (String) row.get("last_name"),
             (String) row.get("password_hash"),
             Boolean.TRUE.equals(row.get("must_change_password")),
-            Boolean.TRUE.equals(row.get("is_active"))
+            Boolean.TRUE.equals(row.get("is_active")),
+            (Long) row.get("lecturer_id"),
+            (Long) row.get("student_id")
         );
     }
 
@@ -124,7 +157,7 @@ public class PermissionRepository {
     }
 
     public Flux<UserRow> usersInGroup(Long groupId) {
-        return db.sql("SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.must_change_password, u.is_active " +
+        return db.sql("SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.must_change_password, u.is_active, u.lecturer_id, u.student_id " +
                 "FROM users u JOIN user_groups ug ON ug.user_id = u.id WHERE ug.group_id = :groupId ORDER BY u.last_name, u.first_name")
             .bind("groupId", groupId)
             .map(this::mapUser)

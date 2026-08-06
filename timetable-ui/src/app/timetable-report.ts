@@ -74,7 +74,7 @@ const DAY_FILL: RGB = [0.9, 0.92, 0.95];
 const MUTED: RGB = [0.42, 0.45, 0.5];
 
 /** What the sheet is a timetable *of* — which decides its title, columns and signature block. */
-export type TimetableReportKind = 'FACULTY' | 'DEPARTMENT' | 'LECTURER' | 'ROOM';
+export type TimetableReportKind = 'FACULTY' | 'DEPARTMENT' | 'LECTURER' | 'ROOM' | 'ACADEMIC_GROUP';
 
 export interface TimetableReportInput {
   kind: TimetableReportKind;
@@ -104,13 +104,14 @@ export const isOfficial = (kind: TimetableReportKind): boolean => kind === 'FACU
 
 const KIND_TITLE: Record<TimetableReportKind, string> = {
   FACULTY: 'РОЗКЛАД ЗАНЯТЬ', DEPARTMENT: 'РОЗКЛАД ЗАНЯТЬ КАФЕДРИ',
-  LECTURER: 'РОЗКЛАД ЗАНЯТЬ ВИКЛАДАЧА', ROOM: 'РОЗКЛАД ЗАЙНЯТОСТІ АУДИТОРІЇ'
+  LECTURER: 'РОЗКЛАД ЗАНЯТЬ ВИКЛАДАЧА', ROOM: 'РОЗКЛАД ЗАЙНЯТОСТІ АУДИТОРІЇ',
+  ACADEMIC_GROUP: 'РОЗКЛАД ЗАНЯТЬ АКАДЕМІЧНОЇ ГРУПИ'
 };
 
 /** What runs across the top of the sheet, named for its own header cell. */
 const KIND_COLUMN_TITLE: Record<TimetableReportKind, string> = {
   FACULTY: 'Академічні групи', DEPARTMENT: 'Викладачі',
-  LECTURER: 'Заняття', ROOM: 'Заняття'
+  LECTURER: 'Заняття', ROOM: 'Заняття', ACADEMIC_GROUP: 'Заняття'
 };
 
 const fmtDate = (d: Date): string =>
@@ -123,6 +124,7 @@ export function timetableReportFileName(
   const prefix = kind === 'ROOM' ? 'Розклад_аудиторії'
                : kind === 'LECTURER' ? 'Розклад_викладача'
                : kind === 'DEPARTMENT' ? 'Розклад_кафедри'
+               : kind === 'ACADEMIC_GROUP' ? 'Розклад_групи'
                : 'Розклад_занять';
   return `${prefix}_${safe || 'розклад'}_${academicYear.replace('/', '-')}.pdf`;
 }
@@ -372,7 +374,9 @@ function drawList(doc: PdfDocument, input: TimetableReportInput): void {
 
   // The far column names the other party: a lecturer's sheet lists the groups they teach, a room's
   // sheet the lecturer using it — neither needs to be told what it is itself.
-  const otherTitle = input.kind === 'ROOM' ? 'Викладач і групи' : 'Академічні групи';
+  const otherTitle = input.kind === 'ROOM' ? 'Викладач і групи'
+                   : input.kind === 'ACADEMIC_GROUP' ? 'Викладач'
+                   : 'Академічні групи';
   const columns = [
     { title: 'День', width: 24, align: 'left' as const },
     { title: 'Пара', width: 12, align: 'center' as const },
@@ -392,7 +396,9 @@ function drawList(doc: PdfDocument, input: TimetableReportInput): void {
       for (const e of gridCell(grid, day, slot.ordinal, column.id)) {
         const other = input.kind === 'ROOM'
           ? [e.lecturers.map((l) => l.withPosition).join(', '), e.groupNames].filter(Boolean).join(' · ')
-          : e.groupNames;
+          : input.kind === 'ACADEMIC_GROUP'
+            ? e.lecturers.map((l) => l.withPosition).join(', ')
+            : e.groupNames;
         rows.push({
           cells: [
             { text: first ? DAY_NAMES[day] ?? String(day) : '', font: first ? 'bold' : undefined },
@@ -511,6 +517,12 @@ function drawNotes(doc: PdfDocument, input: TimetableReportInput): void {
   if (input.kind === 'LECTURER') {
     notes.push('Персональний розклад викладача формується із наявного навантаження та може ' +
                'змінюватися разом із розкладом факультету.');
+  }
+  if (input.kind === 'ACADEMIC_GROUP') {
+    // The same rows as the approved faculty sheet, cut to one column. Saying so is the point: a
+    // student printing their own timetable should know which sheet is the one that governs.
+    notes.push('Аркуш показує заняття однієї академічної групи, вибрані з розкладу факультету. ' +
+               'Затверджується розклад факультету загалом; за розбіжності чинним є він.');
   }
 
   doc.ensure(14 + notes.length * 6);
