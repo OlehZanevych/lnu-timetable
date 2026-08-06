@@ -26,7 +26,9 @@
     <a class="nav-home" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
       🎓 Факультети
     </a>
-    <a class="nav-timetable" routerLink="/timetable" routerLinkActive="active">📅 Розклад</a>
+    @if (auth.hasPersonLink()) {
+      <a class="nav-timetable" routerLink="/me" routerLinkActive="active">📅 Мій кабінет</a>
+    }
 
     <h3>Загальне</h3>
     <a [routerLink]="['/e', 'building']" routerLinkActive="active">Корпуси</a>

@@ -1,8 +1,9 @@
 # The printable class timetable (PDF)
 
-The **«Завантажити PDF»** button on four tabs — "Розклад факультету" (`/faculty/{id}`), "Розклад
-кафедри" (`/department/{id}`), "Розклад" on the lecturer page (`/lecturer/{id}`) and "Розклад" on the
-room page (`/room/{id}`) — produces the class timetable of the subject in question.
+The **«Завантажити PDF»** button on five tabs — "Розклад факультету" (`/faculty/{id}`), "Розклад
+кафедри" (`/department/{id}`), "Розклад" on the lecturer page (`/lecturer/{id}`), "Розклад" on the
+room page (`/room/{id}`) and "Мій розклад" on «Мій кабінет» (`/me`) — produces the class timetable of
+the subject in question.
 
 The document is built **entirely on the client**. The code is `pdf-writer.ts` (the engine),
 `timetable-grid.ts` (the grid), `timetable-report.ts` (the document itself) and `pdf-fonts.ts` (fonts
@@ -51,7 +52,7 @@ norms**, and the spread is real:
 Which is why the one number this document actually needs — **the length of the academic hour** — is
 read from `global_properties` rather than assumed.
 
-## 2. One sheet is approved, three are not
+## 2. One sheet is approved, four are not
 
 This is the central decision in the document, and it rests on a single predicate, `isOfficial(kind)`.
 
@@ -61,6 +62,7 @@ This is the central decision in the document, and it rests on a single predicate
 | **Department** | none | Institutions deliver lecturer timetables as a web service rather than as a sheet: at ЛНУ that is «ПС-Розклад» and the faculty pages, at КПІ it is schedule.kpi.ua |
 | **Lecturer** | none | the same |
 | **Room** | none | The room timetable is an internal instrument of the dispatch office and the academic affairs unit; КПІ does not even offer a filter by room |
+| **Academic group** | none | The same rows as the faculty sheet, cut to the one group a student belongs to and printed by that student from «Мій кабінет». What the institution approves and publishes is the faculty sheet as a whole; a slice of it taken by its reader is not separately approved, and its note says which of the two governs if they disagree |
 
 The reference sheets carry the line **«Довідковий документ. Затвердженню не підлягає»** instead,
 plus a note pointing at the faculty timetable as the one that is approved. Printing an approval block
@@ -161,14 +163,21 @@ Positions are abbreviated the way ЛНУ timetables abbreviate them: `проф.`
 
 ## 6. Technical decisions
 
-### One grid for four screens and the document
+### One grid for five screens and the document
 
 `timetable-grid.ts` is a pure function,
 `buildTimetableGrid(entries, { columnMode, academicHourMinutes })`. `columnMode` decides what runs
-along the horizontal, and with it which of the four documents this is: `group` — the timetable a
+along the horizontal, and with it which of the five documents this is: `group` — the timetable a
 faculty publishes; `lecturer` — the departmental one; `room` — the room one; `single` — a single
-subject. The same object feeds both `TimetableView` on screen and `timetable-report.ts` in the PDF,
-so a timetable rendered four ways is not four opportunities to disagree.
+subject, which is what both the lecturer sheet and the academic-group sheet on «Мій кабінет» use. The
+same object feeds both `TimetableView` on screen and `timetable-report.ts` in the PDF, so a timetable
+rendered five ways is not five opportunities to disagree.
+
+The layout follows the **column count, not the kind**: one column prints as a list (day · пара · time
+· week · discipline · kind of class · room · the other party), several as a grid. That is why the
+academic-group sheet needed nothing but a title and a note — a student's own timetable is one column
+by construction, and the far column names the викладач rather than the groups, since a sheet about
+one group need not be told which group it is.
 
 A class lands in **every column it belongs to**: a lecture given to three groups occupies three cells
 of the group grid. That is what makes the printed sheet readable down a group's column — and it is
@@ -177,9 +186,12 @@ how the published ones look.
 ### Semester
 
 `timetable_entries` **has no semester of its own** — it sits two joins away, on the curriculum item.
-So each of the four screens filters by `semesterParity` (a relational filter on the backend), with
+So each of the five screens filters by `semesterParity` (a relational filter on the backend), with
 the default taken from `current_semester_parity`. Without it autumn and spring overlap and rooms look
-doubly booked — exactly the flaw the older `/timetable` page has.
+doubly booked — which is exactly why the older, unfiltered and unscoped `/timetable` page was removed
+rather than repaired. On «Мій кабінет» the filter is the page's own: `TimetableView` hides its picker
+when `externalSemesterParity` is bound, so the plan and the timetable beside it cannot end up showing
+different half-years.
 
 ### Testing
 

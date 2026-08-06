@@ -191,8 +191,17 @@ src/app/
 ├── timetable-solver.worker.ts        # runs it off the main thread and reports progress
 ├── global-properties-page.ts/.html   # "/global-properties" — edit the global_properties settings
 │
-└── timetable.ts/.html        # "/timetable" — read-only weekly grid (days × class start times)
+└── me-page.ts/.html          # "/me" — «Мій кабінет»: the signed-in user's own навантаження or
+                              #   навчальний план, and their own розклад (lazy route)
 ```
+
+The `/timetable` page that used to sit at the end of this list is **gone**. It was a read-only
+weekly grid over `timetableEntryConnection(limit: 1000)` with no faculty scope and no
+`semesterParity`, against a `data.sql` carrying 1428 entries spanning both halves of the year — so it
+silently dropped 428 rows to its limit and overlaid autumn on spring in the cells it did show. Every
+other consumer of that table has filtered by semester since the filter existed. `TimetableView`
+already does everything that page did and does it correctly, five times over; `me-page.ts` is what
+took its place in the sidebar.
 
 ### The pure modules
 
@@ -212,7 +221,7 @@ allowed to reach for a service.
 | `curriculum-report.ts` | the printable «Навчальний план» sheet | [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) |
 | `working-curriculum-plan.ts` | which department delivers what, and the hours that projects onto each | [WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) |
 | `working-curriculum-report.ts` | the printable «Робочий навчальний план» sheet | [WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) |
-| `timetable-grid.ts` | timetable entries → day × class slot × subject, for every view and the sheet | *The four timetables*, below |
+| `timetable-grid.ts` | timetable entries → day × class slot × subject, for every view and the sheet | *The five timetables*, below |
 | `timetable-report.ts` | the printable «Розклад занять» sheet | [TIMETABLE-PDF.md](./TIMETABLE-PDF.md) |
 | `workload-report.ts` | the printable «Розрахунок навчального навантаження» sheet | [WORKLOAD-PDF.md](./WORKLOAD-PDF.md) |
 | `pdf-writer.ts` | a PDF, from scratch, including the TrueType subsetting | *Printable workload calculation*, below |
@@ -542,11 +551,64 @@ The room page is smaller: details, and the occupancy grid. That view is the one 
 institutions essentially never publish — ЛНУ offers it as an internal mode of «ПС-Розклад», КПІ has
 no room filter at all — and the printed sheet says so.
 
-#### The four timetables (`timetable-grid.ts`, `TimetableView`)
+#### «Мій кабінет» (`MyDeskPage`, `/me`)
+
+Every other screen in this app is a deanery instrument. They ask *how loaded is this department*,
+*is this plan within ст. 5*, *where can this class go* — questions asked **about** people by someone
+administering them. A lecturer and a student have a much narrower one, and it is about themselves:
+**what am I carrying, and when do I have to be where.** Until this page existed, answering it meant
+knowing your own id and typing `/lecturer/123`.
+
+What makes it resolvable is `users.lecturer_id` / `users.student_id` (see the [service
+README](../timetable/README.md#who-an-account-is-userslecturer_id--usersstudent_id)) — two optional,
+mutually exclusive columns saying who an account *is*. `AuthService.personLink` reads them off
+`Query.me` and the page renders itself from that: no route parameter, nothing to type, and nothing
+to get wrong.
+
+| The account is | Tabs |
+|---|---|
+| a lecturer | «Моє навантаження» · «Мій розклад» |
+| a student | «Мій навчальний план» · «Мій розклад» |
+| neither | an explanation, and where to go instead |
+
+**The link is not a permission**, and the page is careful not to imply otherwise: everything on it is
+read-only, and a завідувач who is also a lecturer still reaches their department exactly as before.
+An account that is nobody in particular — most of the deanery, every administrator — gets a card
+saying so rather than an empty grid, and no sidebar link at all.
+
+**One semester control governs the page.** A student comparing their plan against their timetable has
+to be looking at the same term in both, so the half-year picker sits in the page header and the
+tables *and* the grid follow it; it starts on `current_semester_parity`. This is what
+`TimetableView.externalSemesterParity` exists for (see *The five timetables* above) — the alternative
+was two pickers that could disagree about which half-year was on screen.
+
+The two halves resolve their data differently, and both differences are forced by the model:
+
+- **The lecturer's figures come from the department's whole tree.** `loadDepartmentWorkloads` +
+  `computeStats` are reused unchanged, because distinct-discipline counting and the accounting rules
+  (several lecturers on one item each accrue the *full* hours; individual work costs
+  hours × students) need every position of the department, not just this lecturer's. Reusing them is
+  what makes «Моє навантаження» and «Зведене навантаження» structurally unable to quote different
+  totals for the same person — the third view of the same numbers described under *Workload
+  statistics*. The annual total and the min/max band are always the **whole year**, whatever the
+  picker says, because a ceiling is annual and measuring half a load against it would lie.
+- **The student's plan is their specialty's plan.** `curriculum_items` hang off a specialty, not off
+  a cohort, and there should be no per-student curriculum: what a student is entitled to see is the
+  programme they are enrolled in. Which semesters that means is derived —
+  `semester = (academic_groups.course_year − 1) × 2 + half`, the inverse of `courseYearOf` /
+  `halfYearOf` in `entities.ts` — so the page needs no field the model does not have.
+
+The timetable tab mounts `TimetableView` in `columnMode: 'single'` for both roles, including the
+student. `'group'` would be the obvious choice and is the wrong one: the grid builds a column per
+academic group it finds in the returned entries, so a lecture shared with a neighbouring group would
+add a column that is not this student's. One column, with the groups named inside the cell, says the
+same thing without pretending to be a faculty sheet.
+
+#### The five timetables (`timetable-grid.ts`, `TimetableView`)
 
 One grid, mounted five ways. `buildTimetableGrid(entries, { columnMode, academicHourMinutes })` puts
 the day and the class slot down the side and whatever is being compared across the top, and
-`columnMode` decides which of the four documents it is:
+`columnMode` decides which of the five documents it is:
 
 | Where | `columnMode` | Scope passed | What it is |
 |---|---|---|---|
@@ -554,6 +616,7 @@ the day and the class slot down the side and whatever is being compared across t
 | department → «Розклад кафедри» | `lecturer` | the department's lecturers | the lecturer timetable a department works from |
 | `/lecturer/:id` → «Розклад» | `single` | that lecturer | one person's classes |
 | `/room/:id` → «Розклад» | `single` | that room | the room timetable |
+| `/me` → «Мій розклад» | `single` | the signed-in lecturer, or their academic group | one person's own timetable |
 
 `timetableEntryConnection` has no `facultyId` or `departmentId` filter — it filters by
 `academicGroupIds`, `lecturerIds` and `roomIds` — so the faculty and department pages resolve their
@@ -568,9 +631,16 @@ how the published sheets look.
 **The semester filter is on by default, and it matters.** `timetable_entries` carry no semester of
 their own — it lives two joins away on the curriculum item — so an unfiltered grid overlays autumn
 and spring, and rooms appear double-booked when they are not. Each view passes the backend's
-`semesterParity` relation filter, defaulting to the `current_semester_parity` setting. The older
-read-only `/timetable` page still has no such filter; see [Notes / known
-limitations](#notes--known-limitations).
+`semesterParity` relation filter, defaulting to the `current_semester_parity` setting. The read-only
+`/timetable` page, which had no such filter and no scope of any kind, has been removed rather than
+fixed — `TimetableView` was already the better version of it.
+
+**One input decides who owns that filter.** `externalSemesterParity` is `null` on the four pages
+that mounted this component first, and they keep the picker they have always had. «Мій кабінет» sets
+it, which hides the picker and makes the view follow the host — because that page shows a plan and a
+timetable side by side, and two half-year controls that can disagree are worse than one. It is
+applied in `ngOnChanges`, which runs *before* `ngOnInit`, so setting it also suppresses the
+`current_semester_parity` default that would otherwise overwrite the host's choice a tick later.
 
 The one number the grid needs — how long an academic hour is — comes from `global_properties` rather
 than a constant, because institutions genuinely differ: ЛНУ and ЗНУ use 40 minutes, КПІ and
@@ -578,16 +648,16 @@ than a constant, because institutions genuinely differ: ЛНУ and ЗНУ use 40
 
 #### The printable class timetable (`timetable-report.ts`)
 
-All four views carry a **«Завантажити PDF»** button, and all four produce the layout ЛНУ actually
+All five views carry a **«Завантажити PDF»** button, and all five produce the layout ЛНУ actually
 publishes — verified against the current sheets of the faculty of applied mathematics and
 informatics and the economics and philosophy faculties: day → class slot down the side, groups
 across, and a cell reading discipline → kind of class → room → position and surname.
 
 **Only the faculty sheet is a document anyone signs**, and the split runs through one predicate,
 `isOfficial(kind)`. The faculty sheet carries the «ЗАТВЕРДЖУЮ» approval block, the МОН → university
-→ faculty letterhead, a «ПОГОДЖЕНО» countersignature and a signature block; the department, lecturer
-and room sheets carry a compact heading, the grid, the bells and the line «Довідковий документ.
-Затвердженню не підлягає». This is not tidiness — it is what institutions do. What they approve and
+→ faculty letterhead, a «ПОГОДЖЕНО» countersignature and a signature block; the department, lecturer,
+room and academic-group sheets carry a compact heading, the grid, the bells and the line «Довідковий
+документ. Затвердженню не підлягає». This is not tidiness — it is what institutions do. What they approve and
 publish is the timetable of academic groups; a lecturer timetable is served from a web service rather
 than issued on paper, and a room timetable is an internal instrument of the dispatch office. An
 approval block on those would assert an approval that never happened.
@@ -595,7 +665,15 @@ approval block on those would assert an approval that never happened.
 A sheet about **one** subject is laid out as a **list** rather than a one-column grid — day · slot ·
 time · week · discipline · kind of class · room · plus the other party — because a lecturer reading
 their own timetable wants "when and where" in order, and one column stretched across a landscape
-sheet gives them neither.
+sheet gives them neither. That choice is made on the column count, not on the kind, which is why the
+fifth kind needed nothing but a title to work.
+
+**`ACADEMIC_GROUP` is that fifth kind**, added for the student half of «Мій кабінет» — the same rows
+as the approved faculty sheet, cut to one group, with the викладач in the far column instead of the
+groups (a sheet about one group need not be told which group it is). Its note says outright that the
+faculty timetable is the one that governs and this is a selection from it: a student printing their
+own week should know which sheet wins if the two disagree. It is a довідковий document like the
+other three, by the same predicate.
 
 **The class timetable has no legal existence at all**, which is a stronger statement than for either
 plan: the term is absent from the Закон «Про вищу освіту», absent from the list of documents
@@ -1142,7 +1220,7 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 |---|---|---|
 | `/login` | `LoginPage` | the only route with no guard |
 | `/change-password` | `ChangePasswordPage` | `authGuard` only — reachable while `mustChangePassword` is set |
-| `/admin` | `AdminPage` | `authGuard` + `adminGuard` — user/group/permission management |
+| `/admin` | `AdminPage` | **lazy** — `authGuard` + `adminGuard`; user/group/permission management and the person link |
 | `/` | `FacultyHome` | faculty tiles, drill-down entry point |
 | `/faculty/:id` | `FacultyPage` | tabbed faculty detail |
 | `/building/:id` | `BuildingPage` | building detail |
@@ -1152,12 +1230,13 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 | `/course/:id` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads |
 | `/lecturer/:id` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable |
 | `/room/:id` | `RoomDetailPage` | **lazy** — one room and its occupancy |
-| `/timetable` | `Timetable` | weekly grid |
+| `/me` | `MyDeskPage` | **lazy** — «Мій кабінет»: own workload or curriculum, and own timetable |
 | `/global-properties` | `GlobalPropertiesPage` | system-wide settings editor |
 | `/e/building` | `BuildingHome` | building tiles (overrides the generic table for this entity) |
 | `/e/:single` | generic `entity-pages.ts` component | one per remaining entity — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
 
-The sidebar (`app.html`) links to the drill-down entry points ("🎓 Факультети", "📅 Розклад"),
+The sidebar (`app.html`) links to the drill-down entry point ("🎓 Факультети") and — only when the
+signed-in account is linked to a lecturer or a student — to «📅 Мій кабінет»,
 then a flat "Загальне" group of generic-table links for entities with no dedicated page
 (`Building`, `RoomGroup`, `ClassStartTimeSet`, `ClassStartTime`, `AcademicDegree`) plus the global
 settings page ("Глобальні властивості"), and — only for an administrator — an
@@ -1166,16 +1245,27 @@ signed-in user's name, an «АДМІН» badge where it applies, and the passwor
 `CombinedGroup` has no sidebar link of its own — it's only reachable embedded in the Faculty page's
 "Об'єднані групи" tab (see above), not as a standalone `/e/…` route.
 
+«Мій кабінет» is hidden rather than shown-and-empty for an account that is neither: a deanery
+administrator has no навантаження and no навчальний план of their own, and reaches every timetable
+from the faculty, department, lecturer and room pages already. Typing `/me` still works and explains
+itself.
+
 The three detail pages added last — `/course/:id`, `/lecturer/:id`, `/room/:id` — have no sidebar
 link either, and that is deliberate: nobody navigates to a discipline or a room from a menu, they
 arrive from the list they were already reading. Every such list carries an «Відкрити →» link in its
 last column, driven by `EntityMeta.detailRoute` (see [Generic CRUD
 tables](#generic-crud-tables-entitiests--baseentity)), so the route is reachable from wherever the
-entity is mentioned rather than from one place. They are also the only three `loadComponent` routes
+entity is mentioned rather than from one place. They are three of the five `loadComponent` routes
 in the file. Each pulls in `TimetableView`, the grid and — on the Course page — the whole aggregation
 of curricula and workloads; eagerly bundled they took the initial chunk to 995.66 kB against a
 1.00 MB error budget. Lazily loaded it sits at 963.53 kB, and the cost is one extra request the
 first time a user opens one of the three.
+
+`/me` and `/admin` are the other two, on the same reasoning. «Мій кабінет» mounts `TimetableView`
+and is opened only by an account that is a person; the administration console carries its own
+queries including the full lecturer and student lists behind the person pickers, and is opened only
+by an administrator. Making `/admin` lazy in the same round more than paid for the new page: the
+initial chunk is **949.06 kB**, below where it stood before either existed.
 
 ---
 
@@ -1201,6 +1291,10 @@ A single root-provided service, injected the same way `GraphqlService` is used e
   `Query.canModifyResources` which of them the signed-in user may edit/delete, backed by a
   per-`resourceType` cache (`clearModifyCache()` invalidates it, called after granting/revoking a
   permission in the admin console) so re-rendering an already-checked list doesn't re-query.
+- `personLink` / `hasPersonLink` (computed) — `'lecturer' | 'student' | null`, from the
+  `lecturerId`/`studentId` on `Query.me`. **Deliberately not a permission**: it decides only whether
+  «Мій кабінет» has anything to show, and therefore whether its sidebar link appears. Everything a
+  user may *edit* still comes from `permissions` and is re-checked server-side (see below).
 
 `authInterceptor` (an `HttpInterceptorFn`) attaches `Authorization: Bearer <token>` to every
 outgoing GraphQL request when a token is present.
@@ -1256,6 +1350,14 @@ spec asked an administrator to be able to do, in one screen:
   backend never returns a password) — the new account must change it on first login.
 - **Activate/deactivate** existing accounts.
 - **Create groups** and manage membership (add/remove a user to/from a group).
+- **Link an account to a person** — say which викладач or which студент an account is
+  (`users.lecturer_id` / `users.student_id`), through searchable pickers over every lecturer and
+  every student, either when creating the account or afterwards from the «Прив'язати» button on its
+  row. The one-of-two rule is enforced here by only ever sending the id matching the chosen kind,
+  and again by the database; `ALREADY_LINKED`, `BOTH_LINKS_SET` and `INVALID_LINK` come back as named
+  statuses and are shown in Ukrainian. The users table gains an «Особа» column so the current state
+  of every account is visible without opening anything. This is administrator-only for a reason
+  worth stating: an account able to point itself at a lecturer could read that lecturer's workload.
 - **Grant/revoke permissions** — pick a grantee (a user or a group), a resource type (every entity
   in `entities.ts` plus `GLOBAL` and the curriculum/scheduling entities that only have bespoke
   drill-down UI, e.g. `WORKING_CURRICULUM_ITEM`), and — unless the type is `GLOBAL` — a resource
@@ -1266,10 +1368,11 @@ spec asked an administrator to be able to do, in one screen:
 
 ### Seeded accounts (local dev)
 
-Matching the backend's `data.sql` (see its README for the full list): `admin@lnu.edu.ua` /
-`Admin#2026` signs in as the full `GLOBAL` administrator; `dean.fpmi@lnu.edu.ua` and
-`o.melnyk@lnu.edu.ua` (both temporary password `Temp#12345`) exercise the forced
-change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
+Matching the backend's `data.sql`: `admin@lnu.edu.ua` / `Admin#2026` signs in as the full `GLOBAL`
+administrator, and it is the **only** seeded account. The forced change-password flow, a scoped
+`FACULTY`/`DEPARTMENT` grant and the person link behind «Мій кабінет» all have to be set up from
+`/admin` first — creating an account there always sets `mustChangePassword`, so the first of those
+needs nothing more than one «+ Створити користувача».
 
 ---
 
@@ -1317,18 +1420,13 @@ change-password flow and a scoped `FACULTY`/`DEPARTMENT` grant respectively.
   with more rooms or groups than that would silently show only the first page. It also re-sends each
   subject's own scalar fields on every save (the mutation payload is the whole entity), so a card
   saved from a stale page would overwrite a name someone changed in the meantime.
-- **The read-only `/timetable` grid shows both halves of the year at once.** `timetable.ts` asks for
-  `timetableEntryConnection(limit: 1000)` with no `semesterParity` and no faculty scope — while
-  `data.sql` carries 1428 entries spanning autumn *and* spring. So the grid silently drops 428 rows
-  to its limit, and of what it does show, autumn and spring classes appear to share rooms and slots.
-  Every other consumer of that table filters by semester for exactly this reason (see the backend
-  README's *Reading the current timetable*); this page predates the filter and has not been updated.
-  The contrast is now visible inside the app: the four `TimetableView` screens — faculty, department,
-  lecturer and room — each open on `current_semester_parity` and let the reader switch, so the
-  same underlying rows read one way on `/timetable` and another on `/faculty/:id`. Reconciling them
-  means giving `/timetable` the same filter, or replacing it with `TimetableView` in `columnMode:
-  'group'` and a faculty picker — the second is the smaller change, since that component already
-  does everything the page does.
+- **«Мій кабінет» reads the *current* plan, not the one the student was admitted under.** The
+  curriculum tab shows the specialty's plan as it stands today, narrowed to the semesters the
+  student's course year names. `Specialty` stores no year of intake and `curriculum_items` are not
+  versioned, so a plan revised mid-programme is shown to every cohort alike — the same gap
+  [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) lists for the printed plan, surfacing here for the first
+  time in front of the person it concerns. It also means the page cannot show a student what they
+  have already passed: there is no enrolment or grade in the model at all.
 - **A route deeper than three path segments would 404 on reload** when the app is served from the
   packaged jar rather than from `ng serve`. The service's deep-link fallback matches a fixed list of
   patterns rather than a catch-all, so that requests for real files still reach the static resource

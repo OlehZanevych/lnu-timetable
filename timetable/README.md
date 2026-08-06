@@ -570,10 +570,51 @@ fetchers instead (see [Authentication & authorization](#authentication--authoriz
 
 | Table | Notes |
 |---|---|
-| `users` | email (unique), first/last name, BCrypt `password_hash`, `must_change_password`, `is_active` |
+| `users` | email (unique), first/last name, BCrypt `password_hash`, `must_change_password`, `is_active`, and the optional person link `lecturer_id` / `student_id` — see below |
 | `groups` | name (unique), description |
 | `user_groups` | `(user_id, group_id)` — a user may belong to any number of groups |
 | `permissions` | a single grant: `grantee_type` (`USER`/`GROUP`) + exactly one of `user_id`/`group_id`, `resource_type` + `resource_id` (or `resource_type = 'GLOBAL'` with a `NULL` id for full admin access), `granted_by` |
+
+#### Who an account *is*: `users.lecturer_id` / `users.student_id`
+
+An account may also name the person it belongs to — the викладач it is, or the студент. Two nullable
+foreign keys, `ON DELETE SET NULL` on both, and one rule:
+
+```sql
+CONSTRAINT users_person_link_check CHECK (lecturer_id IS NULL OR student_id IS NULL)
+```
+
+A user is a Lecturer **or** a Student **or** neither, and neither is the normal case — deanery staff
+and the administrator are nobody in particular, which is why this is a `CHECK` over two nullable
+columns rather than a discriminator. Two partial unique indexes
+(`users_unique_lecturer` / `users_unique_student`) say the same thing in the other direction: one
+account per person, since two accounts both claiming lecturer 123 would make «мій розклад»
+ambiguous without either being wrong on its own.
+
+`ON DELETE SET NULL` rather than `CASCADE` is the deliberate part. Striking a lecturer off the staff
+list must not delete their account along with its permission grants and its trail in
+`permissions.granted_by`; the account survives, unlinked, for an administrator to deal with.
+
+**The link is an identity, not a role.** It grants nothing and restricts nothing: authorization
+still comes entirely from `permissions` and the cascade below, and a linked account edits exactly
+what its grants allow. All it decides is whose навантаження, навчальний план and розклад the
+client's «Мій кабінет» resolves — see the frontend README's
+[«Мій кабінет»](../timetable-ui/README.md#мій-кабінет-mydeskpage-me). That separation is what lets a
+завідувач кафедри hold both a `DEPARTMENT` grant and a lecturer link without either implying the
+other.
+
+Two things follow for the API. `lecturerId`/`studentId` appear on `CurrentUser` (your own account)
+and on `User` as returned by the **administrator-only** `users` query — but they are stripped from
+the same type where a user is merely *named* rather than administered: `Group.members`,
+`PermissionGrant.user` and `PermissionGrant.grantedBy`. `groups` is open to any signed-in caller, so
+without that the link would be enumerable university-wide. And only an administrator may set it
+(`setUserLink`, `createUser`'s two optional arguments), because an account that can point itself at
+a lecturer can read that lecturer's workload.
+
+Because `schema.sql` opens with `DROP SCHEMA public CASCADE`, a database that already holds data
+takes the columns from **`db/users-person-link.sql`** instead — `ALTER TABLE … ADD COLUMN IF NOT
+EXISTS` plus the guarded constraint and the two indexes, safe to run more than once. It is the same
+arrangement `global-properties-limits.sql` uses, and for the same reason.
 
 ### Permission cascade annotations on domain entities
 
@@ -921,7 +962,7 @@ around).
    - `create`/`update`/`delete` mutations additionally require "modify" permission on the target
      (or, for creates, on whichever declared parent the new row is being attached to) — see
      `PermissionService` below.
-3. Hand-rolled operations (`login`, `me`, `changePassword`, `createUser`, group/permission
+3. Hand-rolled operations (`login`, `me`, `changePassword`, `createUser`, `setUserLink`, group/permission
    management) bypass this decorator entirely — they're wired directly in
    `DynamicGraphQLSchemaBuilder.buildAuthTypes()`/`registerAuthFetchers()`, the same escape-hatch
    pattern used for `GlobalProperty` (see above), so a `User`'s password hash is never reachable
@@ -935,13 +976,13 @@ around).
 |---|---|
 | `AuthenticationGraphQlInterceptor` | reads `Authorization: Bearer <jwt>` on every request, resolves it to a `Principal` and puts it on the GraphQL context; an absent or invalid token leaves the request anonymous rather than failing it, which is what keeps `login` reachable through the same endpoint |
 | `JwtService` | issues and parses the HS256 tokens, which carry only the user id |
-| `Principal` | record — id, email, first/last name, `mustChangePassword` |
+| `Principal` | record — id, email, first/last name, `mustChangePassword`, and the person link (`lecturerId`/`studentId`), resolved fresh per request like everything else here |
 | `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field and "may modify" on every generated mutation |
 | `PermissionService` | the decision point: `canModify`, `canCreate`, `canManageGrantsOn` |
 | `PermissionGraphRepository` | the three raw reads `PermissionService` walks the permission graph with — `fetchForeignKeys`, `fetchJoinParentIds`, `fetchLabel` |
 | `ResourceRef` | record — one `(resourceType, resourceId)` node of that ancestry |
 | `PermissionRepository` | everything else the auth tables need: users, groups, memberships, grants |
-| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `canModifyResources`, `grantsForResource` and the grant/membership mutations |
+| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `canModifyResources`, `grantsForResource`, the grant/membership mutations and `setUserLink` (with `linkErrorStatus`, the one place in the service that tells a `CHECK` from a foreign key by reading the `SQLSTATE`) |
 | `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
 | `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
 
@@ -1006,9 +1047,10 @@ full graph as actually declared across the domain model.
 | Field | Kind | Notes |
 |---|---|---|
 | `login(email, password)` | mutation | returns a JWT + whether the account must change its password |
-| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin`, groups, effective permissions), or `null` |
+| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin`, `lecturerId`/`studentId`, groups, effective permissions), or `null` |
 | `changePassword(currentPassword, newPassword)` | mutation | minimum 8 characters; clears `mustChangePassword` |
-| `createUser(email, firstName, lastName, temporaryPassword)` | mutation | **admin-only**; the created account must change its password on first login |
+| `createUser(email, firstName, lastName, temporaryPassword, lecturerId?, studentId?)` | mutation | **admin-only**; the created account must change its password on first login. The two optional ids link it to a person straight away — at most one of them, or `BOTH_LINKS_SET` |
+| `setUserLink(userId, lecturerId?, studentId?)` | mutation | **admin-only**; says which lecturer or student an account belongs to. Both omitted clears the link; both given fails `BOTH_LINKS_SET`; a person another account already claims fails `ALREADY_LINKED`; an id naming nobody fails `INVALID_LINK` |
 | `setUserActive(userId, active)` | mutation | **admin-only**; deactivates/reactivates an account |
 | `users` | query | **admin-only**; all accounts |
 | `createGroup(name, description)`, `addUserToGroup`/`removeUserFromGroup` | mutation | **admin-only** group management |
@@ -1029,14 +1071,21 @@ anything except `login` fail the same way with "You must be signed in to do this
 profile is active inside the packaged jar as well, so **override it before deploying anywhere
 real** — `--app.security.jwt-secret=…`, `APP_SECURITY_JWTSECRET`, or `SPRING_APPLICATION_JSON`.
 
-`data.sql` seeds two groups ("Деканат ФПМіІ", "Завідувачі кафедр") and three accounts for local
-testing:
+`data.sql` seeds two groups ("Деканат ФПМіІ", "Завідувачі кафедр") and exactly one account:
 
 | Email | Password | Role |
 |---|---|---|
 | `admin@lnu.edu.ua` | `Admin#2026` | `GLOBAL` admin grant, no forced password change |
-| `dean.fpmi@lnu.edu.ua` | `Temp#12345` | member of "Деканат ФПМіІ" (holds a `FACULTY` grant); must change password on first login |
-| `o.melnyk@lnu.edu.ua` | `Temp#12345` | direct `DEPARTMENT` grant; must change password on first login |
+
+Everything else about the auth tables is left for that administrator to create, which matches the
+no-self-registration rule: there is no seeded example of a forced password change, of a scoped
+`FACULTY`/`DEPARTMENT` grant, or of an account linked to a lecturer or a student. Both groups are
+seeded empty — "Деканат ФПМіІ" keeps its `FACULTY` grant, so adding a user to it is enough to hand
+out faculty-wide access, and `permissions` carries just that grant plus the administrator's `GLOBAL`
+one.
+
+Exercising the person link therefore takes two steps on «Користувачі та права»: create the account,
+then point it at a lecturer or a student (`setUserLink`). Nothing in `data.sql` does it for you.
 
 ---
 
@@ -1111,8 +1160,14 @@ timetable/
 │   │                                ../scripts/build-ui.sh — git-ignored build output
 │   └── db/
 │       ├── schema.sql     DDL; starts with DROP SCHEMA public CASCADE
-│       └── data.sql       pg_dump-style seed: the real LNU structure plus the
-│                          transcribed ФПМІ 2025/2026 timetable (see Database setup)
+│       ├── data.sql       pg_dump-style seed: the real LNU structure plus the
+│       │                  transcribed ФПМІ 2025/2026 timetable (see Database setup)
+│       ├── global-properties-limits.sql
+│       │                  the curriculum limits alone, ON CONFLICT DO NOTHING
+│       └── users-person-link.sql
+│                          users.lecturer_id / users.student_id alone, as ALTER
+│                          TABLE — both files exist so a populated database can
+│                          take a change schema.sql would DROP it to apply
 ├── src/test/java/…/SchemaBuildTest.java   assembles the whole GraphQL schema and
 │                                          asserts on the printed SDL — the fastest
 │                                          check that a schema-config change is valid
@@ -1174,7 +1229,12 @@ setup](#database-setup).
   schema/fetcher slice instead of a generic generalization; see [global_properties — outside the
   entity framework](#global_properties--outside-the-entity-framework). A second string-keyed (or
   composite-keyed) entity would need the same treatment, not a `@GraphQLEntity` annotation.
-- **A `CHECK`-constraint failure is reported as if a related row were missing.**
+- **A `CHECK`-constraint failure is reported as if a related row were missing.** *(Except for the
+  person link, which is the one place that does it properly — `AuthDataFetchers#linkErrorStatus`
+  reads the Postgres `SQLSTATE` and returns `ALREADY_LINKED` for `23505`, `BOTH_LINKS_SET` for
+  `23514` and `INVALID_LINK` otherwise, and its callers narrow `onErrorResume` to
+  `DataIntegrityViolationException` so a dropped connection is still an error rather than "that
+  lecturer does not exist". Generalising that to the reflective handler is the fix described below.)*
   `DynamicDataFetchers`' generic error handler maps any `DataIntegrityViolationException` — which is
   also what a foreign-key violation throws — to whichever declared error status *contains* the
   substring `"NOT_FOUND"`, so it cannot distinguish the two. `lecturer_workloads.duration_hours`

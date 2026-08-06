@@ -52,6 +52,16 @@ export class TimetableView implements OnInit, OnChanges {
   @Input() report: TimetableReportContext | null = null;
   /** Heading above the grid; omitted when the host page has its own. */
   @Input() heading = '';
+  /**
+   * Lets the host own the semester filter instead of this component.
+   *
+   * Left `null` — every screen that mounted this before «Мій кабінет» did — the view keeps the
+   * picker it has always had, seeded from `current_semester_parity`. Set to `''`/`'ODD'`/`'EVEN'`,
+   * the picker is hidden and the value is followed, which is what «Мій кабінет» needs: one
+   * half-year control in its header governing the timetable *and* the curriculum beside it, rather
+   * than two that can disagree about which semester the page is showing.
+   */
+  @Input() externalSemesterParity: string | null = null;
 
   readonly dayNames = DAY_NAMES;
   readonly parityOptions: Option[] = [
@@ -97,6 +107,12 @@ export class TimetableView implements OnInit, OnChanges {
   }
 
   ngOnChanges() {
+    // Runs before ngOnInit on the first pass, so marking the value as "touched" here is also what
+    // stops the current_semester_parity default from overwriting the host's choice a tick later.
+    if (this.externalSemesterParity !== null) {
+      this.parityTouched = true;
+      this.semesterParity.set(this.externalSemesterParity);
+    }
     if (this.initialized) this.load();
   }
 

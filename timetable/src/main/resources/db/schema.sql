@@ -799,6 +799,17 @@ CREATE INDEX room_timetable_constraints_room_idx
 -- multiple groups, and effective permissions are the union of a user's direct grants and all of
 -- their groups' grants.
 
+-- An account may also say *who its owner is* in the domain model: lecturer_id names the викладач
+-- they are, student_id the студент. Both are optional and mutually exclusive — a person is one or
+-- the other, and most accounts (deanery staff, the administrator) are neither, which is why the
+-- rule is a CHECK over two nullable columns rather than a NOT NULL discriminator. It is an
+-- identity, not a role: permissions still come from the grants below, and the link only decides
+-- whose навантаження / навчальний план / розклад «Мій кабінет» shows.
+--
+-- ON DELETE SET NULL rather than CASCADE, deliberately: striking a lecturer off the staff list must
+-- not silently delete their account together with its permission grants and its audit trail in
+-- permissions.granted_by. The account survives, unlinked, for an administrator to deal with.
+
 CREATE TABLE users
 (
     id                   BIGSERIAL PRIMARY KEY,
@@ -808,9 +819,21 @@ CREATE TABLE users
     password_hash        VARCHAR(255) NOT NULL,
     must_change_password BOOLEAN      NOT NULL DEFAULT TRUE,
     is_active            BOOLEAN      NOT NULL DEFAULT TRUE,
+    lecturer_id          BIGINT REFERENCES lecturers (id) ON DELETE SET NULL,
+    student_id           BIGINT REFERENCES students (id) ON DELETE SET NULL,
     created_at           TIMESTAMP    NOT NULL DEFAULT now(),
-    updated_at           TIMESTAMP    NOT NULL DEFAULT now()
+    updated_at           TIMESTAMP    NOT NULL DEFAULT now(),
+    -- A user can be a Lecturer or a Student, or neither — never both.
+    CONSTRAINT users_person_link_check CHECK (lecturer_id IS NULL OR student_id IS NULL)
 );
+
+-- One account per person, in the other direction: two accounts both claiming lecturer 123 would
+-- make "whose timetable is mine?" ambiguous without either of them being wrong on its own. Partial,
+-- so the many accounts linked to nobody do not collide with each other (the house convention for
+-- "unique, treating NULL as a value" is COALESCE(col, 0); here NULL genuinely means "no link", so a
+-- WHERE ... IS NOT NULL predicate is the right shape instead).
+CREATE UNIQUE INDEX users_unique_lecturer ON users (lecturer_id) WHERE lecturer_id IS NOT NULL;
+CREATE UNIQUE INDEX users_unique_student  ON users (student_id)  WHERE student_id IS NOT NULL;
 
 CREATE TABLE groups
 (

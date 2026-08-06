@@ -38,19 +38,21 @@ The work it supports runs in one direction, and each stage is the input to the n
    constraints of lecturers, groups and rooms, and scheduling *around* the classes other faculties
    have already placed in the same rooms and with the same people.
 
-Alongside it: JWT sign-in with entity-scoped, cascading permissions; and four printable forms —
+Alongside it: JWT sign-in with entity-scoped, cascading permissions; **«Мій кабінет»**, where an
+account linked to a викладач or a студент reads its own навантаження or навчальний план and its own
+розклад, defaulting to the half-year that is running; and four printable forms —
 the [**«Навчальний план»**](./timetable-ui/CURRICULUM-PDF.md) of a specialty, the
 [**«Робочий навчальний план»**](./timetable-ui/WORKING-CURRICULUM-PDF.md) of one of its academic
 years, the [**«Розрахунок навчального навантаження»**](./timetable-ui/WORKLOAD-PDF.md) of a
 lecturer, and the [**«Розклад занять»**](./timetable-ui/TIMETABLE-PDF.md) of a faculty, a
-department, a lecturer or a room — all rendered to PDF entirely in the browser, the first two also
+department, a lecturer, a room or an academic group — all rendered to PDF entirely in the browser, the first two also
 checking the plan against the volume, credit and elective-share limits — every one of them a
 `global_properties` row an administrator edits, not a constant, because the statutory figures change
 with the law and the rest differ between institutions by design.
 
 Only one of those four is an approved document. The faculty timetable carries the «ЗАТВЕРДЖУЮ»
-approval block and a block of signatures; the department, lecturer and room sheets are the same data
-cut a different way, print «Довідковий документ. Затвердженню не підлягає», and point back at the
+approval block and a block of signatures; the department, lecturer, room and academic-group sheets
+are the same data cut a different way, print «Довідковий документ. Затвердженню не підлягає», and point back at the
 faculty sheet — because an approval block on a sheet nobody approves is a claim, not a decoration.
 
 ---
@@ -78,6 +80,9 @@ npm start
 `npm start` proxies `/graphql` to `http://localhost:8080`, so the service has to be up first.
 `timetable/scripts/reset_db.sh` re-applies both SQL files in one command, which is the usual way to
 pick up a schema change — see the service README's *Known limitations* for why that step is manual.
+Two files beside them apply one change each *without* dropping the database, for a deployment that
+already holds data: `global-properties-limits.sql` (the curriculum limits) and
+`users-person-link.sql` (the `users.lecturer_id` / `users.student_id` columns).
 
 Everything environment-specific lives in one file,
 [`timetable/src/main/resources/application-loc.properties`](./timetable/src/main/resources/application-loc.properties):
@@ -92,10 +97,13 @@ Sign in with one of the seeded accounts:
 | Email | Password | Role |
 |---|---|---|
 | `admin@lnu.edu.ua` | `Admin#2026` | full administrator |
-| `dean.fpmi@lnu.edu.ua` | `Temp#12345` | faculty-scoped; must change password on first login |
-| `o.melnyk@lnu.edu.ua` | `Temp#12345` | department-scoped; must change password on first login |
 
-There is no sign-up screen anywhere: accounts are created by an administrator, by design.
+That is the **only** seeded account. There is no sign-up screen anywhere — every other account is
+created from «Користувачі та права», by design — so the first thing a fresh database needs is for
+that administrator to create the accounts the institution actually wants, scope them with permission
+grants, and (for a lecturer or a student) point them at the person they belong to. The two seeded
+groups survive with no members, «Деканат ФПМіІ» still holding its `FACULTY` grant, ready to be
+populated.
 
 ---
 
@@ -161,15 +169,15 @@ database once first.
 
 | Document | What it covers |
 |---|---|
-| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files), the generated GraphQL surface and its query catalogue, N+1-safe relation batching, authentication and the permission cascade |
-| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI |
+| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files), the generated GraphQL surface and its query catalogue, N+1-safe relation batching, authentication, the permission cascade, and the person link that says who an account is |
+| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, «Мій кабінет», the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
 | [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, a traced example, complexity, and the code map |
 | [`timetable-ui/CURRICULUM-PDF.md`](./timetable-ui/CURRICULUM-PDF.md) | the printable curriculum — which of its parts are required by the Закон України «Про вищу освіту» and which are settled practice, the compliance checks it carries, and what the data model cannot yet fill in |
 | [`timetable-ui/WORKING-CURRICULUM-PDF.md`](./timetable-ui/WORKING-CURRICULUM-PDF.md) | the printable working curriculum — why it has no legal footing at all since 1993, what institutional practice actually puts in one, and how department teaching hours are projected from it |
 | [`timetable-ui/WORKLOAD-PDF.md`](./timetable-ui/WORKLOAD-PDF.md) | the printable workload sheet — what each part of the document answers to in Ukrainian practice, and the ДСТУ 4163:2020 layout rules |
-| [`timetable-ui/TIMETABLE-PDF.md`](./timetable-ui/TIMETABLE-PDF.md) | the printable class timetable in its four cuts — why no law mentions it at all, why no sanitary regulation applies to higher education, why only the faculty sheet is approved, and the grid-versus-list layout rule |
+| [`timetable-ui/TIMETABLE-PDF.md`](./timetable-ui/TIMETABLE-PDF.md) | the printable class timetable in its five cuts — why no law mentions it at all, why no sanitary regulation applies to higher education, why only the faculty sheet is approved, and the grid-versus-list layout rule |
 | [`timetable/scripts/lnu_import/README.md`](./timetable/scripts/lnu_import/README.md) | the two-stage pipeline that scraped the real LNU structure into `data.sql`, and how to re-run it |
 
 ---
@@ -226,9 +234,12 @@ lnu-timetable/
 │   │   └── db/
 │   │       ├── schema.sql   DDL — starts with DROP SCHEMA public CASCADE
 │   │       ├── data.sql     the real LNU structure plus the ФПМІ 2025/2026 timetable
-│   │       └── global-properties-limits.sql
-│   │                        the curriculum limits alone, ON CONFLICT DO NOTHING —
-│   │                        for a database seeded before they existed
+│   │       ├── global-properties-limits.sql
+│   │       │                the curriculum limits alone, ON CONFLICT DO NOTHING —
+│   │       │                for a database seeded before they existed
+│   │       └── users-person-link.sql
+│   │                        the users.lecturer_id / users.student_id columns alone,
+│   │                        as ALTER TABLE — same purpose, same re-runnability
 │   └── scripts/          reset/backup helpers, and the lnu.edu.ua import pipeline
 └── timetable-ui/         the Angular client
     ├── src/app/          pages, child-list widgets, form controls, and the pure modules

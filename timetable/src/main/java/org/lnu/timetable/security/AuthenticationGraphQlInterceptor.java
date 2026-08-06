@@ -48,6 +48,7 @@ public class AuthenticationGraphQlInterceptor implements WebGraphQlInterceptor {
     private Mono<Principal> loadPrincipal(Long userId) {
         return permissionRepository.findUserById(userId)
             .filter(PermissionRepository.UserRow::active)
-            .map(u -> new Principal(u.id(), u.email(), u.firstName(), u.lastName(), u.mustChangePassword()));
+            .map(u -> new Principal(u.id(), u.email(), u.firstName(), u.lastName(), u.mustChangePassword(),
+                u.lecturerId(), u.studentId()));
     }
 }

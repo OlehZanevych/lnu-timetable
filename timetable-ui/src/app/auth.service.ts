@@ -23,9 +23,16 @@ export interface CurrentUser {
   lastName: string;
   mustChangePassword: boolean;
   isAdmin: boolean;
+  /** `users.lecturer_id` — set when this account *is* a lecturer. */
+  lecturerId: string | null;
+  /** `users.student_id` — set when this account *is* a student. Never set together with the above. */
+  studentId: string | null;
   groups: CurrentGroup[];
   permissions: PermissionGrant[];
 }
+
+/** Which person, if any, the signed-in account belongs to — what «Мій кабінет» renders itself from. */
+export type PersonLink = 'lecturer' | 'student' | null;
 
 const TOKEN_KEY = 'lnu_timetable_token';
 
@@ -47,6 +54,24 @@ export class AuthService {
   isAuthenticated = computed(() => this.token() !== null);
   isAdmin = computed(() => this.currentUser()?.isAdmin ?? false);
   mustChangePassword = computed(() => this.currentUser()?.mustChangePassword ?? false);
+
+  /**
+   * Whether this account is a lecturer's, a student's, or nobody's in particular — read from
+   * `users.lecturer_id` / `users.student_id`, at most one of which the database allows to be set.
+   *
+   * It is deliberately *not* a permission: a linked account still edits exactly what its grants
+   * allow, and an unlinked administrator still sees every timetable through the faculty and
+   * department pages. All this decides is whether «Мій кабінет» has anything to show — which is why
+   * the sidebar link is hidden when it does not.
+   */
+  personLink = computed<PersonLink>(() => {
+    const u = this.currentUser();
+    if (u?.lecturerId) return 'lecturer';
+    if (u?.studentId) return 'student';
+    return null;
+  });
+
+  hasPersonLink = computed(() => this.personLink() !== null);
 
   /** Cache of resourceType -> (id -> canModify) so list views don't re-query on every render. */
   private modifyCache = new Map<string, Map<string, boolean>>();
@@ -79,7 +104,7 @@ export class AuthService {
 
   /** Re-fetches Query.me; call after login and on app bootstrap when a token is already stored. */
   refreshMe(): Observable<CurrentUser | null> {
-    const q = `{ me { id email firstName lastName mustChangePassword isAdmin
+    const q = `{ me { id email firstName lastName mustChangePassword isAdmin lecturerId studentId
       groups { id name description }
       permissions { id granteeType resourceType resourceId resourceLabel }
     } }`;
