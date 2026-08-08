@@ -1,10 +1,10 @@
-import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { GlobalPropertiesService } from './global-properties.service';
-import { Option, SearchSelect } from './search-select';
-import { WEEK_PARITY_OPTIONS } from './entities';
+import { SearchSelect } from './search-select';
+import { SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
 import {
   ColumnMode, DAY_NAMES, GridEntry, RawEntry, buildTimetableGrid, dayIsEmpty, gridCell
 } from './timetable-grid';
@@ -23,16 +23,19 @@ export interface TimetableReportContext {
  * One read-only timetable, in the layout ЛНУ publishes: день and пара down the side, and whatever
  * the page is comparing — groups, lecturers, rooms — across the top.
  *
- * Mounted five ways. The faculty page passes its academic groups and gets the розклад it publishes;
+ * Five documents. The faculty page passes its academic groups and gets the розклад it publishes
+ * (narrowed, on that tab, by семестр / курс / спеціальність / група — see `restrictColumnsToScope`);
  * the department page passes its lecturers and gets the викладацький розклад a кафедра works from;
- * the lecturer and room pages pass one id each and get a single column. All of them share the query,
- * the grid, the semester filter and the export, because a timetable rendered four different ways is
- * four chances to disagree.
+ * the lecturer and room pages pass one id each and get a single column; «Мій кабінет» shows the
+ * signed-in reader their own, mounting this twice — once for a lecturer, once for a student — for
+ * the one document. All of them share the query, the grid, the semester filter and the export,
+ * because a timetable rendered five different ways is five chances to disagree.
  *
- * **The semester filter is on by default and matters.** `timetable_entries` has no semester of its
- * own — it lives two joins away on the curriculum item — so an unfiltered grid shows autumn and
- * spring at once and rooms appear double-booked when they are not. The backend's `semesterParity`
- * relation filter is what this passes, defaulting to the `current_semester_parity` setting.
+ * **The semester filter is not optional, and it matters.** `timetable_entries` has no semester of
+ * its own — it lives two joins away on the curriculum item — so an unfiltered grid shows autumn and
+ * spring at once and rooms appear double-booked when they are not. The picker therefore offers one
+ * half-year or the other and nothing else; the backend's `semesterParity` relation filter is always
+ * passed, seeded from the `current_semester_parity` setting and falling back to `ODD`.
  */
 @Component({
   selector: 'app-timetable-view',
@@ -45,6 +48,20 @@ export class TimetableView implements OnInit, OnChanges {
 
   /** Scope: exactly one of these is normally set. Empty arrays mean "no scope", which loads nothing. */
   @Input() academicGroupIds: string[] = [];
+  /**
+   * Restricts the grid's *columns* to `academicGroupIds`, for hosts that narrow the scope to a
+   * chosen few groups. Off by default, and only meaningful when `columnMode` is `'group'`.
+   *
+   * The server filter matches an entry if *any* of its groups is in scope, and a cell names every
+   * group taught together (see `toGridEntry`) — so a lecture shared with a group outside the scope
+   * otherwise raises a column for that group too, and «розклад 1 курсу» sprouts a 2nd-year column.
+   *
+   * The filter is applied against the scope the entries on screen were *fetched* with, never against
+   * the current input. Those differ for the length of a round trip, and filtering last request's
+   * classes by this request's scope rejects every column at once — which `buildTimetableGrid` reads
+   * as «N не розміщено» and the view reports in red, for the whole of every filter change.
+   */
+  @Input() restrictColumnsToScope = false;
   @Input() lecturerIds: string[] = [];
   @Input() roomIds: string[] = [];
   /** What runs across the top. */
@@ -57,19 +74,21 @@ export class TimetableView implements OnInit, OnChanges {
    * Lets the host own the semester filter instead of this component.
    *
    * Left `null` — every screen that mounted this before «Мій кабінет» did — the view keeps the
-   * picker it has always had, seeded from `current_semester_parity`. Set to `''`/`'ODD'`/`'EVEN'`,
-   * the picker is hidden and the value is followed, which is what «Мій кабінет» needs: one
-   * half-year control in its header governing the timetable *and* the curriculum beside it, rather
-   * than two that can disagree about which semester the page is showing.
+   * picker it has always had, seeded from `current_semester_parity`. Set to `'ODD'`/`'EVEN'`, the
+   * picker is hidden and the value is followed, which is what «Мій кабінет» needs: one half-year
+   * control in its header governing the timetable *and* the curriculum beside it, rather than two
+   * that can disagree about which semester the page is showing. Any other non-null string is read
+   * as `'ODD'` — the grid always shows one half-year, so there is no "unset" for it to mean.
    */
   @Input() externalSemesterParity: string | null = null;
 
   readonly dayNames = DAY_NAMES;
-  readonly parityOptions: Option[] = [
-    { id: '', label: 'Весь навчальний рік' },
-    { id: 'ODD', label: 'Перший (непарний) семестр' },
-    { id: 'EVEN', label: 'Другий (парний) семестр' }
-  ];
+  /**
+   * One half-year or the other — there is deliberately no "whole year". A grid holding both halves
+   * at once overlays classes that never coexist and shows rooms and lecturers as double-booked when
+   * they are not, which is not a view of anything anyone's week actually looks like.
+   */
+  readonly parityOptions = SEMESTER_PARITY_OPTIONS;
 
   entries = signal<RawEntry[]>([]);
   loading = signal(false);
@@ -77,34 +96,67 @@ export class TimetableView implements OnInit, OnChanges {
   exporting = signal(false);
   exportError = signal('');
 
-  /** ODD / EVEN / '' — seeded from `current_semester_parity` on first load. */
-  semesterParity = signal('');
+  /** ODD / EVEN — seeded from `current_semester_parity` on first load, and never empty: a grid is
+   *  always showing exactly one half-year, so the picker always names the one on screen. */
+  semesterParity = signal('ODD');
   private parityTouched = false;
 
   private academicHourMinutes = computed(() =>
     this.settings.numberValue('academic_hour_duration_minutes') ?? 40);
 
-  grid = computed(() => buildTimetableGrid(this.entries(), {
-    columnMode: this.columnMode,
-    academicHourMinutes: this.academicHourMinutes()
-  }));
+  /**
+   * The scope `entries()` was fetched with — set together with them, never ahead of them. A signal
+   * rather than a plain field read because `grid` is a computed, which would otherwise memoise the
+   * first array it saw.
+   */
+  private entriesScope = signal<readonly string[]>([]);
+
+  grid = computed(() => {
+    const scope = this.restrictColumnsToScope && this.columnMode === 'group'
+      ? new Set(this.entriesScope())
+      : null;
+    return buildTimetableGrid(this.entries(), {
+      columnMode: this.columnMode,
+      academicHourMinutes: this.academicHourMinutes(),
+      columnFilter: scope ? (id) => scope.has(id) : undefined
+    });
+  });
 
   /** Days with at least one class — an empty Saturday is not worth a column of dashes. */
   activeDays = computed(() => this.grid().days.filter((d) => !dayIsEmpty(this.grid(), d)));
 
   private initialized = false;
+  /** Discards all but the newest in-flight load — see `load()`. */
+  private loadToken = 0;
+  /** Whether the stored default has been applied (or given up on) and the first load issued. */
+  private paritySeeded = false;
 
-  ngOnInit() {
-    this.initialized = true;
-    this.settings.ensureLoaded();
-    // The current half-year is the useful default; a user who picks another keeps it.
-    queueMicrotask(() => {
+  /**
+   * Seeds the picker from `current_semester_parity`, then issues the first load.
+   *
+   * An effect rather than a `queueMicrotask`, because `ensureLoaded()` is an HTTP round trip: a
+   * microtask runs in the same task as the request that was just sent, so `value()` is reliably
+   * `null` and the stored default was silently discarded on every direct page load. Waiting for the
+   * settings to resolve *either way* also means the first query carries the right half-year instead
+   * of fetching autumn and then refetching spring.
+   */
+  constructor() {
+    effect(() => {
+      const settled = this.settings.loaded() || !!this.settings.error();
+      if (!settled || this.paritySeeded || !this.initialized) return;
+      this.paritySeeded = true;
       if (!this.parityTouched) {
         const current = this.settings.value('current_semester_parity');
-        if (current) this.semesterParity.set(current);
+        if (current === 'ODD' || current === 'EVEN') this.semesterParity.set(current);
       }
       this.load();
     });
+  }
+
+  ngOnInit() {
+    this.initialized = true;
+    // The first load is issued by the constructor's effect, once the current half-year is known.
+    this.settings.ensureLoaded();
   }
 
   ngOnChanges() {
@@ -112,14 +164,17 @@ export class TimetableView implements OnInit, OnChanges {
     // stops the current_semester_parity default from overwriting the host's choice a tick later.
     if (this.externalSemesterParity !== null) {
       this.parityTouched = true;
-      this.semesterParity.set(this.externalSemesterParity);
+      // Coerced, not trusted: the host owns the value but the grid still has to name one half-year.
+      this.semesterParity.set(this.externalSemesterParity === 'EVEN' ? 'EVEN' : 'ODD');
     }
-    if (this.initialized) this.load();
+    // Before seeding, the effect owns the first load; after it, input changes drive their own.
+    if (this.initialized && this.paritySeeded) this.load();
   }
 
   onParityChange(value: string) {
     this.parityTouched = true;
-    this.semesterParity.set(value);
+    // Coerced for the same reason the host-owned value is: the grid always names one half-year.
+    this.semesterParity.set(value === 'EVEN' ? 'EVEN' : 'ODD');
     this.load();
   }
 
@@ -137,11 +192,22 @@ export class TimetableView implements OnInit, OnChanges {
   }
 
   load() {
-    const scope = this.idListFilter();
-    if (!scope) { this.entries.set([]); return; }
+    // Rapid filter changes on a host page mean several of these can be in flight at once, and they
+    // do not come back in the order they were sent. The token discards all but the newest, so a
+    // slow wide query cannot land after a fast narrow one and leave the grid describing neither.
+    const token = ++this.loadToken;
+    const groupScope = [...this.academicGroupIds];
 
-    const parity = this.semesterParity();
-    const parityFilter = parity ? `, semesterParity: "${parity}"` : '';
+    const scope = this.idListFilter();
+    if (!scope) {
+      this.entries.set([]);
+      this.entriesScope.set(groupScope);
+      this.loading.set(false);
+      return;
+    }
+
+    // Always applied — see `parityOptions` for why there is no unfiltered case to fall back to.
+    const parityFilter = `, semesterParity: "${this.semesterParity()}"`;
     this.loading.set(true);
 
     const q = `{ timetableEntries { timetableEntryConnection(limit: 2000, offset: 0, ${scope}${parityFilter}) { nodes {
@@ -154,15 +220,15 @@ export class TimetableView implements OnInit, OnChanges {
         academicGroups { id name }
         combinedGroups { name academicGroups { id name } }
         workingCurriculumItem {
-          course { id name }
+          course { id name tags { tag } }
           department { id name }
-          curriculumItemHours { hourType curriculumItem { semester course { id name courseType } specialty { id name } } }
+          curriculumItemHours { hourType curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
         }
         combinedWorkingCurriculumItem {
           workingCurriculumItems {
-            course { id name }
+            course { id name tags { tag } }
             department { id name }
-            curriculumItemHours { hourType curriculumItem { semester course { id name courseType } specialty { id name } } }
+            curriculumItemHours { hourType curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
           }
         }
       }
@@ -170,11 +236,18 @@ export class TimetableView implements OnInit, OnChanges {
 
     this.gql.request(q).subscribe({
       next: (d: any) => {
+        if (token !== this.loadToken) return;
+        // Set together: `grid` filters columns by the scope these entries were fetched with.
         this.entries.set(d.timetableEntries.timetableEntryConnection.nodes ?? []);
+        this.entriesScope.set(groupScope);
         this.error.set('');
         this.loading.set(false);
       },
-      error: (e) => { this.error.set(e.message); this.loading.set(false); }
+      error: (e) => {
+        if (token !== this.loadToken) return;
+        this.error.set(e.message);
+        this.loading.set(false);
+      }
     });
   }
 

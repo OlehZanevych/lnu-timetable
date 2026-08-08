@@ -43,6 +43,11 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
         s.query("courseConnection").entity(Course.class).connection().orderBy("name")
             .filter("departmentId", "department_id")
             .filter("facultyId", "faculty_id")
+            // An ELECTIVE_GROUP's own electives, for the course page's «Вибіркові дисципліни»
+            // section. Course *does* carry a childCourses relation, but a relation cannot be
+            // paged, filtered or created into; the section adds and detaches rows, so it wants a
+            // connection like every other editable list.
+            .filter("parentCourseId", "parent_course_id")
             .relationFilter("specialtyId",
                 "EXISTS (SELECT 1 FROM course_specialties cs " +
                 "WHERE cs.course_id = courses.id AND cs.specialty_id = :specialtyId)");
@@ -179,7 +184,20 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
                 "EXISTS (SELECT 1 FROM curriculum_item_hours cih " +
                 "JOIN curriculum_items ci ON ci.id = cih.curriculum_item_id " +
                 "WHERE cih.id = working_curriculum_items.curriculum_item_hours_id " +
-                "AND ((:semesterParity = 'ODD' AND ci.semester % 2 = 1) OR (:semesterParity = 'EVEN' AND ci.semester % 2 = 0)))");
+                "AND ((:semesterParity = 'ODD' AND ci.semester % 2 = 1) OR (:semesterParity = 'EVEN' AND ci.semester % 2 = 0)))")
+            // Everything that delivers one discipline, for the course page's editors. A working
+            // item names a course in two different senses and both belong here:
+            //   * the discipline it delivers — the curriculum item's course, two joins away;
+            //   * the elective actually chosen — its own course_id, set only when that curriculum
+            //     item's course is an ELECTIVE_GROUP (see WorkingCurriculumItem.course).
+            // Filtering on only the first would hide an elective's own deliveries from its page;
+            // on only the second, every ordinary discipline's. Hence the OR.
+            .relationFilter("courseId",
+                "(working_curriculum_items.course_id = :courseId " +
+                "OR EXISTS (SELECT 1 FROM curriculum_item_hours cih " +
+                "JOIN curriculum_items ci ON ci.id = cih.curriculum_item_id " +
+                "WHERE cih.id = working_curriculum_items.curriculum_item_hours_id " +
+                "AND ci.course_id = :courseId))");
         s.query("workingCurriculumItem").entity(WorkingCurriculumItem.class).findById();
 
         s.mutation("createWorkingCurriculumItem").entity(WorkingCurriculumItem.class).create()

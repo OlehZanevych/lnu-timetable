@@ -3,6 +3,10 @@
     <h2>Вхід у систему</h2>
     <p class="muted">Львівський національний університет імені Івана Франка</p>
 
+    @if (sessionNotice() && !error()) {
+      <p class="session-notice">{{ sessionNotice() }}</p>
+    }
+
     @if (error()) {
       <p class="error">{{ error() }}</p>
     }

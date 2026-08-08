@@ -11,6 +11,7 @@ import { TimetableView } from './timetable-view';
 import { SearchSelect, Option } from './search-select';
 import { DeptFacultySelect, DeptOption } from './dept-faculty-select';
 import { compareUk } from './sort';
+import { courseLabel } from './course-label';
 
 type LecturerSection = 'info' | 'classes' | 'timetable';
 
@@ -28,7 +29,12 @@ interface LecturerInfo {
 /** One `lecturer_workloads` row this lecturer carries, flattened for the table. */
 interface ClassRow {
   id: string;
+  /** Bare `courses.name` — what the «Дисциплін» tally counts distinct values of, and sorts by. */
   courseName: string;
+  /** `courses.id` behind {@link ClassRow.courseLabel} — what the table links each line to. */
+  courseId: string;
+  /** {@link ClassRow.courseName} with the course's tags in parentheses — what the table prints. */
+  courseLabel: string;
   hourType: string;
   hours: number;
   semester: number;
@@ -162,16 +168,16 @@ export class LecturerDetailPage implements OnInit {
         timetableEntries { id }
         workingCurriculumItem {
           lecturerCount teachingFormat
-          course { id name }
+          course { id name tags { tag } }
           department { id name }
-          curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType } specialty { id name } } }
+          curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
         }
         combinedWorkingCurriculumItem {
           workingCurriculumItems {
             lecturerCount teachingFormat
-            course { id name }
+            course { id name tags { tag } }
             department { id name }
-            curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType } specialty { id name } } }
+            curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
           }
         }
       }
@@ -212,6 +218,14 @@ export class LecturerDetailPage implements OnInit {
         courseName: umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course
           ? ref.course.name
           : (umbrella?.name ?? '—'),
+        courseLabel: umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course
+          ? courseLabel(ref.course.name, ref.course.tags)
+          : courseLabel(umbrella?.name, umbrella?.tags),
+        // The same elective-vs-umbrella choice as the label: the row links to the discipline it
+        // names, not to the block it was chosen out of.
+        courseId: umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course
+          ? String(ref.course.id)
+          : String(umbrella?.id ?? ''),
         hourType: ref?.curriculumItemHours?.hourType ?? '',
         hours: ref?.curriculumItemHours?.hours ?? 0,
         semester: ci?.semester ?? 0,

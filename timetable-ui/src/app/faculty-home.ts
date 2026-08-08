@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
@@ -21,8 +21,37 @@ interface Faculty {
 })
 export class FacultyHome {
   private gql = inject(GraphqlService);
-  faculties = signal<Faculty[]>([]);
+  private faculties = signal<Faculty[]>([]);
   error = signal('');
+
+  /** What the search box holds. A signal, because `visibleFaculties` is a computed over it. */
+  filter = signal('');
+
+  /**
+   * The list after the search box.
+   *
+   * Client-side, and deliberately so: `facultyConnection` is fetched once with `limit: 100` and a
+   * university has a few dozen faculties, so every candidate is already in hand — a server round
+   * trip per keystroke would be slower than the filter it replaces, and `facultyConnection` has no
+   * name filter to send anyway.
+   *
+   * Matches the abbreviation as well as the name, because the abbreviation is what the tiles show
+   * and what people usually type: «ФЕІ» finds «Факультет електроніки та комп'ютерних технологій».
+   * Case-folded with the Ukrainian locale so «фЕі» finds it too.
+   */
+  visibleFaculties = computed(() => {
+    const q = this.filter().trim().toLocaleLowerCase('uk');
+    if (!q) return this.faculties();
+    return this.faculties().filter((f) =>
+      (f.name ?? '').toLocaleLowerCase('uk').includes(q)
+      || (f.abbreviation ?? '').toLocaleLowerCase('uk').includes(q));
+  });
+
+  /** Whether the search box, rather than an empty database, is why nothing is listed. */
+  filteredToNothing = computed(() =>
+    this.faculties().length > 0 && this.visibleFaculties().length === 0);
+
+  totalFaculties = computed(() => this.faculties().length);
 
   // Create form
   showForm = signal(false);

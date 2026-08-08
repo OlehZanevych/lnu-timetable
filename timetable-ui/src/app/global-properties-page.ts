@@ -1,15 +1,9 @@
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Option, SearchSelect } from './search-select';
+import { SearchSelect } from './search-select';
+import { SEMESTER_PARITY_OPTIONS } from './entities';
 import { GlobalPropertiesService, GlobalPropertyRow } from './global-properties.service';
 import { GraphqlService } from './graphql.service';
-
-/** Known values for current_semester_parity — the only ENUM-typed property today, so its options
- *  aren't discoverable from the schema (global_properties has no allowed-values metadata). */
-const SEMESTER_PARITY_OPTIONS: Option[] = [
-  { id: 'ODD', label: 'Перший (непарний)' },
-  { id: 'EVEN', label: 'Другий (парний)' }
-];
 
 /**
  * What is known about a property beyond its name/type/value triple: how to label it, what it is

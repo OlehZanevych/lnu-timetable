@@ -10,7 +10,8 @@
 
 <div class="section-filter">
   <label>Семестр</label>
-  <app-search-select [options]="SEMESTER_PARITY_OPTIONS" [ngModel]="selectedSemesterParity()"
+  <app-search-select [options]="SEMESTER_PARITY_OPTIONS" [clearable]="false"
+                      [ngModel]="selectedSemesterParity()"
                       (ngModelChange)="onParityChange($event)"
                       name="semesterParity" [ngModelOptions]="{ standalone: true }" />
 </div>
@@ -53,8 +54,8 @@
       <strong>
         Дисципліна:
         @if (b.courseId) {
-          <a class="ent-link" [routerLink]="['/course', b.courseId]">{{ b.courseName }}</a>
-        } @else { {{ b.courseName }} }
+          <a class="ent-link" [routerLink]="['/course', b.courseId]">{{ b.courseLabel }}</a>
+        } @else { {{ b.courseLabel }} }
       </strong>
       <span>Тип заняття: {{ hourTypeLabel(b.hourType) }}</span>
       @if (b.isBiweekly) {
@@ -299,7 +300,7 @@
                   <tbody>
                     @for (c of plan.creates; track c.block.key) {
                       <tr>
-                        <td>{{ c.block.courseName }}</td>
+                        <td>{{ c.block.courseLabel }}</td>
                         <td>{{ hourTypeLabel(c.block.hourType) }}</td>
                         <td class="cell-info">{{ groupNames(c.block) }}</td>
                         <td>додати: {{ dayLabel(c.placement.dayOfWeek) }}</td>
@@ -307,7 +308,7 @@
                     }
                     @for (c of plan.updates; track c.block.key) {
                       <tr>
-                        <td>{{ c.block.courseName }}</td>
+                        <td>{{ c.block.courseLabel }}</td>
                         <td>{{ hourTypeLabel(c.block.hourType) }}</td>
                         <td class="cell-info">{{ groupNames(c.block) }}</td>
                         <td>перенести: {{ dayLabel(c.placement.dayOfWeek) }}</td>

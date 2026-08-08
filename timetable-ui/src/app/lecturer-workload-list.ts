@@ -8,6 +8,7 @@ import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, DURATION_HOURS_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
 import { compareUk } from './sort';
 import { GenIssue, GenLecturer, GenResult, GenWorkload, generateWorkloads } from './workload-generator';
+import { CourseTagRef, courseLabel } from './course-label';
 
 interface GroupRef {
   id: string;
@@ -69,8 +70,6 @@ interface Workload {
   id: string;
   durationHours: number;
   classStartTimeSet?: { id: string; name: string } | null;
-  rooms?: { id: string; number: string; name?: string | null }[];
-  roomGroups?: { id: string; name: string }[];
   lecturers: LecturerRef[];
   academicGroups: GroupRef[];
   combinedGroups: GroupRef[];
@@ -98,7 +97,7 @@ interface WorkingItem {
   id: string;
   lecturerCount: number;
   teachingFormat: string;
-  course?: { id: string; name: string } | null;
+  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
   academicGroups: GroupRef[];
   workloads: Workload[];
   /** Non-empty when this item has been merged into a combined_working_curriculum_item — such
@@ -114,7 +113,7 @@ interface WorkingItem {
       controlForm: string;
       ectsCredits?: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string; courseType: string };
+      course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -129,7 +128,7 @@ interface CombinedMember {
     curriculumItem: {
       semester: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string };
+      course: { id: string; name: string; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -156,7 +155,7 @@ interface CurriculumItemGroup {
   controlForm: string;
   ectsCredits?: number;
   specialty: { id: string; name: string };
-  course: { id: string; name: string; courseType: string };
+  course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null };
   hoursGroups: HoursGroup[];
 }
 
@@ -210,13 +209,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   /** The set marked as default, pre-selected when creating a workload. */
   private defaultClassStartTimeSetId = signal('');
 
-  /**
-   * Rooms and room groups this department may restrict a workload to. Rooms of another faculty and
-   * groups scoped elsewhere are not offered — see loadRoomOptions.
-   */
-  roomOptions = signal<Option[]>([]);
-  roomGroupOptions = signal<Option[]>([]);
-
   private rawItems = signal<WorkingItem[]>([]);
   /** Combined items with at least one member belonging to this department — filtered server-side
    *  (see loadCombined) via the departmentIds relation filter on combinedWorkingCurriculumItemConnection. */
@@ -237,8 +229,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   formCombinedGroupIds: string[] = [];
   formDurationHours = '2';
   formClassStartTimeSetId = '';
-  formRoomIds: string[] = [];
-  formRoomGroupIds: string[] = [];
 
   /**
    * The student roster shown instead of academic groups when the item is taught INDIVIDUALLY:
@@ -301,7 +291,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     if (this.departmentId) {
       this.loadLecturerOptions();
       this.loadClassStartTimeSets();
-      this.loadRoomOptions();
       this.loadAll();
     }
   }
@@ -310,7 +299,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     if (this.initialized && this.departmentId) {
       this.loadLecturerOptions();
       this.loadClassStartTimeSets();
-      this.loadRoomOptions();
       this.loadAll();
     }
   }
@@ -350,7 +338,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     if (!this.departmentId) return;
     const q = `{ workingCurriculumItems { workingCurriculumItemConnection(limit: 1000, offset: 0, departmentId: "${this.departmentId}") { nodes {
       id lecturerCount teachingFormat
-      course { id name }
+      course { id name tags { tag } }
       academicGroups { id name }
       combinedWorkingCurriculumItems { id }
       curriculumItemHours {
@@ -358,15 +346,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         curriculumItem {
           id semester controlForm ectsCredits
           specialty { id name }
-          course { id name courseType }
+          course { id name courseType tags { tag } }
         }
       }
       workloads {
         id
         durationHours
         classStartTimeSet { id name }
-        rooms { id number name }
-        roomGroups { id name }
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
@@ -393,15 +379,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         academicGroups { id name }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name } }
+          curriculumItem { semester specialty { id name } course { id name tags { tag } } }
         }
       }
       workloads {
         id
         durationHours
         classStartTimeSet { id name }
-        rooms { id number name }
-        roomGroups { id name }
         lecturers { id firstName middleName lastName }
         academicGroups { id name }
         combinedGroups { id name }
@@ -485,45 +469,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
             .map((n: any) => ({ id: n.id, label: n.isDefault ? `${n.name} (типовий)` : n.name }))
             .sort((a: Option, b: Option) => compareUk(a.label, b.label)));
         this.defaultClassStartTimeSetId.set(nodes.find((n: any) => n.isDefault)?.id ?? '');
-      },
-      error: () => {}
-    });
-  }
-
-  /**
-   * Loads the rooms and room groups a workload of this department may be restricted to.
-   *
-   * Rooms: this faculty's, plus those belonging to no faculty (shared sports halls and the like).
-   * Groups: university-wide, this faculty's, and this department's own. Both are fetched
-   * unfiltered and narrowed here for the same reason as the start-time sets — an equality filter
-   * on facultyId would drop exactly the unscoped rows that are most often wanted.
-   */
-  private loadRoomOptions() {
-    if (!this.departmentId) return;
-    const q = `{
-      departments { department(id: "${this.departmentId}") { faculty { id } } }
-      rooms { roomConnection(limit: 1000, offset: 0) { nodes { id number name faculty { id } } } }
-      roomGroups { roomGroupConnection(limit: 500, offset: 0) { nodes {
-        id name faculty { id } department { id }
-      } } }
-    }`;
-    this.gql.request(q).subscribe({
-      next: (d: any) => {
-        const facultyId = d.departments?.department?.faculty?.id ?? '';
-
-        const rooms = (d.rooms.roomConnection.nodes ?? [])
-          .filter((r: any) => !r.faculty || r.faculty.id === facultyId)
-          .map((r: any) => ({ id: r.id, label: r.name ? `${r.number} — ${r.name}` : r.number }))
-          .sort((a: Option, b: Option) => compareUk(a.label, b.label));
-        this.roomOptions.set(rooms);
-
-        const groups = (d.roomGroups.roomGroupConnection.nodes ?? [])
-          .filter((g: any) => (!g.faculty && !g.department)
-            || g.faculty?.id === facultyId
-            || g.department?.id === this.departmentId)
-          .map((g: any) => ({ id: g.id, label: g.name }))
-          .sort((a: Option, b: Option) => compareUk(a.label, b.label));
-        this.roomGroupOptions.set(groups);
       },
       error: () => {}
     });
@@ -726,38 +671,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     // Individual work has no duration column — it is always one academic hour per student
     // (see INDIVIDUAL_DURATION_HOURS), so showing "1 год." on every row says nothing. Every layout
     // carries the start-time set, though: it applies to individual consultations just as much.
-    if (this.isIndividuallyItem(wci)) return 5;          // lecturer, student, bells, rooms, actions
-    return wci.teachingFormat === 'SEPARATELY' ? 7 : 6;  // lecturers, groups, (+ combined), duration, bells, rooms, actions
+    if (this.isIndividuallyItem(wci)) return 4;          // lecturer, student, bells, actions
+    return wci.teachingFormat === 'SEPARATELY' ? 6 : 5;  // lecturers, groups, (+ combined), duration, bells, actions
   }
 
   /** Name of the grid of bells a workload is scheduled on, for the tree's "Дзвінки" column. */
   startTimeSetName(w: Workload): string {
     return w.classStartTimeSet?.name ?? '—';
-  }
-
-  /**
-   * Where a workload may be held, for the tree's "Аудиторії" column: the named rooms and the room
-   * groups together, since the eligible rooms are their union. Nothing named means no restriction,
-   * which is worth saying in words rather than leaving as a dash.
-   */
-  roomRestrictionLabel(w: Workload): string {
-    const parts = [
-      ...(w.rooms ?? []).map((r) => r.number),
-      ...(w.roomGroups ?? []).map((g) => `${g.name} (група)`)
-    ];
-    return parts.length ? parts.join(', ') : 'будь-яка';
-  }
-
-  /**
-   * The same list as {@link roomRestrictionLabel}, itemised so each named аудиторія can link to its
-   * own page. A room group has no page of its own, so it carries a blank `roomId` and renders as
-   * plain text; an empty result means "no restriction", which the cell still says in words.
-   */
-  roomRefs(w: Workload): { roomId: string; label: string }[] {
-    return [
-      ...(w.rooms ?? []).map((r) => ({ roomId: r.id, label: r.number })),
-      ...(w.roomGroups ?? []).map((g) => ({ roomId: '', label: `${g.name} (група)` }))
-    ];
   }
 
   /** True once this working curriculum item has been merged into a combined item — such items are
@@ -766,16 +686,21 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     return (wci.combinedWorkingCurriculumItems ?? []).length > 0;
   }
 
+  /** Exposed for the template — the shared rule, see `course-label.ts`. */
+  courseLabel = courseLabel;
+
   /** "Дисципліна · Семестр N · Тип годин: H год." summary line for a combined item's card header. */
   combinedSummary(c: CombinedItem): string {
     const ref = this.combinedCourseRef(c);
-    return ref ? `${ref.name}${this.combinedSummaryTail(c)}` : '';
+    return ref ? `${ref.label}${this.combinedSummaryTail(c)}` : '';
   }
 
   /** The discipline of a combined item's card header, split out so the header can link it. */
-  combinedCourseRef(c: CombinedItem): { id: string; name: string } | null {
+  combinedCourseRef(c: CombinedItem): { id: string; name: string; label: string } | null {
     const ci = c.workingCurriculumItems[0]?.curriculumItemHours?.curriculumItem;
-    return ci ? { id: ci.course.id, name: ci.course.name } : null;
+    return ci
+      ? { id: ci.course.id, name: ci.course.name, label: courseLabel(ci.course.name, ci.course.tags) }
+      : null;
   }
 
   /** Everything after the discipline in that header — " · Семестр N · Лекції: 32 год." */
@@ -818,8 +743,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.buildCandidateRows([]);
     this.formDurationHours = this.isIndividuallyItem(wci) ? INDIVIDUAL_DURATION_HOURS : this.defaultDurationHours();
     this.formClassStartTimeSetId = this.defaultClassStartTimeSetId();
-    this.formRoomIds = [];
-    this.formRoomGroupIds = [];
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -837,8 +760,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.buildCandidateRows(w.candidates ?? []);
     this.formDurationHours = this.isIndividuallyItem(wci) ? INDIVIDUAL_DURATION_HOURS : String(w.durationHours);
     this.formClassStartTimeSetId = w.classStartTimeSet?.id ?? this.defaultClassStartTimeSetId();
-    this.formRoomIds = (w.rooms ?? []).map((r) => r.id);
-    this.formRoomGroupIds = (w.roomGroups ?? []).map((g) => g.id);
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -861,8 +782,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.buildCandidateRows([]);
     this.formDurationHours = this.defaultDurationHours();
     this.formClassStartTimeSetId = this.defaultClassStartTimeSetId();
-    this.formRoomIds = [];
-    this.formRoomGroupIds = [];
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -880,8 +799,6 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.buildCandidateRows(w.candidates ?? []);
     this.formDurationHours = String(w.durationHours);
     this.formClassStartTimeSetId = w.classStartTimeSet?.id ?? this.defaultClassStartTimeSetId();
-    this.formRoomIds = (w.rooms ?? []).map((r) => r.id);
-    this.formRoomGroupIds = (w.roomGroups ?? []).map((g) => g.id);
     this.formError.set('');
     this.showForm.set(true);
   }
@@ -1057,10 +974,10 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       durationHours: Number(individually ? INDIVIDUAL_DURATION_HOURS : this.formDurationHours),
       // Non-null in the database, so it is always sent rather than omitted when unchanged.
       classStartTimeSetId: this.formClassStartTimeSetId,
-      // Always sent in full: an empty array means "no room restriction", and omitting the field
-      // would instead leave whatever was there — see the manyToMany note in base-entity.ts.
-      roomIds: this.formRoomIds,
-      roomGroupIds: this.formRoomGroupIds,
+      // `roomIds`/`roomGroupIds` are deliberately absent. Where a class may be held is assigned on
+      // the faculty's «Призначення аудиторій» tab and on the discipline's own page, not here, and a
+      // many-to-many field left out of the input leaves its rows untouched (see the note in
+      // base-entity.ts) — so saving a workload from this modal cannot silently clear either.
     };
     // Exactly one of these two is sent, matching whichever entry point (single item or combined
     // item) the modal was opened from.
@@ -1196,7 +1113,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
               assignedStudents: (w.studentAssignments ?? []).map((a) => ({
                 studentId: a.student.id, lecturerId: a.lecturer.id
               })),
-              label: `${group.course.name} · ${this.hourTypeLabel(hg.hourType)} · семестр ${group.semester}`
+              label: `${courseLabel(group.course.name, group.course.tags)} · ${this.hourTypeLabel(hg.hourType)} · семестр ${group.semester}`
             });
           }
         }
@@ -1223,7 +1140,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
           courseId: ci.course.id,
           courseType: (ci.course as any).courseType ?? 'MANDATORY',
           teachingFormat: 'TOGETHER',
-          label: `${ci.course.name} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)} · семестр ${ci.semester} (об'єднана)`
+          label: `${courseLabel(ci.course.name, ci.course.tags)} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)} · семестр ${ci.semester} (об'єднана)`
         });
       }
     }

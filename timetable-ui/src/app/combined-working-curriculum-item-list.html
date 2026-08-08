@@ -17,7 +17,7 @@
 @for (g of proposals(); track g.key) {
   <div class="card wci-item-card">
     <div class="wci-item-header">
-      <strong>{{ g.course.name }}</strong>
+      <strong><a class="ent-link" [routerLink]="['/course', g.course.id]">{{ courseLabel(g.course.name, g.course.tags) }}</a></strong>
       <span>Семестр {{ g.semester }}</span>
       <span>{{ hourTypeLabel(g.hourType) }}: {{ g.hours }} год.</span>
     </div>
@@ -74,7 +74,9 @@
         @for (m of c.workingCurriculumItems; track m.id) {
           <tr>
             <td>{{ memberSpecialtyName(m) }}</td>
-            <td>{{ memberCourseName(m) }}</td>
+            <td>
+              <a class="ent-link" [routerLink]="['/course', m.curriculumItemHours.curriculumItem.course.id]">{{ memberCourseName(m) }}</a>
+            </td>
             <td>{{ memberSemester(m) }}</td>
             <td>{{ hourTypeLabel(m.curriculumItemHours.hourType) }}</td>
             <td>{{ academicGroupNames(m.academicGroups) }}</td>

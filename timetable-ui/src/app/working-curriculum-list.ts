@@ -8,6 +8,7 @@ import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
 import { WorkingCurriculumSummary } from './working-curriculum-summary';
 import { WorkingPlanItemInput, buildWorkingCurriculumPlan } from './working-curriculum-plan';
+import { CourseTagRef, courseLabel, courseTagNames } from './course-label';
 
 type DeptOption = Option & { facultyId: string };
 type GroupOption = Option & { courseYear: number };
@@ -16,12 +17,14 @@ interface ChildCourse {
   id: string;
   name: string;
   courseType: string;
+  tags?: CourseTagRef[] | null;
 }
 
 interface ItemCourse {
   id: string;
   name: string;
   courseType: string;
+  tags?: CourseTagRef[] | null;
   childCourses?: ChildCourse[];
 }
 
@@ -37,7 +40,7 @@ interface WorkingItem {
   lecturerCount: number;
   teachingFormat: string;
   department?: { id: string; name: string; faculty?: { id: string } };
-  course?: { id: string; name: string } | null;
+  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
   academicGroups: AcademicGroupRef[];
 }
 
@@ -67,7 +70,8 @@ const toWorkingPlanItem = (item: CurriculumItemNode): WorkingPlanItemInput => ({
   controlForm: item.controlForm,
   ectsCredits: item.ectsCredits ?? 0,
   course: item.course
-    ? { id: item.course.id, name: item.course.name, courseType: item.course.courseType ?? 'MANDATORY' }
+    ? { id: item.course.id, name: item.course.name, courseType: item.course.courseType ?? 'MANDATORY',
+        tags: courseTagNames(item.course.tags) }
     : null,
   hours: (item.hours ?? []).map((h) => ({
     id: h.id,
@@ -185,12 +189,12 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     if (!this.specialtyId) return;
     const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
       id semester controlForm ectsCredits
-      course { id name courseType childCourses { id name courseType } }
+      course { id name courseType tags { tag } childCourses { id name courseType tags { tag } } }
       hours { id hourType hours
         workingCurriculumItems {
           id lecturerCount teachingFormat
           department { id name faculty { id } }
-          course { id name }
+          course { id name tags { tag } }
           academicGroups { id name studentsCount }
         }
       }
@@ -267,6 +271,9 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     return item.course?.courseType === 'ELECTIVE_GROUP';
   }
 
+  /** Exposed for the template — the shared rule, see `course-label.ts`. */
+  courseLabel = courseLabel;
+
   private setElectiveContext(item: CurriculumItemNode) {
     const isElectiveGroup = this.isElectiveGroupCourse(item);
     this.isElectiveContext.set(isElectiveGroup);
@@ -277,7 +284,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     const children = item.course?.childCourses ?? [];
     const electives = children.filter((c) => c.courseType === 'ELECTIVE');
     const source = electives.length ? electives : children;
-    this.electiveOptions.set(source.map((c) => ({ id: c.id, label: c.name })));
+    this.electiveOptions.set(source.map((c) => ({ id: c.id, label: courseLabel(c.name, c.tags) })));
   }
 
   // ── Create / Edit ────────────────────────────────────────────────────────

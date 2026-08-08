@@ -61,8 +61,8 @@
     <div class="tv-toolbar">
       <label class="tv-picker">
         <span>Семестр</span>
-        <app-search-select [options]="parityOptions"
-                           [ngModel]="semesterParity()" (ngModelChange)="semesterParity.set($event)"
+        <app-search-select [options]="parityOptions" [clearable]="false"
+                           [ngModel]="semesterParity()" (ngModelChange)="onParityChange($event)"
                            name="deskParity" [ngModelOptions]="{ standalone: true }" />
       </label>
       <p class="muted tv-scope-note">Показано {{ parityTitle() }}.</p>
@@ -146,7 +146,9 @@
               @for (row of workloadItems(); track row.workloadId + row.hourType) {
                 <tr>
                   <td>
-                    {{ row.courseName }}
+                    @if (row.courseId) {
+                      <a class="ent-link" [routerLink]="['/course', row.courseId]">{{ row.courseLabel }}</a>
+                    } @else { {{ row.courseLabel }} }
                     @if (row.combined) { <span class="cp-chip">об&rsquo;єднана позиція</span> }
                   </td>
                   <td>{{ hourTypeLabel(row.hourType) }}</td>
@@ -239,7 +241,9 @@
               @for (row of curriculumRows(); track row.id) {
                 <tr>
                   <td>
-                    {{ row.courseName }}
+                    @if (row.courseId) {
+                      <a class="ent-link" [routerLink]="['/course', row.courseId]">{{ row.courseName }}</a>
+                    } @else { {{ row.courseName }} }
                     <span class="muted">{{ courseTypeLabel(row.courseType) }}</span>
                   </td>
                   <td>{{ row.semester ? termLabelShort(row.semester) : '&mdash;' }}</td>

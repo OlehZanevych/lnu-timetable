@@ -143,6 +143,22 @@ export const HOUR_TYPE_OPTIONS = [
   { value: 'INDEPENDENT_WORK', label: 'Самостійна робота' }
 ];
 
+/**
+ * The two halves of the academic year, matching the parity of `curriculum_items.semester`
+ * (1,3,5… vs 2,4,6…). Every screen that offers a choice of half-year offers exactly these two —
+ * the timetable views, the schedule builder, «Призначення аудиторій», «Мій кабінет», and the
+ * `current_semester_parity` global property editor — so they are declared once.
+ *
+ * There is deliberately no "whole year": a grid holding both halves overlays classes that never
+ * coexist and shows rooms and lecturers as double-booked when they are not.
+ */
+// Typed by inference rather than annotated: `entities.ts` has no Angular or component imports, and
+// naming search-select's `Option` here would be the first. The literal is structurally identical.
+export const SEMESTER_PARITY_OPTIONS = [
+  { id: 'ODD', label: 'Перший (непарний)' },
+  { id: 'EVEN', label: 'Другий (парний)' }
+];
+
 export const TEACHING_FORMAT_OPTIONS = [
   { value: 'TOGETHER',     label: 'Разом' },
   { value: 'SEPARATELY',   label: 'Окремо' },

@@ -34,6 +34,9 @@ h2 { margin: 0; color: var(--navy); }
 .muted { color: #7b8794; font-size: 13px; margin: 2px 0 0; }
 .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 .error { background: #fde2e1; color: #9b1c1c; padding: 8px 12px; border-radius: 6px; }
+/* Why the login form is on screen when the user did not ask for it — an ended session, not a
+   failed attempt, so it reads as information rather than as the red of a rejected password. */
+.session-notice { background: #fef3c7; color: #92400e; padding: 8px 12px; border-radius: 6px; }
 
 /* ── Buttons ── */
 button { padding: 8px 14px; border: 0; border-radius: 6px; background: var(--blue); color: #fff; cursor: pointer; font-size: 14px; }
@@ -130,6 +133,12 @@ tbody tr:hover { background: #f7f9fc; }
 .section-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
   background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
 .section-filter label { font-size: 12px; color: var(--navy); white-space: nowrap; font-weight: 600; }
+/* Several pickers in one bar (the faculty timetable's курс / спеціальність / група): wrap instead
+   of overflowing, and give each control room to show a group name rather than an ellipsis. */
+.section-filter-wrap { flex-wrap: wrap; }
+.section-filter-wrap app-search-select { flex: 1 1 180px; min-width: 160px; }
+.section-filter-search { flex: 1 1 200px; min-width: 180px; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .section-filter select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
   font: inherit; font-size: 13px; color: var(--text); background: #fff; cursor: pointer; }
 
@@ -209,6 +218,7 @@ button.danger:hover { background: #991b1b !important; }
 .ce-toolbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 16px; }
 .ce-search { display: flex; flex-direction: column; gap: 4px; font-size: 12px; min-width: 280px; }
 .ce-search input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.fh-count { display: flex; align-items: center; gap: 10px; margin: 0 0 4px; font-size: 13px; }
 .ce-check { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--navy); padding-bottom: 8px; }
 
 /* .card clips overflow for its rounded corners, which would also clip the app-search-select
@@ -262,6 +272,13 @@ button.danger:hover { background: #991b1b !important; }
 .tt-block-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .tt-block-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 180px; }
 .tt-block-form .actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Room assignment (faculty page): the same block card, coloured by whether the class has
+      anywhere in particular to be held. Red is not "invalid" here — an unrestricted class still
+      schedules — it is "nobody has said where this goes", which is the thing worth spotting. ── */
+.ra-block.unassigned { border-left: 4px solid #b91c1c; background: #fdf3f2; }
+.ra-block:not(.unassigned) { border-left: 4px solid #16a34a; }
+.ra-hint { margin: -6px 0 14px; max-width: 70ch; }
 
 /* ── Lecturer workloads (department page): one level deeper than .wci-hours-block ── */
 .lw-record { margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
@@ -439,6 +456,10 @@ button.danger:hover { background: #991b1b !important; }
 
 /* ── Login / change-password pages ── */
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+/* Signed out there is no sidebar and nothing else on the page, so the card centres in what is left
+   below the header — exactly, rather than in a viewport-tall block that pushes a scrollbar. */
+.layout.no-sidebar .content { padding: 0; }
+.layout.no-sidebar .login-wrap { min-height: calc(100vh - 71px); }
 .login-card { width: min(420px, 100%); padding: 28px 30px; }
 .login-card h2 { margin-bottom: 4px; }
 .login-form { flex-direction: column; align-items: stretch; gap: 14px; }
@@ -456,9 +477,16 @@ button.danger:hover { background: #991b1b !important; }
 .ss { position: relative; }
 .ss-control { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .ss.open .ss-control { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(29, 79, 145, .15); }
-.ss-input { flex: 1; border: 0; outline: none; padding: 8px 10px; font: inherit; background: transparent; }
-.ss-clear { background: transparent; color: #9aa5b1; padding: 0 6px; font-size: 12px; }
-.ss-arrow { color: #9aa5b1; padding: 0 8px; }
+/* min-width: 0 overrides a flex item's automatic minimum size, which for an <input> is its content
+   width. Without it a long option label — a full спеціальність name, say — forces .ss-control wider
+   than the box the host was given, .ss overflows to the right, and whatever flex item comes next
+   paints over the overflow: the ✕ and the ▾ sit at that right edge, so they become unclickable.
+   The ellipsis is what the input does instead of pushing. */
+.ss-input { flex: 1; min-width: 0; text-overflow: ellipsis; border: 0; outline: none; padding: 8px 10px; font: inherit; background: transparent; }
+/* Never squeezed: these two are the control's affordances, and a click target that shrinks with
+   the available width is one that stops working exactly when the row gets crowded. */
+.ss-clear { flex: 0 0 auto; background: transparent; color: #9aa5b1; padding: 0 6px; font-size: 12px; }
+.ss-arrow { flex: 0 0 auto; color: #9aa5b1; padding: 0 8px; }
 .ss-menu { position: absolute; z-index: 10; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none; background: #fff; border: 1px solid var(--line); border-radius: 6px; max-height: 220px; overflow-y: auto; box-shadow: 0 8px 20px rgba(0,0,0,.12); }
 .ss-menu li { padding: 7px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; }
 .ss-menu li:hover { background: #eef2f9; }
@@ -635,5 +663,19 @@ button.danger:hover { background: #991b1b !important; }
 .tv-biweekly { border-left: 2px solid #c4b5fd; padding-left: 5px; }
 
 /* A chip for a small inline fact — tags, hour breakdowns, "об'єднана позиція". */
+/* Course page: the per-section editors added alongside the read-only tables. */
+.cp-hint { margin: -6px 0 14px; max-width: 78ch; }
+.cp-via { font-size: 12px; margin-top: 2px; }
+.cp-subheader { margin-top: 24px; }
+.cp-subheader h3 { margin: 0; font-family: Georgia, serif; font-size: 16px; color: var(--navy); }
+.cp-field-hint { display: block; margin-top: 4px; }
+.cp-hours-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px;
+  margin: 6px 0 4px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px; }
+.cp-hours-title { grid-column: 1 / -1; font-weight: 600; color: var(--navy); font-size: 13px; }
+.cp-hours-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; }
+.cp-hours-row span { font-size: 13px; color: var(--text); }
+.cp-hours-row input { width: 90px; }
+.cp-hours-grid .cp-field-hint { grid-column: 1 / -1; margin-top: 2px; }
+
 .cp-chip { display: inline-block; margin: 0 4px 3px 0; padding: 1px 7px; border-radius: 10px;
   background: #eef2f9; color: #55606e; font-size: 11px; white-space: nowrap; }

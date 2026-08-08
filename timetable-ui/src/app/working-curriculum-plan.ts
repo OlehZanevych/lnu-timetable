@@ -37,6 +37,7 @@ import { PlanCourse, PlanHourType, PLAN_HOUR_TYPES, ComplianceCheck, fmtNumber }
   from './curriculum-plan';
 import { PlanLimits, DEFAULT_PLAN_LIMITS } from './plan-limits';
 import { compareUk } from './sort';
+import { courseLabel } from './course-label';
 
 /** Hour types a кафедра can be made responsible for; INDEPENDENT_WORK is the student's own time. */
 export const DELIVERABLE_HOUR_TYPES =
@@ -99,6 +100,11 @@ export interface WorkingPosition {
   id: string;
   semester: number;
   courseYear: number;
+  /**
+   * `«Група вибіркових: Обраний курс»`, or just the discipline's name — bare. It has no tagged
+   * counterpart because nothing renders a position on screen: this field is read by the printed
+   * витяг and by the distinct-discipline tally, and both want the name as stored.
+   */
   courseName: string;
   courseType: string;
   hourType: DeliverableHourType;
@@ -120,7 +126,10 @@ export interface WorkingPlanRow {
   id: string;
   /** `courses.id` behind {@link name} — what the table links to. Blank when the item names none. */
   courseId: string;
+  /** The bare `courses.name` — what the printed РНП sheet puts in its discipline column. */
   name: string;
+  /** {@link WorkingPlanRow.name} with the course's tags in parentheses — what the page renders. */
+  label: string;
   courseType: string;
   semester: number;
   courseYear: number;
@@ -318,6 +327,7 @@ export function buildWorkingCurriculumPlan(
       id: item.id,
       courseId: item.course?.id ?? '',
       name: item.course?.name ?? '—',
+      label: courseLabel(item.course?.name, item.course?.tags),
       courseType: item.course?.courseType ?? '',
       semester: item.semester,
       courseYear: courseYearOf(item.semester),
@@ -487,6 +497,9 @@ function buildChecks(rows: WorkingPlanRow[], totals: WorkingPlanTotals,
     verdict: !rows.length
       ? 'позицій немає'
       : unbalanced.length
+        // `name`, not `label`: a ComplianceCheck verdict is one string, shown on the page *and*
+        // printed in the sheet's примітки. Tagging it here would tag the document too — so the
+        // warning card names a discipline slightly more tersely than the table above it does.
         ? `сума годин не збігається з кредитами · ${perCredit}: ` +
           unbalanced.slice(0, 3).map((r) => r.name).join(', ') +
           (unbalanced.length > 3 ? ` та ще ${unbalanced.length - 3}` : '')

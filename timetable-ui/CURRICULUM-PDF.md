@@ -236,6 +236,25 @@ redesign of the document.
 
 ## 5. Technical decisions
 
+### Discipline names are printed bare
+
+On screen a discipline is named with its `course_tags` in parentheses — «Іноземна мова
+(англійською)» — because two rows of a table can otherwise carry the same name and mean different
+courses. **This sheet prints the bare `courses.name`.**
+
+The split is deliberate and is enforced at the source, not here: the row objects these documents are
+built from carry both forms, and the printing code reads the bare one. A tag is a disambiguator for
+someone scanning a list, not part of what the discipline is called; a printed form is read one line
+at a time, its column widths are measured for the stored name, and the tag text would push against
+them for no reader who needs it. See *Naming a discipline* in
+[`timetable-ui/README.md`](./README.md) for the rule and `course-label.ts` for the one function that
+applies it.
+
+Here the split does not exist at all: a `PlanRow` carries the bare name and **no tagged counterpart**,
+because nothing renders one. «Навчальні плани» builds its on-screen table from the raw curriculum
+items and labels them itself, and the summary above it shows only totals — so this sheet is the
+field's one consumer, and one form is all it needs.
+
 ### Arithmetic separate from layout
 
 `curriculum-plan.ts` knows nothing about PDF, and `curriculum-report.ts` computes nothing beyond the

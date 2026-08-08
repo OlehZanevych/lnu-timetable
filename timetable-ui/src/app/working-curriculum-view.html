@@ -70,8 +70,8 @@
             <td>{{ row.semester }}</td>
             <td>
               @if (row.courseId) {
-                <a class="ent-link" [routerLink]="['/course', row.courseId]">{{ row.name }}</a>
-              } @else { {{ row.name }} }
+                <a class="ent-link" [routerLink]="['/course', row.courseId]">{{ row.label }}</a>
+              } @else { {{ row.label }} }
             </td>
             <td>{{ controlFormLabel(row.controlForm) }}</td>
             <td class="num">{{ fmtNumber(row.credits) }}</td>

@@ -32,7 +32,10 @@ export interface StatWorkload {
   hours: number;
   hourType: string;
   courseId: string;
+  /** The bare `courses.name`, which «Розрахунок навчального навантаження» prints. */
   courseName: string;
+  /** {@link StatWorkload.courseName} with the course's tags in parentheses, for the screen. */
+  courseLabel: string;
   courseType: string;
   semester: number;
   specialtyName: string;
@@ -52,7 +55,10 @@ export interface StatItem {
   workloadId: string;
   /** `courses.id` behind {@link courseName} — what the breakdown links each line to. */
   courseId: string;
+  /** The bare `courses.name` — printed by the workload sheet, sorted on, and never tagged. */
   courseName: string;
+  /** {@link StatItem.courseName} with the course's tags in parentheses — what the screen shows. */
+  courseLabel: string;
   courseType: string;
   semester: number;
   specialtyName: string;
@@ -170,6 +176,7 @@ export function computeStats(input: StatsInput): LecturerStats[] {
         workloadId: w.workloadId,
         courseId: w.courseId,
         courseName: w.courseName,
+        courseLabel: w.courseLabel,
         courseType: w.courseType,
         semester: w.semester,
         specialtyName: w.specialtyName,

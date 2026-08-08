@@ -16,7 +16,7 @@
       </p>
     </div>
     <div class="faculty-header-actions">
-      @if (activeSection() === 'info' && canModifyCourse()) {
+      @if (resolvedSection() === 'info' && canModifyCourse()) {
         <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
       }
     </div>
@@ -28,16 +28,16 @@
 <div class="faculty-layout">
   <nav class="faculty-nav">
     <p class="faculty-nav-group">Дисципліна</p>
-    @for (sec of sections; track sec.key) {
+    @for (sec of sections(); track sec.key) {
       <button type="button" class="faculty-nav-item"
-              [class.active]="activeSection() === sec.key"
+              [class.active]="resolvedSection() === sec.key"
               (click)="selectSection(sec.key)"
               [innerHTML]="sec.label"></button>
     }
   </nav>
 
   <div class="faculty-section">
-    @switch (activeSection()) {
+    @switch (resolvedSection()) {
 
       <!-- ── Info: the aggregate across all four levels ── -->
       @case ('info') {
@@ -97,7 +97,7 @@
                 @if (c.parentCourse) {
                   <tr>
                     <th>Група вибіркових</th>
-                    <td><a [routerLink]="['/course', c.parentCourse.id]">{{ c.parentCourse.name }}</a></td>
+                    <td><a [routerLink]="['/course', c.parentCourse.id]">{{ courseLabel(c.parentCourse.name, c.parentCourse.tags) }}</a></td>
                   </tr>
                 }
                 @if (c.childCourses?.length) {
@@ -105,7 +105,7 @@
                     <th>Вибіркові дисципліни</th>
                     <td>
                       @for (child of c.childCourses; track child.id) {
-                        <div><a [routerLink]="['/course', child.id]">{{ child.name }}</a></div>
+                        <div><a [routerLink]="['/course', child.id]">{{ courseLabel(child.name, child.tags) }}</a></div>
                       }
                     </td>
                   </tr>
@@ -125,6 +125,55 @@
         }
       }
 
+      <!-- ── Child electives: only on an ELECTIVE_GROUP ── -->
+      @case ('electives') {
+        <div class="page-header">
+          <div>
+            <h2>Вибіркові дисципліни</h2>
+            <p class="muted">{{ childCourses().length }} дисципл. у цій групі вибіркових</p>
+          </div>
+          @if (canModifyCourse()) {
+            <button type="button" (click)="openChildCreate()">+ Додати вибіркову</button>
+          }
+        </div>
+
+        @if (childError()) { <p class="error">{{ childError() }}</p> }
+
+        <p class="muted cp-hint">
+          Ця дисципліна &mdash; група вибіркових: у навчальному плані вона займає одну позицію, а
+          група обирає з переліку нижче одну дисципліну, яку справді вивчатиме. Вибір робиться в
+          робочому навчальному плані.
+        </p>
+
+        <div class="card">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Дисципліна</th>
+                <th>Тип</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (child of childCourses(); track child.id) {
+                <tr>
+                  <td><a [routerLink]="['/course', child.id]">{{ courseLabel(child.name, child.tags) }}</a></td>
+                  <td>{{ courseTypeLabel(child.courseType) }}</td>
+                  <td class="row-actions">
+                    @if (canModifyCourse()) {
+                      <button type="button" class="ghost" (click)="openChildEdit(child)">Редагувати</button>
+                      <button type="button" class="ghost danger" (click)="detachChild(child)">Відкріпити</button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="muted">До цієї групи ще не додано жодної вибіркової дисципліни.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
       <!-- ── Curricula ── -->
       @case ('curricula') {
         <div class="page-header">
@@ -132,7 +181,12 @@
             <h2>Навчальні плани</h2>
             <p class="muted">{{ curricula().length }} позиц. у планах спеціальностей</p>
           </div>
+          @if (canAddPlans()) {
+            <button type="button" (click)="openItemCreate()">+ Додати до плану</button>
+          }
         </div>
+
+        @if (itemError()) { <p class="error">{{ itemError() }}</p> }
         <div class="card">
           <table class="wv-table">
             <thead>
@@ -143,6 +197,7 @@
                 <th>Форма контролю</th>
                 <th class="num">ECTS</th>
                 <th>Години за видами</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -162,9 +217,25 @@
                       <span class="cp-chip">{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</span>
                     } @empty { <span class="muted">&mdash;</span> }
                   </td>
+                  <td class="row-actions">
+                    @if (canModifyItem(item)) {
+                      <button type="button" class="ghost" (click)="openItemEdit(item)">Редагувати</button>
+                      <button type="button" class="ghost danger" (click)="askRemoveItem(item)">Видалити</button>
+                    }
+                  </td>
                 </tr>
               } @empty {
-                <tr><td colspan="6" class="muted">Дисципліну ще не внесено до жодного навчального плану.</td></tr>
+                <tr>
+                  <td colspan="7" class="muted">
+                    @if (summary().viaUmbrellaOnly) {
+                      Власної позиції в навчальному плані немає &mdash; дисципліну обирають у складі
+                      групи вибіркових@if (umbrellaLabel()) { &nbsp;«{{ umbrellaLabel() }}»}, і саме
+                      там задано семестр, години та кредити.
+                    } @else {
+                      Дисципліну ще не внесено до жодного навчального плану.
+                    }
+                  </td>
+                </tr>
               }
             </tbody>
           </table>
@@ -178,7 +249,20 @@
             <h2>Робочі навчальні плани</h2>
             <p class="muted">{{ deliveries().length }} позицій РНП</p>
           </div>
+          @if (canAddDeliveries()) {
+            <button type="button" [disabled]="!hoursBlockOptions().length" (click)="openWciCreate()">
+              + Додати позицію
+            </button>
+          }
         </div>
+
+        @if (wciError()) { <p class="error">{{ wciError() }}</p> }
+        @if (!hoursBlockOptions().length) {
+          <p class="muted cp-hint">
+            Спочатку внесіть дисципліну до навчального плану &mdash; позиція РНП передає кафедрі
+            конкретний блок годин, тож без плану її нема на що спирати.
+          </p>
+        }
         <div class="card">
           <table class="wv-table">
             <thead>
@@ -190,12 +274,19 @@
                 <th>Кафедра</th>
                 <th>Формат</th>
                 <th>Академічні групи</th>
+                @if (isElectiveGroup()) { <th>Вибіркова дисципліна</th> }
+                <th></th>
               </tr>
             </thead>
             <tbody>
               @for (d of deliveries(); track d.id) {
                 <tr>
-                  <td>{{ d.specialtyName }}</td>
+                  <td>
+                    {{ d.specialtyName }}
+                    @if (d.viaUmbrella) {
+                      <div class="muted cp-via">у складі: {{ d.viaUmbrella }}</div>
+                    }
+                  </td>
                   <td>{{ d.semester }}</td>
                   <td>{{ hourTypeLabel(d.hourType) }}</td>
                   <td class="num">{{ fmtNumber(d.hours) }}</td>
@@ -206,13 +297,111 @@
                   </td>
                   <td>{{ teachingFormatLabel(d.teachingFormat) }}@if (d.lecturerCount > 1) { &middot; {{ d.lecturerCount }} викл.}</td>
                   <td>{{ d.groupNames || '&mdash;' }}</td>
+                  @if (isElectiveGroup()) {
+                    <td>
+                      @if (d.electiveCourseId) {
+                        <a [routerLink]="['/course', d.electiveCourseId]">{{ d.electiveLabel }}</a>
+                      } @else { <span class="muted">не обрано</span> }
+                    </td>
+                  }
+                  <td class="row-actions">
+                    @if (canModifyDelivery(d)) {
+                      <button type="button" class="ghost" (click)="openWciEdit(d)">Редагувати</button>
+                      <button type="button" class="ghost danger" (click)="askRemoveWci(d)">Видалити</button>
+                    }
+                  </td>
                 </tr>
               } @empty {
-                <tr><td colspan="7" class="muted">Дисципліну ще не закріплено за жодною кафедрою.</td></tr>
+                <tr><td [attr.colspan]="isElectiveGroup() ? 9 : 8" class="muted">Дисципліну ще не закріплено за жодною кафедрою.</td></tr>
               }
             </tbody>
           </table>
         </div>
+      }
+
+      <!-- ── Timetable entries ── -->
+      @case ('timetable') {
+        <div class="page-header">
+          <div>
+            <h2>Розклад занять</h2>
+            @let wt = workloadTotals();
+            <p class="muted">{{ wt.scheduled }} занять за {{ wt.workloads }} навантаженнями</p>
+          </div>
+        </div>
+
+        @if (entryError()) { <p class="error">{{ entryError() }}</p> }
+
+        <p class="muted cp-hint">
+          Заняття цієї дисципліни, згруповані за навантаженнями. Пари пропонуються з того розкладу
+          дзвінків, який задано навантаженню, а аудиторії &mdash; з тих, де це заняття дозволено
+          проводити. Автоматичне формування розкладу залишається на сторінці факультету: воно
+          працює на весь факультет одразу.
+        </p>
+
+        @for (w of workloadCards(); track w.id) {
+          <div class="card wci-item-card">
+            <div class="wci-item-header">
+              <strong>{{ w.specialtyName }} &middot; {{ w.semester }} сем. &middot; {{ hourTypeLabel(w.hourType) }}</strong>
+              <span>{{ w.lecturerNames || 'викладача не призначено' }}</span>
+              <span>{{ w.groupNames || w.combinedGroupNames || '—' }}</span>
+              <span class="badge">{{ w.startTimeSetName }}</span>
+              @let expected = expectedClasses(w);
+              @if (expected) {
+                <span [class.wv-unassigned]="w.entries.length !== expected">
+                  {{ w.entries.length }} з {{ expected }} занять
+                </span>
+              }
+              @if (canModifyWorkload(w)) {
+                <button type="button" (click)="openEntryCreate(w)">+ Заняття</button>
+              }
+            </div>
+
+            <table class="wv-table">
+              <thead>
+                <tr>
+                  <th>День</th>
+                  <th>Пара</th>
+                  <th>Тиждень</th>
+                  <th>Аудиторія</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (e of w.entries; track e.id) {
+                  <tr>
+                    <td>{{ dayLabel(e.dayOfWeek) }}</td>
+                    <td>
+                      @if (e.classStartTime) {
+                        {{ e.classStartTime.ordinal }} пара &middot; {{ e.classStartTime.startTime }}
+                      } @else { &mdash; }
+                    </td>
+                    <td>{{ weekParityLabel(e.weekParity) }}</td>
+                    <td>
+                      @if (e.room) {
+                        <a [routerLink]="['/room', e.room.id]">{{ e.room.number }}</a>
+                      } @else { &mdash; }
+                    </td>
+                    <td class="row-actions">
+                      @if (canModifyWorkload(w)) {
+                        <button type="button" class="ghost" (click)="openEntryEdit(w, e)">Редагувати</button>
+                        <button type="button" class="ghost danger" (click)="askRemoveEntry(e)">Видалити</button>
+                      }
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr><td colspan="5" class="muted">Жодного заняття ще не поставлено в розклад.</td></tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @empty {
+          <div class="card">
+            <p class="muted">
+              Навантаження за цією дисципліною ще не сформовано &mdash; спершу створіть його на
+              вкладці «Навантаження викладачів».
+            </p>
+          </div>
+        }
       }
 
       <!-- ── Workloads ── -->
@@ -220,9 +409,22 @@
         <div class="page-header">
           <div>
             <h2>Навантаження викладачів</h2>
-            <p class="muted">{{ s.lecturers }} викладач(ів) &middot; {{ s.scheduledClasses }} занять у розкладі</p>
+            @let wt = workloadTotals();
+            <p class="muted">
+              {{ wt.workloads }} навантаж. &middot; {{ wt.lecturers }} викладач(ів) &middot;
+              {{ wt.scheduled }} занять у розкладі
+              @if (wt.unassigned) { &middot; <span class="wv-unassigned">{{ wt.unassigned }} без викладача</span> }
+            </p>
           </div>
         </div>
+        @if (workloadError()) { <p class="error">{{ workloadError() }}</p> }
+
+        <p class="muted cp-hint">
+          Кожен рядок &mdash; одне навантаження: хто веде заняття, для яких груп, за яким розкладом
+          дзвінків і в яких аудиторіях їх можна проводити. Позиції РНП, за якими навантаження ще
+          немає, показано нижче окремо.
+        </p>
+
         <div class="card">
           <table class="wv-table">
             <thead>
@@ -232,26 +434,85 @@
                 <th>Вид роботи</th>
                 <th>Кафедра</th>
                 <th>Викладачі</th>
-                <th class="num">Позицій навантаження</th>
-                <th class="num">Занять у розкладі</th>
+                <th>Групи</th>
+                <th>Дзвінки</th>
+                <th>Аудиторії</th>
+                <th class="num">Занять</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (w of workloadCards(); track w.id) {
+                <tr [class.wv-gap]="!w.lecturerNames">
+                  <td>{{ w.specialtyName }}</td>
+                  <td>{{ w.semester }}</td>
+                  <td>{{ hourTypeShort(w.hourType) }}</td>
+                  <td>
+                    @if (w.departmentId) {
+                      <a [routerLink]="['/department', w.departmentId]">{{ w.departmentName }}</a>
+                    } @else { &mdash; }
+                  </td>
+                  <td>
+                    @if (w.lecturerNames) { {{ w.lecturerNames }} }
+                    @else { <span class="wv-unassigned">викладача не призначено</span> }
+                  </td>
+                  <td>{{ w.groupNames || w.combinedGroupNames || '&mdash;' }}</td>
+                  <td class="cell-info">{{ w.startTimeSetName }}</td>
+                  <td class="cell-info">{{ w.roomLabel }}</td>
+                  <td class="num">{{ w.scheduledClasses }}</td>
+                  <td class="row-actions">
+                    @if (canModifyWorkload(w)) {
+                      <button type="button" class="ghost" (click)="openWorkloadEdit(w)">Редагувати</button>
+                      <button type="button" class="ghost danger" (click)="askRemoveWorkload(w)">Видалити</button>
+                    }
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="10" class="muted">Навантаження за цією дисципліною ще не сформовано.</td></tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="page-header cp-subheader">
+          <div>
+            <h3>Позиції РНП</h3>
+            <p class="muted">{{ deliveries().length }} позицій &mdash; кожній можна додати навантаження</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <table class="wv-table">
+            <thead>
+              <tr>
+                <th>Спеціальність</th>
+                <th>Сем.</th>
+                <th>Вид роботи</th>
+                <th>Кафедра</th>
+                <th class="num">Навантажень</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               @for (d of deliveries(); track d.id) {
-                <tr [class.wv-gap]="!d.lecturerNames">
+                <tr [class.wv-gap]="!d.workloadCount">
                   <td>{{ d.specialtyName }}</td>
                   <td>{{ d.semester }}</td>
                   <td>{{ hourTypeShort(d.hourType) }}</td>
                   <td>{{ d.departmentName }}</td>
-                  <td>
-                    @if (d.lecturerNames) { {{ d.lecturerNames }} }
-                    @else { <span class="wv-unassigned">викладача не призначено</span> }
-                  </td>
                   <td class="num">{{ d.workloadCount }}</td>
-                  <td class="num">{{ d.scheduledClasses }}</td>
+                  <td class="row-actions">
+                    @if (d.merged) {
+                      <span class="muted">об&rsquo;єднана позиція</span>
+                    } @else if (d.teachingFormat === 'INDIVIDUALLY') {
+                      <span class="muted">лише на сторінці кафедри</span>
+                    } @else if (canModifyDelivery(d)) {
+                      <button type="button" class="ghost" (click)="openWorkloadCreate(d)">+ Навантаження</button>
+                    }
+                  </td>
                 </tr>
               } @empty {
-                <tr><td colspan="7" class="muted">Навантаження за цією дисципліною ще не сформовано.</td></tr>
+                <tr><td colspan="6" class="muted">Дисципліну ще не закріплено за жодною кафедрою.</td></tr>
               }
             </tbody>
           </table>
@@ -314,6 +575,445 @@
   </div>
 }
 
+<!-- ── Child elective modal ───────────────────────────────────────────────── -->
+
+@if (showChildForm()) {
+  <div class="modal-backdrop" (click)="closeChildForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ childEditingId() ? 'Редагування вибіркової дисципліни' : 'Нова вибіркова дисципліна' }}</h3>
+        <button type="button" class="close" (click)="closeChildForm()">&#x2715;</button>
+      </div>
+
+      @if (childError()) { <p class="error">{{ childError() }}</p> }
+
+      <label>
+        <span>Назва</span>
+        <input type="text" [(ngModel)]="childForm['name']" name="childName" />
+      </label>
+      <label>
+        <span>Тип</span>
+        <app-search-select [options]="childCourseTypeOptions" [clearable]="false"
+                           [(ngModel)]="childForm['courseType']"
+                           name="childType" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      @if (!childEditingId()) {
+        <label>
+          <span>Кафедра</span>
+          <app-search-select [options]="departmentOptions()" [(ngModel)]="childForm['departmentId']"
+                             name="childDept" placeholder="&mdash; не вказано &mdash;"
+                             [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Факультет</span>
+          <app-search-select [options]="facultyOptions()" [(ngModel)]="childForm['facultyId']"
+                             name="childFaculty" placeholder="&mdash; не вказано &mdash;"
+                             [ngModelOptions]="{ standalone: true }" />
+          <small class="muted cp-field-hint">
+            Успадковано від групи вибіркових. Саме за цими полями дисципліна знаходиться зі сторінок
+            кафедри та факультету.
+          </small>
+        </label>
+      }
+      <label>
+        <span>Теги</span>
+        <input type="text" [(ngModel)]="childForm['tags']" name="childTags" />
+        <small class="muted cp-field-hint">Через кому &mdash; наприклад «англійською».</small>
+      </label>
+
+      <div class="actions">
+        <button type="button" (click)="saveChild()">Зберегти</button>
+        <button type="button" class="ghost" (click)="closeChildForm()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Curriculum item modal ──────────────────────────────────────────────── -->
+
+@if (showItemForm()) {
+  <div class="modal-backdrop" (click)="closeItemForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ itemEditingId() ? 'Редагування позиції плану' : 'Нова позиція навчального плану' }}</h3>
+        <button type="button" class="close" (click)="closeItemForm()">&#x2715;</button>
+      </div>
+
+      @if (itemError()) { <p class="error">{{ itemError() }}</p> }
+
+      <label>
+        <span>Спеціальність</span>
+        <app-search-select [options]="itemSpecialtyOptions()" [(ngModel)]="itemForm['specialtyId']"
+                           name="itemSpecialty" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Семестр</span>
+        <input type="number" min="1" max="12" [(ngModel)]="itemForm['semester']" name="itemSemester" />
+      </label>
+      <label>
+        <span>Форма контролю</span>
+        <app-search-select [options]="controlFormOptions" [clearable]="false"
+                           [(ngModel)]="itemForm['controlForm']"
+                           name="itemControlForm" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Кредити ECTS</span>
+        <input type="number" min="0" step="1" [(ngModel)]="itemForm['ectsCredits']" name="itemEcts" />
+      </label>
+
+      <div class="cp-hours-grid">
+        <span class="cp-hours-title">Години за видами</span>
+        @for (row of itemHourRows(); track row.hourType) {
+          <label class="cp-hours-row">
+            <span>{{ hourTypeLabel(row.hourType) }}</span>
+            <input type="number" min="0" [ngModel]="row.hours"
+                   (ngModelChange)="setItemHours(row.hourType, $event)"
+                   [name]="'itemHours_' + row.hourType" [ngModelOptions]="{ standalone: true }" />
+          </label>
+        }
+        <small class="muted cp-field-hint">
+          Порожнє поле означає, що такого виду занять у цьому плані немає &mdash; збереження вилучає
+          рядок, а не записує нуль.
+        </small>
+      </div>
+
+      <div class="actions">
+        <button type="button" (click)="saveItem()">Зберегти</button>
+        <button type="button" class="ghost" (click)="closeItemForm()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Working curriculum item modal ──────────────────────────────────────── -->
+
+@if (showWciForm()) {
+  <div class="modal-backdrop" (click)="closeWciForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ wciEditingId() ? 'Редагування позиції РНП' : 'Нова позиція робочого навчального плану' }}</h3>
+        <button type="button" class="close" (click)="closeWciForm()">&#x2715;</button>
+      </div>
+
+      @if (wciError()) { <p class="error">{{ wciError() }}</p> }
+
+      <label>
+        <span>Позиція навчального плану</span>
+        <app-search-select [options]="hoursBlockOptions()" [ngModel]="wciForm['curriculumItemHoursId']"
+                           (ngModelChange)="onWciBlockChange($event)"
+                           name="wciBlock" [ngModelOptions]="{ standalone: true }" />
+        <small class="muted cp-field-hint">
+          Спеціальність, семестр і вид занять, які ця позиція передає кафедрі.
+        </small>
+      </label>
+      <label>
+        <span>Кафедра</span>
+        <app-search-select [options]="departmentOptions()" [(ngModel)]="wciForm['departmentId']"
+                           name="wciDept" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Формат викладання</span>
+        <app-search-select [options]="teachingFormatOptions" [clearable]="false"
+                           [(ngModel)]="wciForm['teachingFormat']"
+                           name="wciFormat" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Кількість викладачів</span>
+        <input type="number" min="1" [(ngModel)]="wciForm['lecturerCount']" name="wciLecturerCount" />
+      </label>
+      <label>
+        <span>Академічні групи</span>
+        <app-multi-select [options]="wciGroupOptions()" [(ngModel)]="wciGroupIds"
+                          name="wciGroups" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      @if (isElectiveGroup()) {
+        <label>
+          <span>Вибіркова дисципліна</span>
+          <app-search-select [options]="electiveOptions()" [(ngModel)]="wciForm['courseId']"
+                             name="wciElective" placeholder="&mdash; ще не обрано &mdash;"
+                             [ngModelOptions]="{ standalone: true }" />
+          <small class="muted cp-field-hint">
+            Яку саме дисципліну з цієї групи вивчатимуть обрані групи.
+          </small>
+        </label>
+      }
+
+      <div class="actions">
+        <button type="button" (click)="saveWci()">Зберегти</button>
+        <button type="button" class="ghost" (click)="closeWciForm()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Timetable entry modal ──────────────────────────────────────────────── -->
+
+@if (showEntryForm()) {
+  <div class="modal-backdrop" (click)="closeEntryForm()">
+    <div class="modal modal-narrow" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ entryEditingId() ? 'Редагування заняття' : 'Нове заняття' }}</h3>
+        <button type="button" class="close" (click)="closeEntryForm()">&#x2715;</button>
+      </div>
+
+      @if (entryError()) { <p class="error">{{ entryError() }}</p> }
+
+      <label>
+        <span>День тижня</span>
+        <app-search-select [options]="DAY_OF_WEEK_OPTIONS" [clearable]="false"
+                           [(ngModel)]="entryForm['dayOfWeek']"
+                           name="entryDay" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Пара</span>
+        <app-search-select [options]="entryTimeOptions()" [clearable]="false"
+                           [(ngModel)]="entryForm['classStartTimeId']"
+                           name="entryTime" [ngModelOptions]="{ standalone: true }" />
+        @if (entryTimeOutOfSet()) {
+          <small class="error cp-field-hint">
+            Поточна пара не належить до розкладу дзвінків цього навантаження &mdash; ймовірно, його
+            змінили після того, як заняття поставили. Оберіть пару зі списку.
+          </small>
+        } @else {
+          <small class="muted cp-field-hint">
+            З розкладу дзвінків, заданого цьому навантаженню.
+          </small>
+        }
+      </label>
+      <label>
+        <span>Тиждень</span>
+        <app-search-select [options]="WEEK_PARITY_OPTIONS" [clearable]="false"
+                           [(ngModel)]="entryForm['weekParity']"
+                           name="entryParity" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Аудиторія</span>
+        <app-search-select [options]="entryRoomOptions()" [clearable]="false"
+                           [(ngModel)]="entryForm['roomId']"
+                           name="entryRoom" [ngModelOptions]="{ standalone: true }" />
+        <small class="muted cp-field-hint">
+          @if (entryRoomsRestricted()) {
+            Лише аудиторії, у яких дозволено проводити це заняття.
+          } @else {
+            Обмежень не задано &mdash; показано аудиторії факультету.
+          }
+        </small>
+      </label>
+
+      <p class="muted cp-field-hint">
+        Перед збереженням перевіряється, чи вільні в цей час аудиторія, викладачі та групи.
+      </p>
+
+      <div class="actions">
+        <button type="button" [disabled]="entryChecking()" (click)="saveEntry()">
+          {{ entryChecking() ? 'Перевірка…' : 'Зберегти' }}
+        </button>
+        <button type="button" class="ghost" (click)="closeEntryForm()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Timetable entry delete confirmation ────────────────────────────────── -->
+
+@if (pendingEntryDelete(); as entry) {
+  <div class="modal-backdrop" (click)="cancelRemoveEntry()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення заняття</h3>
+        <button type="button" class="close" (click)="cancelRemoveEntry()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Прибрати заняття з розкладу?<br>
+        <strong>{{ entryLabel(entry) }}</strong><br>
+        <span class="muted">{{ weekParityLabel(entry.weekParity) }}</span>
+      </p>
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmRemoveEntry()">Так, прибрати</button>
+        <button type="button" class="ghost" (click)="cancelRemoveEntry()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Workload modal ─────────────────────────────────────────────────────── -->
+
+@if (showWorkloadForm()) {
+  <div class="modal-backdrop" (click)="closeWorkloadForm()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>{{ workloadEditingId() ? 'Редагування навантаження' : 'Нове навантаження' }}</h3>
+        <button type="button" class="close" (click)="closeWorkloadForm()">&#x2715;</button>
+      </div>
+
+      @if (workloadError()) { <p class="error">{{ workloadError() }}</p> }
+
+      @if (isIndividualWorkload()) {
+        <p class="muted cp-field-hint">
+          Індивідуальна робота: керівників і тривалість визначає розподіл студентів, який
+          редагується на сторінці кафедри. Тут їх змінити не можна, щоб списки не розійшлися.
+        </p>
+      }
+
+      @if (!isIndividualWorkload()) {
+        <label>
+          <span>Викладачі</span>
+          <app-multi-select [options]="lecturerOptions()" [(ngModel)]="wlLecturerIds"
+                            name="wlLecturers" [ngModelOptions]="{ standalone: true }" />
+          <small class="muted cp-field-hint">Викладачі кафедри «{{ activeWorkloadDepartment() }}».</small>
+        </label>
+        <label>
+          <span>Академічні групи</span>
+          <app-multi-select [options]="workloadGroupOptions()" [(ngModel)]="wlGroupIds"
+                            name="wlGroups" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        @if (canUseCombinedGroups()) {
+          <label>
+            <span>Об&rsquo;єднані групи</span>
+            <app-multi-select [options]="combinedGroupOptions()" [(ngModel)]="wlCombinedGroupIds"
+                              name="wlCombinedGroups" [ngModelOptions]="{ standalone: true }" />
+            <small class="muted cp-field-hint">
+              Застосовуються лише до позицій, що викладаються окремо для підгруп.
+            </small>
+          </label>
+        }
+        <label>
+          <span>Тривалість заняття (акад. годин)</span>
+          <input type="number" min="1" max="4" [(ngModel)]="workloadForm['durationHours']"
+                 name="wlDuration" />
+        </label>
+      }
+
+      <label>
+        <span>Розклад дзвінків</span>
+        <app-search-select [options]="startTimeSetOptions()" [clearable]="false"
+                           [(ngModel)]="workloadForm['classStartTimeSetId']"
+                           name="wlStartTimeSet" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Аудиторії</span>
+        <app-multi-select [options]="workloadRoomOptions()" [(ngModel)]="wlRoomIds"
+                          name="wlRooms" [ngModelOptions]="{ standalone: true }" />
+      </label>
+      <label>
+        <span>Групи аудиторій</span>
+        <app-multi-select [options]="workloadRoomGroupOptions()" [(ngModel)]="wlRoomGroupIds"
+                          name="wlRoomGroups" [ngModelOptions]="{ standalone: true }" />
+        <small class="muted cp-field-hint">
+          Де можуть проходити заняття. Дозволені аудиторії &mdash; це обрані аудиторії разом з
+          аудиторіями обраних груп; якщо не обрано нічого, заняття можна ставити в будь-яку аудиторію.
+        </small>
+      </label>
+
+      <div class="actions">
+        <button type="button" (click)="saveWorkload()">Зберегти</button>
+        <button type="button" class="ghost" (click)="closeWorkloadForm()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Workload delete confirmation ───────────────────────────────────────── -->
+
+@if (pendingWorkloadDelete(); as card) {
+  <div class="modal-backdrop" (click)="cancelRemoveWorkload()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення навантаження</h3>
+        <button type="button" class="close" (click)="cancelRemoveWorkload()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Видалити навантаження<br>
+        <strong>{{ card.specialtyName }}, {{ card.semester }} сем., {{ hourTypeLabel(card.hourType) }}</strong><br>
+        @if (card.lecturerNames) { викладач(і): {{ card.lecturerNames }} }
+        @else { <span class="muted">без призначених викладачів</span> }
+      </p>
+
+      <p class="confirm-text error">
+        Разом з ним буде видалено:
+        @if (card.scheduledClasses) { {{ card.scheduledClasses }} занять із розкладу, }
+        розподіл студентів між керівниками та перелік кандидатів на це навантаження
+        (використовується автоматичним формуванням).
+      </p>
+      <p class="confirm-text"><span class="muted">Цю дію неможливо скасувати.</span></p>
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmRemoveWorkload()">Так, видалити</button>
+        <button type="button" class="ghost" (click)="cancelRemoveWorkload()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Curriculum item delete confirmation ────────────────────────────────── -->
+
+@if (pendingItemDelete(); as item) {
+  @let cascade = itemCascade(item);
+  <div class="modal-backdrop" (click)="cancelRemoveItem()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Вилучення з навчального плану</h3>
+        <button type="button" class="close" (click)="cancelRemoveItem()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Вилучити дисципліну з плану спеціальності<br>
+        <strong>{{ item.specialty?.name ?? '&mdash;' }}</strong>, {{ item.semester }} семестр?
+      </p>
+
+      @if (cascade.working || cascade.workloads || cascade.entries) {
+        <p class="confirm-text error">
+          Разом з нею буде видалено:
+          {{ cascade.working }} позиц. РНП,
+          {{ cascade.workloads }} навантаж.,
+          {{ cascade.entries }} занять у розкладі.
+        </p>
+      }
+      <p class="confirm-text"><span class="muted">Цю дію неможливо скасувати.</span></p>
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmRemoveItem()">Так, вилучити</button>
+        <button type="button" class="ghost" (click)="cancelRemoveItem()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Working curriculum item delete confirmation ────────────────────────── -->
+
+@if (pendingWciDelete(); as row) {
+  <div class="modal-backdrop" (click)="cancelRemoveWci()">
+    <div class="modal modal-confirm" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Видалення позиції РНП</h3>
+        <button type="button" class="close" (click)="cancelRemoveWci()">&#x2715;</button>
+      </div>
+
+      <p class="confirm-text">
+        Видалити позицію<br>
+        <strong>{{ row.specialtyName }}, {{ row.semester }} сем., {{ hourTypeLabel(row.hourType) }}</strong><br>
+        закріплену за кафедрою «{{ row.departmentName }}»?
+      </p>
+
+      @if (row.workloadCount || row.scheduledClasses) {
+        <p class="confirm-text error">
+          Разом з нею буде видалено: {{ row.workloadCount }} навантаж.,
+          {{ row.scheduledClasses }} занять у розкладі.
+        </p>
+      }
+      <p class="confirm-text"><span class="muted">Цю дію неможливо скасувати.</span></p>
+
+      <div class="actions">
+        <button type="button" class="danger" (click)="confirmRemoveWci()">Так, видалити</button>
+        <button type="button" class="ghost" (click)="cancelRemoveWci()">Скасувати</button>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ── Delete confirmation modal ──────────────────────────────────────────── -->
 
 @if (showDeleteConfirm()) {
@@ -326,7 +1026,7 @@
 
       <p class="confirm-text">
         Ви впевнені, що хочете видалити дисципліну<br>
-        <strong>{{ c?.name }}</strong>?<br>
+        <strong>{{ courseLabel(c?.name, c?.tags) }}</strong>?<br>
         <span class="muted">Цю дію неможливо скасувати.</span>
       </p>
 

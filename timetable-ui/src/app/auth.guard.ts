@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn, Router, UrlTree } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 import { AuthService } from './auth.service';
 
@@ -11,8 +11,11 @@ export const authGuard: CanActivateFn = (route, state) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
+  const toLogin = (): UrlTree =>
+    router.createUrlTree(['/login'], { queryParams: { redirectTo: state.url } });
+
   if (!auth.isAuthenticated()) {
-    return router.createUrlTree(['/login'], { queryParams: { redirectTo: state.url } });
+    return toLogin();
   }
 
   const decide = () =>
@@ -24,8 +27,23 @@ export const authGuard: CanActivateFn = (route, state) => {
     return decide();
   }
   return auth.refreshMe().pipe(
-    map(() => decide()),
-    catchError(() => of(router.createUrlTree(['/login'], { queryParams: { redirectTo: state.url } })))
+    map((user) => {
+      // `me` answering null is not "an anonymous visitor" here — we hold a token and just sent it,
+      // so the only way to be nobody is for that token to have stopped working. Reading it as
+      // success is what used to let an expired session walk straight into the app: `decide()` saw
+      // no `mustChangePassword` on a null user and returned true.
+      if (user === null) {
+        // `authInterceptor` may already have recorded a more precise reason from the response that
+        // just came back (TOKEN_EXPIRED, ACCOUNT_DISABLED); don't overwrite it with a guess.
+        auth.clearSession(auth.sessionEndReason() ?? 'INVALID_TOKEN');
+        return toLogin();
+      }
+      return decide();
+    }),
+    catchError(() => {
+      auth.clearSession(auth.sessionEndReason() ?? 'INVALID_TOKEN');
+      return of(toLogin());
+    })
   );
 };
 

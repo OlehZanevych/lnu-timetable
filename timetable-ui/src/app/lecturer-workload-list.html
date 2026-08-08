@@ -115,7 +115,7 @@
       <div class="wci-item-header">
         <strong>
           @if (combinedCourseRef(c); as cr) {
-            <a class="ent-link" [routerLink]="['/course', cr.id]">{{ cr.name }}</a>
+            <a class="ent-link" [routerLink]="['/course', cr.id]">{{ cr.label }}</a>
           }{{ combinedSummaryTail(c) }}
         </strong>
       </div>
@@ -136,7 +136,6 @@
                 <th>Академічні групи</th>
                 <th>Тривалість</th>
                 <th>Дзвінки</th>
-                <th>Аудиторії</th>
                 <th></th>
               </tr>
             </thead>
@@ -159,20 +158,13 @@
                   <td>{{ academicGroupNames(w.academicGroups) }}</td>
                   <td>{{ w.durationHours }} год.</td>
                   <td class="cell-info">{{ startTimeSetName(w) }}</td>
-                  <td class="cell-info" [title]="roomRestrictionLabel(w)">
-                    @for (r of roomRefs(w); track $index) {
-                      @if (r.roomId) {
-                        <a class="ent-link" [routerLink]="['/room', r.roomId]">{{ r.label }}</a>
-                      } @else { {{ r.label }} }@if (!$last) { , }
-                    } @empty { будь-яка }
-                  </td>
                   <td class="row-actions">
                     <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
                     <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="6" class="muted">Навантаження ще немає.</td></tr>
+                <tr><td colspan="5" class="muted">Навантаження ще немає.</td></tr>
               }
             </tbody>
           </table>
@@ -189,7 +181,7 @@
     <div class="wci-item-header">
       <strong>Семестр {{ group.semester }}</strong>
       <span>Спеціальність: {{ group.specialty.name }}</span>
-      <span>Дисципліна: <a class="ent-link" [routerLink]="['/course', group.course.id]">{{ group.course.name }}</a></span>
+      <span>Дисципліна: <a class="ent-link" [routerLink]="['/course', group.course.id]">{{ courseLabel(group.course.name, group.course.tags) }}</a></span>
       <span>Форма контролю: {{ controlFormLabel(group.controlForm) }}</span>
       <span>ECTS: {{ group.ectsCredits ?? '&mdash;' }}</span>
     </div>
@@ -210,7 +202,7 @@
                 <span>
                   Вибіркова дисципліна:
                   @if (wci.course) {
-                    <a class="ent-link" [routerLink]="['/course', wci.course.id]">{{ wci.course.name }}</a>
+                    <a class="ent-link" [routerLink]="['/course', wci.course.id]">{{ courseLabel(wci.course.name, wci.course.tags) }}</a>
                   } @else { &mdash; }
                 </span>
               }
@@ -234,7 +226,6 @@
                     <th>Тривалість</th>
                   }
                   <th>Дзвінки</th>
-                  <th>Аудиторії</th>
                   <th></th>
                 </tr>
               </thead>
@@ -289,13 +280,6 @@
                       <td>{{ w.durationHours }} год.</td>
                     }
                     <td class="cell-info">{{ startTimeSetName(w) }}</td>
-                    <td class="cell-info" [title]="roomRestrictionLabel(w)">
-                      @for (r of roomRefs(w); track $index) {
-                        @if (r.roomId) {
-                          <a class="ent-link" [routerLink]="['/room', r.roomId]">{{ r.label }}</a>
-                        } @else { {{ r.label }} }@if (!$last) { , }
-                      } @empty { будь-яка }
-                    </td>
                     <td class="row-actions">
                       <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
                       <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
@@ -395,22 +379,6 @@
             для фізичного виховання. За замовчуванням обрано типовий набір.
           </small>
         </label>
-        <label>
-          <span>Аудиторії</span>
-          <app-multi-select [options]="roomOptions()" [(ngModel)]="formRoomIds"
-                            name="roomIds" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        <label>
-          <span>Групи аудиторій</span>
-          <app-multi-select [options]="roomGroupOptions()" [(ngModel)]="formRoomGroupIds"
-                            name="roomGroupIds" [ngModelOptions]="{ standalone: true }" />
-          <small class="muted lw-field-hint">
-            Де можуть проходити заняття. Дозволені аудиторії &mdash; це обрані аудиторії разом з
-            аудиторіями обраних груп. Якщо не обрано нічого, заняття можна ставити в будь-яку
-            аудиторію.
-          </small>
-        </label>
-
         <div class="lw-pairs lw-candidates">
           <div class="lw-pairs-header">
             <span>Кандидати на викладання</span>

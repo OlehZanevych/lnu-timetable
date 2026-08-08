@@ -1,7 +1,7 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { AuthService } from './auth.service';
+import { AuthService, SESSION_END_MESSAGES } from './auth.service';
 
 @Component({
   selector: 'app-login-page',
@@ -18,6 +18,16 @@ export class LoginPage {
   password = '';
   error = signal('');
   submitting = signal(false);
+
+  /**
+   * Why the user is looking at this form when they did not ask to be — an expired session, a token
+   * the service refused, an account deactivated mid-session. Empty when they arrived here by
+   * signing out or by opening the app cold, which needs no explanation.
+   */
+  sessionNotice = computed(() => {
+    const reason = this.auth.sessionEndReason();
+    return reason ? SESSION_END_MESSAGES[reason] : '';
+  });
 
   submit() {
     this.error.set('');

@@ -110,9 +110,12 @@ src/app/
 ├── time-select.ts            # TimeSelect: hour + minute dropdown pair bound to one "HH:mm" string
 ├── dept-faculty-select.ts    # DeptFacultySelect: faculty-filtered department picker
 ├── sort.ts                   # compareUk(): the one Ukrainian-alphabet string comparator
+├── course-label.ts           # courseLabel(): a discipline's name with its course_tags in
+│                             #   parentheses — the one rule, used by every screen, by no sheet
 ├── auth.service.ts           # AuthService: session state (JWT, CurrentUser), login/logout,
 │                             #   changePassword, canModifyIds() permission lookups — see Authentication
-├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests
+├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests,
+│                             #   and ends the session when a response says that token is dead
 ├── auth.guard.ts             # authGuard (must be signed in + password changed), adminGuard
 ├── resource-type.ts          # toResourceType(): entity name → backend permission resource type
 ├── login-page.ts/.html       # "/login"
@@ -186,6 +189,8 @@ src/app/
 ├── workload-generator.ts             # the automatic assignment algorithm — pure, no Angular
 ├── lecturer-workload-list.ts/.html   # department tab: assign lecturers/groups/duration to each
 │                                     #   working (or combined) curriculum item — "Навантаження викладачів"
+├── room-assignment-list.ts/.html     # faculty tab: where each class may be held —
+│                                     #   "Призначення аудиторій" (see below)
 ├── faculty-timetable-list.ts/.html   # faculty tab: auto-generates schedulable blocks from
 │                                     #   workload hours and assigns day/start-time/room —
 │                                     #   "Формування розкладу" (see below)
@@ -207,7 +212,7 @@ took its place in the sidebar.
 
 ### The pure modules
 
-Thirteen files carry the logic that is not UI. All of them are free of Angular, GraphQL and I/O: they
+Fourteen files carry the logic that is not UI. All of them are free of Angular, GraphQL and I/O: they
 take plain objects and return plain objects, so each can be unit-tested (or run under Node) on its
 own, and the components' only job is to map data in and apply results out. This is the single most
 load-bearing convention in the app — every algorithm here is hand-written, and none of them is
@@ -228,10 +233,83 @@ allowed to reach for a service.
 | `workload-report.ts` | the printable «Розрахунок навчального навантаження» sheet | [WORKLOAD-PDF.md](./WORKLOAD-PDF.md) |
 | `pdf-writer.ts` | a PDF, from scratch, including the TrueType subsetting | *Printable workload calculation*, below |
 | `sort.ts` | `compareUk` — the one Ukrainian-alphabet comparator | *Ukrainian sorting*, below |
+| `course-label.ts` | `courseLabel` — a discipline's name with its `course_tags` in parentheses | *Naming a discipline*, below |
 
 Only one of them needs a host that is not a component: `timetable-solver.worker.ts` runs the solver
 on its own thread. `workload-generator.ts` does not, because it is three greedy passes over a
 department rather than a search with a time budget — it returns before a frame is missed.
+
+### Option lists are declared once
+
+Several screens offer the same choice, and a list restated per component drifts. Anything of that
+kind lives in `entities.ts`: `HOUR_TYPE_OPTIONS`, `DAY_OF_WEEK_OPTIONS`, `WEEK_PARITY_OPTIONS`,
+`CONTROL_FORM_OPTIONS`, `TEACHING_FORMAT_OPTIONS`, `COURSE_TYPE_OPTIONS`, `STUDY_FORM_OPTIONS` — and
+**`SEMESTER_PARITY_OPTIONS`**, the two halves of the academic year, which had accumulated five
+near-identical copies (the timetable view, «Мій кабінет», the schedule builder, «Призначення
+аудиторій» and the `current_semester_parity` settings editor). Two of the five spelled the labels
+«Перший (непарний) семестр» and three «Перший (непарний)»; since every one of those controls already
+carries its own «Семестр» caption, the short form won.
+
+Ordering is part of the declaration, not a separate constant: `HOUR_TYPE_OPTIONS` is in the same
+order as the `hour_type` enum in `schema.sql`, and screens that need to sort by hour type derive the
+rank from that list rather than restating it.
+
+### Naming a discipline (`course-label.ts`)
+
+A course's name does not identify it. «Іноземна мова» taught in English and «Іноземна мова» taught
+in German are two `courses` rows, two lines of the plan and two lecturers' workloads, and a list
+showing only the name shows them as the same thing twice. `course_tags` is what tells them apart, so
+**everywhere the UI names a course it renders `courseLabel(name, tags)`** — `Іноземна мова
+(англійською)`, or the bare name when the course has no tags, parentheses omitted rather than left
+empty.
+
+That is one rule applied in about twenty places, which is why it is a pure module rather than a
+method: three components had already grown their own private copy of it before this file existed.
+
+**The four PDF sheets deliberately keep printing the bare name.** Their columns are sized by their
+own layout rules and the faculty timetable is read as approved paper; a tag appearing there is a
+document change, not a UI change. Four modules feed both a screen and a sheet, and each of them
+therefore carries the label in a field *beside* the raw name rather than in place of it:
+
+| Module | Printed by the sheet | Rendered on screen |
+|---|---|---|
+| `working-curriculum-plan.ts` | `WorkingPlanRow.name` | `WorkingPlanRow.label` |
+| `workload-stats.ts` | `StatItem.courseName` | `StatItem.courseLabel` |
+| `timetable-grid.ts` | `GridEntry.courseName` | `GridEntry.courseLabel` |
+| `faculty-timetable-list.ts` | — | `Block.courseLabel` beside `Block.courseName` |
+
+`curriculum-plan.ts` is the exception that proves the rule: it has no tagged counterpart, because
+nothing renders a `PlanRow`'s discipline name — «Навчальні плани» builds its table from the raw
+curriculum items and labels them itself, and the summary above it shows only totals. Adding a field
+for symmetry that no template reads would be dead code.
+
+`faculty-timetable-list.ts` prints nothing at all, yet still splits the two. Its `sortBlocks`
+collates on the name, and folding tags in would let the tag text drive the ordering and split two
+same-named disciplines apart — which is the general reason the split is not only about PDFs.
+
+Two other things read the raw field and must keep doing so: the sorts (`compareUk` on a name, so
+ordering does not shuffle when a tag is added) and the distinct-discipline tallies — «Дисциплін» on
+a lecturer's page counts `courseName` values, `DepartmentLoad.courses` counts them per кафедра, and
+`LecturerStats.distinctCourses` counts `courseId`. Folding tags into those strings would quietly
+change reported figures.
+
+One deliberate hole: a `ComplianceCheck`'s `verdict` names the disciplines that fail a check, and
+that one string is both shown on the page and printed in the sheet's примітки — so it stays bare,
+and the warning card on «Робочі навчальні плани» names a discipline slightly more tersely than the
+table above it. Splitting the check in two to fix a parenthesis was not worth it.
+
+**Two screens are left out, because they already answer the question this rule exists to answer.**
+The generic «Дисципліни» table (`/e/course`) has a «Теги» column of its own, and the course page
+(`/course/:id`) prints its tags on the line under the heading — on the page *about* that course they
+have room to be a fact rather than a parenthesis. Both are read the other way round from every other
+screen: you arrive knowing which discipline you want. Every *other* course either of them names —
+the parent «Група вибіркових», the child electives, the course picker — is labelled the usual way.
+
+Leaving the generic table out is also what keeps `entities.ts` / `base-entity.ts` free of this
+entirely: the option loader there selects `id` plus one scalar, and teaching it to carry a nested tag
+list means a new metadata opt-in threaded through the selection, the dropdown label and the table
+cell — for the single Course foreign key that exists (`parentCourseId`). The bespoke duplicate of
+that same picker on the course page does the labelling instead.
 
 ### Generic CRUD tables (`entities.ts` / `BaseEntity`)
 
@@ -310,6 +388,24 @@ subclass rendered through the shared `entity-page.html` (table + modal form):
 export class CoursePage extends BaseEntity { meta = meta('Course'); }
 ```
 
+A host page narrows a table it does not own through four inputs. `filterValue` supplies
+`meta.filterParam` (the optional, user-facing sub-filter); `extraFilterParam`/`extraFilterValue` add
+a second, always-on argument for a scope the host always wants (courses scoped to the current
+faculty, whatever the department sub-filter says); and `presets` pre-fills the create form and hides
+those columns, which is what keeps a created row valid against constraints the form no longer shows.
+
+**`search` is the fifth, and it is the only one that does not reach the backend.** It narrows the
+rows already loaded, case-folded with the Ukrainian locale. That is not a shortcut: the connection is
+fetched once with `limit: 1000` and no paging, so within a scope every candidate row is already in
+the browser and a round trip per keystroke would be slower than the filter it replaces — and a
+`.filter` argument is an equality on a column, which is not what "find the discipline whose name
+contains this" means. What it matches is exactly what the table shows: every visible cell, rendered
+through the same `display()` the rows use, so a search finds the ref labels and tag text a reader can
+see and cannot match a column hidden by `presets`. The header reads «N запис(ів) · з M» while a
+search is active, and the empty row distinguishes "nothing matched «X»" from "no data yet" — a typo
+otherwise looks like an empty database. The faculty page's «Дисципліни» tab uses it beside the
+server-side кафедра filter.
+
 `entity-pages.ts` currently registers 13 such pages (`academicDegree`, `faculty`,
 `department`, `specialty`, `course`, `lecturer`, `student`, `academicGroup`,
 `room`, `roomGroup`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at
@@ -337,9 +433,11 @@ and composing purpose-built child-list components rather than going through `Bas
 - **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
   tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
   info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, academic groups,
-  combined groups (`CombinedGroupPage`), courses, schedule building (`FacultyTimetableList`,
-  see below) and — under the same "Розклад" group — "Обмеження груп" and "Обмеження аудиторій",
-  two instances of `TimetableConstraintList` (see below). Every list on this page is scoped to the
+  combined groups (`CombinedGroupPage`), courses, room assignment (`RoomAssignmentList`, see
+  below), "Обмеження груп" and "Обмеження аудиторій" (two instances of `TimetableConstraintList`,
+  see below), and schedule building (`FacultyTimetableList`, see below). The "Розклад" group is
+  ordered by the order the work happens in: state where each class may be held and when its groups
+  and rooms are unavailable, then generate a timetable that obeys all three, then read it. Every list on this page is scoped to the
   faculty, including the two that have no
   `faculty_id` of their own: "Академічні групи" passes `[facultyId]` alongside its optional
   specialty sub-filter (so clearing that sub-filter means "all specialties *of this faculty*",
@@ -535,10 +633,86 @@ groups) and
 «Навантаження викладачів» (the same positions with the lecturers actually carrying them, rows
 without one tinted).
 
-It needed one backend change: `curriculumItemConnection` gained a **`courseId` filter**. `Course` has
-no `curriculumItems` relation to walk — its `@OneToMany` fields are `childCourses` and `tags` — and a
-filter was narrower than a relation, which would have appeared on every `Course` selection in the
-schema.
+It now edits, too. «Навчальні плани» creates, edits and deletes the discipline's `curriculum_items`
+rows (their `hours` block included, as a nested list); «Робочі навчальні плани» does the same for the
+`working_curriculum_items` that hand those hours to a кафедра, including the academic groups and —
+when the discipline is an umbrella — the elective actually chosen. «Навантаження викладачів» edits
+the `lecturer_workloads` themselves: lecturers, groups, combined groups, duration, the grid of bells,
+and where the class may be held. An `ELECTIVE_GROUP` also gains a
+«Вибіркові дисципліни» section that lists, adds, renames and detaches its children. The point is to
+correct a discipline's whole chain from one page rather than walking specialty and department pages
+one at a time.
+
+Three details there are load-bearing. A nested-list row is sent **with the id it was loaded with**,
+because the framework reconciles by id — a row without one is an insert, and inserting a second
+ЛЕКЦІЇ row beside the existing one is rejected by `UNIQUE (curriculum_item_id, hour_type)` while the
+delete of the original has already been queued; `curriculum_item_hours` cascades to working items,
+workloads and timetable entries, so getting this wrong destroys data rather than erroring cleanly.
+«Відкріпити» clears `parent_course_id` rather than deleting, because `courses.parent_course_id` is
+`ON DELETE CASCADE` and an elective that groups have already chosen and timetabled must not vanish
+because someone reorganised a block — and that mutation echoes `name`/`courseType` back, both being
+`String!` on `CourseInputPayload`, since an input carrying only the field being cleared is rejected
+at coercion. Both destructive buttons state what they cascade to before doing it.
+
+Permissions are asked per row, not per page. A Course grant authorises everything here — both
+`CurriculumItem` and `WorkingCurriculumItem` name Course among their `@PermissionParent`s and the
+server ORs over the ancestor closure — but it is not the only thing that does: a гарант of one
+specialty may edit that specialty's plan positions without any right over the discipline itself, so
+the page also asks `canModifyIds` for the specialties and departments actually on screen.
+
+«Розклад занять» places this discipline's classes by hand: day, пара, week parity and room, per
+workload, through the same `createTimetableEntry` / `updateTimetableEntry` mutations «Формування
+розкладу» writes. The entries are read through `LecturerWorkload.timetableEntries`, so this tab
+needed no connection filter at all.
+
+Two rules the database explicitly does not enforce are kept here, because on this page they have no
+solver keeping them. The пара picker offers only the slots of the workload's own
+`class_start_time_set`, and the room picker only the union of `lecturer_workload_rooms` and the rooms
+of `lecturer_workload_room_groups` (naming nothing means no restriction, and the picker falls back to
+the faculty's rooms — the same fallback the generator uses). Both are re-checked on save, because a
+grid of bells changed after a class was placed leaves stored values that were legal when written.
+
+**Every save is checked for clashes first.** `timetable_entries` has no unique index — the database
+cannot tell a double-booking from a legitimate row — and «Формування розкладу» keeps that rule by
+handing the solver every competing class as a hard obstacle. Placing classes by hand has no such
+step, so the editor asks directly, through the connection's `roomIds` / `lecturerIds` /
+`academicGroupIds` filters: is this room, any of these lecturers, or any of these groups already busy
+in that slot? A WEEKLY class overlaps both halves of a fortnight, so it clashes with everything;
+NUMERATOR and DENOMINATOR pass each other. The card header also shows placed-versus-expected classes
+(`hours ÷ weeks × durationHours`, the arithmetic the generator uses) — reported, not enforced, since
+placing by hand has legitimate reasons to differ.
+
+The workload editor deliberately leaves two things alone. **`studentAssignments` is never sent** —
+a nested list absent from the input is untouched, and the student→supervisor distribution behind an
+INDIVIDUALLY position is the department page's to write; for the same reason an individual workload
+cannot be *created* here, since it would land with no lecturers, no groups and no pairings and be
+completable nowhere on this page. **The candidate pool is never touched**, so the automatic
+generator's input survives an edit made here.
+
+Two things it does write are shared with other screens, and both are worth knowing. **Room
+eligibility** (`lecturer_workload_rooms` / `lecturer_workload_room_groups`) is also written by the
+faculty's «Призначення аудиторій» tab; both send the lists in full, so the later save wins and
+neither merges — the faculty tab remains the place that answers "what has nobody assigned yet?"
+across a whole faculty. And **combined groups** are offered only for a `SEPARATELY` position,
+matching the department page, which force-clears them for every other format.
+
+A workload hangs off *exactly one* of a working item or a combined item
+(`lecturer_workloads_target_check`), so the tab walks both: a merged position's teaching is carried
+by its combined item, reached through the member's own `combinedWorkingCurriculumItems` relation
+rather than a second connection. A merged position therefore offers no «+ Навантаження» button —
+adding one there would create a second, parallel assignment beside the combined one, double-counting
+the lecturer's hours and double-booking the groups.
+
+It needed three backend changes. `curriculumItemConnection` gained a **`courseId` filter**: `Course`
+has no `curriculumItems` relation to walk — its `@OneToMany` fields are `childCourses` and `tags` —
+and a filter was narrower than a relation, which would have appeared on every `Course` selection in
+the schema. `courseConnection` gained **`parentCourseId`**, so a group's electives are a listable,
+creatable collection rather than a read-only relation. And `workingCurriculumItemConnection` gained a
+**`courseId`** relation filter that ORs the two senses in which a working item names a course: the
+discipline it delivers (its curriculum item's `course_id`, two joins away) and the elective actually
+chosen (its own `course_id`). Filtering on only the first would leave an elective's own page with an
+empty РНП tab — an elective sits in no curriculum of its own, the umbrella holds the plan position —
+and on only the second, every ordinary discipline's.
 
 Its «Інформація» tab also **edits and deletes the discipline**, on the pattern set out under
 [Editing and deleting from a drill-down page](#editing-and-deleting-from-a-drill-down-page) below.
@@ -608,11 +782,15 @@ named:
 | specialty → «Редагування планів» (`CurriculumEditor`) | discipline, on each course block's heading |
 | specialty → «Робочі навчальні плани» (`WorkingCurriculumView`) | discipline |
 | specialty → «Редагування робочих планів» (`WorkingCurriculumList`) | discipline, and the elective actually taught |
-| department → «Навантаження викладачів» (`LecturerWorkloadList`) | discipline (plain, elective and combined), every lecturer, every named аудиторія |
+| department → «Навантаження викладачів» (`LecturerWorkloadList`) | discipline (plain, elective and combined), every lecturer |
 | department → «Зведене навантаження» (`DepartmentWorkloadSummary`) | lecturer |
 | department → «Оцінка навантаження» (`LecturerWorkloadDetail`) | lecturer, and the discipline on every line |
+| faculty → «Призначення аудиторій» (`RoomAssignmentList`) | discipline |
 | faculty → «Формування розкладу» (`FacultyTimetableList`) | discipline, every lecturer |
 | the timetable grid (`TimetableView`, all five mounts) | discipline and аудиторія in every cell; the lecturer in the cell, or in the column header where the column *is* the lecturer |
+| department → «Об'єднані позиції РНП» (`CombinedWorkingCurriculumItemList`) | the proposal's discipline, and each member's |
+| `/lecturer/:id` → «Дисципліни та заняття» | discipline on every line |
+| `/me` → «Моє навантаження» and «Мій навчальний план» | discipline on every line |
 
 **The grid links its column headers too**, and that is not symmetry for its own sake: in
 `columnMode: 'lecturer'` — the department's «Розклад кафедри» — the cell deliberately omits the
@@ -704,7 +882,7 @@ the day and the class slot down the side and whatever is being compared across t
 
 | Where | `columnMode` | Scope passed | What it is |
 |---|---|---|---|
-| faculty → «Розклад факультету» | `group` | the faculty's academic groups | the timetable a faculty publishes |
+| faculty → «Розклад факультету» | `group` | the faculty's academic groups, narrowed by семестр / курс / спеціальність / група | the timetable a faculty publishes |
 | department → «Розклад кафедри» | `lecturer` | the department's lecturers | the lecturer timetable a department works from |
 | `/lecturer/:id` → «Розклад» | `single` | that lecturer | one person's classes |
 | `/room/:id` → «Розклад» | `single` | that room | the room timetable |
@@ -720,16 +898,47 @@ An entry appears **once per column it belongs to**: a lecture given to three gro
 cells of a group-column grid. That is what makes a group's column readable top to bottom, and it is
 how the published sheets look.
 
-**The semester filter is on by default, and it matters.** `timetable_entries` carry no semester of
+**The semester filter is not optional, and it matters.** `timetable_entries` carry no semester of
 their own — it lives two joins away on the curriculum item — so an unfiltered grid overlays autumn
-and spring, and rooms appear double-booked when they are not. Each view passes the backend's
-`semesterParity` relation filter, defaulting to the `current_semester_parity` setting. The read-only
+and spring, and rooms appear double-booked when they are not. The picker therefore offers **one
+half-year or the other and nothing else**: there is no "весь навчальний рік", because the grid it
+produced was not a view of anyone's week — it was two weeks drawn on top of each other. Each view
+passes the backend's `semesterParity` relation filter, seeded from the `current_semester_parity`
+setting and falling back to `ODD` when that setting cannot be read, so the value is never empty and
+the picker always names the half-year on screen. Two consequences of "never empty" are enforced
+rather than assumed: the picker passes `[clearable]="false"`, because `SearchSelect`'s ✕ emits `''`
+and the backend's parity filter matches no row with it — clearing would empty the timetable and make
+it look like the data was missing — and the seed is applied in an `effect` watching
+`GlobalPropertiesService.loaded()`, not in a `queueMicrotask`. `ensureLoaded()` is an HTTP round
+trip, so a microtask runs before the response and read `null` every time: the stored `EVEN` was
+silently discarded on any direct load of a timetable page, and the sheet exported for spring was
+headed «І семестр». `TimetableView` also holds its first query until that value is known, so it
+fetches the right half-year once instead of the wrong one twice. The read-only
 `/timetable` page, which had no such filter and no scope of any kind, has been removed rather than
 fixed — `TimetableView` was already the better version of it.
 
-**One input decides who owns that filter.** `externalSemesterParity` is `null` on the four pages
-that mounted this component first, and they keep the picker they have always had. «Мій кабінет» sets
-it, which hides the picker and makes the view follow the host — because that page shows a plan and a
+**The faculty tab's bar is семестр, курс, спеціальність, група.** A faculty timetable is the timetable
+of its academic groups — `timetableEntryConnection` has no `facultyId` filter — so the group ids the
+page passes *are* the scope, and the three filters are a `computed()` over the loaded group list
+(`courseYear` is a stored column on `academic_groups`; the connection already filters by
+`specialtyId` and `facultyId`, so no backend change was needed). Two consequences are handled
+explicitly. Filters that between them match no group render their own message rather than the
+grid's «Занять у розкладі ще немає» — no groups and no classes look identical and are not the same
+thing. And `restrictColumnsToScope` passes `buildTimetableGrid`'s `columnFilter`, because the server
+matches an entry if *any* of its groups is in scope and a cell names every group taught together, so
+a lecture shared across years would otherwise raise a column for a group the filter excluded. That
+filter runs against the scope the entries on screen were **fetched** with, not the current input:
+the two differ for the length of a round trip, and filtering the previous response by the new scope
+rejects every column at once, which the grid reports as «N не розміщено» in red.
+
+The семестр picker on that tab is the host's, not the view's — see the input below — so all four
+controls sit in one bar in reading order, the half-year first: the other three only mean anything
+once you know which half-year you are looking at. It alone survives a tab change; the other three
+are narrowings of one list, while the half-year is which part of the year the reader is working in.
+
+**One input decides who owns that filter.** `externalSemesterParity` is `null` on the pages that
+mounted this component first, and they keep the picker they have always had. «Мій кабінет» and the
+faculty's «Розклад факультету» tab set it, which hides the picker and makes the view follow the host — because that page shows a plan and a
 timetable side by side, and two half-year controls that can disagree are worse than one. It is
 applied in `ngOnChanges`, which runs *before* `ngOnInit`, so setting it also suppresses the
 `current_semester_parity` default that would otherwise overwrite the host's choice a tick later.
@@ -877,26 +1086,28 @@ when the item's `teachingFormat` is `SEPARATELY` — "together" has nothing to c
 `default_class_duration_hours` global property when creating a new workload, or from the
 workload's own stored value when editing one.
 
-Three further fields say *where* and *on which bells* the class runs, and appear whatever the
-teaching format — they apply to individual consultations just as much:
+One further field says *on which bells* the class runs, and appears whatever the teaching format —
+it applies to individual consultations just as much:
 
 - **Часи початку занять** (required) — the `ClassStartTimeSet` its classes are scheduled on, e.g.
   the separate grid physical education runs on. `lecturer_workloads.class_start_time_set_id` is
   `NOT NULL`, so an empty picker is caught here, in Ukrainian, rather than at the database; a new
   workload starts on the set marked as default.
-- **Аудиторії** and **Групи аудиторій** (`MultiSelect` each) — where the class may be held. The
-  eligible rooms are the **union** of the two, and choosing nothing means no restriction, which the
-  hint says in words. Both lists are always sent in full, including when empty: omitting a
-  many-to-many field leaves the stored membership untouched, so "clear the restriction" has to be
-  an explicit empty array.
 
-All three are echoed in the workload tree as "Дзвінки" and "Аудиторії" columns, the latter joining
-named rooms and `«group» (група)` entries into one cell and reading «будь-яка» when nothing is set.
-The options for all three are fetched **unfiltered and narrowed client-side**, deliberately: the
-backend's `facultyId` filter matches the column exactly, so asking for this faculty's sets or groups
-would drop precisely the university-wide ones (`faculty_id IS NULL`) that most workloads use. What
-survives the narrowing is this faculty's rows plus the unscoped ones — and, for room groups, this
-department's own.
+It is echoed in the workload tree as the "Дзвінки" column. Its options are fetched **unfiltered and
+narrowed client-side**, deliberately: the backend's `facultyId` filter matches the column exactly,
+so asking for this faculty's sets would drop precisely the university-wide ones
+(`faculty_id IS NULL`) that most workloads use.
+
+**Where a class may be held is not set here.** It used to be — two further multi-selects in this
+same modal, beside the lecturers and the duration — and that put a faculty-wide resource inside a
+per-department form: a кафедра editing its own teaching load was also, in the same dialog, laying
+claim to rooms shared with every other department, and there was nowhere to see which classes had
+been given no room at all. Rooms belong to the faculty (`rooms.faculty_id`), the timetable that has
+to fit in them is built at faculty level, and so is the assignment — see [«Призначення
+аудиторій»](#where-each-class-may-be-held-roomassignmentlist-faculty-призначення-аудиторій-tab) below. Saving a workload
+here cannot disturb it: `roomIds`/`roomGroupIds` are simply absent from this mutation's input, and a
+many-to-many field left out is left untouched.
 
 When the item's `teachingFormat` is **`INDIVIDUALLY`** (a coursework consultation, say) the modal
 swaps shape entirely: the group pickers, the lecturer multi-select and the duration field all
@@ -1110,6 +1321,53 @@ shared class, e.g. the same lecture required by two specialties), and proposes m
 group into a new combined item via the `workingCurriculumItemIds` many-to-many mutation field —
 after which it shows up in `LecturerWorkloadList`'s "Об'єднані позиції" section instead of the
 plain tree.
+
+#### Where each class may be held (`RoomAssignmentList`, faculty "Призначення аудиторій" tab)
+
+One card per class — one `lecturer_workloads` row — carrying two multi-selects: **Аудиторії** and
+**Групи аудиторій**. The eligible rooms of a class are the **union** of the two, and naming nothing
+means no restriction: the solver on the next tab may then put that class in any room of the faculty.
+
+That last case is the reason this page exists as a board of cards rather than a column in a table.
+"No restriction" is not an error — it schedules perfectly well — but it is almost never what anyone
+*decided*, and until now it was invisible: a лекція for 120 students would quietly become eligible
+for a 12-seat lab, and nobody found out until the generated timetable was read. **A card with
+neither a room nor a group is tinted red**, and the header counts them, so the question "what has
+nobody assigned yet?" is answered by looking rather than by auditing.
+
+The card is a sibling of «Формування розкладу»'s (`.tt-block`, same header and record rows), but the
+unit is deliberately different: that page splits a workload into its individual weekly/biweekly
+**sessions**, because each is scheduled separately. Eligibility is not per session — it is stored
+per workload and every session of it shares one list — so splitting the cards there would show N
+copies of one editable value.
+
+Three filters, combinable, and each is server-side where the backend can express it:
+
+| Filter | Where |
+|---|---|
+| Семестр (parity) | server — `semesterParity` on both working-item connections; defaults to `current_semester_parity` |
+| Кафедра | server — `departmentId` on `workingCurriculumItemConnection`, `departmentIds` on the combined one |
+| Спеціальність | **client** — neither connection carries a `specialtyId` relation filter, the specialty being two levels down on the curriculum item |
+
+The specialty options are the faculty's own specialties **union every specialty actually on screen**,
+because the two sets differ in a way that matters: a department of this faculty teaching a service
+discipline to another faculty's specialty produces a class listed here — it is this faculty's
+teaching load — whose specialty `specialtyConnection(facultyId:)` would never return, leaving that
+class unfilterable. The converse gap is real and deliberate: a specialty of this faculty whose
+discipline is delivered by another faculty's department is that faculty's class to place, and is
+assigned on its page.
+
+Saving writes the same two join tables through the same `updateLecturerWorkload` mutation the
+department modal always used. Two details are load-bearing. Both id lists are sent **in full**,
+including when empty, because an empty array is the meaningful value "no restriction" and an omitted
+many-to-many field would leave the stored rows alone instead. And `durationHours` is echoed back
+untouched, because it is `NOT NULL` in the database and therefore `Int!` on
+`LecturerWorkloadInputPayload` — an update that omits it is rejected by GraphQL validation before it
+reaches the resolver, however little it has to do with rooms.
+
+Anything already assigned but outside the offered options — a room of another faculty, a group
+scoped elsewhere — is merged into the option lists on load. Without that, a multi-select would
+render the value as an unchecked blank and the first save would silently drop it.
 
 #### Building the schedule (`FacultyTimetableList`, faculty "Формування розкладу" tab)
 
@@ -1376,14 +1634,21 @@ below) with a temporary password, matching the backend's no-self-registration ru
 A single root-provided service, injected the same way `GraphqlService` is used everywhere else:
 
 - `token` (signal) — the JWT, persisted to `localStorage` (`lnu_timetable_token`) so a page
-  refresh doesn't sign the user out; `isAuthenticated` is just `token() !== null`.
+  refresh doesn't sign the user out; `isAuthenticated` is just `token() !== null`. A stored token
+  already past its `exp` never reaches the signal — see [When the session ends by
+  itself](#when-the-session-ends-by-itself).
 - `currentUser` (signal) — the result of `Query.me` (profile, `isAdmin`, `groups`,
   `permissions`), re-fetched via `refreshMe()` after login and on app bootstrap when a token is
   already stored. Deliberately **not** decoded from the JWT itself — the token only carries a user
   id — so a permission change or account deactivation is reflected the moment `refreshMe()` runs
   again, without needing a new token.
 - `login(email, password)` / `logout()` / `changePassword(current, new)` — thin wrappers around the
-  corresponding mutations.
+  corresponding mutations. `login` clears any stored token first, because sign-in is an
+  unauthenticated operation and a leftover token would only make the service report *its* failure on
+  that response.
+- `endSession(reason)` / `clearSession(reason)` / `sessionEndReason` (signal) — ending a session
+  that stopped working, as opposed to one the user signed out of. The reason is what `LoginPage`
+  turns into «Термін дії сеансу минув…» instead of presenting an unexplained empty form.
 - `canModifyIds(resourceType, ids)` — given a batch of ids of one entity type, asks
   `Query.canModifyResources` which of them the signed-in user may edit/delete, backed by a
   per-`resourceType` cache (`clearModifyCache()` invalidates it, called after granting/revoking a
@@ -1394,22 +1659,86 @@ A single root-provided service, injected the same way `GraphqlService` is used e
   user may *edit* still comes from `permissions` and is re-checked server-side (see below).
 
 `authInterceptor` (an `HttpInterceptorFn`) attaches `Authorization: Bearer <token>` to every
-outgoing GraphQL request when a token is present.
+outgoing GraphQL request when a token is present — and reads the service's verdict on that token off
+every response coming back.
+
+### When the session ends by itself
+
+The service issues a token that lives 12 hours (`app.security.jwt-ttl-minutes`). A tab left open
+overnight outlives it, and what used to happen next was nothing at all: `authInterceptor` kept
+attaching the dead token, the service dropped it silently, `Query.me` returned `{ me: null }` with
+no error, and no part of this client read that as "your session is over". Worse, `authGuard`
+positively waved it through — a stored token made `isAuthenticated()` true, `refreshMe()` resolved
+without throwing, and `decide()` then read `mustChangePassword()` off a `null` user as `false` and
+returned `true`. The user stayed on a page whose every subsequent request failed.
+
+Three independent mechanisms now end it, because no single one covers every way a session can die:
+
+1. **Locally, from the token itself.** `AuthService` decodes the `exp` claim (base64url payload,
+   UTF-8, no signature check — that is the service's job and only the service's job). A stored token
+   already expired is dropped in the constructor rather than trusted for being present, and
+   `tokenForRequest()` refuses to attach one that has expired since, with a 5-second skew allowance
+   covering the flight time of the request and a clock or two that disagree. `isAuthenticated()` is
+   therefore false by the time `authGuard` looks, and the redirect happens before a round trip.
+2. **On a timer.** `armExpiryTimer()` fires at the moment the current token dies, so an idle tab
+   showing «Мій кабінет» returns to the login page on its own instead of displaying data it can no
+   longer refresh. It re-checks the token when it fires rather than trusting the delay — a laptop
+   asleep across the expiry wakes to a late timer, not a skipped one.
+3. **On the service's word.** `authInterceptor` watches every response for `X-Auth-Error` or an
+   `errors` entry with `extensions.code = "UNAUTHENTICATED"`, and calls `endSession()` with the
+   reason. This is the one that catches what the client cannot know by itself: a rotated signing
+   key, an account deactivated mid-session, a clock far enough out that the local check passed.
+
+All three converge on `clearSession(reason)`, and the reason survives the navigation so the login
+page can say which of the three it was. `authGuard` also no longer reads a `null` `me` as success:
+holding a token and being nobody is a contradiction, and it now clears the session and redirects —
+keeping whatever more precise reason `authInterceptor` already recorded rather than overwriting it.
+
+An `UNAUTHENTICATED` code is what ends a session; a `FORBIDDEN` one never does. The backend picks
+between them by whether anyone is signed in at all (see the service README's [When a token
+expires](../timetable/README.md#when-a-token-expires)), which is what stops "you may not edit this
+faculty" from logging anybody out.
 
 ### Route guards (`auth.guard.ts`)
 
 - **`authGuard`** — redirects to `/login` (with a `redirectTo` query param) when there's no
   signed-in user; redirects to `/change-password` when `mustChangePassword` is still set (except
-  for that route itself). Applied to every route except `/login`.
+  for that route itself). Applied to every route except `/login`. A stored token whose profile
+  hasn't been fetched yet is resolved via `refreshMe()` first, and a `me` of `null` — or a thrown
+  request — ends the session rather than passing.
 - **`adminGuard`** — additionally requires `isAdmin`; applied only to `/admin`.
 
 ### Login → forced password change
+
+`LoginPage` shows a notice above the form when the user did not choose to be there — an expired
+session, a token the service refused, an account deactivated mid-session — read from
+`sessionEndReason` and styled apart from the red of a rejected password, because it is information
+rather than a failed attempt.
 
 `LoginPage` (`/login`) posts to `AuthService.login`, then calls `refreshMe()` before navigating —
 if the account still has `mustChangePassword` set, it's sent to `/change-password`
 (`ChangePasswordPage`) regardless of where it was headed; otherwise it lands on the original
 `redirectTo` target or `/`. `ACCOUNT_DISABLED` and invalid-credentials errors from `login` are
 surfaced as distinct messages.
+
+### The shell, when there is nothing to navigate
+
+`app.html` renders the sidebar only when `AuthService.canNavigate()` — signed in, `Query.me`
+resolved, and past any forced password change. Signed out, the login form is the whole page: no menu
+of «Корпуси» / «Наукові ступені» / «Глобальні властивості» beside it advertising links that bounce
+straight to `/login`, and no user block in the header either.
+
+`canNavigate` is deliberately stricter than `isAuthenticated()`, which is true in two states where a
+menu would be a lie. It is true the instant a token is stored, before `Query.me` has said anything
+about its owner — so the sidebar would render before the permissions that decide half of what it
+shows. And it stays true through the whole forced change-password screen, where `authGuard` returns
+every one of those links to `/change-password` anyway. Both states last about one request; a menu
+that appears and then refuses to work is worse than one that waits.
+
+The header stays throughout, because the crest and the university's name are not navigation — only
+the user block inside it is gated. `.layout.no-sidebar` drops the content padding so the sign-in
+card centres in exactly what is left below the header rather than in a viewport-tall block that
+pushes a scrollbar.
 
 ### Hiding UI the user can't use
 
