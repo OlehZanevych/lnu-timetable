@@ -151,8 +151,8 @@
                     <td>{{ courseYear(item.semester) }}</td>
                     <td>
                       @if (item.courseId) {
-                        <a class="ent-link" [routerLink]="['/course', item.courseId]">{{ item.courseName }}</a>
-                      } @else { {{ item.courseName }} }
+                        <a class="ent-link" [routerLink]="['/course', item.courseId]">{{ item.courseLabel }}</a>
+                      } @else { {{ item.courseLabel }} }
                       @if (item.combined) { <em class="wd-flag">об'єднана</em> }
                     </td>
                     <td>{{ courseTypeLabel(item.courseType) }}</td>

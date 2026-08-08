@@ -27,6 +27,7 @@
  */
 
 import { compareUk } from './sort';
+import { CourseTagRef, courseLabel } from './course-label';
 
 /** 1 = Monday … 6 = Saturday, matching `timetable_entries.day_of_week`. */
 export const TIMETABLE_DAYS = [1, 2, 3, 4, 5, 6] as const;
@@ -63,12 +64,12 @@ export type ColumnMode = 'group' | 'lecturer' | 'room' | 'single';
 // ── Input, as the GraphQL query returns it ──────────────────────────────────
 
 export interface RawCourseRef {
-  course?: { id: string; name: string } | null;
+  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
   curriculumItemHours?: {
     hourType?: string;
     curriculumItem?: {
       semester?: number;
-      course?: { id: string; name: string; courseType?: string } | null;
+      course?: { id: string; name: string; courseType?: string; tags?: CourseTagRef[] | null } | null;
       specialty?: { id: string; name: string } | null;
     } | null;
   } | null;
@@ -115,7 +116,13 @@ export interface GridEntry {
   roomLabel: string;
   /** `courses.id` of the discipline named below — what the cell links to. Blank if unresolved. */
   courseId: string;
+  /**
+   * The bare `courses.name`. Kept raw because «Розклад занять» prints from this same object and its
+   * cells are sized for it — the screen reads {@link GridEntry.courseLabel} instead.
+   */
   courseName: string;
+  /** `courseName` with the course's tags in parentheses — what every on-screen cell shows. */
+  courseLabel: string;
   /** Raw `curriculum_item_hours.hour_type` of the block this class delivers. */
   hourType: string;
   hourTypeShort: string;
@@ -180,7 +187,8 @@ const addMinutes = (startTime: string, minutes: number): string => {
  * when that course is an `ELECTIVE_GROUP` (an umbrella students choose within), the discipline
  * actually taught is the elective on the working item itself.
  */
-const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: string; hourType: string;
+const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: string; label: string;
+                                                           hourType: string;
                                                            semester: number | null;
                                                            specialtyName: string;
                                                            departmentId: string;
@@ -191,9 +199,13 @@ const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: str
   // umbrella group nobody is actually taught.
   const elective = umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course ? ref.course : null;
   const name = elective ? elective.name : (umbrella?.name ?? '');
+  // The tags follow the name for the same reason the id does: they describe whichever course is
+  // actually being taught here, not the umbrella group it was chosen from.
+  const tags = elective ? elective.tags : umbrella?.tags;
   return {
     id: elective ? elective.id : (umbrella?.id ?? ''),
     name,
+    label: name ? courseLabel(name, tags) : '',
     hourType: ref?.curriculumItemHours?.hourType ?? '',
     semester: ci?.semester ?? null,
     specialtyName: ci?.specialty?.name ?? '',
@@ -233,6 +245,7 @@ export function toGridEntry(entry: RawEntry, academicHourMinutes: number): GridE
       : '',
     courseId: course.id,
     courseName: course.name,
+    courseLabel: course.label,
     hourType: course.hourType,
     hourTypeShort: HOUR_TYPE_SHORT[course.hourType] ?? '',
     lecturers: (w?.lecturers ?? []).map((l) => {

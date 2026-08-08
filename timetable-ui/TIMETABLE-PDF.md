@@ -183,6 +183,20 @@ A class lands in **every column it belongs to**: a lecture given to three groups
 of the group grid. That is what makes the printed sheet readable down a group's column — and it is
 how the published ones look.
 
+### Discipline names are printed bare
+
+On screen a discipline is named with its `course_tags` in parentheses — «Іноземна мова
+(англійською)» — because two rows of a table can otherwise carry the same name and mean different
+courses. **This sheet prints the bare `courses.name`.**
+
+The split is deliberate and is enforced at the source, not here: the row objects these documents are
+built from carry both forms, and the printing code reads the bare one. A tag is a disambiguator for
+someone scanning a list, not part of what the discipline is called; a printed form is read one line
+at a time, its column widths are measured for the stored name, and the tag text would push against
+them for no reader who needs it. See *Naming a discipline* in
+[`timetable-ui/README.md`](./README.md) for the rule and `course-label.ts` for the one function that
+applies it.
+
 ### Semester
 
 `timetable_entries` **has no semester of its own** — it sits two joins away, on the curriculum item.
@@ -192,6 +206,35 @@ doubly booked — which is exactly why the older, unfiltered and unscoped `/time
 rather than repaired. On «Мій кабінет» the filter is the page's own: `TimetableView` hides its picker
 when `externalSemesterParity` is bound, so the plan and the timetable beside it cannot end up showing
 different half-years.
+
+**There is no "whole year" sheet, and there cannot be.** The picker offers one half-year or the
+other and nothing else: a grid holding both at once overlays classes that never coexist, and a
+document is worse than a screen here, because the reader cannot clear a filter to check. The
+subtitle follows — every sheet is headed «І семестр {рік} навчального року» or «ІІ семестр …», and
+the older «{рік} навчальний рік» form is gone along with the state that produced it. The value is
+never empty: `TimetableView` seeds it from `current_semester_parity`, falls back to `ODD` when that
+property cannot be read, and passes `[clearable]="false"` to the picker — the ✕ would otherwise emit
+`''`, which the backend's parity filter matches no row with, emptying the timetable and blaming the
+data.
+
+### The faculty sheet can be narrowed, and then it is not the faculty's
+
+«Розклад факультету» filters its grid by семестр, курс, спеціальність and академічна група. All four
+narrow the academic-group ids the page passes down, which *is* the scope — a faculty timetable is the
+timetable of its groups, `timetableEntryConnection` having no `facultyId` filter of its own. Two
+consequences reach the document.
+
+**The subject names the scope.** An export carries the faculty plus whichever of курс / спеціальність
+/ група is active, so a sheet holding a subset cannot present itself as the whole faculty's. ЛНУ
+prints one sheet per курс in any case; what the filter adds is that the sheet says which.
+
+**Narrowing to a single group changes the `kind`, and with it whether the document is official.**
+One group is one column, and `isOfficial` — the predicate §2 calls the central decision in this
+document — is `kind === 'FACULTY'`. A single-column faculty sheet would print the гриф, the МОН
+letterhead, ПОГОДЖЕНО and the dean's signature block over one group's week, and would name that group
+in the far column of a list layout that exists to name *the other party*. So the export switches to
+`ACADEMIC_GROUP`, which is the kind that shape belongs to: a reference sheet, no approval apparatus,
+the group named once in the subject rather than on every line.
 
 ### Testing
 

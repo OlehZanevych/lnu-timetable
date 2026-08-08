@@ -1,6 +1,7 @@
 import { Observable, forkJoin, map } from 'rxjs';
 import { GraphqlService } from './graphql.service';
 import { StatWorkload } from './workload-stats';
+import { courseLabel } from './course-label';
 
 /**
  * Loads a department's whole delivered workload — every working curriculum item plus every combined
@@ -14,12 +15,12 @@ import { StatWorkload } from './workload-stats';
 const ITEMS_QUERY = (departmentId: string) => `{
   workingCurriculumItems { workingCurriculumItemConnection(limit: 1000, offset: 0, departmentId: "${departmentId}") { nodes {
     id teachingFormat
-    course { id name courseType }
+    course { id name courseType tags { tag } }
     academicGroups { id name }
     combinedWorkingCurriculumItems { id }
     curriculumItemHours {
       hourType hours
-      curriculumItem { semester specialty { id name } course { id name courseType } }
+      curriculumItem { semester specialty { id name } course { id name courseType tags { tag } } }
     }
     workloads {
       id
@@ -36,7 +37,7 @@ const COMBINED_QUERY = (departmentId: string) => `{
       academicGroups { id name }
       curriculumItemHours {
         hourType hours
-        curriculumItem { semester specialty { id name } course { id name courseType } }
+        curriculumItem { semester specialty { id name } course { id name courseType tags { tag } } }
       }
     }
     workloads { id lecturers { id } }
@@ -73,6 +74,7 @@ export function loadDepartmentWorkloads(gql: GraphqlService, departmentId: strin
           hourType: cih.hourType,
           courseId: course.id,
           courseName: course.name,
+          courseLabel: courseLabel(course.name, course.tags),
           courseType: course.courseType ?? ci.course.courseType,
           semester: ci.semester,
           specialtyName: ci.specialty?.name ?? '',
@@ -100,6 +102,7 @@ export function loadDepartmentWorkloads(gql: GraphqlService, departmentId: strin
           hourType: cih.hourType,
           courseId: ci.course.id,
           courseName: ci.course.name,
+          courseLabel: courseLabel(ci.course.name, ci.course.tags),
           courseType: ci.course.courseType,
           semester: ci.semester,
           specialtyName: (c.workingCurriculumItems ?? [])

@@ -1,0 +1,96 @@
+<div class="page-header">
+  <div>
+    <h2>Призначення аудиторій</h2>
+    <p class="muted">
+      @if (loading()) {
+        Завантаження…
+      } @else {
+        {{ cards().length }} занять
+        @if (unassignedCount()) {
+          &middot; без призначених аудиторій: {{ unassignedCount() }}
+        } @else if (cards().length) {
+          &middot; усім заняттям призначено аудиторії
+        }
+      }
+    </p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+<div class="section-filter">
+  <label>Семестр</label>
+  <app-search-select [options]="SEMESTER_PARITY_OPTIONS" [clearable]="false"
+                      [ngModel]="selectedSemesterParity()"
+                      (ngModelChange)="onParityChange($event)"
+                      name="raSemesterParity" [ngModelOptions]="{ standalone: true }" />
+
+  <label>Кафедра</label>
+  <app-search-select [options]="departmentOptions()" [ngModel]="selectedDepartmentId()"
+                      (ngModelChange)="onDepartmentChange($event)" placeholder="Усі кафедри"
+                      name="raDepartment" [ngModelOptions]="{ standalone: true }" />
+
+  <label>Спеціальність</label>
+  <app-search-select [options]="specialtyOptions()" [ngModel]="selectedSpecialtyId()"
+                      (ngModelChange)="onSpecialtyChange($event)" placeholder="Усі спеціальності"
+                      name="raSpecialty" [ngModelOptions]="{ standalone: true }" />
+</div>
+
+<p class="muted ra-hint">
+  Дозволені аудиторії заняття &mdash; це обрані аудиторії разом з аудиторіями обраних груп аудиторій.
+  Якщо не обрано нічого, заняття можна поставити в будь-яку аудиторію факультету, і картку позначено
+  червоним.
+</p>
+
+@for (c of cards(); track c.workloadId) {
+  <div class="card wci-item-card tt-block ra-block" [class.unassigned]="isUnassigned(c)">
+    <div class="wci-item-header">
+      <strong><a class="ent-link" [routerLink]="['/course', c.courseId]">{{ c.courseLabel }}</a></strong>
+      <span class="badge">{{ hourTypeLabel(c.hourType) }}</span>
+      <span>Семестр {{ c.semester }}</span>
+      <span>{{ c.hours }} год. &middot; пара {{ c.durationHours }} год.</span>
+      @if (c.combined) { <span class="badge">об&rsquo;єднана позиція</span> }
+    </div>
+
+    <div class="lw-record">
+      <div class="lw-record-header">
+        <span>Кафедра: {{ c.departmentName }}</span>
+        <span>Спеціальність: {{ c.specialtyNames }}</span>
+      </div>
+      <div class="lw-record-header">
+        <span>Групи: {{ c.groupNames || '—' }}</span>
+        <span>Викладачі: {{ c.lecturerNames || '—' }}</span>
+      </div>
+    </div>
+
+    @if (form(c); as f) {
+      <div class="tt-block-form">
+        <label>
+          <span>Аудиторії</span>
+          <app-multi-select [options]="roomOptions()" [(ngModel)]="f.roomIds"
+                            [name]="'raRooms_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <label>
+          <span>Групи аудиторій</span>
+          <app-multi-select [options]="roomGroupOptions()" [(ngModel)]="f.roomGroupIds"
+                            [name]="'raRoomGroups_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+        </label>
+        <div class="actions">
+          @if (isDirty(c)) {
+            <button type="button" class="ghost" (click)="revert(c)">Скасувати</button>
+          }
+          <button type="button" [disabled]="!isDirty(c) || saving().has(c.workloadId)" (click)="save(c)">
+            {{ saving().has(c.workloadId) ? 'Збереження…' : 'Зберегти' }}
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+} @empty {
+  <div class="card">
+    <p class="muted">
+      @if (loading()) { Завантаження… }
+      @else { Занять за обраними фільтрами немає. }
+    </p>
+  </div>
+}

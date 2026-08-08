@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
-import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
+import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
 import { compareUk } from './sort';
 // Types only: the solver itself must not land in the initial bundle. It is reached through the Web
 // Worker, and — in the rare host with no `Worker` — through a dynamic import in runSolver().
@@ -19,13 +19,7 @@ import type {
   SolverResult
 } from './timetable-solver';
 import type { SerializedProblem, SolverRequest, SolverResponse } from './timetable-solver.worker';
-
-/** Semester parity — ODD/EVEN — matching curriculum_items.semester (1,3,5.. vs 2,4,6..). Options for
- *  the "current_semester_parity" global property are also enumerated here (see global-properties-page.ts). */
-const SEMESTER_PARITY_OPTIONS: Option[] = [
-  { id: 'ODD', label: 'Перший (непарний)' },
-  { id: 'EVEN', label: 'Другий (парний)' }
-];
+import { CourseTagRef, courseLabel } from './course-label';
 
 /** How long the solver may run. Small faculties converge in seconds; the longest setting is for a
  *  full re-generation of a large one, where the window-reduction phase keeps paying for a while. */
@@ -88,8 +82,8 @@ interface RawWorkingItem {
   combinedWorkingCurriculumItems: { id: string }[];
   /** The specific elective chosen for this working curriculum item (working_curriculum_items.course_id),
    *  set only when the item's curriculum item course is an ELECTIVE_GROUP — see courseNameFor(). */
-  course?: { id: string; name: string } | null;
-  curriculumItemHours: { hourType: string; hours: number; curriculumItem: { course: { id: string; name: string; courseType: string } } };
+  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+  curriculumItemHours: { hourType: string; hours: number; curriculumItem: { course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null } } };
   workloads: RawWorkload[];
 }
 
@@ -99,10 +93,17 @@ interface RawCombinedItem {
   // members no longer need their own department/semester for client-side filtering.
   workingCurriculumItems: {
     id: string;
-    course?: { id: string; name: string } | null;
-    curriculumItemHours: { hourType: string; hours: number; curriculumItem: { course: { id: string; name: string; courseType: string } } };
+    course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+    curriculumItemHours: { hourType: string; hours: number; curriculumItem: { course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null } } };
   }[];
   workloads: RawWorkload[];
+}
+
+/** The discipline a block belongs to: its id, its bare name for sorting, its label for display. */
+interface CourseRef {
+  id: string;
+  name: string;
+  label: string;
 }
 
 /** One lecturer_workloads row, normalized regardless of whether it targets a working curriculum
@@ -111,7 +112,10 @@ interface WorkloadSource {
   workloadId: string;
   /** `courses.id` behind courseName — what the block's heading links to. */
   courseId: string;
+  /** Bare `courses.name` — what `sortBlocks` collates on. */
   courseName: string;
+  /** `courseName` with the course's tags in parentheses — what every heading here shows. */
+  courseLabel: string;
   hourType: string;
   hours: number;
   durationHours: number;
@@ -132,7 +136,10 @@ interface Block {
   workloadId: string;
   entryId: string | null;
   courseId: string;
+  /** Bare `courses.name` — sorted on. */
   courseName: string;
+  /** `courseName` with the course's tags in parentheses — displayed. */
+  courseLabel: string;
   hourType: string;
   durationHours: number;
   academicGroupNames: string[];
@@ -349,8 +356,8 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     const q =`{ workingCurriculumItems { workingCurriculumItemConnection(limit: 5000, offset: 0, facultyId: "${this.facultyId}", semesterParity: "${this.selectedSemesterParity()}") { nodes {
       id
       combinedWorkingCurriculumItems { id }
-      course { id name }
-      curriculumItemHours { hourType hours curriculumItem { course { id name courseType } } }
+      course { id name tags { tag } }
+      curriculumItemHours { hourType hours curriculumItem { course { id name courseType tags { tag } } } }
       workloads { ${WORKLOAD_SELECTION} }
     } } } }`;
     this.gql.request(q).subscribe({
@@ -371,8 +378,8 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       id
       workingCurriculumItems {
         id
-        course { id name }
-        curriculumItemHours { hourType hours curriculumItem { course { id name courseType } } }
+        course { id name tags { tag } }
+        curriculumItemHours { hourType hours curriculumItem { course { id name courseType tags { tag } } } }
       }
       workloads { ${WORKLOAD_SELECTION} }
     } } } }`;
@@ -537,19 +544,23 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
    * curriculum item's course is just the umbrella group — the actual discipline being taught is
    * the specific elective referenced by working_curriculum_items.course_id.
    */
-  private courseRefFor(wci: { course?: { id: string; name: string } | null; curriculumItemHours: { curriculumItem: { course: { id: string; name: string; courseType: string } } } }): { id: string; name: string } {
+  private courseRefFor(wci: { course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null; curriculumItemHours: { curriculumItem: { course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null } } } }): CourseRef {
     const ci = wci.curriculumItemHours.curriculumItem;
-    if (ci.course.courseType === 'ELECTIVE_GROUP' && wci.course) return wci.course;
-    return { id: ci.course.id, name: ci.course.name };
+    const c = ci.course.courseType === 'ELECTIVE_GROUP' && wci.course ? wci.course : ci.course;
+    // Both, not one: the label is what every heading on this board shows, the raw name is what
+    // `sortBlocks` collates on — folding tags into that would let the tag text drive the ordering
+    // and split two same-named disciplines apart.
+    return { id: c.id, name: c.name, label: courseLabel(c.name, c.tags) };
   }
 
-  private toSource(w: RawWorkload, course: { id: string; name: string }, hourType: string, hours: number): WorkloadSource {
+  private toSource(w: RawWorkload, course: CourseRef, hourType: string, hours: number): WorkloadSource {
     const groups = this.academicGroupsFor(w);
     const rooms = this.eligibleRoomsFor(w);
     return {
       workloadId: w.id,
       courseId: course.id,
       courseName: course.name,
+      courseLabel: course.label,
       hourType,
       hours,
       durationHours: w.durationHours,
@@ -633,6 +644,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       entryId: entry?.id ?? null,
       courseId: s.courseId,
       courseName: s.courseName,
+      courseLabel: s.courseLabel,
       hourType: s.hourType,
       durationHours: s.durationHours,
       academicGroupNames: s.academicGroupNames,
@@ -944,7 +956,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       key: b.key,
       workloadId: b.workloadId,
       entryId: b.entryId,
-      courseName: b.courseName,
+      courseName: b.courseLabel,
       hourType: this.hourTypeLabel(b.hourType),
       durationHours: b.durationHours,
       classStartTimeSetId: b.classStartTimeSetId ?? '',

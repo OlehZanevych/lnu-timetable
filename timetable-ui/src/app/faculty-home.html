@@ -10,8 +10,22 @@
   <p class="error">{{ error() }}</p>
 }
 
+<div class="ce-toolbar">
+  <label class="ce-search">
+    <span>Пошук факультету</span>
+    <input type="text" [ngModel]="filter()" (ngModelChange)="filter.set($event)"
+           name="facultyFilter" placeholder="назва або абревіатура&hellip;" />
+  </label>
+  @if (filter()) {
+    <p class="muted fh-count">
+      {{ visibleFaculties().length }} з {{ totalFaculties() }}
+      <button type="button" class="ghost" (click)="filter.set('')">Скинути</button>
+    </p>
+  }
+</div>
+
 <ul class="faculty-list">
-  @for (f of faculties(); track f.id) {
+  @for (f of visibleFaculties(); track f.id) {
     <li class="faculty-list-item">
       <a class="faculty-logo" [routerLink]="['/faculty', f.id]">
         {{ f.abbreviation || f.name.slice(0, 2) }}
@@ -53,7 +67,13 @@
       </div>
     </li>
   } @empty {
-    <li class="muted" style="padding: 16px 0">Факультетів ще немає &mdash; натисніть &laquo;Додати факультет&raquo;.</li>
+    <li class="muted" style="padding: 16px 0">
+      @if (filteredToNothing()) {
+        За запитом «{{ filter() }}» факультетів не знайдено.
+      } @else {
+        Факультетів ще немає &mdash; натисніть &laquo;Додати факультет&raquo;.
+      }
+    </li>
   }
 </ul>
 

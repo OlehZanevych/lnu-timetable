@@ -805,7 +805,7 @@ The same mechanism scopes the two "people" connections to a faculty, neither of 
 |---|---|---|
 | `academicGroupConnection` | `facultyId` | `academic_groups.specialty_id → specialties.faculty_id` |
 | `combinedGroupConnection` | `facultyId` | `combined_group_academic_groups → academic_groups → specialties.faculty_id` |
-| `workingCurriculumItemConnection` | `facultyId`, `semesterParity` | `working_curriculum_items.department_id → departments.faculty_id`; `curriculum_item_hours → curriculum_items.semester` |
+| `workingCurriculumItemConnection` | `facultyId`, `semesterParity`, `courseId` | `working_curriculum_items.department_id → departments.faculty_id`; `curriculum_item_hours → curriculum_items.semester`; `courseId` ORs the item's own `course_id` (the elective chosen) with `curriculum_item_hours → curriculum_items.course_id` (the discipline delivered) |
 | `combinedWorkingCurriculumItemConnection` | `facultyId`, `departmentIds`, `semesterParity` | member `working_curriculum_items` |
 | `lecturerConnection` | `facultyId` | `lecturers.department_id → departments.faculty_id` |
 | `timetableEntryConnection` | `roomIds`, `lecturerIds`, `academicGroupIds`, `semesterParity` | `timetable_entries.room_id`; the workload's `lecturer_workload_lecturers`; its academic groups *and* its combined groups' members; the semester of the curriculum item behind the workload (single or combined) |
@@ -895,7 +895,7 @@ single-row `<entity>(id:)` query.
 | `studentConnection` | `lastName` | `academicGroupId` |
 | `academicGroupConnection` | `name` | `specialtyId`, `facultyId` (r) |
 | `combinedGroupConnection` | `name` | `facultyId` (r) |
-| `courseConnection` | `name` | `departmentId`, `facultyId`, `specialtyId` (r) |
+| `courseConnection` | `name` | `departmentId`, `facultyId`, `parentCourseId`, `specialtyId` (r) |
 | `curriculumItemConnection` | `semester` | `specialtyId`, `courseId` |
 | `curriculumItemHoursConnection` | `hourType` | `curriculumItemId` |
 | `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r) |
@@ -951,9 +951,10 @@ around).
 1. `AuthenticationGraphQlInterceptor` (a `WebGraphQlInterceptor`) reads the `Authorization: Bearer
    <jwt>` header of every request, resolves it to a `Principal` (id, email, name,
    `mustChangePassword`) via `JwtService`/`PermissionRepository`, and places it on the GraphQL
-   context. A missing/invalid/expired token simply leaves the request anonymous rather than
-   rejecting it outright — this keeps `login` reachable through the same `/graphql` endpoint,
-   while every other field enforces its own requirement.
+   context. A request with *no* header stays anonymous rather than being rejected outright — this
+   keeps `login` reachable through the same `/graphql` endpoint, while every other field enforces
+   its own requirement. A request that *does* present a token which cannot be honoured also runs
+   anonymously, but no longer silently: see [When a token expires](#when-a-token-expires).
 2. `AuthorizingDataFetcherProvider` wraps the generic `DynamicDataFetchers` and is the
    `DataFetcherProvider` actually wired into `DynamicGraphQLSchemaBuilder` (via
    `DynamicGraphQlConfiguration`) — the schema builder itself has no authorization awareness.
@@ -968,14 +969,66 @@ around).
    pattern used for `GlobalProperty` (see above), so a `User`'s password hash is never reachable
    through the generic, selection-set-driven machinery.
 
+### When a token expires
+
+`app.security.jwt-ttl-minutes` is 12 hours by default, and a browser tab outlives that easily. Until
+recently the thirteenth hour looked like this: the client kept sending its stored token, the
+interceptor could not verify it, the request ran anonymously, `Query.me` answered
+
+```json
+{ "data": { "me": null } }
+```
+
+with no `errors` array and no status of any kind, and the client — having asked a question that got
+a perfectly well-formed answer — had nothing to react to. It stayed on a page it was no longer
+entitled to until the user happened to trigger something that failed loudly.
+
+The fix is to stop conflating *nobody presented credentials* with *the credentials presented are no
+longer good*. `JwtService.parse` now returns a `TokenResult` — a user id, or one of three
+`AuthFailure` values — and `AuthenticationGraphQlInterceptor` reports the failure on the response
+**twice**, so a client can act on whichever it reads first:
+
+| Where | What |
+|---|---|
+| response body | an extra entry in `errors`, with `extensions.code = "UNAUTHENTICATED"`, `extensions.authError` naming the `AuthFailure`, and `classification: "UNAUTHORIZED"` from `ErrorType` |
+| response header | `X-Auth-Error: TOKEN_EXPIRED`, named in `CorsFilter`'s `Access-Control-Expose-Headers` so a cross-origin client can actually read it |
+
+The three `AuthFailure` values are `TOKEN_EXPIRED` (correctly signed, past its `exp`),
+`INVALID_TOKEN` (malformed, or signed with a key this service does not accept) and
+`ACCOUNT_DISABLED` (the token is fine, but the account it names has since been deleted or
+deactivated — the one case the client could never work out for itself). jjwt raises
+`ExpiredJwtException` only *after* verifying the signature, so `TOKEN_EXPIRED` is never a guess
+about an unauthenticated stranger's token: it says "this was one of ours, and its time is up".
+
+Two things this deliberately does **not** do. It does not reject the request — the query still
+executes anonymously and returns whatever an anonymous caller may see, with the error entry added
+*alongside* the result rather than replacing it. And it does not fire for a request with no
+`Authorization` header at all, because that is not a failure. The corollary for any client is to not
+send a token it already knows is expired; the Angular client checks the `exp` claim locally before
+attaching the header and clears its stored token before posting `login`, so an unauthenticated
+operation never picks the error up.
+
+The second half of the same problem was `GraphQlAuthException`. Spring for GraphQL masks any
+exception escaping a data fetcher as `INTERNAL_ERROR for <execution-id>` unless a resolver claims
+it — so "You must be signed in to do this." was never reaching the browser at all, and could not be
+told apart from a genuine server fault. `AuthExceptionResolver` now maps it, and picks the
+classification off the request instead of off the throw site: no `Principal` on the context means
+nobody is signed in, so the failure is an *authentication* one (`UNAUTHENTICATED` / `UNAUTHORIZED`)
+and the client should return to the login page; a `Principal` present means the caller is signed in
+and merely not allowed to do this (`FORBIDDEN`), which is a message to read, not a session to end.
+Every existing `throw new GraphQlAuthException(…)` is untouched, and cannot drift out of step with
+the classification because it never states one.
+
 ### The security package
 
-`org.lnu.timetable.security` is eleven classes, and it is worth knowing which of them decides what:
+`org.lnu.timetable.security` is thirteen classes, and it is worth knowing which of them decides what:
 
 | Class | Role |
 |---|---|
-| `AuthenticationGraphQlInterceptor` | reads `Authorization: Bearer <jwt>` on every request, resolves it to a `Principal` and puts it on the GraphQL context; an absent or invalid token leaves the request anonymous rather than failing it, which is what keeps `login` reachable through the same endpoint |
-| `JwtService` | issues and parses the HS256 tokens, which carry only the user id |
+| `AuthenticationGraphQlInterceptor` | reads `Authorization: Bearer <jwt>` on every request, resolves it to a `Principal` and puts it on the GraphQL context. An absent header leaves the request anonymous rather than failing it, which is what keeps `login` reachable through the same endpoint; a token that *was* presented and cannot be honoured also runs anonymously, but adds the `X-Auth-Error` header and an `UNAUTHENTICATED` error entry saying so |
+| `AuthFailure` | enum — the three reasons a presented token resolves to nobody (`TOKEN_EXPIRED`, `INVALID_TOKEN`, `ACCOUNT_DISABLED`), each with the Ukrainian text carried on the error entry |
+| `AuthExceptionResolver` | maps `GraphQlAuthException` to a real GraphQL error with `extensions.code`, instead of the `INTERNAL_ERROR` mask Spring applies to anything no resolver claims |
+| `JwtService` | issues and parses the HS256 tokens, which carry only the user id; `parse` returns a `TokenResult` that distinguishes expiry from every other failure |
 | `Principal` | record — id, email, first/last name, `mustChangePassword`, and the person link (`lecturerId`/`studentId`), resolved fresh per request like everything else here |
 | `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field and "may modify" on every generated mutation |
 | `PermissionService` | the decision point: `canModify`, `canCreate`, `canManageGrantsOn` |
@@ -1061,7 +1114,14 @@ full graph as actually declared across the domain model.
 | `grantsForResource(resourceType, resourceId)` | query | lists who currently has access on a resource; requires the caller to already be able to manage grants there |
 
 All admin-only fields fail with a `GraphQlAuthException` for non-admins; unauthenticated calls to
-anything except `login` fail the same way with "You must be signed in to do this."
+anything except `login` fail the same way with "You must be signed in to do this." Both arrive as a
+GraphQL error carrying `extensions.code` — `FORBIDDEN` when someone is signed in, `UNAUTHENTICATED`
+when nobody is (see [When a token expires](#when-a-token-expires)), which is the difference between
+a message to show and a session to end.
+
+`me` is the one field that answers `null` rather than failing when nobody is signed in, and that is
+what made an expired session invisible for as long as it was: a `null` here now travels with the
+`X-Auth-Error` header and an `UNAUTHENTICATED` entry whenever a token was presented and refused.
 
 ### Configuration & seed data
 

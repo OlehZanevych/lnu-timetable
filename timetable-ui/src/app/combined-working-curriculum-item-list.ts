@@ -1,7 +1,9 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
 import { HOUR_TYPE_OPTIONS } from './entities';
 import { compareUk } from './sort';
+import { CourseTagRef, courseLabel } from './course-label';
 
 interface GroupRef {
   id: string;
@@ -20,7 +22,7 @@ interface RawItem {
       id: string;
       semester: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string };
+      course: { id: string; name: string; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -34,7 +36,7 @@ interface CandidateItem {
 /** A proposed merge: 2+ not-yet-combined items sharing course + semester + hour type + hours. */
 interface MergeProposal {
   key: string;
-  course: { id: string; name: string };
+  course: { id: string; name: string; tags?: CourseTagRef[] | null };
   semester: number;
   hourType: string;
   hours: number;
@@ -52,7 +54,7 @@ interface CombinedItemMember {
     curriculumItem: {
       semester: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string };
+      course: { id: string; name: string; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -70,7 +72,8 @@ interface CombinedItem {
  */
 @Component({
   selector: 'app-combined-working-curriculum-item-list',
-  templateUrl: './combined-working-curriculum-item-list.html'
+  templateUrl: './combined-working-curriculum-item-list.html',
+  imports: [RouterLink]
 })
 export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
@@ -117,7 +120,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         curriculumItem {
           id semester
           specialty { id name }
-          course { id name }
+          course { id name tags { tag } }
         }
       }
     } } } }`;
@@ -136,7 +139,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         academicGroups { id name }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name } }
+          curriculumItem { semester specialty { id name } course { id name tags { tag } } }
         }
       }
     } } } }`;
@@ -219,8 +222,12 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
     return m.curriculumItemHours.curriculumItem.specialty.name;
   }
 
+  /** Exposed for the template — the shared rule, see `course-label.ts`. */
+  courseLabel = courseLabel;
+
   memberCourseName(m: CombinedItemMember): string {
-    return m.curriculumItemHours.curriculumItem.course.name;
+    const c = m.curriculumItemHours.curriculumItem.course;
+    return courseLabel(c.name, c.tags);
   }
 
   memberSemester(m: CombinedItemMember): number {

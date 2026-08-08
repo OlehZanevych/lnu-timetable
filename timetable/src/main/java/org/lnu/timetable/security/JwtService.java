@@ -1,6 +1,7 @@
 package org.lnu.timetable.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -48,13 +49,46 @@ public class JwtService {
             .compact();
     }
 
-    /** Returns the user id encoded in {@code token}, or empty if the token is missing/invalid/expired. */
-    public Optional<Long> parseUserId(String token) {
+    /**
+     * The outcome of verifying one token: either a user id, or the reason it could not be used.
+     * Exactly one of the two is ever set, which is what lets the caller tell an expired session
+     * (report it, so the client can sign the user out) from a token that was never valid.
+     */
+    public record TokenResult(Long userId, AuthFailure failure) {
+
+        static TokenResult of(long userId) {
+            return new TokenResult(userId, null);
+        }
+
+        static TokenResult failed(AuthFailure failure) {
+            return new TokenResult(null, failure);
+        }
+
+        public boolean isValid() {
+            return failure == null;
+        }
+    }
+
+    /**
+     * Verifies {@code token} and says either who it belongs to or why it cannot be honoured.
+     * Expiry is separated from every other failure deliberately: jjwt raises
+     * {@link ExpiredJwtException} only after the signature has already been verified, so
+     * {@link AuthFailure#TOKEN_EXPIRED} means "this really was one of our tokens, and its time is
+     * simply up" — the one case where telling the client precisely what happened costs nothing.
+     */
+    public TokenResult parse(String token) {
         try {
             Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
-            return Optional.of(Long.parseLong(claims.getSubject()));
+            return TokenResult.of(Long.parseLong(claims.getSubject()));
+        } catch (ExpiredJwtException e) {
+            return TokenResult.failed(AuthFailure.TOKEN_EXPIRED);
         } catch (JwtException | IllegalArgumentException e) {
-            return Optional.empty();
+            return TokenResult.failed(AuthFailure.INVALID_TOKEN);
         }
+    }
+
+    /** Returns the user id encoded in {@code token}, or empty if the token is missing/invalid/expired. */
+    public Optional<Long> parseUserId(String token) {
+        return Optional.ofNullable(parse(token).userId());
     }
 }

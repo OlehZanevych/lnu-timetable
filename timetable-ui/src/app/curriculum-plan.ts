@@ -117,6 +117,12 @@ export interface PlanRow {
   id: string;
   /** «ОК 12» — position within its section, which is how the освітня програма refers to it. */
   code: string;
+  /**
+   * The `courses.name`, bare. There is no tagged counterpart here on purpose: nothing renders a
+   * `PlanRow`'s discipline name — «Навчальні плани» builds its table from the raw curriculum items
+   * (and labels them itself), and the summary above it shows totals — so the only consumer of this
+   * field is the printed «Навчальний план», which prints names bare. See `course-label.ts`.
+   */
   name: string;
   courseType: string;
   semester: number;

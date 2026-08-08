@@ -9,12 +9,11 @@ import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
 import { CurriculumSummary } from './curriculum-summary';
 import { PlanHourType, PlanItemInput, buildCurriculumPlan } from './curriculum-plan';
 import { compareUk } from './sort';
+import { courseLabel } from './course-label';
 
 /** Highest semester offerable in a plan. curriculum_items.semester is a plain INTEGER, so this is
  *  a UI-side bound only — 11 is the largest value present in real data (PhD plans). */
 const MAX_SEMESTER = 12;
-
-interface CourseTagRef { tag: string }
 
 /**
  * One hour type's slot inside a semester block. Every semester block always carries one of these
@@ -220,7 +219,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
           return {
             courseId: c.id,
             name: c.name,
-            label: this.courseLabel(c.name, c.tags),
+            label: courseLabel(c.name, c.tags),
             courseType: c.courseType ?? 'MANDATORY',
             items: signal<ItemDraft[]>(drafts)
           };
@@ -297,12 +296,6 @@ export class CurriculumEditor implements OnInit, OnChanges {
   }
 
   // ── Labels ───────────────────────────────────────────────────────────────
-
-  /** "Course name (tag1, tag2)"; parentheses omitted entirely when the course has no tags. */
-  courseLabel(name: string, courseTags?: CourseTagRef[] | null): string {
-    const tagList = (courseTags ?? []).map((t) => t.tag).filter(Boolean);
-    return tagList.length ? `${name} (${tagList.join(', ')})` : name;
-  }
 
   itemTitle(item: ItemDraft): string {
     const s = item.semester();

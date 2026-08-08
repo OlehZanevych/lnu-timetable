@@ -132,7 +132,9 @@
               @for (row of classes(); track row.id) {
                 <tr [class.wv-gap]="!row.scheduledClasses">
                   <td>
-                    {{ row.courseName }}
+                    @if (row.courseId) {
+                      <a class="ent-link" [routerLink]="['/course', row.courseId]">{{ row.courseLabel }}</a>
+                    } @else { {{ row.courseLabel }} }
                     @if (row.combined) { <span class="cp-chip">об&rsquo;єднана позиція</span> }
                   </td>
                   <td>{{ hourTypeLabel(row.hourType) }}</td>

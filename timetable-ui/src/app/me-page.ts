@@ -1,20 +1,21 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
 import { GlobalPropertiesService } from './global-properties.service';
-import { Option, SearchSelect } from './search-select';
+import { SearchSelect } from './search-select';
 import { TimetableView } from './timetable-view';
 import {
-  CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, STUDY_FORM_OPTIONS,
+  CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS, STUDY_FORM_OPTIONS,
   courseTypeLabel, halfYearOf, positionLabel, termLabel, termLabelShort
 } from './entities';
 import { fmtNumber } from './curriculum-plan';
 import { compareUk } from './sort';
 import { LecturerStats, STAT_HOUR_TYPES, StatItem, computeStats } from './workload-stats';
 import { loadDepartmentWorkloads } from './workload-tree';
+import { courseLabel } from './course-label';
 
 /** Which tab is open. Which of them exist at all depends on who the account belongs to. */
 type DeskSection = 'workload' | 'curriculum' | 'timetable';
@@ -45,8 +46,11 @@ interface StudentProfile {
 
 /** One discipline of the student's own plan, for the semester (or semesters) on screen. */
 interface CurriculumRow {
+  /** The `curriculum_items` id — *not* the course's; see `courseId`. */
   id: string;
   semester: number;
+  /** `courses.id` behind {@link CurriculumRow.courseName} — what the table links each line to. */
+  courseId: string;
   courseName: string;
   courseType: string;
   controlForm: string;
@@ -98,15 +102,11 @@ export class MyDeskPage implements OnInit {
   readonly fmtNumber = fmtNumber;
   readonly STAT_HOUR_TYPES = STAT_HOUR_TYPES;
 
-  /** The same three options `TimetableView` offers, so the two read the same. */
-  readonly parityOptions: Option[] = [
-    { id: '', label: 'Весь навчальний рік' },
-    { id: 'ODD', label: 'Перший (непарний) семестр' },
-    { id: 'EVEN', label: 'Другий (парний) семестр' }
-  ];
+  readonly parityOptions = SEMESTER_PARITY_OPTIONS;
 
-  /** '' / 'ODD' / 'EVEN' — seeded from `current_semester_parity`, then whatever the reader picks. */
-  semesterParity = signal('');
+  /** 'ODD' / 'EVEN' — seeded from `current_semester_parity`, then whatever the reader picks. This
+   *  page shows a plan and a timetable side by side, and both name one half-year, never the year. */
+  semesterParity = signal('ODD');
   activeSection = signal<DeskSection>('timetable');
 
   loading = signal(false);
@@ -130,18 +130,12 @@ export class MyDeskPage implements OnInit {
       : [{ key: 'curriculum', label: '&#x1F4D8; Мій навчальний план' },
          { key: 'timetable',  label: '&#x1F4C5; Мій розклад' }]);
 
-  /** Half of the academic year the picker currently names; null when it names the whole year. */
-  private readonly selectedHalf = computed<1 | 2 | null>(() => {
-    const p = this.semesterParity();
-    return p === 'ODD' ? 1 : p === 'EVEN' ? 2 : null;
-  });
+  /** Half of the academic year the picker names. Always one or the other — see `parityOptions`. */
+  private readonly selectedHalf = computed<1 | 2>(() => this.semesterParity() === 'EVEN' ? 2 : 1);
 
-  readonly parityTitle = computed(() => {
-    const half = this.selectedHalf();
-    return half === null ? 'весь навчальний рік'
-         : half === 1 ? 'перше півріччя (непарні семестри)'
-         : 'друге півріччя (парні семестри)';
-  });
+  readonly parityTitle = computed(() =>
+    this.selectedHalf() === 1 ? 'перше півріччя (непарні семестри)'
+                              : 'друге півріччя (парні семестри)');
 
   // ── Lecturer: the positions they carry, narrowed to the half-year on screen ──────────────────
 
@@ -149,7 +143,7 @@ export class MyDeskPage implements OnInit {
     const s = this.stats();
     if (!s) return [];
     const half = this.selectedHalf();
-    const items = half === null ? s.items : s.items.filter((i) => halfYearOf(i.semester) === half);
+    const items = s.items.filter((i) => halfYearOf(i.semester) === half);
     return [...items].sort((a, b) => a.semester - b.semester
       || compareUk(a.courseName, b.courseName)
       || compareUk(a.hourType, b.hourType));
@@ -194,8 +188,7 @@ export class MyDeskPage implements OnInit {
     const year = this.student()?.courseYear ?? 0;
     if (!year) return [];
     const base = (year - 1) * 2;
-    const half = this.selectedHalf();
-    return half === null ? [base + 1, base + 2] : [base + half];
+    return [base + this.selectedHalf()];
   });
 
   readonly curriculumRows = computed<CurriculumRow[]>(() => {
@@ -234,13 +227,28 @@ export class MyDeskPage implements OnInit {
   readonly timetableFaculty = computed(() =>
     this.role() === 'lecturer' ? this.lecturer()?.facultyName ?? '' : this.student()?.facultyName ?? '');
 
+  /** Whether the stored half-year has been applied, or the reader has already chosen one. */
+  private paritySeeded = false;
+
+  /** The half-year that is actually running is the useful default; the reader may pick another.
+   *  An effect, not a microtask — see `TimetableView`'s constructor for why. */
+  constructor() {
+    effect(() => {
+      const settled = this.settings.loaded() || !!this.settings.error();
+      if (!settled || this.paritySeeded) return;
+      this.paritySeeded = true;
+      const current = this.settings.value('current_semester_parity');
+      if (current === 'ODD' || current === 'EVEN') this.semesterParity.set(current);
+    });
+  }
+
+  onParityChange(value: string) {
+    this.paritySeeded = true;
+    this.semesterParity.set(value === 'EVEN' ? 'EVEN' : 'ODD');
+  }
+
   ngOnInit() {
     this.settings.ensureLoaded();
-    // The half-year that is actually running is the useful default; the reader may pick another.
-    queueMicrotask(() => {
-      const current = this.settings.value('current_semester_parity');
-      if (current) this.semesterParity.set(current);
-    });
 
     const role = this.role();
     this.activeSection.set(role === 'lecturer' ? 'workload' : role === 'student' ? 'curriculum' : 'timetable');
@@ -405,13 +413,13 @@ export class MyDeskPage implements OnInit {
           for (const h of n.hours ?? []) hours[h.hourType] = h.hours ?? 0;
           const contact = ['LECTURE', 'PRACTICAL', 'LAB']
             .reduce((sum, t) => sum + (hours[t] ?? 0), 0);
-          const tags = (n.course?.tags ?? []).map((t: any) => t.tag).filter(Boolean);
           return {
             id: n.id,
             semester: n.semester ?? 0,
             // The tag is part of how a discipline is named on paper («Database Systems
             // (англійською)»), so it travels with the name rather than into a column of its own.
-            courseName: tags.length ? `${n.course?.name} (${tags.join(', ')})` : (n.course?.name ?? '—'),
+            courseId: n.course?.id ? String(n.course.id) : '',
+            courseName: courseLabel(n.course?.name, n.course?.tags),
             courseType: n.course?.courseType ?? '',
             controlForm: n.controlForm ?? '',
             ectsCredits: n.ectsCredits ?? 0,

@@ -3,7 +3,10 @@
 <div class="page-header">
   <div>
     <h2>{{ m.label }}</h2>
-    <p class="muted">{{ rows().length }} запис(ів)</p>
+    <p class="muted">
+      {{ visibleRows().length }} запис(ів)
+      @if (search) { &middot; з {{ rows().length }} }
+    </p>
   </div>
   @if (canShowCreate) {
     <button type="button" (click)="openCreate()">+ Додати</button>
@@ -26,7 +29,7 @@
       </tr>
     </thead>
     <tbody>
-      @for (row of rows(); track row.id) {
+      @for (row of visibleRows(); track row.id) {
         <tr>
           <td>{{ row.id }}</td>
           @for (f of tableFields; track f.name) {
@@ -44,7 +47,15 @@
           </td>
         </tr>
       } @empty {
-        <tr><td [attr.colspan]="tableFields.length + 2" class="muted">Даних ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr>
+          <td [attr.colspan]="tableFields.length + 2" class="muted">
+            @if (filteredToNothing()) {
+              За запитом «{{ search }}» нічого не знайдено.
+            } @else {
+              Даних ще немає &mdash; натисніть &laquo;Додати&raquo;.
+            }
+          </td>
+        </tr>
       }
     </tbody>
   </table>

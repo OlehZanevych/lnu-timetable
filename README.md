@@ -38,6 +38,21 @@ The work it supports runs in one direction, and each stage is the input to the n
    constraints of lecturers, groups and rooms, and scheduling *around* the classes other faculties
    have already placed in the same rooms and with the same people.
 
+Two of those stages are entered from more than one direction, because the shape of the data and the
+shape of the work do not always agree.
+
+**Where a class may be held** is stored on the workload (stage 3), but it is decided at faculty
+level: rooms belong to a faculty, and the timetable that has to fit in them is built for a whole
+faculty at once. So it has a screen of its own — «Призначення аудиторій» — a board of one card per
+class, tinted red when nothing has been assigned. Naming no room is legal and schedules perfectly
+well; it is almost never what anyone *decided*, and until that board existed nobody found out until a
+lecture for 120 students had been placed in a 12-seat lab.
+
+**A discipline can be corrected from its own page.** `/course/:id` walks the whole chain — curriculum
+items, working curriculum items, workloads, room assignment, timetable entries — and edits every
+level in place, so fixing one discipline no longer means visiting a specialty page, then a
+department page, then a faculty page in turn. An `ELECTIVE_GROUP` also manages its electives there.
+
 Alongside it: JWT sign-in with entity-scoped, cascading permissions; **«Мій кабінет»**, where an
 account linked to a викладач or a студент reads its own навантаження or навчальний план and its own
 розклад, defaulting to the half-year that is running; and four printable forms —

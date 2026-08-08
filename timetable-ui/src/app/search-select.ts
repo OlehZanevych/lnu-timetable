@@ -16,7 +16,7 @@ export type Option = { id: string; label: string };
           (input)="onInput($event)"
           (focus)="open.set(true)"
           autocomplete="off" />
-        @if (value() && !open()) {
+        @if (value() && !open() && clearable()) {
           <button type="button" class="ss-clear" (click)="clear($event)">✕</button>
         }
         <span class="ss-arrow">▾</span>
@@ -37,6 +37,13 @@ export type Option = { id: string; label: string };
 export class SearchSelect implements ControlValueAccessor {
   options = input<Option[]>([]);
   placeholder = input('— оберіть —');
+  /**
+   * Whether the ✕ that empties the control is offered. Set `false` where `''` is not a value the
+   * field can hold — a семестр picker, say: the empty string is not "no filter" there, it is a
+   * value the backend's parity filter matches no row with, so clearing would empty the timetable
+   * and blame the data.
+   */
+  clearable = input(true);
 
   private host = inject(ElementRef);
   value = signal('');

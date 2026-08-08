@@ -224,6 +224,26 @@ the document are one and the same argument, so the printed sheet always matches 
 when `INDEPENDENT_WORK` is not given explicitly. Both documents have to produce the same figure for
 the same item.
 
+### Discipline names are printed bare
+
+On screen a discipline is named with its `course_tags` in parentheses — «Іноземна мова
+(англійською)» — because two rows of a table can otherwise carry the same name and mean different
+courses. **This sheet prints the bare `courses.name`.**
+
+The split is deliberate and is enforced at the source, not here: the row objects these documents are
+built from carry both forms, and the printing code reads the bare one. A tag is a disambiguator for
+someone scanning a list, not part of what the discipline is called; a printed form is read one line
+at a time, its column widths are measured for the stored name, and the tag text would push against
+them for no reader who needs it. See *Naming a discipline* in
+[`timetable-ui/README.md`](./README.md) for the rule and `course-label.ts` for the one function that
+applies it.
+
+One place inside this sheet is worth naming, because it looks like an inconsistency and is not.
+A **`ComplianceCheck` verdict is a single string shown on the page *and* printed in the sheet's
+примітки**, so it is built from the bare name too. The warning card on screen therefore names a
+discipline slightly more tersely than the table above it does — the alternative is a tag reaching
+the printed document through the back door.
+
 ### Testing
 
 Both modules are free of Angular and the DOM, so the document renders under Node from plain objects.

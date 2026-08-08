@@ -84,7 +84,7 @@ export interface TimetableReportInput {
   subjectName: string;
   /** The faculty this belongs to, for the letterhead; blank for a university-wide sheet. */
   facultyName: string;
-  /** ODD / EVEN, or '' when the sheet is not scoped to a half-year. */
+  /** ODD / EVEN. Every sheet covers exactly one half-year; anything else is read as ODD. */
   semesterParity: string;
   generatedAt: Date;
   fonts: { regular: TtfFont; bold: TtfFont };
@@ -229,11 +229,10 @@ function drawTitle(doc: PdfDocument, input: TimetableReportInput, academicYear: 
                              { x: left, y: doc.y, width, size: official ? 14 : 13,
                                font: 'bold', align: official ? 'center' : 'left' });
 
-  const half = input.semesterParity === 'ODD' ? 'І семестр'
-             : input.semesterParity === 'EVEN' ? 'ІІ семестр'
-             : '';
-  const subtitle = [input.subjectName, half ? `${half} ${academicYear} навчального року`
-                                            : `${academicYear} навчальний рік`]
+  // 'EVEN' or anything else: a sheet always covers one half-year (see TimetableView.parityOptions),
+  // and a heading that named the whole year would be describing a grid that cannot be produced.
+  const half = input.semesterParity === 'EVEN' ? 'ІІ семестр' : 'І семестр';
+  const subtitle = [input.subjectName, `${half} ${academicYear} навчального року`]
     .filter(Boolean).join(' · ');
   doc.y += doc.drawParagraph(subtitle, {
     x: left, y: doc.y, width, size: official ? 11.5 : 10.5, align: official ? 'center' : 'left'

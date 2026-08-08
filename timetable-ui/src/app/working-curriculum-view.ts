@@ -11,6 +11,7 @@ import {
   WorkingPlanItemInput, buildWorkingCurriculumPlan
 } from './working-curriculum-plan';
 import type { CurriculumSpecialty } from './curriculum-item-list';
+import { courseTagNames } from './course-label';
 // `working-curriculum-report`, `pdf-fonts` and `workload-report` are imported dynamically in
 // downloadPlan(): see the comment there for why the PDF engine is kept out of the main bundle.
 
@@ -99,12 +100,12 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
     this.loading.set(true);
     const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
       id semester controlForm ectsCredits
-      course { id name courseType }
+      course { id name courseType tags { tag } }
       hours { id hourType hours
         workingCurriculumItems {
           id lecturerCount teachingFormat
           department { id name }
-          course { id name }
+          course { id name tags { tag } }
           academicGroups { id name studentsCount }
         }
       }
@@ -210,7 +211,8 @@ const toPlanItem = (node: any): WorkingPlanItemInput => ({
   controlForm: node.controlForm,
   ectsCredits: node.ectsCredits ?? 0,
   course: node.course
-    ? { id: node.course.id, name: node.course.name, courseType: node.course.courseType ?? 'MANDATORY' }
+    ? { id: node.course.id, name: node.course.name, courseType: node.course.courseType ?? 'MANDATORY',
+        tags: courseTagNames(node.course.tags) }
     : null,
   hours: (node.hours ?? []).map((h: any) => ({
     id: h.id,

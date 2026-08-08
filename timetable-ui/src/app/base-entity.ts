@@ -1,4 +1,4 @@
-import { Directive, Input, OnChanges, OnInit, SimpleChanges, inject, signal } from '@angular/core';
+import { Directive, Input, OnChanges, OnInit, SimpleChanges, computed, inject, signal } from '@angular/core';
 import { GraphqlService } from './graphql.service';
 import { EntityMeta, FieldMeta, entityBySingle, toOptions } from './entities';
 import { Option } from './search-select';
@@ -39,6 +39,44 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   }
   get extraFilterValue(): string | null { return this._extraFilterValue; }
   private _extraFilterValue: string | null = null;
+
+  /**
+   * A free-text narrowing of the rows already loaded, for host pages that want a search box.
+   *
+   * Client-side and deliberately so. The connection is fetched once with `limit: 1000` and no
+   * paging, so within a scope every candidate row is already here; a round trip per keystroke would
+   * be slower than the filter it replaces. It also needs no backend support — a `.filter` argument
+   * is an equality on a column, which is not what "find the discipline whose name contains this" is.
+   *
+   * What it searches is exactly what the table shows: every visible cell, rendered through
+   * `display()`. So a search matches the ref labels and tag text a reader can see, and cannot match
+   * a column that was hidden by `presets`.
+   */
+  @Input()
+  set search(val: string | null | undefined) { this._search.set((val ?? '').trim()); }
+  get search(): string { return this._search(); }
+  private _search = signal('');
+
+  /** The rows after {@link search}; what the table renders. */
+  visibleRows = computed(() => {
+    const q = this._search().toLocaleLowerCase('uk');
+    if (!q) return this.rows();
+    return this.rows().filter((row) => this.rowText(row).includes(q));
+  });
+
+  /** Whether the search box, rather than an empty scope, is why nothing is listed. */
+  filteredToNothing = computed(() =>
+    !!this._search() && this.rows().length > 0 && this.visibleRows().length === 0);
+
+  private rowText(row: any): string {
+    return this.tableFields
+      .map((f) => {
+        const v = this.display(row, f);
+        return v === null || v === undefined ? '' : String(v);
+      })
+      .join(' ')
+      .toLocaleLowerCase('uk');
+  }
 
   /**
    * Key/value pairs pre-filled into the create form when openCreate() is called.

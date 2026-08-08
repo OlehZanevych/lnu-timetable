@@ -21,7 +21,8 @@
   }
 </header>
 
-<div class="layout">
+<div class="layout" [class.no-sidebar]="!auth.canNavigate()">
+  @if (auth.canNavigate()) {
   <nav class="sidebar">
     <a class="nav-home" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
       🎓 Факультети
@@ -43,6 +44,7 @@
       <a routerLink="/admin" routerLinkActive="active">Користувачі та права</a>
     }
   </nav>
+  }
   <main class="content">
     <router-outlet />
   </main>

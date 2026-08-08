@@ -30,16 +30,10 @@
   <div class="tv-toolbar">
     <label class="tv-picker">
       <span>Семестр</span>
-      <app-search-select [options]="parityOptions"
+      <app-search-select [options]="parityOptions" [clearable]="false"
                          [ngModel]="semesterParity()" (ngModelChange)="onParityChange($event)"
                          name="semesterParity" [ngModelOptions]="{ standalone: true }" />
     </label>
-    @if (semesterParity() === '') {
-      <p class="muted tv-scope-note">
-        Показано обидва семестри одразу &mdash; заняття різних півріч у сітці накладаються.
-        Оберіть семестр, щоб побачити розклад, за яким справді навчаються.
-      </p>
-    }
   </div>
 }
 
@@ -88,8 +82,8 @@
                       }
                       <span class="tv-course">
                         @if (e.courseId) {
-                          <a class="ent-link" [routerLink]="['/course', e.courseId]">{{ e.courseName }}</a>
-                        } @else { {{ e.courseName }} }
+                          <a class="ent-link" [routerLink]="['/course', e.courseId]">{{ e.courseLabel }}</a>
+                        } @else { {{ e.courseLabel }} }
                       </span>
                       <span class="tv-meta">
                         @if (e.hourTypeShort) { {{ e.hourTypeShort }} }

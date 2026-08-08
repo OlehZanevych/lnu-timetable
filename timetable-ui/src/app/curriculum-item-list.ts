@@ -7,6 +7,7 @@ import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
 import { CurriculumSummary } from './curriculum-summary';
 import { PlanHourType, PlanItemInput, buildCurriculumPlan } from './curriculum-plan';
+import { CourseTagRef, courseLabel } from './course-label';
 // `curriculum-report`, `pdf-fonts` and `workload-report` are imported dynamically in
 // downloadPlan(): see the comment there for why the PDF engine is kept out of the main bundle.
 
@@ -25,10 +26,6 @@ interface CurriculumItemHours {
   id: string;
   hourType: string;
   hours: number;
-}
-
-interface CourseTagRef {
-  tag: string;
 }
 
 interface CurriculumItem {
@@ -198,19 +195,15 @@ export class CurriculumItemList implements OnInit, OnChanges {
     const q = `{ courses { courseConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}"${scopeFilter}) { nodes { id name tags { tag } } } } }`;
     this.gql.request(q).subscribe({
       next: (d: any) => {
-        const opts: Option[] = d.courses.courseConnection.nodes.map((c: any) => ({ id: c.id, label: this.courseLabel(c.name, c.tags) }));
+        const opts: Option[] = d.courses.courseConnection.nodes.map((c: any) => ({ id: c.id, label: courseLabel(c.name, c.tags) }));
         this.courseOptions.set(opts);
       },
       error: () => {}
     });
   }
 
-  /** "Course name (tag1, tag2)" — tags are omitted entirely (along with the parentheses) when
-   *  the course has none. Used both for the course-selection dropdown and the curriculum table. */
-  courseLabel(name: string, courseTags?: CourseTagRef[] | null): string {
-    const tagList = (courseTags ?? []).map((t) => t.tag).filter(Boolean);
-    return tagList.length ? `${name} (${tagList.join(', ')})` : name;
-  }
+  /** Exposed for the template — the shared rule, see `course-label.ts`. */
+  courseLabel = courseLabel;
 
   onCourseFacultyFilterChange(facultyId: string) {
     this.courseFacultyFilter.set(facultyId);
