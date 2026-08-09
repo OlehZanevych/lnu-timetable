@@ -59,6 +59,14 @@ export interface PlanCourse {
   courseType: string;
   /** Free-form labels shown after the name, e.g. «англійською». */
   tags?: string[];
+  /**
+   * `courses.semester` — the one semester this discipline may be planned for, or null/absent for
+   * the great majority of courses, which may be planned for any. Carried here for the same reason
+   * `tags` is: `working-curriculum-plan` names disciplines on screen as well as on paper, and the
+   * label needs it. Nothing in the plan *arithmetic* reads it — the semester a position is actually
+   * in is `PlanItemInput.semester`, which is what every total is grouped by.
+   */
+  semester?: number | null;
 }
 
 /** One `curriculum_items` row with its `curriculum_item_hours` already folded into a map. */

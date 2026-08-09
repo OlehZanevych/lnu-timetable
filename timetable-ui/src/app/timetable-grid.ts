@@ -64,12 +64,12 @@ export type ColumnMode = 'group' | 'lecturer' | 'room' | 'single';
 // ── Input, as the GraphQL query returns it ──────────────────────────────────
 
 export interface RawCourseRef {
-  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+  course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
   curriculumItemHours?: {
     hourType?: string;
     curriculumItem?: {
       semester?: number;
-      course?: { id: string; name: string; courseType?: string; tags?: CourseTagRef[] | null } | null;
+      course?: { id: string; name: string; courseType?: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
       specialty?: { id: string; name: string } | null;
     } | null;
   } | null;
@@ -200,12 +200,15 @@ const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: str
   const elective = umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course ? ref.course : null;
   const name = elective ? elective.name : (umbrella?.name ?? '');
   // The tags follow the name for the same reason the id does: they describe whichever course is
-  // actually being taught here, not the umbrella group it was chosen from.
+  // actually being taught here, not the umbrella group it was chosen from. `courses.semester` — the
+  // semester the course itself is restricted to — follows them, and is not the same thing as the
+  // `semester` field below, which is the curriculum item's.
   const tags = elective ? elective.tags : umbrella?.tags;
+  const courseSemester = elective ? elective.semester : umbrella?.semester;
   return {
     id: elective ? elective.id : (umbrella?.id ?? ''),
     name,
-    label: name ? courseLabel(name, tags) : '',
+    label: name ? courseLabel(name, tags, courseSemester) : '',
     hourType: ref?.curriculumItemHours?.hourType ?? '',
     semester: ci?.semester ?? null,
     specialtyName: ci?.specialty?.name ?? '',

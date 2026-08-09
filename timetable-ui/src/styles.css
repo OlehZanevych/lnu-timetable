@@ -229,6 +229,9 @@ button.danger:hover { background: #991b1b !important; }
 .ce-course-header strong { font-family: Georgia, serif; font-size: 16px; color: var(--navy); }
 .ce-course-header > button { margin-left: auto; }
 .ce-badge-empty { background: #fbf3d7; color: #92400e; font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+/* A course restricted to one semester by `courses.semester`: the block offers no other. Blue
+   rather than the amber of .ce-badge-empty — this is a fact about the discipline, not a gap. */
+.ce-badge-fixed { background: #e8eef8; color: var(--navy); font-size: 11px; padding: 2px 8px; border-radius: 999px; }
 .ce-course-empty { display: block; font-size: 13px; }
 
 .ce-item-block { margin-bottom: 14px; padding: 12px 14px; background: #f7f9fc; border-radius: 8px;
@@ -251,8 +254,10 @@ button.danger:hover { background: #991b1b !important; }
 .ce-hours-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; flex: 1; min-width: 150px; }
 .ce-hours-row input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
 .ce-hours-row input::placeholder { color: #a5b0bd; font-style: italic; }
-/* A field whose value would drop an hours row that currently exists on the server. */
+/* A field whose value would drop an hours row that currently exists on the server — and, in the
+   item form above, a stored semester its course is no longer allowed in. */
 .ce-hours-row label.will-delete input { border-color: #b91c1c; background: #fef4f4; }
+.ce-item-form label.will-delete > span { color: #b91c1c; }
 .ce-hours-flag { color: #b91c1c; font-style: normal; font-size: 10px; margin-left: 4px;
   text-transform: uppercase; letter-spacing: .03em; }
 

@@ -177,16 +177,16 @@ export class LecturerDetailPage implements OnInit {
         timetableEntries { id }
         workingCurriculumItem {
           lecturerCount teachingFormat
-          course { id name tags { tag } }
+          course { id name semester tags { tag } }
           department { id name }
-          curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
+          curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
         }
         combinedWorkingCurriculumItem {
           workingCurriculumItems {
             lecturerCount teachingFormat
-            course { id name tags { tag } }
+            course { id name semester tags { tag } }
             department { id name }
-            curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
+            curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
           }
         }
       }
@@ -228,8 +228,8 @@ export class LecturerDetailPage implements OnInit {
           ? ref.course.name
           : (umbrella?.name ?? '—'),
         courseLabel: umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course
-          ? courseLabel(ref.course.name, ref.course.tags)
-          : courseLabel(umbrella?.name, umbrella?.tags),
+          ? courseLabel(ref.course.name, ref.course.tags, ref.course.semester)
+          : courseLabel(umbrella?.name, umbrella?.tags, umbrella?.semester),
         // The same elective-vs-umbrella choice as the label: the row links to the discipline it
         // names, not to the block it was chosen out of.
         courseId: umbrella?.courseType === 'ELECTIVE_GROUP' && ref?.course

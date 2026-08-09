@@ -374,8 +374,36 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     return input;
   }
 
+  /**
+   * The one thing this form checks beyond «обов'язкове поле»: a number outside the range its column
+   * accepts.
+   *
+   * It is here rather than on the input because `min`/`max` attributes alone do nothing — Angular
+   * puts `novalidate` on the forms it manages, so the browser never enforces them — and because of
+   * what the server does with the value if it gets through: a `CHECK` violation and a missing
+   * foreign key both arrive as `DataIntegrityViolationException`, and the generic handler reports
+   * either as the entity's `…_NOT_FOUND` status (see the service README's *Known limitations*). So
+   * «Семестр: 0» on a discipline would come back as "a referenced entity does not exist", which
+   * names the wrong problem entirely. Refusing it here is what keeps that limitation confined to
+   * callers who bypass the UI.
+   */
+  private validate(): string {
+    for (const f of this.meta.fields) {
+      if (f.type !== 'number') continue;
+      const raw = this.form[f.name];
+      if (raw === undefined || raw === null || raw === '') continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n)) return `Некоректне число в полі «${f.label}».`;
+      if (f.min !== undefined && n < f.min) return `«${f.label}»: не менше ${f.min}.`;
+      if (f.max !== undefined && n > f.max) return `«${f.label}»: не більше ${f.max}.`;
+    }
+    return '';
+  }
+
   save() {
     const m = this.meta;
+    const problem = this.validate();
+    if (problem) { this.error.set(problem); return; }
     const input = this.buildInput();
     const id = this.editingId();
     const op = id ? `update${m.name}` : `create${m.name}`;

@@ -36,10 +36,17 @@
     <tbody>
       @for (item of items(); track item.id) {
         <tr>
-          <td>{{ item.semester }}</td>
+          <td>
+            {{ item.semester }}
+            @if (rowOffSemester(item)) {
+              <em class="ce-hours-flag" title="Дисципліну дозволено планувати лише на семестр {{ item.course?.semester }}">
+                лише семестр {{ item.course?.semester }}
+              </em>
+            }
+          </td>
           <td>
             @if (item.course) {
-              <a class="ent-link" [routerLink]="['/course', item.course.id]">{{ courseLabel(item.course.name, item.course.tags) }}</a>
+              <a class="ent-link" [routerLink]="['/course', item.course.id]">{{ courseLabel(item.course.name, item.course.tags, item.course.semester) }}</a>
             } @else { &mdash; }
           </td>
           <td>{{ controlFormLabel(item.controlForm) }}</td>
@@ -90,11 +97,23 @@
         </label>
         <label>
           <span>Дисципліна *</span>
-          <app-search-select [options]="courseOptions()" [(ngModel)]="form['courseId']" name="courseId" />
+          <app-search-select [options]="courseOptions()" [ngModel]="form['courseId']"
+                             (ngModelChange)="onCourseChange($event)" name="courseId" />
         </label>
         <label>
           <span>Семестр *</span>
-          <input type="number" [(ngModel)]="form['semester']" name="semester" required />
+          <input type="number" min="1" [(ngModel)]="form['semester']" name="semester" required
+                 [disabled]="fixedSemester() !== null && !isOffSemester()" />
+          @if (fixedSemester() !== null) {
+            <small class="muted cp-field-hint">
+              @if (isOffSemester()) {
+                Позицію збережено на іншому семестрі, ніж дозволяє дисципліна
+                (лише семестр {{ fixedSemester() }}). Виправте значення, щоб зберегти.
+              } @else {
+                Цю дисципліну можна планувати лише на семестр {{ fixedSemester() }}.
+              }
+            </small>
+          }
         </label>
         <label>
           <span>Форма контролю *</span>

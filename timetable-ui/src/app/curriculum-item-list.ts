@@ -37,6 +37,8 @@ interface CurriculumItem {
     id: string;
     name: string;
     courseType?: string;
+    /** `courses.semester` — the one semester this discipline may be planned for, or null for any. */
+    semester?: number | null;
     tags?: CourseTagRef[];
     faculty?: { id: string };
     department?: { id: string; faculty?: { id: string } };
@@ -61,7 +63,8 @@ const toPlanItem = (item: CurriculumItem): PlanItemInput => {
           id: item.course.id,
           name: item.course.name,
           courseType: item.course.courseType ?? 'MANDATORY',
-          tags: (item.course.tags ?? []).map((t) => t.tag).filter(Boolean)
+          tags: (item.course.tags ?? []).map((t) => t.tag).filter(Boolean),
+          semester: item.course.semester ?? null
         }
       : null,
     hours
@@ -98,6 +101,22 @@ export class CurriculumItemList implements OnInit, OnChanges {
   items = signal<CurriculumItem[]>([]);
   courseOptions = signal<Option[]>([]);
   error = signal('');
+
+  /**
+   * `courses.semester` of the discipline currently picked in the modal, or null when it has none —
+   * which is every course until somebody sets the column.
+   *
+   * When it has one, the discipline may be planned for that semester and no other: the «Семестр»
+   * field is filled in with it and closed, and {@link save} re-checks. A signal rather than a field
+   * on `form` because the template reads it to decide whether the field is editable, and this page
+   * is zoneless.
+   */
+  fixedSemester = signal<number | null>(null);
+
+  /** `courses.id` → `courses.semester`, for the options currently offered. Filled by
+   *  {@link loadCourseOptions}; {@link openEdit} seeds the edited course itself, which the
+   *  faculty/department sub-filter may well be excluding. */
+  private courseSemesters = new Map<string, number>();
 
   private specialtySignal = signal<CurriculumSpecialty | null>(null);
   /** Raw `academic_groups.study_form` values among the specialty's groups; names the форма навчання. */
@@ -198,7 +217,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
       v.arg('specialtyId', 'ID', this.specialtyId),
       deptId ? v.arg('departmentId', 'ID', deptId) : v.optionalArg('facultyId', 'ID', facultyId)
     ].filter(Boolean).join(', ');
-    const q = `${v.declaration()}{ courses { courseConnection(${args}) { nodes { id name courseType tags { tag } } } } }`;
+    const q = `${v.declaration()}{ courses { courseConnection(${args}) { nodes { id name courseType semester tags { tag } } } } }`;
     this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         // An `ELECTIVE` is a choice inside a `ELECTIVE_GROUP`, and it is the group that a plan
@@ -207,10 +226,17 @@ export class CurriculumItemList implements OnInit, OnChanges {
         // drop a value the database holds, so a position that names an elective keeps naming it
         // until someone changes it on purpose.
         const editing = String(this.form['courseId'] ?? '');
-        const opts: Option[] = d.courses.courseConnection.nodes
-          .filter((c: any) => c.courseType !== 'ELECTIVE' || String(c.id) === editing)
-          .map((c: any) => ({ id: c.id, label: courseLabel(c.name, c.tags) }));
+        const offered = d.courses.courseConnection.nodes
+          .filter((c: any) => c.courseType !== 'ELECTIVE' || String(c.id) === editing);
+        for (const c of offered) {
+          const n = Number(c.semester);
+          if (Number.isInteger(n) && n > 0) this.courseSemesters.set(String(c.id), n);
+          else this.courseSemesters.delete(String(c.id));
+        }
+        const opts: Option[] = offered.map((c: any) => ({ id: c.id, label: courseLabel(c.name, c.tags, c.semester) }));
         this.courseOptions.set(opts);
+        // The list arrives after the modal opens, so the restriction is re-read once it is here.
+        this.fixedSemester.set(editing ? (this.courseSemesters.get(editing) ?? null) : null);
       },
       error: () => {}
     });
@@ -219,16 +245,50 @@ export class CurriculumItemList implements OnInit, OnChanges {
   /** Exposed for the template — the shared rule, see `course-label.ts`. */
   courseLabel = courseLabel;
 
+  /**
+   * A stored position sitting in a semester its course is not allowed in. Unreachable through this
+   * page now — the modal offers nothing else — but a course can be restricted *after* its positions
+   * were written, and a plan that silently disagrees with its own disciplines is worse than one
+   * that says so. Flagged in the table, and refused by {@link save} when the row is next edited.
+   */
+  rowOffSemester(item: CurriculumItem): boolean {
+    const fixed = Number(item.course?.semester);
+    return Number.isInteger(fixed) && fixed > 0 && item.semester !== fixed;
+  }
+
+  /**
+   * Picking a discipline restricted to one semester fills the «Семестр» field in with it and closes
+   * the field: the position belongs there and nowhere else, so the wrong value is unreachable
+   * rather than caught on save. Picking an unrestricted one re-opens the field and leaves whatever
+   * was typed — clearing it would throw away a value the user chose deliberately.
+   */
+  onCourseChange(courseId: string) {
+    this.form['courseId'] = courseId ?? '';
+    const fixed = courseId ? (this.courseSemesters.get(String(courseId)) ?? null) : null;
+    this.fixedSemester.set(fixed);
+    if (fixed !== null) this.form['semester'] = fixed;
+  }
+
+  /** A position stored in a semester its course is no longer allowed in — see {@link save}. */
+  isOffSemester(): boolean {
+    const fixed = this.fixedSemester();
+    const current = this.form['semester'];
+    return fixed !== null && current !== '' && current !== undefined && current !== null
+      && Number(current) !== fixed;
+  }
+
   onCourseFacultyFilterChange(facultyId: string) {
     this.courseFacultyFilter.set(facultyId);
     this.courseDepartmentFilter.set('');
     this.form['courseId'] = '';
+    this.fixedSemester.set(null);
     this.loadCourseOptions();
   }
 
   onCourseDepartmentFilterChange(deptId: string) {
     this.courseDepartmentFilter.set(deptId);
     this.form['courseId'] = '';
+    this.fixedSemester.set(null);
     this.loadCourseOptions();
   }
 
@@ -239,7 +299,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
     // ст. 62 ч. 1 п. 15 cannot be computed without it.
     const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
-      course { id name courseType tags { tag } faculty { id } department { id faculty { id } } }
+      course { id name courseType semester tags { tag } faculty { id } department { id faculty { id } } }
       hours { id hourType hours }
     } } } }`;
     this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
@@ -282,6 +342,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
     // belong to it; the user can still clear/change it to browse other faculties.
     this.courseFacultyFilter.set(this.specialtyFacultyId ?? '');
     this.courseDepartmentFilter.set('');
+    this.fixedSemester.set(null);
     this.loadCourseOptions();
     this.formError.set('');
     this.showForm.set(true);
@@ -309,6 +370,17 @@ export class CurriculumItemList implements OnInit, OnChanges {
     const courseFacultyId = deptId ? (item.course?.department?.faculty?.id ?? '') : (item.course?.faculty?.id ?? '');
     this.courseFacultyFilter.set(courseFacultyId || (this.specialtyFacultyId ?? ''));
     this.courseDepartmentFilter.set(deptId);
+    // Seeded from the row itself rather than waiting for the options: the faculty/department
+    // sub-filter above may not offer this course at all, and the stored semester still has to be
+    // measured against its course's restriction.
+    const own = Number(item.course?.semester);
+    if (item.course?.id && Number.isInteger(own) && own > 0) {
+      this.courseSemesters.set(String(item.course.id), own);
+      this.fixedSemester.set(own);
+    } else {
+      if (item.course?.id) this.courseSemesters.delete(String(item.course.id));
+      this.fixedSemester.set(null);
+    }
     this.loadCourseOptions();
 
     this.formError.set('');
@@ -328,6 +400,13 @@ export class CurriculumItemList implements OnInit, OnChanges {
    */
   save() {
     if (!this.specialtyId) return;
+    // The field is closed whenever a restriction applies, so this only fires on a position stored
+    // before its course was restricted — which is exactly the one that must not be re-saved as it
+    // stands.
+    if (this.isOffSemester()) {
+      this.formError.set(`Цю дисципліну можна планувати лише на семестр ${this.fixedSemester()}.`);
+      return;
+    }
     const input: Record<string, any> = { specialtyId: this.specialtyId, hours: this.buildHoursInput() };
     if (this.form['courseId']) input['courseId'] = this.form['courseId'];
     if (this.form['controlForm']) input['controlForm'] = this.form['controlForm'];

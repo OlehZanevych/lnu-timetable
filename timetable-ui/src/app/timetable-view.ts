@@ -220,15 +220,15 @@ export class TimetableView implements OnInit, OnChanges {
         academicGroups { id name }
         combinedGroups { name academicGroups { id name } }
         workingCurriculumItem {
-          course { id name tags { tag } }
+          course { id name semester tags { tag } }
           department { id name }
-          curriculumItemHours { hourType curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
+          curriculumItemHours { hourType curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
         }
         combinedWorkingCurriculumItem {
           workingCurriculumItems {
-            course { id name tags { tag } }
+            course { id name semester tags { tag } }
             department { id name }
-            curriculumItemHours { hourType curriculumItem { semester course { id name courseType tags { tag } } specialty { id name } } }
+            curriculumItemHours { hourType curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
           }
         }
       }

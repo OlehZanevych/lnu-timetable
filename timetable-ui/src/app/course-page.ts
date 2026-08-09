@@ -22,13 +22,29 @@ interface CourseInfo {
   id: string;
   name: string;
   courseType: string;
+  /** `courses.semester` — the one semester this discipline may be planned for, null for any. */
+  semester?: number | null;
   faculty?: { id: string; name: string } | null;
   department?: { id: string; name: string; faculty?: { id: string; name: string } | null } | null;
-  parentCourse?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
-  childCourses?: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null }[];
+  parentCourse?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
+  childCourses?: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null }[];
   specialties?: { id: string; name: string; code?: string }[];
   tags?: CourseTagRef[];
 }
+
+/**
+ * `courses.semester` as the two forms on this page send it: a number, or an explicit `null` when
+ * the field is left empty — which is what *lifts* the restriction rather than leaving it as it was,
+ * since an omitted field leaves the column untouched (see `BaseEntity#buildInput`, which does the
+ * same for the generic «Дисципліни» table). A value that is not a positive number also reads as
+ * "not set": the input is `type="number" min="1"`, so getting here with anything else means the
+ * field was typed into and then emptied.
+ */
+const semesterInput = (raw: unknown): number | null => {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.trunc(n) : null;
+};
 
 /** One curriculum_items row this course appears in, with everything hanging off it. */
 interface CurriculumRow {
@@ -49,7 +65,7 @@ interface CurriculumRow {
       combinedWorkingCurriculumItems?: { id: string; workloads?: WorkloadRow[] }[];
       department?: { id: string; name: string; faculty?: { id: string } | null } | null;
       /** The elective actually chosen, set only when this item's discipline is an ELECTIVE_GROUP. */
-      course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+      course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
       academicGroups?: { id: string; name: string }[];
       workloads?: WorkloadRow[];
     }[];
@@ -63,7 +79,7 @@ interface ExtraWorkingItem {
   teachingFormat: string;
   combinedWorkingCurriculumItems?: { id: string; workloads?: WorkloadRow[] }[];
   department?: { id: string; name: string; faculty?: { id: string } | null } | null;
-  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+  course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
   academicGroups?: { id: string; name: string }[];
   workloads?: WorkloadRow[];
   curriculumItemHours?: {
@@ -75,7 +91,7 @@ interface ExtraWorkingItem {
       semester: number;
       ectsCredits?: number;
       specialty?: { id: string; name: string } | null;
-      course?: { id: string; name: string; courseType?: string; tags?: CourseTagRef[] | null } | null;
+      course?: { id: string; name: string; courseType?: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
     } | null;
   } | null;
 }
@@ -253,7 +269,7 @@ export class CourseDetailPage implements OnInit {
 
   /** This umbrella's electives — the section's rows. */
   childCourses = computed(() => [...(this.course()?.childCourses ?? [])]
-    .sort((a, b) => compareUk(courseLabel(a.name, a.tags), courseLabel(b.name, b.tags))));
+    .sort((a, b) => compareUk(courseLabel(a.name, a.tags, a.semester), courseLabel(b.name, b.tags, b.semester))));
 
   course = signal<CourseInfo | null>(null);
   curricula = signal<CurriculumRow[]>([]);
@@ -341,7 +357,7 @@ export class CourseDetailPage implements OnInit {
   departmentOptions = signal<Option[]>([]);
   specialtyOptions = signal<Option[]>([]);
   /** Every course, kept whole so the umbrella picker below can be derived from it. */
-  private allCourses = signal<{ id: string; name: string; courseType: string; tags?: CourseTagRef[] | null }[]>([]);
+  private allCourses = signal<{ id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null }[]>([]);
 
   /**
    * A `parentCourse` is only ever an umbrella `ELECTIVE_GROUP`, so the picker offers those rather
@@ -352,7 +368,7 @@ export class CourseDetailPage implements OnInit {
     const current = this.course()?.parentCourse?.id ?? '';
     return this.allCourses()
       .filter((c) => c.id !== this.courseId && (c.courseType === 'ELECTIVE_GROUP' || c.id === current))
-      .map((c) => ({ id: c.id, label: courseLabel(c.name, c.tags) }));
+      .map((c) => ({ id: c.id, label: courseLabel(c.name, c.tags, c.semester) }));
   });
 
   /**
@@ -413,7 +429,7 @@ export class CourseDetailPage implements OnInit {
             workloadCount: (wci.workloads ?? []).length,
             scheduledClasses: scheduled,
             electiveCourseId: wci.course?.id ?? '',
-            electiveLabel: wci.course ? courseLabel(wci.course.name, wci.course.tags) : '',
+            electiveLabel: wci.course ? courseLabel(wci.course.name, wci.course.tags, wci.course.semester) : '',
             groupIds: (wci.academicGroups ?? []).map((g) => String(g.id)),
             merged: (wci.combinedWorkingCurriculumItems ?? []).length > 0,
             viaUmbrella: ''
@@ -452,11 +468,11 @@ export class CourseDetailPage implements OnInit {
         workloadCount: (wci.workloads ?? []).length,
         scheduledClasses: scheduled,
         electiveCourseId: wci.course?.id ?? '',
-        electiveLabel: wci.course ? courseLabel(wci.course.name, wci.course.tags) : '',
+        electiveLabel: wci.course ? courseLabel(wci.course.name, wci.course.tags, wci.course.semester) : '',
         groupIds: (wci.academicGroups ?? []).map((g) => String(g.id)),
         merged: (wci.combinedWorkingCurriculumItems ?? []).length > 0,
         /** Delivered under another discipline's plan position — this course was chosen for it. */
-        viaUmbrella: ci?.course ? courseLabel(ci.course.name, ci.course.tags) : ''
+        viaUmbrella: ci?.course ? courseLabel(ci.course.name, ci.course.tags, ci.course.semester) : ''
       });
     }
 
@@ -552,10 +568,10 @@ export class CourseDetailPage implements OnInit {
   /** The umbrella this elective is delivered under, named for the info tab's note. */
   umbrellaLabel = computed(() => {
     const parent = this.course()?.parentCourse;
-    if (parent) return courseLabel(parent.name, parent.tags);
+    if (parent) return courseLabel(parent.name, parent.tags, parent.semester);
     for (const wci of this.extraWorkingItems()) {
       const c = wci.curriculumItemHours?.curriculumItem?.course;
-      if (c && String(c.id) !== this.courseId) return courseLabel(c.name, c.tags);
+      if (c && String(c.id) !== this.courseId) return courseLabel(c.name, c.tags, c.semester);
     }
     return '';
   });
@@ -669,11 +685,11 @@ export class CourseDetailPage implements OnInit {
   private load() {
     this.loading.set(true);
     const courseQuery = `query($id: ID!) { courses { course(id: $id) {
-      id name courseType
+      id name courseType semester
       faculty { id name }
       department { id name faculty { id name } }
-      parentCourse { id name tags { tag } }
-      childCourses { id name courseType tags { id tag } }
+      parentCourse { id name semester tags { tag } }
+      childCourses { id name courseType semester tags { id tag } }
       specialties { id name code }
       tags { id tag }
     } } }`;
@@ -696,7 +712,7 @@ export class CourseDetailPage implements OnInit {
             roomGroups { id name }
             timetableEntries { id dayOfWeek weekParity classStartTime { id ordinal startTime } room { id number name } } } }
           department { id name faculty { id } }
-          course { id name tags { tag } }
+          course { id name semester tags { tag } }
           academicGroups { id name }
           workloads {
             id durationHours
@@ -733,11 +749,11 @@ export class CourseDetailPage implements OnInit {
         roomGroups { id name }
         timetableEntries { id dayOfWeek weekParity classStartTime { id ordinal startTime } room { id number name } } } }
       department { id name faculty { id } }
-      course { id name tags { tag } }
+      course { id name semester tags { tag } }
       academicGroups { id name }
       curriculumItemHours {
         id hourType hours
-        curriculumItem { id semester ectsCredits specialty { id name } course { id name courseType tags { tag } } }
+        curriculumItem { id semester ectsCredits specialty { id name } course { id name courseType semester tags { tag } } }
       }
       workloads {
         id durationHours
@@ -780,7 +796,7 @@ export class CourseDetailPage implements OnInit {
       faculties { facultyConnection(limit: $facultyLimit) { nodes { id name } } }
       departments { departmentConnection(limit: $departmentLimit) { nodes { id name } } }
       specialties { specialtyConnection(limit: $departmentLimit) { nodes { id code name } } }
-      courses { courseConnection(limit: $departmentLimit) { nodes { id name courseType tags { tag } } } }
+      courses { courseConnection(limit: $departmentLimit) { nodes { id name courseType semester tags { tag } } } }
     }`;
     this.gql.request(q, { facultyLimit: 200, departmentLimit: 1000 }).subscribe({
       next: (d: any) => {
@@ -815,6 +831,7 @@ export class CourseDetailPage implements OnInit {
       facultyId: c.faculty?.id ?? '',
       departmentId: c.department?.id ?? '',
       parentCourseId: c.parentCourse?.id ?? '',
+      semester: c.semester ?? '',
       specialtyIds: (c.specialties ?? []).map((sp) => String(sp.id)),
       tags: (c.tags ?? []).map((t) => t.tag).filter(Boolean).join(', '),
     };
@@ -855,6 +872,9 @@ export class CourseDetailPage implements OnInit {
       }
       input[f] = v;
     }
+    // `semester` is an Int, so it goes through Number() rather than being sent as the string the
+    // input element holds; cleared, it is an explicit null, which is what lifts the restriction.
+    input['semester'] = semesterInput(this.editForm['semester']);
     const q = `mutation($id: ID!, $input: CourseInputPayload!) { courses { updateCourse(id: $id, course: $input) { isSuccess errorStatus } } }`;
     this.gql.request(q, { id: this.courseId, input }).subscribe({
       next: (d: any) => {
@@ -891,13 +911,19 @@ export class CourseDetailPage implements OnInit {
       courseType: 'ELECTIVE',
       departmentId: c?.department?.id ?? '',
       facultyId: c?.faculty?.id ?? c?.department?.faculty?.id ?? '',
+      // Deliberately *not* inherited from the group, unlike кафедра and факультет above: the
+      // group's semester is the semester its slot in the plan sits in, and the child is never a
+      // plan position in its own right (see `isPlannable` in curriculum-editor.ts), so copying the
+      // value here would restrict a course on grounds that do not apply to it. Set it by hand if
+      // an elective really is a course of one semester.
+      semester: '',
       tags: ''
     };
     this.childError.set('');
     this.showChildForm.set(true);
   }
 
-  openChildEdit(child: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null }) {
+  openChildEdit(child: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null }) {
     this.childTagIds = new Map((child.tags ?? [])
       .filter((t) => t.tag && t.id)
       .map((t) => [t.tag, String(t.id)]));
@@ -905,6 +931,7 @@ export class CourseDetailPage implements OnInit {
     this.childForm = {
       name: child.name ?? '',
       courseType: child.courseType ?? 'ELECTIVE',
+      semester: child.semester ?? '',
       tags: courseTagNames(child.tags).join(', ')
     };
     this.childError.set('');
@@ -927,6 +954,7 @@ export class CourseDetailPage implements OnInit {
     const input: Record<string, any> = {
       name,
       courseType: this.childForm['courseType'] || 'ELECTIVE',
+      semester: semesterInput(this.childForm['semester']),
       tags: String(this.childForm['tags'] ?? '')
         .split(',').map((t) => t.trim()).filter(Boolean)
         .map((tag) => {
@@ -1966,7 +1994,7 @@ export class CourseDetailPage implements OnInit {
 
   /** The electives a group may be given, when this page's course is the umbrella. */
   electiveOptions = computed<Option[]>(() =>
-    this.childCourses().map((c) => ({ id: c.id, label: courseLabel(c.name, c.tags) })));
+    this.childCourses().map((c) => ({ id: c.id, label: courseLabel(c.name, c.tags, c.semester) })));
 
   openWciCreate() {
     this.wciEditingId.set(null);

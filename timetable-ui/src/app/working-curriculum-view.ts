@@ -100,12 +100,12 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
     this.loading.set(true);
     const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
-      course { id name courseType tags { tag } }
+      course { id name courseType semester tags { tag } }
       hours { id hourType hours
         workingCurriculumItems {
           id lecturerCount teachingFormat
           department { id name }
-          course { id name tags { tag } }
+          course { id name semester tags { tag } }
           academicGroups { id name studentsCount }
         }
       }
@@ -212,7 +212,7 @@ const toPlanItem = (node: any): WorkingPlanItemInput => ({
   ectsCredits: node.ectsCredits ?? 0,
   course: node.course
     ? { id: node.course.id, name: node.course.name, courseType: node.course.courseType ?? 'MANDATORY',
-        tags: courseTagNames(node.course.tags) }
+        tags: courseTagNames(node.course.tags), semester: node.course.semester ?? null }
     : null,
   hours: (node.hours ?? []).map((h: any) => ({
     id: h.id,

@@ -61,11 +61,23 @@
     <div class="tv-toolbar">
       <label class="tv-picker">
         <span>Семестр</span>
-        <app-search-select [options]="parityOptions" [clearable]="false"
+        <app-search-select [options]="parityOptions" [clearable]="parityClearable()"
+                           placeholder="— весь рік —"
                            [ngModel]="semesterParity()" (ngModelChange)="onParityChange($event)"
                            name="deskParity" [ngModelOptions]="{ standalone: true }" />
       </label>
-      <p class="muted tv-scope-note">Показано {{ parityTitle() }}.</p>
+      <p class="muted tv-scope-note">
+        Показано {{ parityTitle() }}.
+        @if (wholeYear()) {
+          Обидва півріччя в одному переліку &mdash; півріччя кожного рядка вказано в колонці
+          &laquo;Семестр&raquo;.
+        } @else if (parityClearable()) {
+          Щоб побачити весь рік, очистіть вибір семестру (&#x2715;).
+        }
+        @if (activeSection() === 'timetable') {
+          Розклад показують по одному півріччю: заняття різних півріч ніколи не відбуваються разом.
+        }
+      </p>
     </div>
 
     @switch (activeSection()) {
@@ -282,7 +294,7 @@
           <app-timetable-view
             [lecturerIds]="lecturerIds()"
             columnMode="single"
-            [externalSemesterParity]="semesterParity()"
+            [externalSemesterParity]="gridParity()"
             heading="Мій розклад занять"
             [report]="{ kind: 'LECTURER', subjectName: timetableSubject(),
                         facultyName: timetableFaculty() }" />
@@ -294,7 +306,7 @@
           <app-timetable-view
             [academicGroupIds]="academicGroupIds()"
             columnMode="single"
-            [externalSemesterParity]="semesterParity()"
+            [externalSemesterParity]="gridParity()"
             heading="Мій розклад занять"
             [report]="{ kind: 'ACADEMIC_GROUP', subjectName: timetableSubject(),
                         facultyName: timetableFaculty() }" />
