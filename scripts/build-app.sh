@@ -97,8 +97,39 @@ if [[ -z "$JAR" ]]; then
 fi
 
 # Sanity check: the frontend really is inside the artifact, not merely next to it.
-if ! unzip -l "$JAR" 2>/dev/null | grep -q 'BOOT-INF/classes/static/index.html'; then
+#
+# Read the archive with whatever the machine has. unzip is not installed by default on a minimal
+# Ubuntu server, and sending its "command not found" to /dev/null made a missing *tool* look
+# exactly like a missing *frontend* — a build that had succeeded reported as one that had silently
+# dropped the client. jar comes with the JDK this script already insists on; python3 is on any
+# Ubuntu.
+list_jar_entries() {
+    if command -v unzip >/dev/null 2>&1; then
+        unzip -l "$1"
+    elif command -v jar >/dev/null 2>&1; then
+        jar tf "$1"
+    elif command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import sys, zipfile; print("\\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))' "$1"
+    else
+        return 127
+    fi
+}
+
+if ! JAR_ENTRIES="$(list_jar_entries "$JAR")"; then
+    echo "Error: cannot read $JAR — none of unzip, jar or python3 is available to list its contents." >&2
+    echo "       This says nothing about the jar itself. Install one of them and re-run." >&2
+    exit 1
+fi
+
+if ! grep -q 'BOOT-INF/classes/static/index.html' <<< "$JAR_ENTRIES"; then
     echo "Error: $JAR does not contain BOOT-INF/classes/static/index.html — the frontend was not packaged." >&2
+    if [[ -f "$STATIC_DIR/index.html" ]]; then
+        echo "       $STATIC_DIR/index.html does exist, so it is the packaging that dropped it," >&2
+        echo "       not the Angular build." >&2
+    else
+        echo "       $STATIC_DIR/index.html does not exist either, so the Angular build is what failed." >&2
+        echo "       Run scripts/build-ui.sh on its own to see why." >&2
+    fi
     exit 1
 fi
 
