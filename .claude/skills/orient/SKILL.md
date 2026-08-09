@@ -79,6 +79,7 @@ grep -n "^## \|^### " timetable-ui/README.md
 | Workload generation | `timetable-ui/WORKLOAD-GENERATION.md`, and `scripts/workload-bench/README.md` for the measurements |
 | A printable form | the matching `timetable-ui/*-PDF.md` |
 | Performance, batching, N+1 | `timetable/README.md` → *Avoiding N+1 queries* |
+| Deploying it, keeping it running, the update job | `scripts/deploy/README.md` |
 
 **Do not bulk-read the topic files** (`TIMETABLE-GENERATION.md`, `WORKLOAD-GENERATION.md`, the four
 `*-PDF.md`) unless the task is that topic. Between them they are ~2,900 lines of depth that no

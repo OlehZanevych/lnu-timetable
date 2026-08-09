@@ -34,6 +34,7 @@ explain the same thing twice.
 | The workload generator | `timetable-ui/WORKLOAD-GENERATION.md` |
 | A printable form | the matching `timetable-ui/*-PDF.md` |
 | The benchmark | `timetable-ui/scripts/workload-bench/README.md` |
+| Running it as a service, the systemd unit, the update job | `scripts/deploy/README.md` |
 
 The root `README.md` gets **one or two sentences and a link** — what the system now does, never how
 it does it. If a change is only mechanical (a rename, a bulk refactor already covered by a stated
