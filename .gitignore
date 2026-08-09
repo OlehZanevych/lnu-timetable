@@ -3,3 +3,7 @@
 
 # Scratch space used when the repo is edited from a sandbox that cannot delete files.
 _to_delete/
+
+# Deployment state on a host running scripts/deploy/install-service.sh: the deployed jar, the
+# previous one kept for rollback, the update job's log and its lock file. Runtime, not source.
+run/

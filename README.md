@@ -190,6 +190,22 @@ through `ps`, so prefer the environment-variable forms — `SPRING_R2DBC_PASSWOR
 The schema is still not created on startup: run `schema.sql` and `data.sql` against the target
 database once first.
 
+### Keeping it running
+
+Doing the above by hand on every deployment — pull, build, kill the old process, start a new one
+with its credentials on the command line — is what [`scripts/deploy/`](./scripts/deploy/README.md)
+automates, in one command:
+
+```bash
+sudo scripts/deploy/install-service.sh
+```
+
+That installs a systemd unit which keeps the jar running and starts it again after a reboot, and a
+cron job which checks the tracked branch every ten minutes and rebuilds, redeploys and restarts when
+it moves — putting the previous jar back if the new one will not come up. It also supplies
+`--spring.profiles.active=` and passes the credentials as environment variables rather than
+arguments, which are the two things in this section that are easiest to forget.
+
 ---
 
 ## Documentation
@@ -206,6 +222,7 @@ database once first.
 | [`timetable-ui/WORKLOAD-PDF.md`](./timetable-ui/WORKLOAD-PDF.md) | the printable workload sheet — what each part of the document answers to in Ukrainian practice, and the ДСТУ 4163:2020 layout rules |
 | [`timetable-ui/TIMETABLE-PDF.md`](./timetable-ui/TIMETABLE-PDF.md) | the printable class timetable in its five cuts — why no law mentions it at all, why no sanitary regulation applies to higher education, why only the faculty sheet is approved, and the grid-versus-list layout rule |
 | [`timetable/scripts/lnu_import/README.md`](./timetable/scripts/lnu_import/README.md) | the two-stage pipeline that scraped the real LNU structure into `data.sql`, and how to re-run it |
+| [`scripts/deploy/README.md`](./scripts/deploy/README.md) | running the jar as a service on a Linux host — the systemd unit and why it replaced a pidfile and a polling health check, the job that tracks a branch and rebuilds when it moves, why the deployed jar is a copy and what that buys when a build fails, and what a deployment deliberately does not inherit from the development profile |
 
 ---
 
@@ -244,8 +261,12 @@ whole university and narrow it down in the browser.
 
 ```
 lnu-timetable/
+├── run/                  exists only on a deployment host: the deployed jar, the one kept
+│                         to roll back to, and the update log (git-ignored)
 ├── scripts/              build-ui.sh (Angular → the service's static resources) and
-│                         build-app.sh (that, then the deployable jar)
+│   │                     build-app.sh (that, then the deployable jar)
+│   └── deploy/           running that jar as a service: the systemd unit, the branch-
+│                         tracking update job, and the installer that sets both up
 ├── timetable/            the GraphQL service
 │   ├── src/main/java/org/lnu/timetable/
 │   │   ├── config/       the four schema-config classes — the whole API definition
@@ -287,3 +308,7 @@ JWT secret and database password checked into `application-loc.properties` are d
 that profile is active inside the packaged jar too, the CORS filter allows any origin, and the
 client has no automated tests. Read those sections — and *Running it as a single jar* above, for
 what to override — before deploying any of this anywhere real.
+On a host configured by `scripts/deploy/install-service.sh` one of them is answered: the service
+runs with that profile dropped and its own credentials, and the installer refuses a JWT secret that
+is the checked-in one. The rest still stand — it does not create the database and it does not touch
+the CORS filter.
