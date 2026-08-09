@@ -13,7 +13,11 @@
 #
 # Usage (run from anywhere):
 #   scripts/build-ui.sh
-#   scripts/build-ui.sh --clean     # reinstall node_modules from package-lock.json first
+#   scripts/build-ui.sh --clean     # discard node_modules and reinstall first
+#
+# Dependencies are installed with "npm ci" when a package-lock.json is present and with
+# "npm install" when it is not: package-lock.json is git-ignored, so a fresh clone has none,
+# and "npm ci" refuses to run without one.
 #
 # Requires Node.js 20+ and npm.
 
@@ -29,7 +33,7 @@ CLEAN_INSTALL=false
 for arg in "$@"; do
     case "$arg" in
         --clean) CLEAN_INSTALL=true ;;
-        -h|--help) sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "Error: unknown argument '$arg' (try --clean or --help)" >&2; exit 1 ;;
     esac
 done
@@ -46,12 +50,27 @@ fi
 
 cd "$UI_DIR"
 
+# "npm ci" is the reproducible install, but it exists only for a tree that has a lockfile —
+# without one it fails outright rather than falling back. package-lock.json is git-ignored
+# (timetable-ui/.gitignore), so a fresh clone is exactly that case; "npm install" resolves
+# package.json and writes the lockfile the next run will use.
+if [[ -f package-lock.json ]]; then
+    INSTALL_CMD=(npm ci)
+    INSTALL_LABEL="npm ci (from package-lock.json)"
+else
+    INSTALL_CMD=(npm install)
+    INSTALL_LABEL="npm install (no package-lock.json to run npm ci from)"
+fi
+
 if [[ "$CLEAN_INSTALL" == true ]]; then
-    echo "==> npm ci (clean install from package-lock.json)"
-    npm ci
+    # npm ci wipes node_modules itself; npm install does not, so --clean has to mean the same
+    # thing in both branches.
+    rm -rf node_modules
+    echo "==> clean install: $INSTALL_LABEL"
+    "${INSTALL_CMD[@]}"
 elif [[ ! -d node_modules ]]; then
-    echo "==> node_modules missing; npm ci"
-    npm ci
+    echo "==> node_modules missing; $INSTALL_LABEL"
+    "${INSTALL_CMD[@]}"
 else
     echo "==> node_modules present; skipping install (pass --clean to reinstall)"
 fi
