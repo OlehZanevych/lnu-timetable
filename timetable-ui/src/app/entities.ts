@@ -5,6 +5,16 @@ export interface FieldMeta {
   label: string;
   type: 'text' | 'number' | 'boolean' | 'textarea' | 'ref' | 'enum' | 'multiref' | 'tags' | 'time';
   required?: boolean;
+  /**
+   * number-only: the range the column actually accepts. Declared where a `CHECK` constraint backs
+   * it, so the form refuses the value rather than letting the server reject it — the generic error
+   * handler cannot tell a `CHECK` violation from a missing foreign key and reports one as the
+   * other (see the service README's *Known limitations*), so a bare `min` on the input is not
+   * enough: Angular puts `novalidate` on every form it manages, and native constraint validation
+   * never runs. `BaseEntity#validate` is what enforces these.
+   */
+  min?: number;
+  max?: number;
   // time-only: hour dropdown bounds and the minute dropdown's step, in minutes
   minHour?: number;
   maxHour?: number;
@@ -151,6 +161,11 @@ export const HOUR_TYPE_OPTIONS = [
  *
  * There is deliberately no "whole year": a grid holding both halves overlays classes that never
  * coexist and shows rooms and lecturers as double-booked when they are not.
+ *
+ * One screen lets its picker be **cleared** instead, and an empty picker is the whole year: «Мій
+ * кабінет», on its two *table* tabs. That is not a third entry here — an empty value is the absence
+ * of a choice, not another half-year — and every other picker built from this list, «Мій кабінет»'s
+ * own grid tab included, passes `[clearable]="false"`.
  */
 // Typed by inference rather than annotated: `entities.ts` has no Angular or component imports, and
 // naming search-select's `Option` here would be the first. The literal is structurally identical.
@@ -248,6 +263,11 @@ export const ENTITIES: EntityMeta[] = [
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name'),
       ref('departmentId', 'Кафедра', 'department', 'department', 'name'),
       ref('parentCourseId', 'Група вибіркових', 'course', 'parentCourse', 'name'),
+      // Optional, and null on almost every course: set it only when the discipline belongs to one
+      // particular semester and to no other — which is what a «Група вибіркових» normally is. The
+      // two curriculum screens then offer that semester and nothing else, and every list that names
+      // the course prints it before the tags. `min` mirrors `courses_semester_check`.
+      { name: 'semester', label: 'Семестр', type: 'number', min: 1 },
       multiref('specialtyIds', 'Спеціальності', 'specialty', 'specialties', 'name'),
       tags('tags', 'Теги', 'tags', 'tag')
     ]

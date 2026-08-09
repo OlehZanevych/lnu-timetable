@@ -327,7 +327,7 @@ export function buildWorkingCurriculumPlan(
       id: item.id,
       courseId: item.course?.id ?? '',
       name: item.course?.name ?? '—',
-      label: courseLabel(item.course?.name, item.course?.tags),
+      label: courseLabel(item.course?.name, item.course?.tags, item.course?.semester),
       courseType: item.course?.courseType ?? '',
       semester: item.semester,
       courseYear: courseYearOf(item.semester),

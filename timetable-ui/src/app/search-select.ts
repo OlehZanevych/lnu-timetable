@@ -39,9 +39,10 @@ export class SearchSelect implements ControlValueAccessor {
   placeholder = input('— оберіть —');
   /**
    * Whether the ✕ that empties the control is offered. Set `false` where `''` is not a value the
-   * field can hold — a семестр picker, say: the empty string is not "no filter" there, it is a
-   * value the backend's parity filter matches no row with, so clearing would empty the timetable
-   * and blame the data.
+   * field can hold — the семестр picker above a timetable, say: the empty string is not "no filter"
+   * there, it is a value the backend's parity filter matches no row with, so clearing would empty
+   * the grid and blame the data. Where `''` *is* a meaning the screen has — «Мій кабінет»'s tables
+   * read it as the whole year — the ✕ is offered and the host decides what an empty value does.
    */
   clearable = input(true);
 

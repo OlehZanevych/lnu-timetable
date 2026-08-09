@@ -134,7 +134,8 @@ particular database happens to hold — and why every migration in the tree is w
 nothing on a second run rather than to assume it runs once. Each does it differently, according to
 what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF NOT EXISTS` and
 `ON CONFLICT DO NOTHING`, V3 and V4 by testing `pg_constraint` / the rows themselves, V5 by testing
-`pg_type` and `ADD COLUMN IF NOT EXISTS`.
+`pg_type` and `ADD COLUMN IF NOT EXISTS`, V6 by both — `ADD COLUMN IF NOT EXISTS` for the column and
+`pg_constraint` for the `CHECK`, since there is no `ADD CONSTRAINT IF NOT EXISTS`.
 
 ### `V1__delete_curriculum_items_on_elective_courses.sql`
 
@@ -236,6 +237,32 @@ children, and grant the same scope to somebody else — so nobody loses access o
 ships. Narrowing those grants is a decision for whoever administers them, and the «Доступ» panel
 makes it two clicks; silently demoting live grants here would instead present itself as the
 application breaking.
+
+### `V6__course_semester.sql`
+
+Adds `courses.semester` — nullable, `CHECK (semester IS NULL OR semester > 0)` — the one semester a
+discipline may be planned for.
+
+`curriculum_items` already records the semester a discipline is *studied* in, and for almost every
+course that is the right and only place for it: the same дисципліна can be a second-semester
+component of one programme and a fourth-semester one of another. An **`ELECTIVE_GROUP`** is not like
+that. It exists to reserve one slot, in one semester, that a student fills with one of its children,
+and its name usually says so — «Вибіркова дисципліна 5» means nothing anywhere but the fifth
+semester, and a position putting it in the sixth is an error nobody notices until the розклад is
+built around it. The column is settable on any course; it is the `ELECTIVE_GROUP` that needs it.
+
+Nothing in the database enforces the agreement between this column and `curriculum_items.semester`,
+deliberately. The service stores and serves — it validates a `TimetableEntry` against no scheduling
+rule either — and a constraint here would reject, at the moment somebody restricts a course, a plan
+that was legal when it was written. The client is where the rule lives: both curriculum screens
+offer that semester and no other, and flag a position stored before the restriction rather than
+silently rewriting it. See the client README's *Editing a curriculum course-first*.
+
+The migration is a no-op on a database created from the current `schema.sql`, which carries the
+column: `ADD COLUMN IF NOT EXISTS` skips it, and the `CHECK` is added only when `pg_constraint` says
+it is absent. Both routes were built and `\d courses` diffed — they end at the same definition,
+constraint name included, with the column last on the migrated route for the same reason V2's `id`
+is (a migration can only append).
 
 
 ---
@@ -340,7 +367,7 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `Faculty` | `faculties` | → building?, departments, specialties, rooms |
 | `Department` (кафедра) | `departments` | → faculty, lecturers, courses |
 | `Specialty` (спеціальність) | `specialties` | code, degree; → faculty, groups, curriculum items |
-| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N specialties this course may be added to a curriculum for (`course_specialties`), 1-N tags |
+| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`), optional `semester` — when set, the only semester the discipline may be planned for, enforced by the client on both curriculum screens and printed before its tags wherever it is named (see [`V6`](#v6__course_semestersql)); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N specialties this course may be added to a curriculum for (`course_specialties`), 1-N tags |
 | `CourseTag` | `course_tags` | free-form label shown after the course's name (e.g. "англійською"); → course |
 | `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **specialty directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
 | `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/CONSULTATION/ASSESSMENT/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
@@ -1619,8 +1646,9 @@ setup](#database-setup).
   substring `"NOT_FOUND"`, so it cannot distinguish the two. `lecturer_workloads.duration_hours`
   (`CHECK … BETWEEN 1 AND 4`) surfaces as `LECTURERWORKLOAD_NOT_FOUND`; a malformed
   `constraint_value` on any of the three timetable-constraint tables surfaces as its parent's
-  `RELATED_NOT_FOUND`; `room_groups_scope_check` and `class_start_time_sets_default_scope_check`
-  behave the same way. In practice each is only reachable by bypassing the UI, which validates the
+  `RELATED_NOT_FOUND`; `room_groups_scope_check`, `class_start_time_sets_default_scope_check` and
+  `courses_semester_check` (a `semester` of `0` or less on a discipline) behave the same way. In
+  practice each is only reachable by bypassing the UI, which validates the
   same rules client-side and blocks the save — but a direct API caller gets a message that names
   the wrong problem. Distinguishing them would mean inspecting the Postgres `SQLSTATE`
   (`23514` check vs. `23503` foreign key) in that handler.

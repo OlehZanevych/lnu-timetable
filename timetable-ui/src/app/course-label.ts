@@ -7,6 +7,11 @@
  * beside the name the two are indistinguishable in every list that shows one. So the label, not the
  * bare name, is what the UI renders wherever a course is named.
  *
+ * A course may additionally be restricted to one semester (`courses.semester`), and that value is
+ * written first inside the same parentheses — «Вибіркова дисципліна 5 (семестр 5, англійською)».
+ * It is the same question as the tags answer, asked of a група вибіркових: which slot of the plan
+ * is this, out of several with near-identical names.
+ *
  * This module is pure — no Angular, no GraphQL, no I/O — for the same reason the other thirteen are
  * (see the README's *The pure modules*): it is one formatting rule, it is applied in about twenty
  * places, and three of those had already grown their own private copy of it before this file
@@ -32,7 +37,7 @@ export interface CourseTagRef {
 export type CourseTagInput = CourseTagRef | string | null | undefined;
 
 /** The GraphQL selection to add wherever a course is fetched for display. */
-export const COURSE_TAGS_SELECTION = 'tags { tag }';
+export const COURSE_LABEL_SELECTION = 'semester tags { tag }';
 
 /** Flattens either shape to plain strings, dropping empties. */
 export function courseTagNames(tags?: readonly CourseTagInput[] | null): string[] {
@@ -42,12 +47,42 @@ export function courseTagNames(tags?: readonly CourseTagInput[] | null): string[
 }
 
 /**
+ * `courses.semester`, as it is written inside the parentheses: `"семестр 5"`, or `''` when the
+ * course is not restricted to one — which is every course until somebody says otherwise.
+ *
+ * Accepts a string because GraphQL numbers arrive through form fields and `Record<string, any>`
+ * payloads as often as they arrive typed, and a `'5'` that silently rendered nothing would be a
+ * bug nobody sees. Anything that is not a positive integer reads as "not set" rather than throwing:
+ * this is a label, and a label is not the place to discover bad data.
+ */
+function semesterPart(semester?: number | string | null): string {
+  if (semester === null || semester === undefined || semester === '') return '';
+  const n = Number(semester);
+  return Number.isFinite(n) && n > 0 ? `семестр ${n}` : '';
+}
+
+/**
  * `"Бази даних (англійською)"` — or just `"Бази даних"` when the course has no tags. The
  * parentheses are omitted entirely rather than left empty, which is why every caller goes through
  * here instead of interpolating them at the render site.
+ *
+ * A course restricted to one semester (`courses.semester`) names it **first**, before the tags:
+ * `"Вибіркова дисципліна 5 (семестр 5, англійською)"`. It goes inside the same parentheses rather
+ * than beside them because it answers the same question the tags answer — *which* «Вибіркова
+ * дисципліна 5» is this, out of the several a specialty may carry — and because a second bracketed
+ * group after the first reads as a footnote rather than as part of the name.
+ *
+ * The argument is optional and separate from the tags, so a caller that has not selected
+ * `courses.semester` renders exactly what it rendered before rather than a wrong label; the flip
+ * side is that adding a course to a new screen means selecting the column as well as the tags. See
+ * {@link COURSE_LABEL_SELECTION}.
  */
-export function courseLabel(name: string | null | undefined, tags?: readonly CourseTagInput[] | null): string {
+export function courseLabel(
+  name: string | null | undefined,
+  tags?: readonly CourseTagInput[] | null,
+  semester?: number | string | null
+): string {
   const base = name ?? '—';
-  const list = courseTagNames(tags);
-  return list.length ? `${base} (${list.join(', ')})` : base;
+  const parts = [semesterPart(semester), ...courseTagNames(tags)].filter(Boolean);
+  return parts.length ? `${base} (${parts.join(', ')})` : base;
 }

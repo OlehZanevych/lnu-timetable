@@ -28,7 +28,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureCourse(SchemaDefinition s) {
         s.type(Course.class)
-            .fields("name", "courseType")
+            .fields("name", "courseType", "semester")
             .nullableRelation("faculty")
             .nullableRelation("department")
             .nullableRelation("parentCourse")
@@ -54,7 +54,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
         s.query("course").entity(Course.class).findById();
 
         s.mutation("createCourse").entity(Course.class).create()
-            .inputFields("name", "courseType", "departmentId", "facultyId", "parentCourseId")
+            .inputFields("name", "courseType", "semester", "departmentId", "facultyId", "parentCourseId")
             .manyToMany("specialtyIds", "course_specialties", "course_id", "specialty_id")
             .nestedList("tags", CourseTag.class, "courseId", "tag")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
@@ -62,7 +62,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateCourse").entity(Course.class).update()
-            .inputFields("name", "courseType", "departmentId", "facultyId", "parentCourseId")
+            .inputFields("name", "courseType", "semester", "departmentId", "facultyId", "parentCourseId")
             .manyToMany("specialtyIds", "course_specialties", "course_id", "specialty_id")
             .nestedList("tags", CourseTag.class, "courseId", "tag")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")

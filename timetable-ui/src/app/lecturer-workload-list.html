@@ -181,7 +181,7 @@
     <div class="wci-item-header">
       <strong>Семестр {{ group.semester }}</strong>
       <span>Спеціальність: {{ group.specialty.name }}</span>
-      <span>Дисципліна: <a class="ent-link" [routerLink]="['/course', group.course.id]">{{ courseLabel(group.course.name, group.course.tags) }}</a></span>
+      <span>Дисципліна: <a class="ent-link" [routerLink]="['/course', group.course.id]">{{ courseLabel(group.course.name, group.course.tags, group.course.semester) }}</a></span>
       <span>Форма контролю: {{ controlFormLabel(group.controlForm) }}</span>
       <span>ECTS: {{ group.ectsCredits ?? '&mdash;' }}</span>
     </div>
@@ -202,7 +202,7 @@
                 <span>
                   Вибіркова дисципліна:
                   @if (wci.course) {
-                    <a class="ent-link" [routerLink]="['/course', wci.course.id]">{{ courseLabel(wci.course.name, wci.course.tags) }}</a>
+                    <a class="ent-link" [routerLink]="['/course', wci.course.id]">{{ courseLabel(wci.course.name, wci.course.tags, wci.course.semester) }}</a>
                   } @else { &mdash; }
                 </span>
               }

@@ -97,7 +97,7 @@ interface WorkingItem {
   id: string;
   lecturerCount: number;
   teachingFormat: string;
-  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+  course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
   academicGroups: GroupRef[];
   workloads: Workload[];
   /** Non-empty when this item has been merged into a combined_working_curriculum_item — such
@@ -113,7 +113,7 @@ interface WorkingItem {
       controlForm: string;
       ectsCredits?: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null };
+      course: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -128,7 +128,7 @@ interface CombinedMember {
     curriculumItem: {
       semester: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string; tags?: CourseTagRef[] | null };
+      course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -155,7 +155,7 @@ interface CurriculumItemGroup {
   controlForm: string;
   ectsCredits?: number;
   specialty: { id: string; name: string };
-  course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null };
+  course: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null };
   hoursGroups: HoursGroup[];
 }
 
@@ -338,7 +338,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     if (!this.departmentId) return;
     const q = `query($departmentId: ID, $limit: Int!, $offset: Int!) { workingCurriculumItems { workingCurriculumItemConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
       id lecturerCount teachingFormat
-      course { id name tags { tag } }
+      course { id name semester tags { tag } }
       academicGroups { id name }
       combinedWorkingCurriculumItems { id }
       curriculumItemHours {
@@ -346,7 +346,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         curriculumItem {
           id semester controlForm ectsCredits
           specialty { id name }
-          course { id name courseType tags { tag } }
+          course { id name courseType semester tags { tag } }
         }
       }
       workloads {
@@ -379,7 +379,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         academicGroups { id name }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name tags { tag } } }
+          curriculumItem { semester specialty { id name } course { id name semester tags { tag } } }
         }
       }
       workloads {
@@ -701,7 +701,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   combinedCourseRef(c: CombinedItem): { id: string; name: string; label: string } | null {
     const ci = c.workingCurriculumItems[0]?.curriculumItemHours?.curriculumItem;
     return ci
-      ? { id: ci.course.id, name: ci.course.name, label: courseLabel(ci.course.name, ci.course.tags) }
+      ? { id: ci.course.id, name: ci.course.name, label: courseLabel(ci.course.name, ci.course.tags, ci.course.semester) }
       : null;
   }
 
@@ -1115,7 +1115,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
               assignedStudents: (w.studentAssignments ?? []).map((a) => ({
                 studentId: a.student.id, lecturerId: a.lecturer.id
               })),
-              label: `${courseLabel(group.course.name, group.course.tags)} · ${this.hourTypeLabel(hg.hourType)} · семестр ${group.semester}`
+              label: `${courseLabel(group.course.name, group.course.tags, group.course.semester)} · ${this.hourTypeLabel(hg.hourType)} · семестр ${group.semester}`
             });
           }
         }
@@ -1142,7 +1142,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
           courseId: ci.course.id,
           courseType: (ci.course as any).courseType ?? 'MANDATORY',
           teachingFormat: 'TOGETHER',
-          label: `${courseLabel(ci.course.name, ci.course.tags)} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)} · семестр ${ci.semester} (об'єднана)`
+          label: `${courseLabel(ci.course.name, ci.course.tags, ci.course.semester)} · ${this.hourTypeLabel(first.curriculumItemHours.hourType)} · семестр ${ci.semester} (об'єднана)`
         });
       }
     }

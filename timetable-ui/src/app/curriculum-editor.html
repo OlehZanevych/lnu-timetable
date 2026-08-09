@@ -40,6 +40,11 @@
       @if (block.items().length === 0) {
         <span class="ce-badge-empty">без позицій плану</span>
       }
+      @if (fixedSemesterOf(block); as fixed) {
+        <span class="ce-badge-fixed" title="Дисципліну можна планувати лише на цей семестр">
+          лише семестр {{ fixed }}
+        </span>
+      }
       <button type="button" class="ghost" [disabled]="!canAddItem(block)" (click)="addItem(block)">+ Семестр</button>
     </div>
 
@@ -56,8 +61,11 @@
         @if (item.error()) { <p class="error">{{ item.error() }}</p> }
 
         <div class="ce-item-form">
-          <label>
-            <span>Семестр *</span>
+          <label [class.will-delete]="isOffSemester(block, item)">
+            <span>
+              Семестр *
+              @if (isOffSemester(block, item)) { <em class="ce-hours-flag">не відповідає дисципліні</em> }
+            </span>
             <app-search-select [options]="semesterOptions(block, item)" placeholder="— не обрано —"
                                [ngModel]="item.semester()" (ngModelChange)="setField(item, 'semester', $event)"
                                [name]="'semester_' + item.key" [ngModelOptions]="{ standalone: true }" />

@@ -237,7 +237,12 @@ CREATE TABLE courses
     course_type      course_type  NOT NULL DEFAULT 'MANDATORY',
     faculty_id       BIGINT REFERENCES faculties (id) ON DELETE SET NULL,
     department_id    BIGINT REFERENCES departments (id) ON DELETE CASCADE,
-    parent_course_id BIGINT REFERENCES courses (id) ON DELETE CASCADE
+    parent_course_id BIGINT REFERENCES courses (id) ON DELETE CASCADE,
+    -- When set, this discipline may only be planned for this semester: every curriculum_items row
+    -- naming it must carry the same semester, and the UI offers no other. NULL means unrestricted,
+    -- which is every course unless somebody says otherwise. Used above all for an ELECTIVE_GROUP,
+    -- whose whole point is a slot the plan reserves in one particular semester.
+    semester         INTEGER CHECK (semester IS NULL OR semester > 0)
 );
 
 -- Specialties a course is allowed to be taught for; scopes which courses can be picked when

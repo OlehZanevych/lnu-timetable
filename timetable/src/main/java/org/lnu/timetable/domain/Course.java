@@ -42,6 +42,10 @@ public class Course {
     @ManyToOne(joinColumn = "parent_course_id")
     private Course parentCourse;
 
+    @Nullable
+    @Description("Semester this discipline may be planned for; when set, every curriculum item naming it must use this semester. Null means unrestricted")
+    private Integer semester;
+
     @OneToMany(mappedBy = "parent_course_id")
     private List<Course> childCourses;
 

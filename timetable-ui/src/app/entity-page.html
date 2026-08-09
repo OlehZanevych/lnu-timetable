@@ -115,7 +115,8 @@
             } @else if (f.type === 'textarea') {
               <textarea [(ngModel)]="form[f.name]" [name]="f.name"></textarea>
             } @else {
-              <input [type]="f.type" [(ngModel)]="form[f.name]" [name]="f.name" [required]="!!f.required" />
+              <input [type]="f.type" [(ngModel)]="form[f.name]" [name]="f.name" [required]="!!f.required"
+                     [attr.min]="f.min ?? null" [attr.max]="f.max ?? null" />
             }
           </label>
           }

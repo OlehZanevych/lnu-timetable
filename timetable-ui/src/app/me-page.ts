@@ -86,6 +86,18 @@ interface CurriculumRow {
  * both. That is why `TimetableView` grew an `externalSemesterParity` input rather than this page
  * mounting it with its own picker still showing.
  */
+/**
+ * The picker value that means "do not narrow by semester": **no value at all**, which is what
+ * `SearchSelect`'s ✕ emits.
+ *
+ * It is deliberately not a third option in `SEMESTER_PARITY_OPTIONS`. That list holds the two halves
+ * of the academic year and nothing else, and the reason — a grid holding both halves overlays
+ * classes that never coexist — still binds the four screens that draw grids from it. An empty value
+ * is not a third half-year; it is the absence of a choice, which is exactly what "show the whole
+ * year" means on a page whose tables have a «Семестр» column of their own.
+ */
+const WHOLE_YEAR = '';
+
 @Component({
   selector: 'app-me-page',
   templateUrl: './me-page.html',
@@ -105,9 +117,34 @@ export class MyDeskPage implements OnInit {
 
   readonly parityOptions = SEMESTER_PARITY_OPTIONS;
 
-  /** 'ODD' / 'EVEN' — seeded from `current_semester_parity`, then whatever the reader picks. This
-   *  page shows a plan and a timetable side by side, and both name one half-year, never the year. */
-  semesterParity = signal('ODD');
+  /**
+   * Whether the picker's ✕ is offered — that is, whether the reader may choose **no** half-year and
+   * see the whole one.
+   *
+   * Only on the two **table** tabs. `SEMESTER_PARITY_OPTIONS` offers the two halves and nothing
+   * else because the screens sharing it draw **grids**: a grid holding both halves overlays classes
+   * that never coexist and shows rooms and lecturers as double-booked when they are not (see
+   * `entities.ts`). A table has no such problem, and the whole year is a thing a person actually
+   * wants there — a lecturer's year of teaching, a student's year of study, in one list, with a
+   * «Семестр» column already telling the halves apart.
+   *
+   * «Мій розклад» is that grid, so it keeps the filter mandatory — which is also why
+   * {@link semesterParity} is put back to a half-year when that tab opens.
+   */
+  readonly parityClearable = computed(() => this.activeSection() !== 'timetable');
+
+  /** 'ODD' / 'EVEN', or `''` for the whole year — seeded from `current_semester_parity`, then
+   *  whatever the reader picks. Empty is reachable only from a table tab; see
+   *  {@link parityClearable}. */
+  semesterParity = signal<string>('ODD');
+
+  /**
+   * The half-year the page started on: `current_semester_parity`, or `ODD` until it is known. It is
+   * what a cleared picker falls back to when the timetable tab opens — the grid has to name one
+   * half, and the half that is actually running is the only defensible one to pick on the reader's
+   * behalf.
+   */
+  private seededParity = signal<'ODD' | 'EVEN'>('ODD');
 
   /**
    * The open tab, and the last segment of the URL — `/me/workload`, `/me/timetable`. Its default is
@@ -145,20 +182,47 @@ export class MyDeskPage implements OnInit {
       : [{ key: 'curriculum', label: '&#x1F4D8; Мій навчальний план' },
          { key: 'timetable',  label: '&#x1F4C5; Мій розклад' }]);
 
-  /** Half of the academic year the picker names. Always one or the other — see `parityOptions`. */
-  private readonly selectedHalf = computed<1 | 2>(() => this.semesterParity() === 'EVEN' ? 2 : 1);
+  /**
+   * Half of the academic year the picker names, or **null** when it names none — the cleared picker,
+   * which means "do not narrow by semester at all". Every consumer below reads it rather than the
+   * raw signal, so the whole-year case is handled in one place per table instead of at each use.
+   */
+  private readonly selectedHalf = computed<1 | 2 | null>(() => {
+    const v = this.semesterParity();
+    if (v === WHOLE_YEAR) return null;
+    return v === 'EVEN' ? 2 : 1;
+  });
 
-  readonly parityTitle = computed(() =>
-    this.selectedHalf() === 1 ? 'перше півріччя (непарні семестри)'
-                              : 'друге півріччя (парні семестри)');
+  /** True while the tables are showing the whole year — the tiles say which period they describe. */
+  readonly wholeYear = computed(() => this.selectedHalf() === null);
 
-  // ── Lecturer: the positions they carry, narrowed to the half-year on screen ──────────────────
+  readonly parityTitle = computed(() => {
+    const half = this.selectedHalf();
+    if (half === null) return 'весь навчальний рік (обидва півріччя)';
+    return half === 1 ? 'перше півріччя (непарні семестри)'
+                      : 'друге півріччя (парні семестри)';
+  });
+
+  /**
+   * The parity handed to the grid, which has no rule for an empty one — `SearchSelect`'s ✕ emits
+   * `''`, and the backend's parity filter matches no row with it, so an empty value would empty the
+   * timetable and look like missing data. Normally the raw value: the effect in the constructor
+   * puts the picker back to a half-year as the timetable tab opens, so `''` cannot survive there.
+   * This coercion covers the one change-detection pass between the section changing and that
+   * effect running.
+   */
+  readonly gridParity = computed(() => {
+    const v = this.semesterParity();
+    return v === WHOLE_YEAR ? this.seededParity() : v;
+  });
+
+  // ── Lecturer: the positions they carry, narrowed to the period on screen ────────────────────
 
   readonly workloadItems = computed<StatItem[]>(() => {
     const s = this.stats();
     if (!s) return [];
     const half = this.selectedHalf();
-    const items = s.items.filter((i) => halfYearOf(i.semester) === half);
+    const items = half === null ? s.items : s.items.filter((i) => halfYearOf(i.semester) === half);
     return [...items].sort((a, b) => a.semester - b.semester
       || compareUk(a.courseName, b.courseName)
       || compareUk(a.hourType, b.hourType));
@@ -183,7 +247,7 @@ export class MyDeskPage implements OnInit {
     };
   });
 
-  /** Hours by kind of work within the half-year on screen. */
+  /** Hours by kind of work over the period on screen — a half-year, or the whole year. */
   readonly workloadByHourType = computed<Record<string, number>>(() => {
     const out: Record<string, number> = {};
     for (const t of STAT_HOUR_TYPES) out[t] = 0;
@@ -203,7 +267,8 @@ export class MyDeskPage implements OnInit {
     const year = this.student()?.courseYear ?? 0;
     if (!year) return [];
     const base = (year - 1) * 2;
-    return [base + this.selectedHalf()];
+    const half = this.selectedHalf();
+    return half === null ? [base + 1, base + 2] : [base + half];
   });
 
   readonly curriculumRows = computed<CurriculumRow[]>(() => {
@@ -253,12 +318,31 @@ export class MyDeskPage implements OnInit {
       if (!settled || this.paritySeeded) return;
       this.paritySeeded = true;
       const current = this.settings.value('current_semester_parity');
-      if (current === 'ODD' || current === 'EVEN') this.semesterParity.set(current);
+      if (current === 'ODD' || current === 'EVEN') {
+        this.seededParity.set(current);
+        this.semesterParity.set(current);
+      }
+    });
+
+    // An empty picker belongs to the tables and not to the grid, and the tab is part of the URL —
+    // it changes on a click, on the back button and on a pasted link alike. Putting the picker back
+    // here rather than in `selectSection` covers all three, and means the grid tab never opens on a
+    // filter it has no rule for (nor showing a ✕ that is no longer there to press).
+    effect(() => {
+      if (this.activeSection() === 'timetable' && this.semesterParity() === WHOLE_YEAR) {
+        this.semesterParity.set(this.seededParity());
+      }
     });
   }
 
   onParityChange(value: string) {
     this.paritySeeded = true;
+    // Clearing is a real choice here — the whole year — but only where it is offered: on the grid
+    // tab an empty value would produce two weeks drawn on top of each other, so it reads as ODD.
+    if (!value) {
+      this.semesterParity.set(this.parityClearable() ? WHOLE_YEAR : this.seededParity());
+      return;
+    }
     this.semesterParity.set(value === 'EVEN' ? 'EVEN' : 'ODD');
   }
 
@@ -415,7 +499,7 @@ export class MyDeskPage implements OnInit {
     // round trip to show rows already in hand. A specialty's plan is ~60 rows.
     const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
-      course { id name courseType tags { tag } }
+      course { id name courseType semester tags { tag } }
       hours { hourType hours }
     } } } }`;
 
@@ -433,7 +517,7 @@ export class MyDeskPage implements OnInit {
             // The tag is part of how a discipline is named on paper («Database Systems
             // (англійською)»), so it travels with the name rather than into a column of its own.
             courseId: n.course?.id ? String(n.course.id) : '',
-            courseName: courseLabel(n.course?.name, n.course?.tags),
+            courseName: courseLabel(n.course?.name, n.course?.tags, n.course?.semester),
             courseType: n.course?.courseType ?? '',
             controlForm: n.controlForm ?? '',
             ectsCredits: n.ectsCredits ?? 0,

@@ -45,7 +45,7 @@ interface RawCurriculumItemHours {
   curriculumItem: {
     semester: number;
     specialty?: { id: string; name: string } | null;
-    course: { id: string; name: string; courseType: string; tags?: CourseTagRef[] | null };
+    course: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null };
   };
 }
 
@@ -53,7 +53,7 @@ interface RawWorkingItem {
   id: string;
   combinedWorkingCurriculumItems: { id: string }[];
   department?: { id: string; name: string } | null;
-  course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+  course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
   curriculumItemHours: RawCurriculumItemHours;
   workloads: RawWorkload[];
 }
@@ -63,7 +63,7 @@ interface RawCombinedItem {
   workingCurriculumItems: {
     id: string;
     department?: { id: string; name: string } | null;
-    course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+    course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
     curriculumItemHours: RawCurriculumItemHours;
   }[];
   workloads: RawWorkload[];
@@ -421,10 +421,10 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       id
       combinedWorkingCurriculumItems { id }
       department { id name }
-      course { id name tags { tag } }
+      course { id name semester tags { tag } }
       curriculumItemHours {
         hourType hours
-        curriculumItem { semester specialty { id name } course { id name courseType tags { tag } } }
+        curriculumItem { semester specialty { id name } course { id name courseType semester tags { tag } } }
       }
       workloads { ${this.WORKLOAD_SELECTION} }
     } } } }`;
@@ -458,10 +458,10 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       workingCurriculumItems {
         id
         department { id name }
-        course { id name tags { tag } }
+        course { id name semester tags { tag } }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name courseType tags { tag } } }
+          curriculumItem { semester specialty { id name } course { id name courseType semester tags { tag } } }
         }
       }
       workloads { ${this.WORKLOAD_SELECTION} }
@@ -492,11 +492,11 @@ export class RoomAssignmentList implements OnInit, OnChanges {
    * The discipline actually taught: normally the curriculum item's course, but when that is an
    * `ELECTIVE_GROUP` the class delivers the specific elective named on the working item.
    */
-  private courseOf(item: { course?: { id: string; name: string; tags?: CourseTagRef[] | null } | null;
+  private courseOf(item: { course?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
                            curriculumItemHours: RawCurriculumItemHours }): { id: string; name: string; label: string } {
     const ci = item.curriculumItemHours.curriculumItem;
     const c = ci.course.courseType === 'ELECTIVE_GROUP' && item.course ? item.course : ci.course;
-    return { id: c.id, name: c.name, label: courseLabel(c.name, c.tags) };
+    return { id: c.id, name: c.name, label: courseLabel(c.name, c.tags, c.semester) };
   }
 
   private lecturerName(l: LecturerRef): string {

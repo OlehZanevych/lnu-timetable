@@ -33,6 +33,21 @@ const MAX_SEMESTER = 12;
 const isPlannable = (course: { courseType?: string }): boolean => course.courseType !== 'ELECTIVE';
 
 /**
+ * `courses.semester` as this page uses it: the one semester the course may be planned for, or null
+ * when it may be planned for any — which is every course until somebody sets the column.
+ *
+ * Anything that is not a positive integer within the range the page can offer reads as "no
+ * restriction". A course restricted to a semester this page cannot show would otherwise leave the
+ * dropdown with nothing selectable and «+ Семестр» permanently disabled, i.e. a discipline nobody
+ * can plan and no message saying why; ignoring the value instead leaves the page exactly as
+ * useful as it was before the column existed.
+ */
+const fixedSemester = (value: unknown): number | null => {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= MAX_SEMESTER ? n : null;
+};
+
+/**
  * One hour type's slot inside a semester block. Every semester block always carries one of these
  * per hour type (a fixed set of placeholder rows), whether or not a curriculum_item_hours row
  * actually exists — `id` is null until one does, and a blank/zero `hours` means "not set".
@@ -72,6 +87,12 @@ interface CourseBlock {
    * summary above the page reports.
    */
   courseType: string;
+  /**
+   * `courses.semester`, or null for the great majority of courses. When set, this course is a
+   * component of one semester and of no other: the block offers that semester and nothing else,
+   * accepts a single position, and {@link validate} refuses anything that slipped past both.
+   */
+  semester: number | null;
   items: WritableSignal<ItemDraft[]>;
 }
 
@@ -163,7 +184,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
           semester,
           controlForm: draft.controlForm(),
           ectsCredits: Number.isFinite(credits) && credits > 0 ? credits : 0,
-          course: { id: block.courseId, name: block.name, courseType: block.courseType },
+          course: { id: block.courseId, name: block.name, courseType: block.courseType, semester: block.semester },
           hours
         });
       }
@@ -202,7 +223,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
     // courseType comes along for the summary above the page: it is what tells обов'язкові from
     // вибіркові, and so what the 25 % of ст. 62 ч. 1 п. 15 is measured on.
     const coursesQuery = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { courses { courseConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) {
-      nodes { id name courseType tags { tag } }
+      nodes { id name courseType semester tags { tag } }
     } } }`;
     // ELECTIVE courses are deliberately not among them — see `isPlannable`.
     const itemsQuery = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) {
@@ -239,8 +260,9 @@ export class CurriculumEditor implements OnInit, OnChanges {
           return {
             courseId: c.id,
             name: c.name,
-            label: courseLabel(c.name, c.tags),
+            label: courseLabel(c.name, c.tags, c.semester),
             courseType: c.courseType ?? 'MANDATORY',
+            semester: fixedSemester(c.semester),
             items: signal<ItemDraft[]>(drafts)
           };
         });
@@ -329,13 +351,31 @@ export class CurriculumEditor implements OnInit, OnChanges {
    * uses, plus the block's own current value. Excluding taken semesters here is what enforces
    * "no two blocks with the same semester" — save() re-checks it, since two blocks can both be
    * new and unsaved at once.
+   *
+   * A course with `courses.semester` set offers **that semester and nothing else**. It is a
+   * discipline of one semester, and every position naming it belongs there; the point of the
+   * column is that the wrong value stops being reachable rather than being caught afterwards.
+   *
+   * The one addition is the block's own stored value when it disagrees — a position written before
+   * the course was restricted. It stays on the list, marked, because an edit form must never
+   * silently drop a value the database holds (the same rule the «Навчальні плани» discipline picker
+   * follows for an elective it is already editing). Choosing it again is possible; choosing a
+   * *third* semester is not, which is what makes the mismatch something you correct rather than
+   * something you can spread.
    */
   semesterOptions(block: CourseBlock, item: ItemDraft): Option[] {
+    const own = item.semester();
+    if (block.semester !== null) {
+      const fixed = String(block.semester);
+      const opts: Option[] = [{ id: fixed, label: `Семестр ${block.semester}` }];
+      if (own && own !== fixed) opts.push({ id: own, label: `Семестр ${own} — не відповідає дисципліні` });
+      return opts;
+    }
+
     const taken = new Set<string>();
     for (const sibling of block.items()) {
       if (sibling.key !== item.key && sibling.semester()) taken.add(sibling.semester());
     }
-    const own = item.semester();
     const opts: Option[] = [];
     for (let n = 1; n <= MAX_SEMESTER; n++) {
       const v = String(n);
@@ -344,9 +384,24 @@ export class CurriculumEditor implements OnInit, OnChanges {
     return opts;
   }
 
-  /** True once every semester 1..MAX_SEMESTER is used by this course — nothing left to add. */
+  /**
+   * True once every semester 1..MAX_SEMESTER is used by this course — nothing left to add. A course
+   * restricted to one semester has exactly one position to give, so the button closes after it.
+   */
   canAddItem(block: CourseBlock): boolean {
+    if (block.semester !== null) return block.items().length === 0;
     return block.items().length < MAX_SEMESTER;
+  }
+
+  /** The block's own restriction, for the template — «лише семестр N» beside the course name. */
+  fixedSemesterOf(block: CourseBlock): number | null {
+    return block.semester;
+  }
+
+  /** A stored position sitting in a semester its course is no longer allowed in. */
+  isOffSemester(block: CourseBlock, item: ItemDraft): boolean {
+    const own = item.semester();
+    return block.semester !== null && !!own && Number(own) !== block.semester;
   }
 
   // ── Editing ──────────────────────────────────────────────────────────────
@@ -383,6 +438,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
   }
 
   private firstFreeSemester(block: CourseBlock): string {
+    if (block.semester !== null) return String(block.semester);
     const taken = new Set(block.items().map((i) => i.semester()));
     for (let n = 1; n <= MAX_SEMESTER; n++) {
       if (!taken.has(String(n))) return String(n);
@@ -501,6 +557,11 @@ export class CurriculumEditor implements OnInit, OnChanges {
     const semester = item.semester();
     if (block.items().some((i) => i.key !== item.key && i.semester() === semester)) {
       return `Семестр ${semester} для цієї дисципліни вже додано.`;
+    }
+    // The dropdown already offers nothing else, so this only fires on a position stored before the
+    // course was restricted — which is exactly the case that must not be re-saved as it stands.
+    if (block.semester !== null && Number(semester) !== block.semester) {
+      return `Цю дисципліну можна планувати лише на семестр ${block.semester}.`;
     }
 
     for (const h of item.hours) {

@@ -144,8 +144,8 @@ src/app/
 ├── time-select.ts            # TimeSelect: hour + minute dropdown pair bound to one "HH:mm" string
 ├── dept-faculty-select.ts    # DeptFacultySelect: faculty-filtered department picker
 ├── sort.ts                   # compareUk(): the one Ukrainian-alphabet string comparator
-├── course-label.ts           # courseLabel(): a discipline's name with its course_tags in
-│                             #   parentheses — the one rule, used by every screen, by no sheet
+├── course-label.ts           # courseLabel(): a discipline's name with its courses.semester and
+│                             #   course_tags in parentheses — one rule, every screen, no sheet
 ├── auth.service.ts           # AuthService: session state (JWT, CurrentUser), login/logout,
 │                             #   changePassword, accessLevels() permission lookups — see Authentication
 ├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests,
@@ -349,7 +349,7 @@ allowed to reach for a service.
 | `workload-report.ts` | the printable «Розрахунок навчального навантаження» sheet | [WORKLOAD-PDF.md](./WORKLOAD-PDF.md) |
 | `pdf-writer.ts` | a PDF, from scratch, including the TrueType subsetting | *Printable workload calculation*, below |
 | `sort.ts` | `compareUk` — the one Ukrainian-alphabet comparator | *Ukrainian sorting*, below |
-| `course-label.ts` | `courseLabel` — a discipline's name with its `course_tags` in parentheses | *Naming a discipline*, below |
+| `course-label.ts` | `courseLabel` — a discipline's name with its `courses.semester` and `course_tags` in parentheses | *Naming a discipline*, below |
 
 Only one of them needs a host that is not a component: `timetable-solver.worker.ts` runs the solver
 on its own thread. `workload-generator.ts` does not, because it is three greedy passes over a
@@ -360,11 +360,19 @@ department rather than a search with a time budget — it returns before a frame
 Several screens offer the same choice, and a list restated per component drifts. Anything of that
 kind lives in `entities.ts`: `HOUR_TYPE_OPTIONS`, `DAY_OF_WEEK_OPTIONS`, `WEEK_PARITY_OPTIONS`,
 `CONTROL_FORM_OPTIONS`, `TEACHING_FORMAT_OPTIONS`, `COURSE_TYPE_OPTIONS`, `STUDY_FORM_OPTIONS` — and
-**`SEMESTER_PARITY_OPTIONS`**, the two halves of the academic year, which had accumulated five
-near-identical copies (the timetable view, «Мій кабінет», the schedule builder, «Призначення
-аудиторій» and the `current_semester_parity` settings editor). Two of the five spelled the labels
-«Перший (непарний) семестр» and three «Перший (непарний)»; since every one of those controls already
-carries its own «Семестр» caption, the short form won.
+**`SEMESTER_PARITY_OPTIONS`**, the two halves of the academic year, which had accumulated four
+near-identical copies (the timetable view, «Мій кабінет», the schedule builder and the
+`current_semester_parity` settings editor). Two of the four spelled the labels «Перший (непарний)
+семестр» and two «Перший (непарний)»; since the three pickers that narrow a view already carry their
+own «Семестр» caption — and the fourth sits in a settings table under «Поточний семестр» — the short
+form won. Two more screens have been built on the constant since and never had a copy of their own:
+«Призначення аудиторій» and the faculty's «Розклад факультету» tab.
+
+One screen takes the list as it is and relaxes something else instead: on its two *table* tabs
+«Мій кабінет» lets the picker be **cleared**, and an empty picker is the whole year. Nothing here had
+to change for it — an empty value is the absence of a choice rather than a third half-year — and
+every other picker built from this list still passes `[clearable]="false"`. See
+[«Мій кабінет»](#мій-кабінет-mydeskpage-me).
 
 Ordering is part of the declaration, not a separate constant: `HOUR_TYPE_OPTIONS` is in the same
 order as the `hour_type` enum in `schema.sql`, and screens that need to sort by hour type derive the
@@ -378,6 +386,17 @@ showing only the name shows them as the same thing twice. `course_tags` is what 
 **everywhere the UI names a course it renders `courseLabel(name, tags)`** — `Іноземна мова
 (англійською)`, or the bare name when the course has no tags, parentheses omitted rather than left
 empty.
+
+A course may also be restricted to **one semester** (`courses.semester`, [`V6`](../timetable/README.md#v6__course_semestersql)),
+and that value is written **first inside the same parentheses**:
+`Вибіркова дисципліна 5 (семестр 5, англійською)`. It goes there rather than beside them because it
+answers the same question the tags answer — which «Вибіркова дисципліна 5» is this, out of the
+several a specialty may carry — and
+because a second bracketed group after the first reads as a footnote rather than as part of the
+name. `courseLabel(name, tags, semester)`; the third argument is optional, so a caller that has not
+selected the column renders exactly what it rendered before rather than a wrong label, and the flip
+side is that putting a course on a new screen means selecting `semester` as well as `tags`
+(`COURSE_LABEL_SELECTION` is that selection written down once).
 
 That is one rule applied in about twenty places, which is why it is a pure module rather than a
 method: three components had already grown their own private copy of it before this file existed.
@@ -415,9 +434,10 @@ and the warning card on «Робочі навчальні плани» names a d
 table above it. Splitting the check in two to fix a parenthesis was not worth it.
 
 **Two screens are left out, because they already answer the question this rule exists to answer.**
-The generic «Дисципліни» table (`/course`) has a «Теги» column of its own, and the course page
-(`/course/:id`) prints its tags on the line under the heading — on the page *about* that course they
-have room to be a fact rather than a parenthesis. Both are read the other way round from every other
+The generic «Дисципліни» table (`/course`) has «Теги» and «Семестр» columns of its own, and the
+course page (`/course/:id`) prints the tags on the line under the heading and the semester as a row
+of the info table — on the page *about* that course both have room to be a fact rather than a
+parenthesis. Both are read the other way round from every other
 screen: you arrive knowing which discipline you want. Every *other* course either of them names —
 the parent «Група вибіркових», the child electives, the course picker — is labelled the usual way.
 
@@ -456,6 +476,18 @@ A `time(name, label, required, minHour, maxHour, minuteStep)` helper declares an
 edited through `TimeSelect`'s hour + minute dropdowns instead of a free-text box — used by
 `ClassStartTime.startTime`, where only valid slot times should be enterable. Because the form is
 metadata-driven, any future time field gets the same widget for free.
+
+A `'number'` field may declare **`min` / `max`**, and `BaseEntity#validate` refuses a value outside
+them before the mutation is sent (`Course.semester` carries `min: 1`, mirroring
+`courses_semester_check`). The check is in the component rather than on the input because the
+attribute alone would do nothing — Angular puts `novalidate` on every form it manages, so the
+browser never enforces it — and because of what the server makes of a value that gets through: a
+`CHECK` violation and a missing foreign key both arrive as the same exception, and the generic
+handler reports either as the entity's `…_NOT_FOUND` status, so «Семестр: 0» would come back as «a
+referenced entity does not exist». See the service README's
+[Known limitations](../timetable/README.md#known-limitations); refusing the value here is what keeps
+that limitation confined to callers who bypass the UI. The attributes are rendered too, so the
+number spinner also stops at the bound.
 
 A `'boolean'` field type renders a checkbox (`ClassStartTimeSet.isDefault` is the only one so far)
 and needs three small departures from how every other type is handled, all in `base-entity.ts`:
@@ -648,6 +680,13 @@ two readings coincide exactly: all 664 electives have a parent, and nothing else
 - **No duplicate semesters** — the semester dropdown only offers values no sibling block already
   uses, and `save()` re-checks (two new blocks can both be unsaved at once), with
   `UNIQUE (course_id, specialty_id, semester)` as the backstop.
+- **A course restricted to one semester offers that semester and nothing else.** `courses.semester`
+  (see the service README's [`V6`](../timetable/README.md#v6__course_semestersql)) says a discipline
+  is a component of one semester and of no other — normally an `ELECTIVE_GROUP`, whose whole purpose
+  is a slot the plan reserves in one place. Its block shows «лише семестр N», its dropdown carries
+  the one value, «+ Семестр» closes after the single position it can have, and `validate()` refuses
+  anything else. The database is not asked to enforce this, on purpose: restricting a course must
+  not invalidate plans that were legal when they were written.
 - **Hours** — a fixed row per hour type, always shown. A blank or `0` field means "not set": it is
   omitted from the nested `hours` list, which is what makes the backend *delete* an existing row
   (see the backend's `.nestedList(...)` reconciliation). A field that would drop a stored row is
@@ -673,6 +712,15 @@ dropdown and the resulting curriculum table display a course's tags (`Course.tag
 `Course` entity page — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity)
 above) after its name in parentheses, e.g. "Database Systems (англійською)"
 (`CurriculumItemList.courseLabel`).
+
+Picking a discipline that carries `courses.semester` **fills the «Семестр» field in and closes it**:
+that course may be planned for that semester and no other, so the wrong value is unreachable rather
+than caught on save (the same rule the editor beside it applies — see above). Two things keep the
+lock honest against data written before the restriction existed: a stored position sitting in the
+wrong semester is flagged in the table («лише семестр N») and re-opens the field with a message when
+it is edited, and `save()` refuses it until it agrees. Both are reachable only that way — a course
+can be restricted long after its positions were written, and a plan that silently disagrees with its
+own disciplines is worse than one that says so.
 
 #### The programme's headline figures (`CurriculumSummary`, both curriculum tabs)
 
@@ -798,7 +846,12 @@ rows (their `hours` block included, as a nested list); «Робочі навча
 when the discipline is an umbrella — the elective actually chosen. «Навантаження викладачів» edits
 the `lecturer_workloads` themselves: lecturers, groups, combined groups, duration, the grid of bells,
 and where the class may be held. An `ELECTIVE_GROUP` also gains a
-«Вибіркові дисципліни» section that lists, adds, renames and detaches its children. The point is to
+«Вибіркові дисципліни» section that lists, adds, renames and detaches its children. The «Семестр»
+field of the edit form is where a discipline is pinned to one semester — `courses.semester`, which
+both curriculum screens then enforce (see
+[`V6`](../timetable/README.md#v6__course_semestersql)); it is offered on the child form too, but a
+new elective deliberately does *not* inherit its group's value, since the group's semester belongs
+to the slot the plan reserves and the child is never a plan position in its own right. The point is to
 correct a discipline's whole chain from one page rather than walking specialty and department pages
 one at a time.
 
@@ -1052,6 +1105,31 @@ tables *and* the grid follow it; it starts on `current_semester_parity`. This is
 `TimetableView.externalSemesterParity` exists for (see *The five timetables* above) — the alternative
 was two pickers that could disagree about which half-year was on screen.
 
+**On the two table tabs that control can be cleared, and a cleared picker is the whole year.**
+The reason `SEMESTER_PARITY_OPTIONS` offers only the two halves is about grids — both halves drawn at
+once overlay classes that never coexist — and two of this page's three tabs are tables, where the
+whole year is exactly what a person often wants: a lecturer's year of teaching, a student's year of
+study, in one list, with the «Семестр» column already telling the halves apart. So «Моє
+навантаження» and «Мій навчальний план» carry the ✕ (`[clearable]="parityClearable()"`, placeholder
+«— весь рік —») and «Мій розклад» does not, and opening «Мій розклад» with the picker empty puts it
+back to the half-year the page started on — the grid has to name one half, and the half that is
+actually running is the only defensible one to pick on a reader's behalf.
+
+Saying it with an empty value rather than a «Весь рік» option is the point: the absence of a choice
+is what "no semester filter" *is*, so `SEMESTER_PARITY_OPTIONS` keeps holding two half-years and
+nothing else. Every other picker built from it — the five other screens named under *Option lists are
+declared once* — hard-codes `[clearable]="false"`, and this page's own control evaluates to the same
+thing on its grid tab.
+
+Three details follow. The reset lives in an `effect` on the open tab rather than in the
+tab-click handler, since the tab is part of the URL and also changes on the back button and on a
+pasted link. `gridParity()` coerces the value the grid is handed, covering the one change-detection
+pass between the section changing and that effect running — an empty parity reaches the backend's
+filter as `''`, which matches no row, so the grid would look like missing data rather than like a
+filter nobody set. And everything that names the period on screen — the «Показано …» note, the
+tiles' captions — reads one `parityTitle()`, so none of them can describe a period the tables are not
+showing.
+
 The two halves resolve their data differently, and both differences are forced by the model:
 
 - **The lecturer's figures come from the department's whole tree.** `loadDepartmentWorkloads` +
@@ -1102,7 +1180,9 @@ how the published sheets look.
 their own — it lives two joins away on the curriculum item — so an unfiltered grid overlays autumn
 and spring, and rooms appear double-booked when they are not. The picker therefore offers **one
 half-year or the other and nothing else**: there is no "весь навчальний рік", because the grid it
-produced was not a view of anyone's week — it was two weeks drawn on top of each other. Each view
+produced was not a view of anyone's week — it was two weeks drawn on top of each other. («Мій
+кабінет» does allow a whole year, by letting its own picker be cleared, but only for its tables and
+never for this grid — see [«Мій кабінет»](#мій-кабінет-mydeskpage-me).) Each view
 passes the backend's `semesterParity` relation filter, seeded from the `current_semester_parity`
 setting and falling back to `ODD` when that setting cannot be read, so the value is never empty and
 the picker always names the half-year on screen. Two consequences of "never empty" are enforced

@@ -22,7 +22,7 @@ interface RawItem {
       id: string;
       semester: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string; tags?: CourseTagRef[] | null };
+      course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -36,7 +36,7 @@ interface CandidateItem {
 /** A proposed merge: 2+ not-yet-combined items sharing course + semester + hour type + hours. */
 interface MergeProposal {
   key: string;
-  course: { id: string; name: string; tags?: CourseTagRef[] | null };
+  course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
   semester: number;
   hourType: string;
   hours: number;
@@ -54,7 +54,7 @@ interface CombinedItemMember {
     curriculumItem: {
       semester: number;
       specialty: { id: string; name: string };
-      course: { id: string; name: string; tags?: CourseTagRef[] | null };
+      course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
 }
@@ -120,7 +120,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         curriculumItem {
           id semester
           specialty { id name }
-          course { id name tags { tag } }
+          course { id name semester tags { tag } }
         }
       }
     } } } }`;
@@ -139,7 +139,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         academicGroups { id name }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name tags { tag } } }
+          curriculumItem { semester specialty { id name } course { id name semester tags { tag } } }
         }
       }
     } } } }`;
@@ -227,7 +227,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
 
   memberCourseName(m: CombinedItemMember): string {
     const c = m.curriculumItemHours.curriculumItem.course;
-    return courseLabel(c.name, c.tags);
+    return courseLabel(c.name, c.tags, c.semester);
   }
 
   memberSemester(m: CombinedItemMember): number {

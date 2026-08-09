@@ -97,7 +97,7 @@
                 @if (c.parentCourse) {
                   <tr>
                     <th>Група вибіркових</th>
-                    <td><a [routerLink]="['/course', c.parentCourse.id]">{{ courseLabel(c.parentCourse.name, c.parentCourse.tags) }}</a></td>
+                    <td><a [routerLink]="['/course', c.parentCourse.id]">{{ courseLabel(c.parentCourse.name, c.parentCourse.tags, c.parentCourse.semester) }}</a></td>
                   </tr>
                 }
                 @if (c.childCourses?.length) {
@@ -105,11 +105,22 @@
                     <th>Вибіркові дисципліни</th>
                     <td>
                       @for (child of c.childCourses; track child.id) {
-                        <div><a [routerLink]="['/course', child.id]">{{ courseLabel(child.name, child.tags) }}</a></div>
+                        <div><a [routerLink]="['/course', child.id]">{{ courseLabel(child.name, child.tags, child.semester) }}</a></div>
                       }
                     </td>
                   </tr>
                 }
+                <tr>
+                  <th>Семестр</th>
+                  <td>
+                    @if (c.semester) {
+                      {{ c.semester }}
+                      <small class="muted cp-field-hint">
+                        Дисципліну можна вносити в навчальний план лише на цей семестр.
+                      </small>
+                    } @else { &mdash; }
+                  </td>
+                </tr>
                 <tr>
                   <th>Спеціальності</th>
                   <td>
@@ -157,7 +168,7 @@
             <tbody>
               @for (child of childCourses(); track child.id) {
                 <tr>
-                  <td><a [routerLink]="['/course', child.id]">{{ courseLabel(child.name, child.tags) }}</a></td>
+                  <td><a [routerLink]="['/course', child.id]">{{ courseLabel(child.name, child.tags, child.semester) }}</a></td>
                   <td>{{ courseTypeLabel(child.courseType) }}</td>
                   <td class="row-actions">
                     @if (canModifyCourse()) {
@@ -567,6 +578,15 @@
           <app-search-select [options]="parentCourseOptions()" [(ngModel)]="editForm['parentCourseId']" name="parentCourseId" />
         </label>
         <label>
+          <span>Семестр</span>
+          <input type="number" min="1" [(ngModel)]="editForm['semester']" name="semester"
+                 placeholder="&mdash; будь-який &mdash;" />
+          <small class="muted cp-field-hint">
+            Якщо вказано, дисципліну можна вносити в навчальний план лише на цей семестр &mdash; і
+            обидві сторінки планів не запропонують іншого. Залиште порожнім, щоб не обмежувати.
+          </small>
+        </label>
+        <label>
           <span>Спеціальності</span>
           <app-multi-select [options]="specialtyOptions()" [(ngModel)]="editForm['specialtyIds']" name="specialtyIds" />
         </label>
@@ -623,6 +643,11 @@
           </small>
         </label>
       }
+      <label>
+        <span>Семестр</span>
+        <input type="number" min="1" [(ngModel)]="childForm['semester']" name="childSemester"
+               placeholder="&mdash; будь-який &mdash;" [ngModelOptions]="{ standalone: true }" />
+      </label>
       <label>
         <span>Теги</span>
         <input type="text" [(ngModel)]="childForm['tags']" name="childTags" />
@@ -1034,7 +1059,7 @@
 
       <p class="confirm-text">
         Ви впевнені, що хочете видалити дисципліну<br>
-        <strong>{{ courseLabel(c?.name, c?.tags) }}</strong>?<br>
+        <strong>{{ courseLabel(c?.name, c?.tags, c?.semester) }}</strong>?<br>
         <span class="muted">Цю дію неможливо скасувати.</span>
       </p>
 
