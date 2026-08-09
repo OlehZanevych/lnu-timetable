@@ -281,7 +281,7 @@
                   <li><strong>Залишились накладки ({{ res.conflicts.length }}):</strong></li>
                   @for (c of res.conflicts.slice(0, 10); track $index) {
                     <li>
-                      {{ dayLabel(c.dayOfWeek) }} —
+                      {{ dayLabel(c.dayOfWeek) }} — {{ conflictKindLabel(c.kind) }}:
                       {{ c.descriptions[0] }} ↔ {{ c.descriptions[1] }}
                     </li>
                   }

@@ -16,6 +16,7 @@ import { compareUk } from './sort';
 import { LecturerStats, STAT_HOUR_TYPES, StatItem, computeStats } from './workload-stats';
 import { loadDepartmentWorkloads } from './workload-tree';
 import { courseLabel } from './course-label';
+import { sectionNav } from './section-route';
 
 /** Which tab is open. Which of them exist at all depends on who the account belongs to. */
 type DeskSection = 'workload' | 'curriculum' | 'timetable';
@@ -107,7 +108,21 @@ export class MyDeskPage implements OnInit {
   /** 'ODD' / 'EVEN' — seeded from `current_semester_parity`, then whatever the reader picks. This
    *  page shows a plan and a timetable side by side, and both name one half-year, never the year. */
   semesterParity = signal('ODD');
-  activeSection = signal<DeskSection>('timetable');
+
+  /**
+   * The open tab, and the last segment of the URL — `/me/workload`, `/me/timetable`. Its default is
+   * the only one in the app that is not a constant: a викладач opens on their навантаження and a
+   * студент on their навчальний план, which is why `/me` redirects through a function (see
+   * `app.routes.ts`) and why the fallback here asks the session the same question. An account that
+   * is neither still lands on `/me/timetable`, where the page explains itself.
+   */
+  private nav = sectionNav<DeskSection>(
+    () => ['/me'],
+    () => this.sections().map((s) => s.key),
+    () => this.role() === 'lecturer' ? 'workload'
+        : this.role() === 'student'  ? 'curriculum'
+        : 'timetable');
+  readonly activeSection = this.nav.active;
 
   loading = signal(false);
   error = signal('');
@@ -251,12 +266,11 @@ export class MyDeskPage implements OnInit {
     this.settings.ensureLoaded();
 
     const role = this.role();
-    this.activeSection.set(role === 'lecturer' ? 'workload' : role === 'student' ? 'curriculum' : 'timetable');
     if (role === 'lecturer') this.loadLecturer();
     else if (role === 'student') this.loadStudent();
   }
 
-  selectSection(key: DeskSection) { this.activeSection.set(key); }
+  selectSection(key: DeskSection) { this.nav.select(key); }
 
   hourTypeLabel(v: string): string {
     return HOUR_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
@@ -286,17 +300,17 @@ export class MyDeskPage implements OnInit {
     if (!lecturerId) return;
     this.loading.set(true);
 
-    const profileQuery = `{
-      lecturers { lecturer(id: "${lecturerId}") {
+    const profileQuery = `query($id: ID!, $name: ID!) {
+      lecturers { lecturer(id: $id) {
         id firstName middleName lastName position
         academicDegree { name }
         department { id name faculty { name } }
         workloadConstraints { constraintType value }
       } }
-      globalProperties { globalProperty(name: "default_max_hours_per_year") { value } }
+      globalProperties { globalProperty(name: $name) { value } }
     }`;
 
-    this.gql.request(profileQuery).subscribe({
+    this.gql.request(profileQuery, { id: lecturerId, name: 'default_max_hours_per_year' }).subscribe({
       next: (d: any) => {
         const l = d.lecturers?.lecturer;
         if (!l) {
@@ -355,7 +369,7 @@ export class MyDeskPage implements OnInit {
     if (!studentId) return;
     this.loading.set(true);
 
-    const q = `{ students { student(id: "${studentId}") {
+    const q = `query($id: ID!) { students { student(id: $id) {
       id firstName middleName lastName recordBookNumber
       academicGroup {
         id name courseYear studyForm
@@ -363,7 +377,7 @@ export class MyDeskPage implements OnInit {
       }
     } } }`;
 
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { id: studentId }).subscribe({
       next: (d: any) => {
         const s = d.students?.student;
         if (!s) {
@@ -399,13 +413,13 @@ export class MyDeskPage implements OnInit {
     // The whole plan is fetched and narrowed here rather than per semester: the picker moves
     // between two semesters of the same programme, and re-querying on every switch would cost a
     // round trip to show rows already in hand. A specialty's plan is ~60 rows.
-    const q = `{ curriculumItems { curriculumItemConnection(limit: 1000, offset: 0, specialtyId: "${specialtyId}") { nodes {
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType tags { tag } }
       hours { hourType hours }
     } } } }`;
 
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { specialtyId, limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const nodes = d.curriculumItems.curriculumItemConnection.nodes ?? [];
         this.curriculum.set(nodes.map((n: any) => {

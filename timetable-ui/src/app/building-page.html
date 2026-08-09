@@ -1,7 +1,7 @@
 @let b = building();
 
 <div class="faculty-header">
-  <a routerLink="/e/building" class="back-link">&#x2190; Корпуси</a>
+  <a routerLink="/building" class="back-link">&#x2190; Корпуси</a>
   <div class="faculty-header-title">
     <div>
       <h2>{{ b?.name ?? '&#x2026;' }}</h2>
@@ -22,12 +22,12 @@
     <p class="faculty-nav-group">Корпус</p>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'info'"
-            (click)="activeSection.set('info')">
+            (click)="selectSection('info')">
       &#x2139; Інформація
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'rooms'"
-            (click)="activeSection.set('rooms')">
+            (click)="selectSection('rooms')">
       &#x1F6AA; Аудиторії
       @if (b?.rooms?.length) {
         <span class="nav-badge">{{ b!.rooms.length }}</span>
@@ -72,7 +72,6 @@
         <table>
           <thead>
             <tr>
-              <th>#</th>
               <th>Номер</th>
               <th>Назва</th>
               <th>Місткість</th>
@@ -84,19 +83,19 @@
           <tbody>
             @for (room of b?.rooms ?? []; track room.id) {
               <tr>
-                <td>{{ room.id }}</td>
                 <td>{{ room.number }}</td>
                 <td>{{ room.name || '&mdash;' }}</td>
                 <td>{{ room.capacity ?? '&mdash;' }}</td>
                 <td>{{ roomKindLabel(room.kind) || '&mdash;' }}</td>
                 <td>{{ room.faculty?.name || '&mdash;' }}</td>
                 <td class="row-actions">
+                  <a class="open-link" [routerLink]="['/room', room.id]">Відкрити &rarr;</a>
                   <button type="button" class="ghost" (click)="openEditRoom(room)">Редагувати</button>
                   <button type="button" class="ghost danger" (click)="deleteRoom(room)">Видалити</button>
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="7" class="muted">Аудиторій ще немає &mdash; натисніть &laquo;Додати аудиторію&raquo;.</td></tr>
+              <tr><td colspan="6" class="muted">Аудиторій ще немає &mdash; натисніть &laquo;Додати аудиторію&raquo;.</td></tr>
             }
           </tbody>
         </table>

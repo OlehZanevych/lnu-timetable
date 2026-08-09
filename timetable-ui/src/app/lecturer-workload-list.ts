@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, DURATION_HOURS_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
@@ -313,13 +313,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   /** Lecturer constraints and the global hour default — only needed by the generator. */
   private loadGeneratorInputs() {
     if (!this.departmentId) return;
-    const q = `{
-      lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes {
+    const q = `query($departmentId: ID, $limit: Int!, $offset: Int!, $name: ID!) {
+      lecturers { lecturerConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
         id firstName middleName lastName workloadConstraints { constraintType value }
       } } }
-      globalProperties { globalProperty(name: "default_max_hours_per_year") { value } }
+      globalProperties { globalProperty(name: $name) { value } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { departmentId: this.departmentId, limit: 500, offset: 0, name: 'default_max_hours_per_year' }).subscribe({
       next: (d: any) => {
         this.genLecturers.set(d.lecturers.lecturerConnection.nodes.map((n: any) => ({
           id: n.id,
@@ -336,7 +336,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
   private loadItems() {
     if (!this.departmentId) return;
-    const q = `{ workingCurriculumItems { workingCurriculumItemConnection(limit: 1000, offset: 0, departmentId: "${this.departmentId}") { nodes {
+    const q = `query($departmentId: ID, $limit: Int!, $offset: Int!) { workingCurriculumItems { workingCurriculumItemConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
       id lecturerCount teachingFormat
       course { id name tags { tag } }
       academicGroups { id name }
@@ -364,7 +364,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         candidates { id desirability lecturer { id firstName middleName lastName } constraints { id constraintType value } }
       }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { departmentId: this.departmentId, limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => this.rawItems.set(d.workingCurriculumItems.workingCurriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
@@ -372,7 +372,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
   private loadCombined() {
     if (!this.departmentId) return;
-    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0, departmentIds: ["${this.departmentId}"]) { nodes {
+    const q = `query($departmentIds: [ID!], $limit: Int!, $offset: Int!) { combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: $limit, offset: $offset, departmentIds: $departmentIds) { nodes {
       id
       workingCurriculumItems {
         id
@@ -392,7 +392,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         candidates { id desirability lecturer { id firstName middleName lastName } constraints { id constraintType value } }
       }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { departmentIds: [this.departmentId], limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => this.combinedItems.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
@@ -432,8 +432,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
   private loadLecturerOptions() {
     if (!this.departmentId) return;
-    const q = `{ lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes { id firstName middleName lastName } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($departmentId: ID, $limit: Int!, $offset: Int!) { lecturers { lecturerConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes { id firstName middleName lastName } } } }`;
+    this.gql.request(q, { departmentId: this.departmentId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.lecturers.lecturerConnection.nodes.map((l: any) => ({ id: l.id, label: this.lecturerName(l) }));
         this.lecturerOptions.set(opts);
@@ -453,13 +453,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     if (!this.departmentId) return;
     // The department's faculty comes along in the same round trip, because which sets are usable
     // depends on it.
-    const q = `{
-      departments { department(id: "${this.departmentId}") { faculty { id } } }
-      classStartTimeSets { classStartTimeSetConnection(limit: 200, offset: 0) { nodes {
+    const q = `query($id: ID!, $limit: Int!, $offset: Int!) {
+      departments { department(id: $id) { faculty { id } } }
+      classStartTimeSets { classStartTimeSetConnection(limit: $limit, offset: $offset) { nodes {
         id name isDefault faculty { id }
       } } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { id: this.departmentId, limit: 200, offset: 0 }).subscribe({
       next: (d: any) => {
         const nodes = d.classStartTimeSets.classStartTimeSetConnection.nodes ?? [];
         const facultyId = d.departments?.department?.faculty?.id ?? '';
@@ -475,8 +475,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   private loadDefaultDurationHours() {
-    const q = `{ globalProperties { globalProperty(name: "default_class_duration_hours") { value } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($name: ID!) { globalProperties { globalProperty(name: $name) { value } } }`;
+    this.gql.request(q, { name: 'default_class_duration_hours' }).subscribe({
       next: (d: any) => {
         const value = d.globalProperties.globalProperty?.value;
         if (value) this.defaultDurationHours.set(value);
@@ -508,10 +508,12 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     }
 
     this.loadingStudents.set(true);
+    const v = new GqlVars();
+    const paging = `${v.arg('limit', 'Int!', 500)}, ${v.arg('offset', 'Int!', 0)}`;
     const parts = list
-      .map((g, i) => `g${i}: studentConnection(limit: 500, offset: 0, academicGroupId: "${g.id}") { nodes { id firstName middleName lastName academicGroup { id name } } }`)
+      .map((g, i) => `g${i}: studentConnection(${paging}, academicGroupId: ${v.ref(`group${i}`, 'ID', g.id)}) { nodes { id firstName middleName lastName academicGroup { id name } } }`)
       .join(' ');
-    this.gql.request(`{ students { ${parts} } }`).subscribe({
+    this.gql.request(`${v.declaration()}{ students { ${parts} } }`, v.values).subscribe({
       next: (d: any) => {
         const byId = new Map<string, StudentRef>();
         for (const key of Object.keys(d.students ?? {})) {
@@ -592,8 +594,8 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   private loadCombinedGroupOptions() {
-    const q = `{ combinedGroups { combinedGroupConnection(limit: 1000, offset: 0) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!, $offset: Int!) { combinedGroups { combinedGroupConnection(limit: $limit, offset: $offset) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.combinedGroups.combinedGroupConnection.nodes.map((g: any) => ({ id: g.id, label: g.name }));
         this.combinedGroupOptions.set(opts);
@@ -1162,10 +1164,12 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       Array.from(groupsByWorkload.values()).flat().map((g) => g.id)));
     if (!groupIds.length) { done(); return; }
 
+    const v = new GqlVars();
+    const paging = `${v.arg('limit', 'Int!', 500)}, ${v.arg('offset', 'Int!', 0)}`;
     const parts = groupIds
-      .map((id, i) => `g${i}: studentConnection(limit: 500, offset: 0, academicGroupId: "${id}") { nodes { id } }`)
+      .map((id, i) => `g${i}: studentConnection(${paging}, academicGroupId: ${v.ref(`group${i}`, 'ID', id)}) { nodes { id } }`)
       .join(' ');
-    this.gql.request(`{ students { ${parts} } }`).subscribe({
+    this.gql.request(`${v.declaration()}{ students { ${parts} } }`, v.values).subscribe({
       next: (d: any) => {
         const byGroup = new Map<string, string[]>();
         groupIds.forEach((id, i) => {

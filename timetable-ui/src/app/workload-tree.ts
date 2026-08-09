@@ -12,8 +12,8 @@ import { courseLabel } from './course-label';
  * query because it needs candidate pools and student pairings for editing, not just totals.
  */
 
-const ITEMS_QUERY = (departmentId: string) => `{
-  workingCurriculumItems { workingCurriculumItemConnection(limit: 1000, offset: 0, departmentId: "${departmentId}") { nodes {
+const ITEMS_QUERY = `query($departmentId: ID, $limit: Int!, $offset: Int!) {
+  workingCurriculumItems { workingCurriculumItemConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
     id teachingFormat
     course { id name courseType tags { tag } }
     academicGroups { id name }
@@ -30,8 +30,8 @@ const ITEMS_QUERY = (departmentId: string) => `{
   } } }
 }`;
 
-const COMBINED_QUERY = (departmentId: string) => `{
-  combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0, departmentIds: ["${departmentId}"]) { nodes {
+const COMBINED_QUERY = `query($departmentIds: [ID!], $limit: Int!, $offset: Int!) {
+  combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: $limit, offset: $offset, departmentIds: $departmentIds) { nodes {
     id
     workingCurriculumItems {
       academicGroups { id name }
@@ -46,8 +46,8 @@ const COMBINED_QUERY = (departmentId: string) => `{
 
 export function loadDepartmentWorkloads(gql: GraphqlService, departmentId: string): Observable<StatWorkload[]> {
   return forkJoin({
-    items: gql.request(ITEMS_QUERY(departmentId)),
-    combined: gql.request(COMBINED_QUERY(departmentId))
+    items: gql.request(ITEMS_QUERY, { departmentId, limit: 1000, offset: 0 }),
+    combined: gql.request(COMBINED_QUERY, { departmentIds: [departmentId], limit: 1000, offset: 0 })
   }).pipe(map(({ items, combined }: any) => {
     const out: StatWorkload[] = [];
 

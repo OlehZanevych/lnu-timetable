@@ -111,7 +111,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
 
   private loadItems() {
     if (!this.departmentId) return;
-    const q = `{ workingCurriculumItems { workingCurriculumItemConnection(limit: 1000, offset: 0, departmentId: "${this.departmentId}") { nodes {
+    const q = `query($departmentId: ID, $limit: Int!, $offset: Int!) { workingCurriculumItems { workingCurriculumItemConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
       id
       academicGroups { id name }
       combinedWorkingCurriculumItems { id }
@@ -124,7 +124,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         }
       }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { departmentId: this.departmentId, limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => this.rawItems.set(d.workingCurriculumItems.workingCurriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
@@ -132,7 +132,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
 
   private loadCombined() {
     if (!this.departmentId) return;
-    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 1000, offset: 0, departmentIds: ["${this.departmentId}"]) { nodes {
+    const q = `query($departmentIds: [ID!], $limit: Int!, $offset: Int!) { combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: $limit, offset: $offset, departmentIds: $departmentIds) { nodes {
       id
       workingCurriculumItems {
         id
@@ -143,7 +143,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         }
       }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { departmentIds: [this.departmentId], limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => this.existingCombined.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });

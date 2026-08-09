@@ -68,15 +68,15 @@ export class DepartmentWorkloadSummary implements OnInit, OnChanges {
 
   private load() {
     this.loading.set(true);
-    const metaQuery = `{
-      lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes {
+    const metaQuery = `query($departmentId: ID, $limit: Int!, $offset: Int!, $name: ID!) {
+      lecturers { lecturerConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
         id firstName middleName lastName workloadConstraints { constraintType value }
       } } }
-      globalProperties { globalProperty(name: "default_max_hours_per_year") { value } }
+      globalProperties { globalProperty(name: $name) { value } }
     }`;
 
     forkJoin({
-      meta: this.gql.request(metaQuery),
+      meta: this.gql.request(metaQuery, { departmentId: this.departmentId, limit: 500, offset: 0, name: 'default_max_hours_per_year' }),
       workloads: loadDepartmentWorkloads(this.gql, this.departmentId)
     }).subscribe({
       next: ({ meta, workloads }: any) => {

@@ -9,7 +9,7 @@
       <p class="muted">{{ f?.abbreviation }}</p>
     </div>
     <div class="faculty-header-actions">
-      @if (activeSection() === 'info' && canModifyFaculty()) {
+      @if (activeSection() === 'info' && canDeleteFaculty()) {
         <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
       }
     </div>
@@ -208,6 +208,13 @@
 
       @case ('roomConstraints') {
         <app-timetable-constraint-list subject="room" [scopeId]="fid" />
+      }
+
+      <!-- ── Access ── -->
+
+      @case ('access') {
+        <app-resource-access resourceType="FACULTY" [resourceId]="facultyId"
+                             [resourceLabel]="f?.name || 'факультет'" />
       }
 
     }

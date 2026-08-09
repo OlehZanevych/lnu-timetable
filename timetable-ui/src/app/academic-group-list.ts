@@ -1,8 +1,9 @@
 import { Component, Input, OnChanges, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { SearchSelect } from './search-select';
 import { STUDY_FORM_OPTIONS, toOptions } from './entities';
 
@@ -39,7 +40,8 @@ export class AcademicGroupList implements OnInit, OnChanges {
   error = signal('');
 
   canCreate = signal(false);
-  modifiableIds = signal<Set<string>>(new Set());
+  /** This user's access level per row; absent means they cannot touch that row at all. */
+  accessById = signal<Map<string, AccessLevel>>(new Map());
 
   showCreateForm = signal(false);
   createError = signal('');
@@ -56,17 +58,19 @@ export class AcademicGroupList implements OnInit, OnChanges {
     return STUDY_FORM_OPTIONS.find((o) => o.value === v)?.label ?? v;
   }
 
-  canModify(g: AcademicGroup): boolean {
-    return this.auth.isAdmin() || this.modifiableIds().has(String(g.id));
+  canEdit(g: AcademicGroup): boolean {
+    return allows(maxLevel(this.auth.globalLevel(), this.accessById().get(String(g.id))), 'EDIT');
   }
 
   private loadPermissions() {
-    if (this.auth.isAdmin()) {
+    if (this.auth.globalLevel() === 'MANAGE') {
       this.canCreate.set(true);
       return;
     }
     if (this.specialtyId) {
-      this.auth.canModifyIds('SPECIALTY', [this.specialtyId]).subscribe((ids) => this.canCreate.set(ids.has(this.specialtyId!)));
+      // Creating a child needs EDIT on the parent it is attached to — the same rule the server applies.
+      this.auth.accessLevel('SPECIALTY', this.specialtyId!)
+        .subscribe((level) => this.canCreate.set(allows(maxLevel(this.auth.globalLevel(), level), 'EDIT')));
     } else if (this.facultyId) {
       // No specialty picked, so a new group has nothing to attach to — creating is only offered
       // once the sub-filter narrows to one specialty (see the specialtyId branch above).
@@ -77,17 +81,20 @@ export class AcademicGroupList implements OnInit, OnChanges {
   }
 
   load() {
-    const parts: string[] = [];
-    if (this.specialtyId) parts.push(`specialtyId: "${this.specialtyId}"`);
-    if (this.facultyId) parts.push(`facultyId: "${this.facultyId}"`);
-    const filter = parts.length ? `, ${parts.join(', ')}` : '';
-    const q = `{ academicGroups { academicGroupConnection(limit: 500${filter}) { nodes { id name courseYear studyForm studentsCount } } } }`;
-    this.gql.request(q).subscribe({
+    const v = new GqlVars();
+    const args = [
+      v.arg('limit', 'Int!', 500),
+      v.optionalArg('specialtyId', 'ID', this.specialtyId),
+      v.optionalArg('facultyId', 'ID', this.facultyId)
+    ].filter(Boolean).join(', ');
+    const q = `${v.declaration()}{ academicGroups { academicGroupConnection(${args}) { nodes { id name courseYear studyForm studentsCount } } } }`;
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         const nodes = d.academicGroups.academicGroupConnection.nodes;
         this.groups.set(nodes);
-        if (!this.auth.isAdmin() && nodes.length) {
-          this.auth.canModifyIds('ACADEMIC_GROUP', nodes.map((n: AcademicGroup) => n.id)).subscribe((ids) => this.modifiableIds.set(ids));
+        if (this.auth.globalLevel() !== 'MANAGE' && nodes.length) {
+          this.auth.accessLevels('ACADEMIC_GROUP', nodes.map((n: AcademicGroup) => String(n.id)))
+            .subscribe((levels) => this.accessById.set(levels));
         }
       },
       error: (e) => this.error.set(e.message)

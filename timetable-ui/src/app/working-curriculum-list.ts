@@ -187,7 +187,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   private loadItems() {
     if (!this.specialtyId) return;
-    const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType tags { tag } childCourses { id name courseType tags { tag } } }
       hours { id hourType hours
@@ -199,15 +199,15 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
         }
       }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.items.set(d.curriculumItems.curriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
   }
 
   private loadFacultyOptions() {
-    const q = `{ faculties { facultyConnection(limit: 1000, offset: 0) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!, $offset: Int!) { faculties { facultyConnection(limit: $limit, offset: $offset) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name }));
         this.facultyOptions.set(opts);
@@ -217,8 +217,8 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   }
 
   private loadDepartmentOptions() {
-    const q = `{ departments { departmentConnection(limit: 1000, offset: 0) { nodes { id name faculty { id } } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!, $offset: Int!) { departments { departmentConnection(limit: $limit, offset: $offset) { nodes { id name faculty { id } } } } }`;
+    this.gql.request(q, { limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: DeptOption[] = d.departments.departmentConnection.nodes.map((dep: any) => ({
           id: dep.id, label: dep.name, facultyId: dep.faculty?.id ?? ''
@@ -236,8 +236,8 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   private loadGroupOptions() {
     if (!this.specialtyId) return;
-    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id name courseYear } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id name courseYear } } } }`;
+    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: GroupOption[] = d.academicGroups.academicGroupConnection.nodes.map((g: any) => ({ id: g.id, label: g.name, courseYear: g.courseYear }));
         this.groupOptions.set(opts);

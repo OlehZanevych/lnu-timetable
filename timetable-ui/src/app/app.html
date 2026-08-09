@@ -32,11 +32,12 @@
     }
 
     <h3>Загальне</h3>
-    <a [routerLink]="['/e', 'building']" routerLinkActive="active">Корпуси</a>
-    <a [routerLink]="['/e', 'roomGroup']" routerLinkActive="active">Групи аудиторій</a>
-    <a [routerLink]="['/e', 'classStartTimeSet']" routerLinkActive="active">Набори часів занять</a>
-    <a [routerLink]="['/e', 'classStartTime']" routerLinkActive="active">Часи початку занять</a>
-    <a [routerLink]="['/e', 'academicDegree']" routerLinkActive="active">Наукові ступені</a>
+    <a routerLink="/building" routerLinkActive="active">Корпуси</a>
+    <a routerLink="/building-travel-times" routerLinkActive="active">Час переходу між корпусами</a>
+    <a routerLink="/room-group" routerLinkActive="active">Групи аудиторій</a>
+    <a routerLink="/class-start-time-set" routerLinkActive="active">Набори часів занять</a>
+    <a routerLink="/class-start-time" routerLinkActive="active">Часи початку занять</a>
+    <a routerLink="/academic-degree" routerLinkActive="active">Наукові ступені</a>
     <a routerLink="/global-properties" routerLinkActive="active">Глобальні властивості</a>
 
     @if (auth.isAdmin()) {

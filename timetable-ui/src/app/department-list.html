@@ -14,7 +14,6 @@
   <table>
     <thead>
       <tr>
-        <th>#</th>
         <th>Назва</th>
         <th>Абревіатура</th>
         <th>Ел. пошта</th>
@@ -25,20 +24,19 @@
     <tbody>
       @for (d of departments(); track d.id) {
         <tr>
-          <td>{{ d.id }}</td>
           <td>{{ d.name }}</td>
           <td>{{ d.abbreviation || '&mdash;' }}</td>
           <td>{{ d.email || '&mdash;' }}</td>
           <td>{{ d.phone || '&mdash;' }}</td>
           <td class="row-actions">
-            @if (canModify(d)) {
+            @if (canEdit(d)) {
               <button type="button" class="ghost" (click)="openEdit(d)">Редагувати</button>
             }
             <a [routerLink]="['/department', d.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="6" class="muted">Кафедр ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="5" class="muted">Кафедр ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>

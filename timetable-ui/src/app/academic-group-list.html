@@ -14,7 +14,6 @@
   <table>
     <thead>
       <tr>
-        <th>#</th>
         <th>Назва</th>
         <th>Курс</th>
         <th>Форма навчання</th>
@@ -25,20 +24,19 @@
     <tbody>
       @for (g of groups(); track g.id) {
         <tr>
-          <td>{{ g.id }}</td>
           <td>{{ g.name }}</td>
           <td>{{ g.courseYear }}</td>
           <td>{{ studyFormLabel(g.studyForm) }}</td>
           <td>{{ g.studentsCount ?? '&mdash;' }}</td>
           <td class="row-actions">
-            @if (canModify(g)) {
+            @if (canEdit(g)) {
               <button type="button" class="ghost" (click)="openEdit(g)">Редагувати</button>
             }
             <a [routerLink]="['/academic-group', g.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="6" class="muted">Груп ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="5" class="muted">Груп ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>

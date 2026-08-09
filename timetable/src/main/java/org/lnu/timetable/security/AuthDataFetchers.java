@@ -8,9 +8,9 @@ import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +30,7 @@ import java.util.Map;
  * entity-metadata-driven {@code DataFetcherProvider}) — each method here reads the
  * {@link Principal} straight from the GraphQL context and applies whatever check that particular
  * operation needs (none at all for {@code login}, "is this an admin" for user/group management,
- * {@link PermissionService#canManageGrantsOn} for permission delegation).
+ * {@link AccessLevel#MANAGE} on the target resource for permission delegation).
  */
 @Component
 public class AuthDataFetchers {
@@ -53,20 +53,20 @@ public class AuthDataFetchers {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // --- Query.me / Query.users / Query.groups / Query.canModifyResources ---
+    // --- Query.me / Query.users / Query.groups / Query.accessLevels ---
 
     public DataFetcher<?> me() {
         return env -> {
             Principal principal = AuthorizingDataFetcherProvider.principalOf(env);
             if (principal == null) return Mono.empty().toFuture();
-            return currentUserMap(principal).toFuture();
+            return currentUserMap(principal, evaluatorOf(env, principal)).toFuture();
         };
     }
 
-    private Mono<Map<String, Object>> currentUserMap(Principal principal) {
+    private Mono<Map<String, Object>> currentUserMap(Principal principal, PermissionEvaluator evaluator) {
         return permissionRepo.groupIdsForUser(principal.userId()).collectList()
             .flatMap(groupIds -> Mono.zip(
-                permissionRepo.isGlobalAdmin(principal.userId(), groupIds),
+                evaluator.isAdmin(),
                 permissionRepo.effectiveGrants(principal.userId(), groupIds).collectList(),
                 permissionRepo.groupsForUser(principal.userId()).collectList()
             ).map(tuple -> {
@@ -96,6 +96,28 @@ public class AuthDataFetchers {
             .toFuture();
     }
 
+    /**
+     * Finds accounts by name or e-mail, for the grantee picker on the access panels. Open to anyone
+     * who can delegate access somewhere, rather than to administrators only — otherwise a деканат
+     * holding MANAGE on their факультет could grant access but had no way to look up the person
+     * they were granting it to, which is what kept delegation an administrator's job in practice.
+     * Identity only: no person link, no flags, no password material.
+     */
+    public DataFetcher<?> searchUsers() {
+        return env -> requirePrincipal(env).flatMap(principal -> {
+            String query = env.getArgument("query");
+            Object rawLimit = env.getArgument("limit");
+            int limit = rawLimit == null ? 20 : Math.min(50, Math.max(1, ((Number) rawLimit).intValue()));
+            if (query == null || query.trim().length() < 2) {
+                return Mono.just(List.<Map<String, Object>>of());
+            }
+            return evaluatorOf(env, principal).canDelegateSomewhere()
+                .flatMap(allowed -> allowed
+                    ? permissionRepo.searchUsers(query.trim(), limit).map(this::identityOnly).collectList()
+                    : Mono.error(new GraphQlAuthException("You need MANAGE access somewhere to look up users.")));
+        }).toFuture();
+    }
+
     public DataFetcher<?> groups() {
         return env -> requirePrincipal(env)
             .flatMapMany(p -> permissionRepo.listGroups())
@@ -104,37 +126,92 @@ public class AuthDataFetchers {
             .toFuture();
     }
 
-    /** Given a set of candidate ids of one resource type, returns the subset the caller may modify. */
-    public DataFetcher<?> canModifyResources() {
+    /**
+     * Given candidate ids of one resource type, returns the caller's access level on each — the one
+     * query the client needs to decide which buttons a page may show.
+     * <p>
+     * It replaces the old {@code canModifyResources}, which answered with a subset of ids: a
+     * yes/no answer cannot distinguish «можна редагувати» from «можна редагувати й видаляти», so a
+     * client built on it had no way to show an Edit button without a Delete button beside it. Ids
+     * the caller cannot touch at all are simply absent from the result rather than being returned
+     * with a null level — the client works with a map, and absent is the natural spelling of "no".
+     */
+    public DataFetcher<?> accessLevels() {
         return env -> {
             String resourceType = env.getArgument("resourceType");
             List<String> rawIds = env.getArgument("resourceIds");
             Class<?> entityClass = entityRegistry.getEntityClassByResourceType(resourceType);
             return requirePrincipal(env).flatMap(principal -> {
-                if (entityClass == null) return Mono.just(List.<Long>of());
-                return Flux.fromIterable(rawIds)
-                    .map(Long::parseLong)
-                    .flatMap(id -> permissionService.canModify(principal.userId(), entityClass, id)
-                        .map(ok -> ok ? id : null))
-                    .filter(java.util.Objects::nonNull)
-                    .collectList();
+                if (entityClass == null) return Mono.just(List.<Map<String, Object>>of());
+                List<Long> ids = rawIds.stream().map(Long::parseLong).toList();
+                return evaluatorOf(env, principal).levelsFor(entityClass, ids)
+                    .map(levels -> levels.entrySet().stream()
+                        .map(e -> {
+                            Map<String, Object> m = new LinkedHashMap<>();
+                            m.put("id", e.getKey());
+                            m.put("level", e.getValue().name());
+                            return m;
+                        })
+                        .toList());
             }).toFuture();
         };
     }
 
+    /**
+     * Who can currently reach this resource, and how. Requires {@link AccessLevel#MANAGE} on it.
+     * <p>
+     * With {@code includeInherited} (the default) the answer includes grants made on the resource's
+     * ancestors and university-wide grants, because that is the question an administrator is
+     * actually asking: "who can edit this кафедра" is answered wrongly by a list that omits the
+     * деканат who holds the факультет above it. Inherited rows are marked — {@code inherited: true}
+     * — and cannot be revoked from here; the client shows them as context rather than as controls.
+     */
     public DataFetcher<?> grantsForResource() {
         return env -> requirePrincipal(env).flatMap(principal -> {
             String resourceType = env.getArgument("resourceType");
             Object rawResourceId = env.getArgument("resourceId");
             Long resourceId = rawResourceId == null ? null : Long.parseLong(rawResourceId.toString());
-            return permissionService.canManageGrantsOn(principal.userId(), resourceType, resourceId)
-                .flatMapMany(allowed -> allowed
-                    ? permissionRepo.grantsForResource(resourceType, resourceId)
-                    : Flux.<PermissionRepository.PermissionRow>error(new GraphQlAuthException(
-                        "You don't have permission to view grants on this resource.")))
-                .map(this::permissionToMap)
-                .collectList();
+            Boolean rawInherited = env.getArgument("includeInherited");
+            boolean includeInherited = rawInherited == null || rawInherited;
+            PermissionEvaluator evaluator = evaluatorOf(env, principal);
+
+            return requireLevel(evaluator, resourceType, resourceId, AccessLevel.MANAGE,
+                    "You need MANAGE access on this resource to see who else can reach it.")
+                .flatMap(ok -> includeInherited
+                    ? evaluator.coveringRefs(resourceType, resourceId)
+                        .flatMapMany(permissionRepo::grantsForResources)
+                        .collectList()
+                    : permissionRepo.grantsForResource(resourceType, resourceId).collectList())
+                .map(rows -> rows.stream()
+                    .map(row -> {
+                        Map<String, Object> m = permissionToMap(row);
+                        boolean own = row.resourceType().equals(resourceType)
+                            && java.util.Objects.equals(row.resourceId(), resourceId);
+                        m.put("inherited", !own);
+                        return m;
+                    })
+                    // Direct grants first, then inherited ones, strongest level first within each —
+                    // the order someone scanning the list to answer "who is in charge here" reads in.
+                    .sorted(GRANT_DISPLAY_ORDER)
+                    .toList());
         }).toFuture();
+    }
+
+    /** Direct grants before inherited ones; within each, the strongest level first. */
+    private static final Comparator<Map<String, Object>> GRANT_DISPLAY_ORDER =
+        Comparator.<Map<String, Object>, Boolean>comparing(m -> Boolean.TRUE.equals(m.get("inherited")))
+            .thenComparing(Comparator.<Map<String, Object>>comparingInt(m -> {
+                AccessLevel level = AccessLevel.parse(m.get("level"));
+                return level == null ? Integer.MAX_VALUE : -level.ordinal();
+            }));
+
+    /** Fails with a GraphQL error unless the caller holds at least {@code required} on the resource. */
+    private Mono<Boolean> requireLevel(PermissionEvaluator evaluator, String resourceType, Long resourceId,
+                                        AccessLevel required, String message) {
+        return evaluator.levelForResource(resourceType, resourceId)
+            .map(level -> level.allows(required))
+            .defaultIfEmpty(false)
+            .flatMap(ok -> ok ? Mono.just(true) : Mono.error(new GraphQlAuthException(message)));
     }
 
     // --- Mutation.login / changePassword / createUser / setUserActive ---
@@ -324,6 +401,19 @@ public class AuthDataFetchers {
 
     // --- Mutation: grantPermission / revokePermission (delegation) ---
 
+    /**
+     * Delegation. Grants — or re-levels — access on one resource, to a user or a group.
+     * <p>
+     * Two rules, and no more than two: the caller must hold {@link AccessLevel#MANAGE} over the
+     * resource (their own grant on it, a grant on any ancestor of it, or a university-wide grant),
+     * and they cannot hand out a level above their own. Since MANAGE is the top of the scale the
+     * second rule never bites today, but it is written down rather than assumed, so that adding a
+     * level above MANAGE later cannot silently let a delegate mint it.
+     * <p>
+     * Granting the same scope twice is an update of the level, not a failure — see
+     * {@link PermissionRepository#upsertPermission}. The response says which happened
+     * ({@code UPDATED}) so the UI can tell the administrator what they just did.
+     */
     public DataFetcher<?> grantPermission() {
         return env -> requirePrincipal(env).flatMap(principal -> {
             String granteeType = env.getArgument("granteeType");
@@ -332,32 +422,75 @@ public class AuthDataFetchers {
             String resourceType = env.getArgument("resourceType");
             Object rawResourceId = env.getArgument("resourceId");
             Long resourceId = rawResourceId == null ? null : Long.parseLong(rawResourceId.toString());
+            AccessLevel level = AccessLevel.parse(env.getArgument("level"));
 
-            if (!"GLOBAL".equals(resourceType) && entityRegistry.getEntityClassByResourceType(resourceType) == null) {
+            if (level == null) {
+                return Mono.just(simpleResult(false, "UNKNOWN_ACCESS_LEVEL"));
+            }
+            if (!ResourceRef.GLOBAL_TYPE.equals(resourceType)
+                && entityRegistry.getEntityClassByResourceType(resourceType) == null) {
                 return Mono.just(simpleResult(false, "UNKNOWN_RESOURCE_TYPE"));
             }
-            return permissionService.canManageGrantsOn(principal.userId(), resourceType, resourceId)
-                .flatMap(allowed -> {
-                    if (!allowed) return Mono.just(simpleResult(false, "FORBIDDEN"));
-                    Long userId = rawUserId == null ? null : Long.parseLong(rawUserId.toString());
-                    Long groupId = rawGroupId == null ? null : Long.parseLong(rawGroupId.toString());
-                    return permissionRepo.insertPermission(granteeType, userId, groupId, resourceType, resourceId, principal.userId())
-                        .map(id -> simpleResult(true, null))
-                        .switchIfEmpty(Mono.just(simpleResult(false, "ALREADY_GRANTED")));
-                });
+            Long userId = rawUserId == null ? null : Long.parseLong(rawUserId.toString());
+            Long groupId = rawGroupId == null ? null : Long.parseLong(rawGroupId.toString());
+            // A grant is one person's or one group's, never both and never neither — the same rule
+            // permissions_grantee_check enforces, checked here so the caller gets a named status
+            // rather than a raw integrity violation.
+            boolean validGrantee = ("USER".equals(granteeType) && userId != null && groupId == null)
+                || ("GROUP".equals(granteeType) && groupId != null && userId == null);
+            if (!validGrantee) {
+                return Mono.just(simpleResult(false, "INVALID_GRANTEE"));
+            }
+
+            return evaluatorOf(env, principal).levelForResource(resourceType, resourceId)
+                .flatMap(own -> {
+                    if (!own.allows(AccessLevel.MANAGE)) {
+                        return Mono.just(simpleResult(false, "FORBIDDEN"));
+                    }
+                    if (!own.allows(level)) {
+                        return Mono.just(simpleResult(false, "LEVEL_ABOVE_OWN"));
+                    }
+                    return permissionRepo.upsertPermission(granteeType, userId, groupId, resourceType, resourceId,
+                            level, principal.userId())
+                        .map(outcome -> simpleResult(true, outcome.updated() ? "UPDATED" : null))
+                        // A user or group id that names nobody trips a foreign key; report it as the
+                        // named status the form already knows how to say, rather than as a raw
+                        // integrity-violation error. Narrowed to that one exception type so a
+                        // connection failure still surfaces as a failure.
+                        .onErrorResume(DataIntegrityViolationException.class,
+                            e -> Mono.just(simpleResult(false, "INVALID_GRANTEE")));
+                })
+                // No level at all on the resource — the caller cannot see it, let alone share it.
+                .switchIfEmpty(Mono.just(simpleResult(false, "FORBIDDEN")));
         }).toFuture();
     }
 
+    /**
+     * Withdraws a grant. Requires {@link AccessLevel#MANAGE}, and one thing more: the caller's
+     * MANAGE must come from <em>above</em> the grant's resource, or the grant must be one they made
+     * themselves.
+     * <p>
+     * That extra clause closes a hole the previous rule left open. When delegation and modification
+     * were the same check, everyone holding a grant on a кафедра could revoke everyone else's grant
+     * on that same кафедра — including the one the деканат had just made, and including their own.
+     * Two heads of the same department could unseat each other, and a delegate could lock out the
+     * person who appointed them. Requiring authority from a strict ancestor means access is
+     * withdrawn by whoever is actually above it, while {@code granted_by} still lets anyone undo
+     * their own mistake immediately.
+     */
     public DataFetcher<?> revokePermission() {
         return env -> requirePrincipal(env).flatMap(principal -> {
             Long permissionId = Long.parseLong(env.getArgument("permissionId").toString());
-            return permissionRepo.findPermission(permissionId).flatMap(grant ->
-                permissionService.canManageGrantsOn(principal.userId(), grant.resourceType(), grant.resourceId())
-                    .flatMap(allowed -> {
-                        if (!allowed) return Mono.just(simpleResult(false, "FORBIDDEN"));
-                        return permissionRepo.deletePermission(permissionId).map(rows -> simpleResult(rows > 0, null));
-                    })
-            ).switchIfEmpty(Mono.just(simpleResult(false, "PERMISSION_NOT_FOUND")));
+            PermissionEvaluator evaluator = evaluatorOf(env, principal);
+            return permissionRepo.findPermission(permissionId).flatMap(grant -> {
+                if (java.util.Objects.equals(grant.grantedBy(), principal.userId())) {
+                    return permissionRepo.deletePermission(permissionId).map(rows -> simpleResult(rows > 0, null));
+                }
+                return evaluator.holdsManageAbove(grant.resourceType(), grant.resourceId())
+                    .flatMap(allowed -> allowed
+                        ? permissionRepo.deletePermission(permissionId).map(rows -> simpleResult(rows > 0, null))
+                        : Mono.just(simpleResult(false, "FORBIDDEN")));
+            }).switchIfEmpty(Mono.just(simpleResult(false, "PERMISSION_NOT_FOUND")));
         }).toFuture();
     }
 
@@ -437,8 +570,14 @@ public class AuthDataFetchers {
     }
 
     private Mono<Boolean> requireAdmin(graphql.schema.DataFetchingEnvironment env) {
-        return requirePrincipal(env).flatMap(principal -> permissionService.isAdmin(principal.userId()))
+        return requirePrincipal(env).flatMap(principal -> evaluatorOf(env, principal).isAdmin())
             .flatMap(admin -> admin ? Mono.just(true) : Mono.error(new GraphQlAuthException("Administrator access required.")));
+    }
+
+    /** The request-scoped {@link PermissionEvaluator}; see {@link AuthorizingDataFetcherProvider#evaluatorOf}. */
+    private PermissionEvaluator evaluatorOf(graphql.schema.DataFetchingEnvironment env, Principal principal) {
+        PermissionEvaluator evaluator = env.getGraphQlContext().get(PermissionEvaluator.class);
+        return evaluator != null ? evaluator : permissionService.newEvaluator(principal.userId());
     }
 
     private Map<String, Object> simpleResult(boolean success, String errorStatus) {
@@ -492,6 +631,7 @@ public class AuthDataFetchers {
         m.put("granteeType", p.granteeType());
         m.put("resourceType", p.resourceType());
         m.put("resourceId", p.resourceId());
+        m.put("level", p.level() == null ? null : p.level().name());
         m.put("_userId", p.userId());
         m.put("_groupId", p.groupId());
         m.put("_grantedBy", p.grantedBy());

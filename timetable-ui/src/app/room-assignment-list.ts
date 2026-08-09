@@ -1,7 +1,7 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS } from './entities';
@@ -225,8 +225,8 @@ export class RoomAssignmentList implements OnInit, OnChanges {
    * place rather than leaving the page empty.
    */
   private loadGlobalParity() {
-    const q = `{ globalProperties { globalProperty(name: "current_semester_parity") { value } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($name: ID!) { globalProperties { globalProperty(name: $name) { value } } }`;
+    this.gql.request(q, { name: 'current_semester_parity' }).subscribe({
       next: (d: any) => {
         const v = d.globalProperties?.globalProperty?.value;
         if (v === 'ODD' || v === 'EVEN') this.selectedSemesterParity.set(v);
@@ -237,11 +237,11 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   }
 
   private loadFilterOptions() {
-    const q = `{
-      departments { departmentConnection(limit: 200, offset: 0, facultyId: "${this.facultyId}") { nodes { id name } } }
-      specialties { specialtyConnection(limit: 200, offset: 0, facultyId: "${this.facultyId}") { nodes { id code name } } }
+    const q = `query($facultyId: ID, $limit: Int!, $offset: Int!) {
+      departments { departmentConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes { id name } } }
+      specialties { specialtyConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes { id code name } } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { facultyId: this.facultyId, limit: 200, offset: 0 }).subscribe({
       next: (d: any) => {
         this.departmentOptions.set((d.departments.departmentConnection.nodes ?? [])
           .map((x: any) => ({ id: x.id, label: x.name }))
@@ -263,13 +263,13 @@ export class RoomAssignmentList implements OnInit, OnChanges {
    * equality filter would drop exactly the unscoped rows that are most often wanted.
    */
   private loadRoomOptions() {
-    const q = `{
-      rooms { roomConnection(limit: 1000, offset: 0) { nodes { id number name faculty { id } } } }
-      roomGroups { roomGroupConnection(limit: 500, offset: 0) { nodes {
+    const q = `query($roomLimit: Int!, $offset: Int!, $roomGroupLimit: Int!) {
+      rooms { roomConnection(limit: $roomLimit, offset: $offset) { nodes { id number name faculty { id } } } }
+      roomGroups { roomGroupConnection(limit: $roomGroupLimit, offset: $offset) { nodes {
         id name faculty { id } department { id faculty { id } }
       } } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { roomLimit: 1000, offset: 0, roomGroupLimit: 500 }).subscribe({
       next: (d: any) => {
         this.baseRoomOptions.set((d.rooms.roomConnection.nodes ?? [])
           .filter((r: any) => !r.faculty || r.faculty.id === this.facultyId)
@@ -406,13 +406,18 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     roomGroups { id name }
   `;
 
-  private get departmentFilter(): string {
-    const id = this.selectedDepartmentId();
-    return id ? `, departmentId: "${id}"` : '';
+  /** The кафедра sub-filter, when one is chosen — absent from the document when it is not. */
+  private departmentFilter(v: GqlVars): string {
+    const filter = v.optionalArg('departmentId', 'ID', this.selectedDepartmentId());
+    return filter ? `, ${filter}` : '';
   }
 
   private loadWorkingItems(token: number) {
-    const q = `{ workingCurriculumItems { workingCurriculumItemConnection(limit: 5000, offset: 0, facultyId: "${this.facultyId}", semesterParity: "${this.selectedSemesterParity()}"${this.departmentFilter}) { nodes {
+    const v = new GqlVars();
+    const scope = `${v.arg('limit', 'Int!', 5000)}, ${v.arg('offset', 'Int!', 0)}, `
+      + `${v.arg('facultyId', 'ID', this.facultyId)}, `
+      + `${v.arg('semesterParity', 'String', this.selectedSemesterParity())}${this.departmentFilter(v)}`;
+    const q = `${v.declaration()}{ workingCurriculumItems { workingCurriculumItemConnection(${scope}) { nodes {
       id
       combinedWorkingCurriculumItems { id }
       department { id name }
@@ -423,7 +428,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       }
       workloads { ${this.WORKLOAD_SELECTION} }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         if (token !== this.loadToken) return;
         this.wciItems.set(d.workingCurriculumItems.workingCurriculumItemConnection.nodes ?? []);
@@ -443,8 +448,12 @@ export class RoomAssignmentList implements OnInit, OnChanges {
 
   private loadCombinedItems(token: number) {
     const dept = this.selectedDepartmentId();
-    const deptFilter = dept ? `, departmentIds: ["${dept}"]` : '';
-    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 2000, offset: 0, facultyId: "${this.facultyId}", semesterParity: "${this.selectedSemesterParity()}"${deptFilter}) { nodes {
+    const v = new GqlVars();
+    const deptFilter = dept ? `, ${v.arg('departmentIds', '[ID!]', [dept])}` : '';
+    const scope = `${v.arg('limit', 'Int!', 2000)}, ${v.arg('offset', 'Int!', 0)}, `
+      + `${v.arg('facultyId', 'ID', this.facultyId)}, `
+      + `${v.arg('semesterParity', 'String', this.selectedSemesterParity())}${deptFilter}`;
+    const q = `${v.declaration()}{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(${scope}) { nodes {
       id
       workingCurriculumItems {
         id
@@ -457,7 +466,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       }
       workloads { ${this.WORKLOAD_SELECTION} }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         if (token !== this.loadToken) return;
         this.combinedItems.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes ?? []);

@@ -21,12 +21,12 @@
     <p class="faculty-nav-group">Академічна група</p>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'info'"
-            (click)="activeSection.set('info')">
+            (click)="selectSection('info')">
       &#x2139; Інформація
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'students'"
-            (click)="activeSection.set('students')">
+            (click)="selectSection('students')">
       &#x1F393; Студенти
     </button>
   </nav>

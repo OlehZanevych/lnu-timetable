@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for the core organizational entities:
- * Building, Faculty, Department, Specialty, Room, RoomGroup.
+ * Building, BuildingTravelTime, Faculty, Department, Specialty, Room, RoomGroup.
  */
 @Component
 public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
@@ -15,6 +15,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
     @Override
     public void configure(SchemaDefinition s) {
         configureBuilding(s);
+        configureBuildingTravelTime(s);
         configureFaculty(s);
         configureDepartment(s);
         configureSpecialty(s);
@@ -54,6 +55,47 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
     // -------------------------------------------------------------------------
     // Faculty
     // -------------------------------------------------------------------------
+
+    /**
+     * How long it takes to get from one корпус to another — see {@link BuildingTravelTime}.
+     *
+     * <p>The connection carries a filter on each end of the journey. The client's matrix reads the
+     * whole table in one request and never uses either, but a caller asking "what does it cost to
+     * leave this building?" — which is the question the scheduler will ask, once per group move —
+     * should not have to fetch 342 rows to answer it.
+     *
+     * <p>Ordered by `from_building_id`: the rows come back grouped by where the journey starts,
+     * which is the order a matrix fills its cells in.
+     */
+    private void configureBuildingTravelTime(SchemaDefinition s) {
+        s.type(BuildingTravelTime.class)
+            .fields("minutes")
+            .relation("fromBuilding")
+            .relation("toBuilding");
+
+        s.query("buildingTravelTimeConnection").entity(BuildingTravelTime.class).connection()
+            .orderBy("from_building_id")
+            .filter("fromBuildingId", "from_building_id")
+            .filter("toBuildingId", "to_building_id");
+        s.query("buildingTravelTime").entity(BuildingTravelTime.class).findById();
+
+        s.mutation("createBuildingTravelTime").entity(BuildingTravelTime.class).create()
+            .inputFields("minutes", "fromBuildingId", "toBuildingId")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("updateBuildingTravelTime").entity(BuildingTravelTime.class).update()
+            .inputFields("minutes", "fromBuildingId", "toBuildingId")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("BUILDING_TRAVEL_TIME_NOT_FOUND", "Building travel time not found")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("deleteBuildingTravelTime").entity(BuildingTravelTime.class).delete()
+            .errorStatus("BUILDING_TRAVEL_TIME_NOT_FOUND", "Building travel time not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
 
     private void configureFaculty(SchemaDefinition s) {
         s.type(Faculty.class)

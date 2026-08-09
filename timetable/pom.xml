@@ -43,6 +43,40 @@
 			<version>${r2dbc-postgresql.version}</version>
 		</dependency>
 
+		<!-- Schema migrations. Flyway speaks JDBC and this service speaks R2DBC, so the JDBC driver
+		     comes along with it: the only JDBC connection this application ever opens is the one
+		     Flyway uses at startup. flyway-database-postgresql is Flyway's PostgreSQL support, a
+		     separate artifact since Flyway 10; both versions are managed by the Boot parent.
+
+		     spring-boot-flyway is what actually makes any of it run, and it is easy to leave out.
+		     Spring Boot 4 split spring-boot-autoconfigure into one module per technology — what is
+		     left of it is twelve core auto-configurations, and Flyway's is not among them. Without
+		     this dependency flyway-core sits on the classpath unused: no Flyway bean is created,
+		     nothing binds spring.flyway.*, and the application starts perfectly normally having
+		     migrated nothing at all. There is no warning, because from Boot's point of view nobody
+		     asked for Flyway. It brings spring-boot-jdbc with it, which is where DataSourceBuilder
+		     lives; no connection pool comes along, so DataSourceAutoConfiguration finds neither a
+		     pool nor an embedded driver nor a spring.datasource.url and creates nothing, leaving
+		     Flyway's own SimpleDriverDataSource (built from spring.flyway.url) the only JDBC
+		     DataSource in the context, which is the intent. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-flyway</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>runtime</scope>
+		</dependency>
+
 		<!-- Common -->
 		<dependency>
 			<groupId>org.projectlombok</groupId>

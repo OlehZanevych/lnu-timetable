@@ -53,10 +53,10 @@
   <p class="muted">Об'єднаних позицій ще немає.</p>
 }
 
-@for (c of existingCombined(); track c.id) {
+@for (c of existingCombined(); track c.id; let i = $index) {
   <div class="card wci-item-card">
     <div class="wci-item-header">
-      <strong>Об'єднання #{{ c.id }}</strong>
+      <strong>Об'єднання {{ i + 1 }}</strong>
       <button type="button" class="ghost danger" (click)="remove(c)">Видалити об'єднання</button>
     </div>
 

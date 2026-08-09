@@ -202,7 +202,7 @@ export const DURATION_HOURS_OPTIONS = [
 
 export const ENTITIES: EntityMeta[] = [
   {
-    name: 'Building', label: 'Корпуси', single: 'building', namespace: 'buildings', list: 'buildingConnection',
+    name: 'Building', label: 'Корпуси', single: 'building', namespace: 'buildings', list: 'buildingConnection', detailRoute: 'building',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'address', label: 'Адреса', type: 'text' },
@@ -211,7 +211,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Faculty', label: 'Факультети', single: 'faculty', namespace: 'faculties', list: 'facultyConnection',
+    name: 'Faculty', label: 'Факультети', single: 'faculty', namespace: 'faculties', list: 'facultyConnection', detailRoute: 'faculty',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'abbreviation', label: 'Абревіатура', type: 'text' },
@@ -222,7 +222,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Department', label: 'Кафедри', single: 'department', namespace: 'departments', list: 'departmentConnection', filterParam: 'facultyId',
+    name: 'Department', label: 'Кафедри', single: 'department', namespace: 'departments', list: 'departmentConnection', filterParam: 'facultyId', detailRoute: 'department',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'abbreviation', label: 'Абревіатура', type: 'text' },

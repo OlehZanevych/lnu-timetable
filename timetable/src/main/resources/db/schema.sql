@@ -38,6 +38,38 @@ CREATE TABLE buildings
     postal_code VARCHAR(10)
 );
 
+-- How long it comfortably takes to get from one building to another. A group's day is a sequence of
+-- classes and the gap between two bells is fixed; when consecutive classes are in different корпуси
+-- that gap has to cover the journey, and this is where the length of that journey is written down.
+--
+-- Directed rather than a symmetric pair, and the two directions are allowed to disagree: Lviv is
+-- built on hills, and a climb with a bag is not the walk back down. No row from a building to
+-- itself — moving inside one building is not a journey between buildings, and a stored zero would
+-- be a value someone could edit into something else; a reader asking about one building gets
+-- nothing back and should read that as no travel at all.
+--
+-- Seeded by db/migration/V2__building_travel_times.sql, which also states where its numbers came
+-- from and that they are estimates. Read by the BuildingTravelTime entity (its connection, lookup
+-- and three mutations), by the client's «Час переходу між корпусами» matrix, and by the timetable
+-- generator as the hard terms Π₄/Π₅ of its objective.
+CREATE TABLE building_travel_times
+(
+    -- A surrogate key rather than the natural (from, to) pair, for the same reason every other
+    -- table here has one: the entity framework addresses a row by a single `id` — findById, the
+    -- update and delete mutations, the permission cascade — and a composite key has nowhere to go
+    -- in that. The pair is still the real identity, and the UNIQUE below is what says so.
+    id               BIGSERIAL PRIMARY KEY,
+    from_building_id BIGINT  NOT NULL REFERENCES buildings (id) ON DELETE CASCADE,
+    to_building_id   BIGINT  NOT NULL REFERENCES buildings (id) ON DELETE CASCADE,
+    -- Whole minutes: the bells are on a five-minute grid and nobody plans a walk to the second.
+    minutes          INTEGER NOT NULL CHECK (minutes >= 0),
+    UNIQUE (from_building_id, to_building_id),
+    CONSTRAINT building_travel_times_two_buildings CHECK (from_building_id <> to_building_id)
+);
+
+COMMENT ON TABLE building_travel_times IS
+    'Comfortable travel time between two buildings, in whole minutes. Directed: (from, to) and (to, from) may differ.';
+
 -- ============================ Organisational structure ============================
 
 CREATE TABLE faculties
@@ -789,15 +821,18 @@ CREATE INDEX room_timetable_constraints_room_idx
 -- class name in UPPER_SNAKE_CASE, e.g. 'FACULTY', 'DEPARTMENT', 'WORKING_CURRICULUM_ITEM' — this
 -- mirrors org.lnu.timetable.framework.metadata.EntityMetadata#resourceType, so any entity newly
 -- annotated with @GraphQLEntity automatically becomes a valid grant target with no schema change
--- here) plus a resource_id, OR the special resource_type 'GLOBAL' (resource_id NULL) for
--- full-access admin grants. Modify permission on a resource cascades to its descendants along the
--- edges declared via @PermissionParent/@PermissionJoinParent on the domain classes (see
--- org.lnu.timetable.security.PermissionService) — this table only stores the grants themselves,
--- not the cascade rules.
+-- here) plus a resource_id, OR the special resource_type 'GLOBAL' (resource_id NULL) for a
+-- university-wide scope. A grant carries an access level (see the access_level type below) that
+-- says what may be done inside that scope, and the scope itself cascades to the resource's
+-- descendants along the edges declared via @PermissionParent/@PermissionJoinParent on the domain
+-- classes (see org.lnu.timetable.security.PermissionService) — this table only stores the grants
+-- themselves, not the cascade rules. The level does not weaken on the way down: EDIT on a
+-- факультет is EDIT on every кафедра, спеціальність, група, план, навантаження and заняття under
+-- it, which is what makes "give the деканат their faculty and nothing else" a single row.
 --
 -- A grant is made either to a single user or to a group (never both); a user can belong to
--- multiple groups, and effective permissions are the union of a user's direct grants and all of
--- their groups' grants.
+-- multiple groups, and a user's effective level on a resource is the *highest* level among their
+-- own grants and their groups' grants on that resource or any of its ancestors.
 
 -- An account may also say *who its owner is* in the domain model: lecturer_id names the викладач
 -- they are, student_id the студент. Both are optional and mutually exclusive — a person is one or
@@ -851,18 +886,42 @@ CREATE TABLE user_groups
 
 CREATE TYPE grantee_type AS ENUM ('USER', 'GROUP');
 
+-- How much a grant lets its holder do. The three values are *ordered* — an enum rather than three
+-- boolean columns precisely so that every check in the service reduces to one comparison,
+-- `level >= <required>`, and so that adding a fourth level later cannot silently mean "and also
+-- everything the other three flags implied".
+--
+--   EDIT   — create and update the resource and everything below it. Cannot delete anything.
+--            This is the everyday level: a методист who maintains навчальні плани and навантаження
+--            but must not be able to remove a кафедра or a група by mis-clicking.
+--   FULL   — everything EDIT allows, plus delete. Deletion cascades in this schema (dropping a
+--            Specialty takes its groups, curriculum items and workloads with it), which is exactly
+--            why it is a separate level and not part of "may modify".
+--   MANAGE — everything FULL allows, plus granting and revoking access to this resource and its
+--            descendants, at any level up to MANAGE itself. This is the delegation level: the
+--            деканат holds MANAGE on the факультет and hands out EDIT/FULL on individual кафедри
+--            without an administrator being involved.
+--
+-- Declaration order is the comparison order in PostgreSQL, so 'EDIT' < 'FULL' < 'MANAGE' holds in
+-- SQL as well as in org.lnu.timetable.security.AccessLevel.
+CREATE TYPE access_level AS ENUM ('EDIT', 'FULL', 'MANAGE');
+
 CREATE TABLE permissions
 (
     id            BIGSERIAL PRIMARY KEY,
     grantee_type  grantee_type NOT NULL,
     user_id       BIGINT REFERENCES users (id) ON DELETE CASCADE,
     group_id      BIGINT REFERENCES groups (id) ON DELETE CASCADE,
-    -- Entity simple name in UPPER_SNAKE_CASE (e.g. 'FACULTY'), or 'GLOBAL' for full-access admin.
+    -- Entity simple name in UPPER_SNAKE_CASE (e.g. 'FACULTY'), or 'GLOBAL' for university-wide scope.
     resource_type VARCHAR(64)  NOT NULL,
     -- NULL only when resource_type = 'GLOBAL'.
     resource_id   BIGINT,
+    -- What the grantee may do within that scope. There is no DEFAULT on purpose: every writer must
+    -- say which level it means, so a forgotten column cannot quietly hand out delete rights.
+    level         access_level NOT NULL,
     granted_by    BIGINT REFERENCES users (id) ON DELETE SET NULL,
     created_at    TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMP    NOT NULL DEFAULT now(),
     CONSTRAINT permissions_grantee_check CHECK (
         (grantee_type = 'USER' AND user_id IS NOT NULL AND group_id IS NULL) OR
         (grantee_type = 'GROUP' AND group_id IS NOT NULL AND user_id IS NULL)
@@ -873,8 +932,11 @@ CREATE TABLE permissions
     )
 );
 
--- A given grantee can only hold one grant per exact resource (NULLS NOT DISTINCT so the two
--- GLOBAL rows, which both have resource_id = NULL, are still treated as duplicates of each other).
+-- A given grantee holds at most one grant per exact resource, and `level` is an attribute of that
+-- one row rather than a second row: re-granting the same scope at a different level is an UPDATE,
+-- so "who can do what here" never has to be read as the max over several rows meaning the same
+-- thing. (COALESCE(col, 0) rather than NULLS NOT DISTINCT so the two GLOBAL rows, which both have
+-- resource_id = NULL, are still treated as duplicates of each other.)
 CREATE UNIQUE INDEX permissions_unique_grant
     ON permissions (grantee_type, COALESCE(user_id, 0), COALESCE(group_id, 0), resource_type, COALESCE(resource_id, 0));
 

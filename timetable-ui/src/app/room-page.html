@@ -16,7 +16,7 @@
       </p>
     </div>
     <div class="faculty-header-actions">
-      @if (activeSection() === 'info' && canModifyRoom()) {
+      @if (activeSection() === 'info' && canDeleteRoom()) {
         <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
       }
     </div>

@@ -1,0 +1,118 @@
+@if (canManage()) {
+  <div class="page-header">
+    <div>
+      <h2>Доступ</h2>
+      <p class="muted">
+        Хто може редагувати {{ resourceLabel || resourceType }} і все, що йому підпорядковане.
+        Рівень не слабшає донизу: «Редагування» на факультеті — це «Редагування» на кожній його
+        кафедрі, спеціальності, групі, плані, навантаженні та занятті.
+      </p>
+    </div>
+  </div>
+
+  @if (error()) { <p class="error">{{ error() }}</p> }
+  @if (notice()) { <p class="muted">{{ notice() }}</p> }
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>Кому</th>
+          <th>Рівень доступу</th>
+          <th>Звідки</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (g of directGrants(); track g.id) {
+          <tr>
+            <td>{{ granteeName(g) }}</td>
+            <td>
+              <!-- [selected] on each option, not [value] on the select: the select's own property
+                   binding is applied before @for has created any options, so the assignment finds
+                   nothing to match, the browser falls back to the first option, and the binding is
+                   never re-applied because the value it holds has not changed. The row then reads
+                   «Редагування» whatever the grant actually says. -->
+              <select (change)="changeLevel(g, $any($event.target).value)">
+                @for (l of levels; track l) {
+                  <option [value]="l" [selected]="l === g.level">{{ levelLabels[l] }}</option>
+                }
+              </select>
+            </td>
+            <td class="muted">{{ sourceOf(g) }}</td>
+            <td class="row-actions">
+              <button type="button" class="ghost danger" (click)="revoke(g)">Відкликати</button>
+            </td>
+          </tr>
+        }
+        @for (g of inheritedGrants(); track g.id) {
+          <tr class="muted">
+            <td>{{ granteeName(g) }}</td>
+            <td>{{ levelLabels[g.level] }}</td>
+            <td>{{ sourceOf(g) }}</td>
+            <td class="row-actions"><span class="muted">успадковано</span></td>
+          </tr>
+        }
+        @if (!grants().length) {
+          <tr>
+            <td colspan="4" class="muted">
+              @if (loading()) { Завантаження… } @else { Доступ ще нікому не надано. }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <h3 class="hours-title" style="margin-top: 24px;">Надати доступ</h3>
+
+  <div class="card" style="padding: 16px 20px;">
+    <form class="entity-form">
+      <label>
+        <span>Кому *</span>
+        <select [(ngModel)]="form.granteeType" name="granteeType">
+          <option value="USER">Користувачу</option>
+          <option value="GROUP">Групі</option>
+        </select>
+      </label>
+
+      @if (form.granteeType === 'USER') {
+        <label>
+          <span>Пошук користувача</span>
+          <input type="text" [(ngModel)]="userQuery" name="userQuery"
+                 placeholder="прізвище або ел. пошта" (keyup.enter)="findUsers()" />
+        </label>
+        <div class="actions">
+          <button type="button" class="ghost" [disabled]="userSearchPending()" (click)="findUsers()">
+            {{ userSearchPending() ? 'Пошук…' : 'Знайти' }}
+          </button>
+        </div>
+        @if (userOptions().length) {
+          <label>
+            <span>Користувач *</span>
+            <app-search-select [options]="userOptions()" [(ngModel)]="form.userId" name="userId" />
+          </label>
+        }
+      } @else {
+        <label>
+          <span>Група *</span>
+          <app-search-select [options]="groupOptions()" [(ngModel)]="form.groupId" name="groupId" />
+        </label>
+      }
+
+      <label>
+        <span>Рівень доступу *</span>
+        <select [(ngModel)]="form.level" name="level">
+          @for (l of levels; track l) {
+            <option [value]="l">{{ levelLabels[l] }}</option>
+          }
+        </select>
+      </label>
+      <p class="muted">{{ levelHints[form.level] }}</p>
+
+      <div class="actions">
+        <button type="button" (click)="submit()">Надати доступ</button>
+      </div>
+    </form>
+  </div>
+}

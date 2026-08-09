@@ -16,6 +16,23 @@ import { courseLabel } from './course-label';
 const MAX_SEMESTER = 12;
 
 /**
+ * Whether a course of the specialty is a component of its навчальний план in its own right.
+ *
+ * An `ELECTIVE` is not. It is one of the choices inside a `ELECTIVE_GROUP`, and the group is what
+ * the plan reserves a slot for; which child fills that slot is decided a level down, on
+ * `WorkingCurriculumItem.course`. Listing the children here put «Основи web програмування (пм)»
+ * and its forty siblings on the page as top-level blocks marked «без позицій плану», burying the
+ * components that actually are the plan under courses that structurally never can be.
+ *
+ * The rule is the course's own type rather than "has a parent course", so that it is the same rule
+ * the database is cleaned by — see
+ * `timetable/src/main/resources/db/migration/V1__delete_curriculum_items_on_elective_courses.sql`,
+ * which removes the plan positions that should never have been attached to one. In the seeded data
+ * the two readings coincide exactly: all 664 electives have a parent, and nothing else does.
+ */
+const isPlannable = (course: { courseType?: string }): boolean => course.courseType !== 'ELECTIVE';
+
+/**
  * One hour type's slot inside a semester block. Every semester block always carries one of these
  * per hour type (a fixed set of placeholder rows), whether or not a curriculum_item_hours row
  * actually exists — `id` is null until one does, and a blank/zero `hours` means "not set".
@@ -184,16 +201,17 @@ export class CurriculumEditor implements OnInit, OnChanges {
 
     // courseType comes along for the summary above the page: it is what tells обов'язкові from
     // вибіркові, and so what the 25 % of ст. 62 ч. 1 п. 15 is measured on.
-    const coursesQuery = `{ courses { courseConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}") {
+    const coursesQuery = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { courses { courseConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) {
       nodes { id name courseType tags { tag } }
     } } }`;
-    const itemsQuery = `{ curriculumItems { curriculumItemConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}") {
+    // ELECTIVE courses are deliberately not among them — see `isPlannable`.
+    const itemsQuery = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) {
       nodes { id semester controlForm ectsCredits course { id } hours { id hourType hours } }
     } } }`;
 
     forkJoin({
-      courses: this.gql.request(coursesQuery),
-      items: this.gql.request(itemsQuery)
+      courses: this.gql.request(coursesQuery, { specialtyId: this.specialtyId, limit: 1000, offset: 0 }),
+      items: this.gql.request(itemsQuery, { specialtyId: this.specialtyId, limit: 1000, offset: 0 })
     }).subscribe({
       next: ({ courses, items }: any) => {
         const dirtyBefore = new Map<string, CourseBlock>();
@@ -210,7 +228,9 @@ export class CurriculumEditor implements OnInit, OnChanges {
           byCourse.set(courseId, list);
         }
 
-        const blocks: CourseBlock[] = courses.courses.courseConnection.nodes.map((c: any) => {
+        const blocks: CourseBlock[] = courses.courses.courseConnection.nodes
+          .filter(isPlannable)
+          .map((c: any) => {
           const preserved = dirtyBefore.get(c.id);
           if (preserved) return preserved;
           const drafts = (byCourse.get(c.id) ?? [])

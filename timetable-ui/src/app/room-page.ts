@@ -3,11 +3,16 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { SearchSelect, Option } from './search-select';
 import { ROOM_KIND_OPTIONS, toOptions } from './entities';
 import { TimetableView } from './timetable-view';
+import { sectionNav } from './section-route';
 
 type RoomSection = 'info' | 'timetable';
+
+/** Which slugs `/room/:id/:section` recognises — see `section-route.ts`. */
+const SECTION_KEYS: RoomSection[] = ['info', 'timetable'];
 
 interface RoomInfo {
   id: string;
@@ -29,7 +34,7 @@ interface RoomInfo {
  *
  * The info tab also edits and deletes the room itself, exactly as `FacultyPage` does for a faculty:
  * a modal over the entity's own fields and a confirmation before `deleteRoom`, both hidden unless
- * `canModifyIds('ROOM', …)` says this account may — see the README's *Hiding UI the user can't use*.
+ * `accessLevels('ROOM', …)` says this account may — see the README's *Hiding UI the user can't use*.
  */
 @Component({
   selector: 'app-room-page',
@@ -52,10 +57,19 @@ export class RoomDetailPage implements OnInit {
 
   room = signal<RoomInfo | null>(null);
   error = signal('');
-  activeSection = signal<RoomSection>('info');
 
-  /** Whether the current user may edit/delete this Room — see AuthService#canModifyIds. */
-  canModifyRoom = signal(false);
+  /** The open tab, and the last segment of the URL — see `section-route.ts`. */
+  private nav = sectionNav<RoomSection>(
+    () => ['/room', this.roomId], () => SECTION_KEYS, () => 'info');
+  readonly activeSection = this.nav.active;
+
+  /**
+   * This user's level on this Room. Two signals rather than one boolean, because the two buttons
+   * they gate are no longer the same right: «Редагувати» needs EDIT, «Видалити» needs FULL.
+   */
+  roomLevel = signal<AccessLevel | null>(null);
+  canModifyRoom = computed(() => allows(maxLevel(this.auth.globalLevel(), this.roomLevel()), 'EDIT'));
+  canDeleteRoom = computed(() => allows(maxLevel(this.auth.globalLevel(), this.roomLevel()), 'FULL'));
 
   showEditForm = signal(false);
   editError = signal('');
@@ -79,34 +93,30 @@ export class RoomDetailPage implements OnInit {
     this.load();
     this.loadFaculties();
     this.loadBuildings();
-    if (this.auth.isAdmin()) {
-      this.canModifyRoom.set(true);
-    } else {
-      this.auth.canModifyIds('ROOM', [this.roomId]).subscribe((ids) => this.canModifyRoom.set(ids.has(this.roomId)));
-    }
+    this.auth.accessLevel('ROOM', this.roomId).subscribe((level) => this.roomLevel.set(level));
   }
 
-  selectSection(key: RoomSection) { this.activeSection.set(key); }
+  selectSection(key: RoomSection) { this.nav.select(key); }
 
   kindLabel(v?: string | null): string {
     return ROOM_KIND_OPTIONS.find((o) => o.value === v)?.label ?? (v || '—');
   }
 
   private load() {
-    const q = `{ rooms { room(id: "${this.roomId}") {
+    const q = `query($id: ID!) { rooms { room(id: $id) {
       id number name capacity kind
       faculty { id name }
       building { id name address }
     } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { id: this.roomId }).subscribe({
       next: (d: any) => this.room.set(d.rooms.room),
       error: (e) => this.error.set(e.message)
     });
   }
 
   private loadFaculties() {
-    const q = `{ faculties { facultyConnection(limit: 200) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { faculties { facultyConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 200 }).subscribe({
       next: (d: any) => this.facultyOptions.set(
         d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name }))),
       error: () => {}
@@ -114,8 +124,8 @@ export class RoomDetailPage implements OnInit {
   }
 
   private loadBuildings() {
-    const q = `{ buildings { buildingConnection(limit: 200) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { buildings { buildingConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 200 }).subscribe({
       next: (d: any) => this.buildingOptions.set(
         d.buildings.buildingConnection.nodes.map((b: any) => ({ id: b.id, label: b.name }))),
       error: () => {}
@@ -181,7 +191,7 @@ export class RoomDetailPage implements OnInit {
     const r = this.room();
     if (r?.building) return ['/building', r.building.id];
     if (r?.faculty) return ['/faculty', r.faculty.id];
-    return ['/e/room'];
+    return ['/room'];
   }
 
   confirmDelete() {

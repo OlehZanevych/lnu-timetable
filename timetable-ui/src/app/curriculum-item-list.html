@@ -25,7 +25,6 @@
   <table>
     <thead>
       <tr>
-        <th>#</th>
         <th>Семестр</th>
         <th>Дисципліна</th>
         <th>Форма контролю</th>
@@ -37,7 +36,6 @@
     <tbody>
       @for (item of items(); track item.id) {
         <tr>
-          <td>{{ item.id }}</td>
           <td>{{ item.semester }}</td>
           <td>
             @if (item.course) {
@@ -59,7 +57,7 @@
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="7" class="muted">Позицій навчального плану ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="6" class="muted">Позицій навчального плану ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>

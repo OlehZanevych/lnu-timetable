@@ -73,19 +73,170 @@ between environments* rather than by subject:
 
 | File | Holds |
 |---|---|
-| `application.properties` | what is the same everywhere — the connection URL and pool sizing, GraphiQL, `app.security.jwt-ttl-minutes`, and `spring.profiles.active=loc` |
+| `application.properties` | what is the same everywhere — the connection URL and pool sizing, the `spring.flyway.*` block (see [Migrations](#migrations-flyway)), GraphiQL, `app.security.jwt-ttl-minutes`, and `spring.profiles.active=loc` |
 | `application-loc.properties` | what is not — `spring.r2dbc.username`/`password`, `app.security.jwt-secret`, the R2DBC SQL/param debug logging (which is how the N+1 query problem described below was originally spotted), and `app.apollo-sandbox.enabled` |
 
 The `loc` profile is activated from `application.properties` itself, so a local run needs nothing on
 the command line, and both files are checked in with working development values. Anything in the
 profile file can be overridden per run — `--spring.r2dbc.password=…`, `SPRING_R2DBC_PASSWORD=…`,
-`SPRING_APPLICATION_JSON` — and `--spring.profiles.active=` drops the file altogether. See the root
-README's *Running it as a single jar* for what a deployment should override.
+`SPRING_APPLICATION_JSON`. Overriding the credentials moves Flyway too, since
+`spring.flyway.user`/`password` are declared as `${spring.r2dbc.username}`/`${spring.r2dbc.password}`
+rather than repeated — which is the point, but it also means `--spring.profiles.active=` no longer
+merely drops the profile: nothing would then define those two keys and the placeholders fail to
+resolve at startup. Supply them another way if you switch the profile off. See the root README's
+*Running it as a single jar* for what a deployment should override.
 
 `scripts/reset_db.sh`, `scripts/backup_data.sh` and `scripts/renumber_ids.sh` read both files
 directly: the URL from the first, the credentials from the second. The connection is therefore
 stated once and the scripts stay correct when it changes; all three fail with a named error if
 either file, or either key, is missing.
+
+---
+
+## Migrations (Flyway)
+
+`schema.sql` creates the database and `data.sql` fills it. Everything that happens to that database
+**afterwards** is Flyway's: `src/main/resources/db/migration/V*.sql`, applied at startup, in order,
+once each, recorded in `flyway_schema_history`.
+
+The split is deliberate and is the whole of the configuration:
+
+```properties
+spring.flyway.url=jdbc:postgresql://localhost:5432/lnu-timetable
+spring.flyway.user=${spring.r2dbc.username}
+spring.flyway.password=${spring.r2dbc.password}
+spring.flyway.baseline-on-migrate=true
+spring.flyway.baseline-version=0
+```
+
+- **A URL of its own.** Flyway is a JDBC tool; this service is an R2DBC one and owns no
+  `DataSource`. Spring Boot handles exactly this case — give `spring.flyway.url` a JDBC URL and it
+  builds a plain single-connection `DataSource` for the migration and nothing else. The JDBC driver
+  is a `runtime` dependency for that one purpose. It does mean the address of the database is
+  written down **twice**, and the two must move together; there is no way to derive `jdbc:…` from
+  `r2dbc:…` in a property placeholder. The credentials are not duplicated — they are read from the
+  `loc` profile through `${…}`, so they still live in exactly one place.
+- **`baseline-version=0`, not the default 1.** `baselineOnMigrate` lets Flyway adopt a schema that
+  already exists rather than refusing to touch it, which every database here is: `schema.sql` made
+  it. But Flyway then skips every migration *at or below* the baseline version, so the default of 1
+  would silently skip `V1`. Zero says "the starting point is before the first migration", and V1
+  applies to a database seeded years ago exactly as it does to one seeded this morning.
+- **An empty database is not a supported case.** Point the service at one and `V1` fails, because
+  the tables it touches do not exist. That is the right answer rather than a bug: the alternative —
+  a guard that skips the migration on an empty schema — records V1 as applied, and then `schema.sql`
+  and `data.sql` re-create the very rows it was supposed to remove, with nothing left to remove
+  them. Run the two files first, as [Database setup](#database-setup) already says.
+
+`reset_db.sh` drops the schema and re-applies both files, `flyway_schema_history` included, so the
+next start re-baselines and re-runs every migration against the freshly seeded data. That is why a
+migration here has to stay correct against `data.sql` as shipped, not merely against whatever a
+particular database happens to hold — and why every migration in the tree is written to match
+nothing on a second run rather than to assume it runs once. Each does it differently, according to
+what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF NOT EXISTS` and
+`ON CONFLICT DO NOTHING`, V3 and V4 by testing `pg_constraint` / the rows themselves, V5 by testing
+`pg_type` and `ADD COLUMN IF NOT EXISTS`.
+
+### `V1__delete_curriculum_items_on_elective_courses.sql`
+
+An `ELECTIVE_GROUP` is the slot a навчальний план reserves; which of its children fills that slot is
+decided a level down, on `working_curriculum_items.course_id`. A `curriculum_items` row whose own
+course is an `ELECTIVE` is therefore a position the model has no place for — and `data.sql` carries
+28 of them, across 6 specialties. They put the elective on the plan as a top-level component beside
+its own група, and where the група carried the same hours they were counted twice: toward the
+programme's volume and toward the 25 % elective share alike.
+
+The delete is **not** cheap, and the migration says so in a `NOTICE` before it runs. None of the 28
+is an empty leftover: every one is delivered, so `ON DELETE CASCADE` carries the removal down
+`curriculum_items` → `curriculum_item_hours` → `working_curriculum_items` → `lecturer_workloads` →
+`timetable_entries` — 41, 43, 43 and 47 rows against `data.sql`. That teaching is real and has to be
+re-entered under the група's own position by hand; the migration cannot move it, because 19 of the
+28 have no група position in their specialty at all and one has a position lacking the hour types
+the child carries. Only 8 of 28 could have been re-pointed, and a migration that fixed 8 and left 20
+would be harder to reason about than one that removes all 28 and reports what it removed.
+
+`data.sql` has since been re-exported from a database this migration had already cleaned, so it now
+carries none of those rows and V1 matches nothing on a fresh install: its `NOTICE` reports 0 and the
+cascade never fires. The counts above describe what it did when it ran, which is the state any
+database seeded before that export is still in.
+
+The client enforces the same rule going forward, so nothing puts these rows back: `CurriculumEditor`
+no longer lists an `ELECTIVE` as a top-level block, and the «Навчальні плани» tab's discipline
+picker no longer offers one. See the client README's *Editing a curriculum course-first*.
+
+### `V2__building_travel_times.sql`
+
+A group's day is a sequence of classes and the gap between two bells is fixed; when the two classes
+are in different корпуси, that gap has to cover the journey. Nothing in the system knew how long
+that journey was, so the solver would put a class in Університетська 1 at 9:50 and the next in
+Черемшини 31 at 11:30 as readily as two in one corridor. `building_travel_times` is the missing
+fact: `(from_building_id, to_building_id) → minutes`, all 342 ordered pairs of the 19 buildings.
+
+**Directed on purpose.** Lviv is built on hills. Університетська 1 stands at roughly 295 m and
+Кирила і Мефодія 8 at 310 m, and a fifteen-metre climb with a bag is not the walk back down; 48 of
+the 171 pairs differ by a minute or two for that reason and the rest are symmetric, which is a fact
+about the terrain rather than a shortcut in the model. There is no row from a building to itself —
+a `CHECK` forbids it, because moving inside one building is not a journey between buildings and a
+stored zero is a value someone can edit into something else.
+
+**The numbers are estimates and are meant to be corrected.** They were computed from approximate
+coordinates and elevations — straight-line distance × 1.35, 4.8 km/h, Naismith's minute per 25 m
+climbed and half of it back on the way down, the lesser of that and a tram ride for anything long,
+and a floor of four minutes because leaving one building and entering another is never instant. The
+migration's header states the method in full. They run from 4 to 31 minutes, median 13.
+
+**The table is in `schema.sql`**, where every other table is, so that file keeps describing the
+whole schema; the migration creates it too, with `IF NOT EXISTS`, because a database made before
+today has to get it from somewhere. Both routes end at the same definition — verified by building
+one database each way and diffing `\d building_travel_times` — with one cosmetic difference that
+survives: `schema.sql` declares `id` first, while the migrated route can only append it, so the
+column sits last there. Nothing addresses a column by position. The seed rows are `ON CONFLICT DO
+NOTHING` for the same reason: once they are in `data.sql` the migration finds nothing to insert on
+a fresh database, and still fills an old one.
+
+**What reads it.** `BuildingTravelTime` is a `@GraphQLEntity` with the usual connection, lookup and
+three mutations (`configureBuildingTravelTime` in `OrganizationSchemaConfig`); the client edits the
+whole matrix on «Час переходу між корпусами»; and the timetable generator now consults it as two new
+hard terms of its objective — Π₄ and Π₅, a group or a lecturer given less time between two classes
+than the walk between their корпуси takes. See the client's
+[TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md) §1.2.
+
+`V3__building_travel_times_surrogate_id.sql` follows, and exists only because of that entity: V2
+gave the table its natural primary key, `(from_building_id, to_building_id)`, and the framework
+addresses every row by a single `id`. The pair moved from PRIMARY KEY to UNIQUE, which enforces
+exactly as much.
+
+### `V4__merge_duplicate_hrushevskoho_building.sql`
+
+`buildings` held one корпус twice: id 5 «вул. Грушевського, 4» and id 7 «вул. Михайла
+Грушевського, 4» — the street's colloquial name and its official one, same number, same postal code,
+entered by two different people. Harmless until something was built on `buildings`; then it became
+36 travel times to and from a place nobody can be in, and a generator that would answer "four
+minutes" for a journey of zero.
+
+id 5 had the 5 rooms and the Біологічний факультет; id 7 had no rooms, no timetable entries and the
+Геологічний факультет. So the merge is an UPDATE and a DELETE: the faculty moves to the row with the
+rooms, the empty duplicate goes, and its travel rows cascade with it — 342 ordered pairs become 306,
+which is 18 × 17. Guarded on the duplicate still being empty: if a room has since been put in it the
+two rows are no longer one story, and the migration says so and does nothing rather than guess.
+
+As with V1, `data.sql` was re-exported afterwards: it now seeds 18 buildings and 306 travel rows,
+with no id 7 at all. On a fresh install V4 therefore finds the pair it was written for absent and
+prints its guard message — expected, not a warning about anything.
+
+### `V5__permission_access_levels.sql`
+
+Adds the `access_level` type and `permissions.level`, turning one indivisible "modify" right into
+the three ordered levels described under [The permission model](#the-permission-model), plus
+`permissions.updated_at`, since a grant became a row that is updated in place rather than only
+inserted.
+
+**Every existing grant is backfilled to `MANAGE`.** That is the faithful value rather than the
+safest one: `MANAGE` is exactly what a pre-migration row already permitted — update, delete, create
+children, and grant the same scope to somebody else — so nobody loses access on the morning it
+ships. Narrowing those grants is a decision for whoever administers them, and the «Доступ» panel
+makes it two clicks; silently demoting live grants here would instead present itself as the
+application breaking.
+
 
 ---
 
@@ -138,10 +289,10 @@ possible value of the property, so `/` can never be owned by both or by neither.
 
 The bundle's own files — `main-*.js`, `styles-*.css`, `favicon.ico`, `fonts/*.ttf` — are served by
 Spring Boot's ordinary static resource handling, untouched. `FrontendController` exists for the one
-thing that handling cannot do: answer a **deep link**. The Angular router owns `/faculty/3` and
-`/e/course`, which are paths in the browser and files nowhere, so a reload or a pasted URL asks
-this service for something that was never on disk. It answers those with `index.html` and lets the
-router take over. Three rules keep it from swallowing anything else:
+thing that handling cannot do: answer a **deep link**. The Angular router owns
+`/faculty/3/room-assignment` and `/room-group`, which are paths in the browser and files nowhere, so
+a reload or a pasted URL asks this service for something that was never on disk. It answers those with
+`index.html` and lets the router take over. Three rules keep it from swallowing anything else:
 
 - every path segment is matched as `[^.]*`, so a request for any name containing a dot — every
   hashed asset, every font — does not match here and falls through to the resource handler, which
@@ -151,6 +302,24 @@ router take over. Three rules keep it from swallowing anything else:
   mapping is ordered `-1` — ahead of the order-`0` mapping that serves annotated controllers — so
   they are matched before these patterns are consulted at all;
 - `produces = text/html` keeps it out of the way of anything negotiating for JSON.
+
+Those three are also the whole of the overlap question. `IndexController` is the only other
+annotated controller in the service and the two are mutually exclusive by construction, so nothing
+else in the application competes with these patterns for a path.
+
+**Why the patterns are enumerated rather than one catch-all.** `PathPattern` accepts `/{*path}`,
+which would match every depth at once — but it captures the remainder whole, dots and all, so
+`/main-ABC123.js` and `/fonts/LiberationSerif.ttf` would match it too. A handler cannot decline a
+request once its mapping has matched, so it would have to serve those files itself, badly, instead of
+letting the resource handler do it. The per-segment `[^.]*` constraint is the only thing that
+expresses "no dotted name", and a regex constraint is allowed only on a named single-segment
+capture — so one pattern per depth is the price of the fall-through, and the depth is bounded by
+however many are listed. **Six are**, which is double what the client needs: its deepest route is
+three segments, because every tabbed drill-down page carries its open tab as one more segment
+(`/faculty/:id/:section`, so that «Кафедри» and «Аудиторії» can be bookmarked and reloaded — see the
+client README's [The open tab is part of the
+URL](../timetable-ui/README.md#the-open-tab-is-part-of-the-url-section-routets)). A seventh segment
+would need one more line in `FrontendController`, and nothing else.
 
 The client asks for `/graphql` as a relative path (`GraphqlService`), so same-origin serving needs
 no configuration on either side; `timetable-ui/src/proxy.conf.json` exists only because `ng serve`
@@ -166,7 +335,8 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 
 | Entity | Table | Notes |
 |---|---|---|
-| `Building` | `buildings` | → faculties, rooms |
+| `Building` | `buildings` | → faculties, rooms, travel times |
+| `BuildingTravelTime` | `building_travel_times` | whole minutes (`CHECK (minutes >= 0)`); → fromBuilding, toBuilding, both `ON DELETE CASCADE`, so removing a building takes its journeys with it. Directed: (from, to) and (to, from) may differ, and `CHECK` forbids a row from a building to itself. Both ends are `@PermissionParent`s, so a grant over either building covers the journey between them |
 | `Faculty` | `faculties` | → building?, departments, specialties, rooms |
 | `Department` (кафедра) | `departments` | → faculty, lecturers, courses |
 | `Specialty` (спеціальність) | `specialties` | code, degree; → faculty, groups, curriculum items |
@@ -198,7 +368,9 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all supported.
 Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbreviation`,
 `departments.abbreviation`, `specialties(name, degree)`, `academic_groups.name`,
-`lecturers.email`, `curriculum_items(course_id, specialty_id, semester)`,
+`lecturers.email`, `building_travel_times(from_building_id, to_building_id)` (one figure per
+ordered pair; the pair was this table's primary key until V3 gave it a surrogate `id`),
+`curriculum_items(course_id, specialty_id, semester)`,
 `curriculum_item_hours(curriculum_item_id, hour_type)`, `course_tags(course_id, tag)`,
 `lecturer_workload_students(lecturer_workload_id, student_id)` (within one workload a student has
 exactly one supervising lecturer), `lecturer_workload_constraints(lecturer_id, constraint_type)`
@@ -246,6 +418,7 @@ ordering significance beyond their values, because `ORDER BY` on an enum column 
 | `course_type` | `MANDATORY`, `ELECTIVE_GROUP`, `ELECTIVE`, `OPTIONAL`, `INTERNSHIP`, `COURSE_PROJECT`, `COURSE_WORK`, `QUALIFICATION_WORK` |
 | `week_parity` | `WEEKLY`, `NUMERATOR`, `DENOMINATOR` |
 | `grantee_type` | `USER`, `GROUP` — which column of a `permissions` row is set |
+| `access_level` | `EDIT`, `FULL`, `MANAGE` — how much a grant permits. The clearest case of why these are enums: the service asks `level >= 'FULL'` in SQL and `held.allows(required)` in Java, and both mean the same thing only because declaration order is comparison order |
 | `study_form`, `degree`, `lecturer_position`, `room_kind`, `property_type` | see `schema.sql` |
 
 `hour_type` is declared "contact teaching, then the contact work around it, then the student's own
@@ -301,7 +474,10 @@ types and their `list` / `globalProperty(name)` / `updateGlobalProperty(name, va
 hand-built directly in `DynamicGraphQLSchemaBuilder.buildGlobalPropertyTypes()` and wired to
 hand-written fetchers in `DynamicDataFetchers` (`globalPropertyList()`, `globalProperty()`,
 `updateGlobalProperty()`), following the same escape-hatch pattern already used for
-`ConnectionPageInfo` and the Apollo Federation `_service` field. `R2dbcQueryEngine.updateWhere(table,
+`ConnectionPageInfo` and the Apollo Federation `_service` field. They are not outside authorization,
+though they once were: the two reads are wrapped in `DataFetcherProvider#authenticated` and the
+write in `#globalSettingMutation`, which requires a `GLOBAL` grant at `EDIT` or above — see [Two
+holes this closed on the way](#two-holes-this-closed-on-the-way). `R2dbcQueryEngine.updateWhere(table,
 columnValues, whereColumn, whereValue)` — an `update()` variant keyed by an arbitrary column
 instead of the conventional `id` — was added specifically to make `updateGlobalProperty` possible
 without touching the generic `update()`/`selectOne()` methods every other entity relies on.
@@ -329,8 +505,9 @@ differ between institutions by design, since the Закон «Про вищу о
 educational process to each institution. A **blank value is meaningful** — it means «не встановлено»,
 and the
 client drops the check that rests on it — so `updateGlobalProperty` accepts an empty string and must
-keep accepting one. `global-properties-limits.sql` beside `data.sql` adds just this group with
-`ON CONFLICT DO NOTHING`, for a database created before it existed.
+keep accepting one. These rows now ship in `data.sql` itself; the separate
+`global-properties-limits.sql` that once carried them for an older database is gone, superseded by
+the Flyway migrations described under [Schema migrations](#migrations-flyway).
 
 Nothing in the service reads any of these: they are stored and served, and every one of them is
 applied in the client. That is the same division as everywhere else — see *How the two halves divide
@@ -573,7 +750,7 @@ fetchers instead (see [Authentication & authorization](#authentication--authoriz
 | `users` | email (unique), first/last name, BCrypt `password_hash`, `must_change_password`, `is_active`, and the optional person link `lecturer_id` / `student_id` — see below |
 | `groups` | name (unique), description |
 | `user_groups` | `(user_id, group_id)` — a user may belong to any number of groups |
-| `permissions` | a single grant: `grantee_type` (`USER`/`GROUP`) + exactly one of `user_id`/`group_id`, `resource_type` + `resource_id` (or `resource_type = 'GLOBAL'` with a `NULL` id for full admin access), `granted_by` |
+| `permissions` | a single grant: `grantee_type` (`USER`/`GROUP`) + exactly one of `user_id`/`group_id`, `resource_type` + `resource_id` (or `resource_type = 'GLOBAL'` with a `NULL` id for university-wide scope), `level` (`EDIT`/`FULL`/`MANAGE`, with no `DEFAULT` on purpose, so a forgotten column cannot quietly hand out delete rights), `granted_by`, `created_at`, `updated_at`. One row per grantee per exact resource, so re-granting a scope changes `level` in place rather than adding a near-duplicate |
 
 #### Who an account *is*: `users.lecturer_id` / `users.student_id`
 
@@ -611,10 +788,10 @@ without that the link would be enumerable university-wide. And only an administr
 (`setUserLink`, `createUser`'s two optional arguments), because an account that can point itself at
 a lecturer can read that lecturer's workload.
 
-Because `schema.sql` opens with `DROP SCHEMA public CASCADE`, a database that already holds data
-takes the columns from **`db/users-person-link.sql`** instead — `ALTER TABLE … ADD COLUMN IF NOT
-EXISTS` plus the guarded constraint and the two indexes, safe to run more than once. It is the same
-arrangement `global-properties-limits.sql` uses, and for the same reason.
+Because `schema.sql` opens with `DROP SCHEMA public CASCADE`, it cannot be re-applied to a database
+that already holds data. Carrying an existing database forward is what
+[Schema migrations](#migrations-flyway) is for; the hand-run `db/users-person-link.sql` that
+predated Flyway has been removed.
 
 ### Permission cascade annotations on domain entities
 
@@ -648,7 +825,8 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `LecturerWorkloadCandidateConstraint` | `LecturerWorkloadCandidate` |
 | `LecturerWorkloadStudent` | `LecturerWorkload` |
 | `TimetableEntry` | `LecturerWorkload`, `Room` |
-| `Building`, `AcademicDegree` | *(none — top-level; only an administrator can create/modify these)* |
+| `BuildingTravelTime` | `Building` at *either* end (`from_building_id`, `to_building_id`) |
+| `Building`, `AcademicDegree` | *(none — top-level; only a `GLOBAL` grant reaches these, at `EDIT` to create or change one and `FULL` to delete it)* |
 
 `LecturerWorkload`'s rooms and room groups are deliberately **not** permission parents: being able
 to modify a room, or the list of rooms in a group, must not confer the right to modify every
@@ -829,17 +1007,17 @@ instead of widening to every group in the university.
 
 ### Where each entity is declared
 
-The four `*SchemaConfig` classes are the whole API surface — 28 entities, one `configure<Entity>`
+The four `*SchemaConfig` classes are the whole API surface — 29 entities, one `configure<Entity>`
 method each, split by subject area:
 
 | Config class | Entities declared |
 |---|---|
-| `OrganizationSchemaConfig` | `Building`, `Faculty`, `Department`, `Specialty`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup` |
+| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `Specialty`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup` |
 | `CurriculumSchemaConfig` | `Course`, `CourseTag`\*, `CurriculumItem`, `CurriculumItemHours`, `WorkingCurriculumItem`, `CombinedWorkingCurriculumItem` |
 | `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `LecturerTimetableConstraint`\*, `Student`, `AcademicGroup`, `AcademicGroupTimetableConstraint`\*, `CombinedGroup` |
 | `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTimeSet`, `ClassStartTime`, `TimetableEntry` |
 
-Twenty of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
+Twenty-one of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
 The exceptions are all children written through a parent:
 
 - \* **type-only** (`s.type(...)` with no queries or mutations): registered so a parent's relation
@@ -889,6 +1067,7 @@ single-row `<entity>(id:)` query.
 | `departmentConnection` | `name` | `facultyId` |
 | `specialtyConnection` | `code` | `facultyId` |
 | `roomConnection` | `number` | `facultyId`, `buildingId` |
+| `buildingTravelTimeConnection` | `from_building_id` | `fromBuildingId`, `toBuildingId` |
 | `roomGroupConnection` | `name` | `facultyId`, `departmentId` |
 | `academicDegreeConnection` | `level` | — |
 | `lecturerConnection` | `lastName` | `departmentId`, `facultyId` (r) |
@@ -960,14 +1139,39 @@ around).
    `DynamicGraphQlConfiguration`) — the schema builder itself has no authorization awareness.
    It enforces two rules for every reflectively-generated query/mutation:
    - any operation requires a signed-in caller (reads are open to any authenticated user);
-   - `create`/`update`/`delete` mutations additionally require "modify" permission on the target
-     (or, for creates, on whichever declared parent the new row is being attached to) — see
-     `PermissionService` below.
+   - mutations additionally require an access level on the target (or, for creates, on whichever
+     declared parent the new row is being attached to): `create` and `update` need `EDIT`, `delete`
+     needs `FULL` — see [The permission model](#the-permission-model) below. The denial message
+     names the level that was missing, so somebody holding `EDIT` learns what to ask their deanery
+     for rather than guessing whether they are in the wrong place entirely.
 3. Hand-rolled operations (`login`, `me`, `changePassword`, `createUser`, `setUserLink`, group/permission
    management) bypass this decorator entirely — they're wired directly in
    `DynamicGraphQLSchemaBuilder.buildAuthTypes()`/`registerAuthFetchers()`, the same escape-hatch
    pattern used for `GlobalProperty` (see above), so a `User`'s password hash is never reachable
    through the generic, selection-set-driven machinery.
+
+### Why the Flyway dependency list has four entries and not one
+
+`flyway-core` on the classpath does **nothing** on its own here. Spring Boot 4 split
+`spring-boot-autoconfigure` into one module per technology; what remains in it is twelve core
+auto-configurations, and Flyway's is not one of them. Without
+`org.springframework.boot:spring-boot-flyway` there is no `FlywayAutoConfiguration`, so no `Flyway`
+bean is created, nothing binds the `spring.flyway.*` properties, and **the application starts
+normally having migrated nothing** — no warning, because as far as Boot is concerned nobody asked
+for Flyway. The failure mode is silence, which is why it is written down here as well as in the
+pom.
+
+The other two are less subtle. `flyway-database-postgresql` is Flyway's PostgreSQL support, a
+separate artifact since Flyway 10, without which Flyway does not recognise the database it is
+pointed at; and `org.postgresql:postgresql` is the JDBC driver, at `runtime` scope, since the
+startup migration is the only JDBC connection this service ever opens. No versions are declared for
+any of the four — the Boot parent manages all of them.
+
+`spring-boot-flyway` brings `spring-boot-jdbc` with it (that is where `DataSourceBuilder` lives). No
+connection pool comes along, so `DataSourceAutoConfiguration` finds neither a pool implementation,
+nor an embedded driver, nor a `spring.datasource.url`, and creates no `DataSource` — which is what
+we want. The only JDBC `DataSource` in the context is the `SimpleDriverDataSource` Flyway builds for
+itself from `spring.flyway.url`, and it is used once, at startup.
 
 ### When a token expires
 
@@ -1021,21 +1225,23 @@ the classification because it never states one.
 
 ### The security package
 
-`org.lnu.timetable.security` is thirteen classes, and it is worth knowing which of them decides what:
+`org.lnu.timetable.security` is fifteen classes, and it is worth knowing which of them decides what:
 
 | Class | Role |
 |---|---|
-| `AuthenticationGraphQlInterceptor` | reads `Authorization: Bearer <jwt>` on every request, resolves it to a `Principal` and puts it on the GraphQL context. An absent header leaves the request anonymous rather than failing it, which is what keeps `login` reachable through the same endpoint; a token that *was* presented and cannot be honoured also runs anonymously, but adds the `X-Auth-Error` header and an `UNAUTHENTICATED` error entry saying so |
+| `AuthenticationGraphQlInterceptor` | reads `Authorization: Bearer <jwt>` on every request, resolves it to a `Principal` and puts it — together with the request's `PermissionEvaluator` — on the GraphQL context. An absent header leaves the request anonymous rather than failing it, which is what keeps `login` reachable through the same endpoint; a token that *was* presented and cannot be honoured also runs anonymously, but adds the `X-Auth-Error` header and an `UNAUTHENTICATED` error entry saying so |
 | `AuthFailure` | enum — the three reasons a presented token resolves to nobody (`TOKEN_EXPIRED`, `INVALID_TOKEN`, `ACCOUNT_DISABLED`), each with the Ukrainian text carried on the error entry |
 | `AuthExceptionResolver` | maps `GraphQlAuthException` to a real GraphQL error with `extensions.code`, instead of the `INTERNAL_ERROR` mask Spring applies to anything no resolver claims |
 | `JwtService` | issues and parses the HS256 tokens, which carry only the user id; `parse` returns a `TokenResult` that distinguishes expiry from every other failure |
 | `Principal` | record — id, email, first/last name, `mustChangePassword`, and the person link (`lecturerId`/`studentId`), resolved fresh per request like everything else here |
-| `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field and "may modify" on every generated mutation |
-| `PermissionService` | the decision point: `canModify`, `canCreate`, `canManageGrantsOn` |
-| `PermissionGraphRepository` | the three raw reads `PermissionService` walks the permission graph with — `fetchForeignKeys`, `fetchJoinParentIds`, `fetchLabel` |
-| `ResourceRef` | record — one `(resourceType, resourceId)` node of that ancestry |
+| `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field, `EDIT` on every `create`/`update` and `FULL` on every `delete`, and — through `authenticated()` / `globalSettingMutation()` — the same two rules on the hand-rolled `GlobalProperty` fields |
+| `AccessLevel` | the three ordered levels — `EDIT` < `FULL` < `MANAGE` — mirroring the `access_level` PostgreSQL enum |
+| `PermissionService` | the factory for a request's `PermissionEvaluator` |
+| `PermissionEvaluator` | the decision point, one per request: grants loaded once, ancestry walked set-at-a-time, results memoised. Deliberately not thread-safe — GraphQL resolves fields concurrently, and the memo is only sound because a request's fields share one instance rather than racing several |
+| `PermissionGraphRepository` | the set-at-a-time reads the evaluator walks the graph with — `fetchForeignKeys`, `fetchJoinParents`, `fetchLabel`. These no longer swallow database errors: a failed read used to look like "no ancestors", i.e. a silent denial, and now propagates |
+| `ResourceRef` | record — one `(resourceType, resourceId)` node of that ancestry, plus the synthetic `GLOBAL` root that university-wide grants name. Making `GLOBAL` a node of the same shape, rather than a magic string spliced into each grant query, is what removes the special case from every lookup |
 | `PermissionRepository` | everything else the auth tables need: users, groups, memberships, grants |
-| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `canModifyResources`, `grantsForResource`, the grant/membership mutations and `setUserLink` (with `linkErrorStatus`, the one place in the service that tells a `CHECK` from a foreign key by reading the `SQLSTATE`) |
+| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `searchUsers`, `accessLevels`, `grantsForResource`, the grant/membership mutations and `setUserLink` (with `linkErrorStatus`, the one place in the service that tells a `CHECK` from a foreign key by reading the `SQLSTATE`) |
 | `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
 | `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
 
@@ -1045,14 +1251,45 @@ users, the other reads the *auth* tables and knows nothing about the domain.
 
 ### The permission model
 
-A grant (`permissions` table) names a `resource_type` — an entity's simple class name in
-`UPPER_SNAKE_CASE`, e.g. `FACULTY`, derived the same way both sides of the stack independently
-compute it (`EntityMetadata#resourceType()` on the backend via Guava's `CaseFormat`, `toResourceType()`
-in the frontend) — plus a `resource_id`, or the special `resource_type = 'GLOBAL'` (`resource_id`
-`NULL`) for full-access admin grants. "Modify" permission on a resource means update, delete, *and*
-the right to create new child rows underneath it (and to modify those children in turn) — exactly
-the cascade the product spec asked for (e.g. a grant on a `Faculty` also covers its `Department`s,
-`Specialty`s, `Room`s, `Course`s, and transitively everything beneath those).
+A grant (`permissions` table) has three parts: **who**, **where**, and **how much**.
+
+**Who** is a single user or a single group, never both. A user's effective access is the union of
+their own grants and those of every group they belong to.
+
+**Where** is a `resource_type` — an entity's simple class name in `UPPER_SNAKE_CASE`, e.g.
+`FACULTY`, derived the same way both sides of the stack independently compute it
+(`EntityMetadata#resourceType()` on the backend via Guava's `CaseFormat`, `toResourceType()` in the
+frontend) — plus a `resource_id`, or the special `resource_type = 'GLOBAL'` (`resource_id` `NULL`)
+for a university-wide scope. The scope **cascades downward**: a grant on a `Faculty` also covers its
+`Department`s, `Specialty`s, `AcademicGroup`s, `Room`s, `Course`s, curriculum and working-curriculum
+items, lecturer workloads and timetable entries; a grant on a single `Department` covers that
+department, its lecturers and their workloads, and nothing belonging to a sibling department.
+
+**How much** is an `AccessLevel` — three ordered values, and the level does not weaken on the way
+down:
+
+| Level | Ukrainian | Covers |
+|---|---|---|
+| `EDIT` | Редагування | create and update this resource and everything below it. **No deletes.** |
+| `FULL` | Повний доступ | everything `EDIT` allows, plus deleting |
+| `MANAGE` | Керування доступом | everything `FULL` allows, plus granting and revoking access to this resource and its descendants, at any level up to `MANAGE` |
+
+Three levels rather than a matrix of independent "may update" / "may delete" / "may delegate" flags,
+because every combination anyone actually asked for is a prefix of that chain. Nobody wants a person
+who can delete a кафедра but not rename it, or hand out access they do not themselves have. The
+consequence is that every authorization question in the service reduces to one comparison,
+`level >= required`, in SQL as much as in Java — `access_level` is a PostgreSQL enum and declaration
+order is comparison order there too.
+
+`EDIT` exists because deletion in this schema cascades: removing a `Specialty` takes its academic
+groups, curriculum items and workloads with it. Somebody who maintains навчальні плани every day
+should be able to do that job without being one mis-click away from erasing a group. `MANAGE` exists
+because delegation is a real act at a university: a deanery should be able to hand a кафедра to its
+завідувач without an administrator being the bottleneck.
+
+`isAdmin` is not a column on `users`; it is `GLOBAL` at `MANAGE`. `GLOBAL` at `EDIT` is a coherent
+and useful thing to hold — somebody trusted with the whole university's data who cannot delete any
+of it, and cannot give the right away.
 
 That cascade is declared, not hardcoded, via two repeatable class-level annotations in
 `org.lnu.timetable.framework.annotation`:
@@ -1073,34 +1310,105 @@ public class CombinedGroup { ... }
 covers an ancestor reached through a many-to-many join table (e.g. a `LecturerWorkload` is also
 covered by a grant on any `Lecturer` assigned to it). Either may be repeated
 (`@PermissionParents`/`@PermissionJoinParents`) when an entity has more than one path to an
-ancestor — coverage through *any one* declared path is enough. See [Permission cascade
-annotations on domain entities](#permission-cascade-annotations-on-domain-entities) above for the
-full graph as actually declared across the domain model.
+ancestor — coverage through *any one* declared path is enough, and the effective level is the
+highest any of them yields. See [Permission cascade annotations on domain
+entities](#permission-cascade-annotations-on-domain-entities) above for the full graph as actually
+declared across the domain model.
 
-`PermissionService` (`org.lnu.timetable.security`) is the central decision point:
+### Where the decisions are made
 
-- `canModify(userId, entityClass, id)` walks **up** from the row (cheaper than walking down from
-  every grant) along the declared edges, up to a depth of 15 (`MAX_DEPTH`, guarding against an
-  accidental annotation cycle), collecting every ancestor `(resourceType, id)` pair reachable —
-  then checks whether the user (directly, or via any group they belong to) holds a grant on any
-  one of them, or a `GLOBAL` grant.
-- `canCreate(userId, entityClass, input)` does the same starting from whichever
-  `@PermissionParent` foreign keys are present in the proposed input, since the row doesn't exist
-  yet to walk up from. An entity with no applicable parent reference in the input (e.g. a
-  top-level `Building`, or an optional-FK entity created with none of its FKs set) can then only be
-  created by an administrator.
-- `canManageGrantsOn(userId, resourceType, resourceId)` is the delegation rule: **you can only
-  grant (or revoke) access to a scope you already hold yourself.** A user with modify permission
-  on a `Faculty` can grant that same `Faculty` — or anything beneath it — to another user or
-  group; they cannot grant access to an unrelated faculty, or promote anyone to `GLOBAL`
-  admin unless they're a `GLOBAL` admin themselves.
+`PermissionService` is now only a factory. The decisions live in **`PermissionEvaluator`**, one
+instance of which exists per GraphQL request (put on the context by
+`AuthenticationGraphQlInterceptor`, next to the `Principal`).
+
+That split is the point of the refactor. Authorization here is a graph question, and one request
+asks it many times — once per mutation, and once per row when a page asks which of two hundred
+courses are editable. The previous implementation answered each from scratch: two round trips for
+the caller's groups and grants, then one round trip per node while climbing the hierarchy, with no
+memory between questions. Two hundred courses in one faculty meant that faculty was read two hundred
+times. The evaluator instead:
+
+1. **Loads the caller's grants once** and answers every subsequent question against that map. The
+   `hasAnyGrant` statement — whose `WHERE` clause used to be an OR-list of every ancestor reached,
+   so the deeper the row the longer the SQL — is gone entirely.
+2. **Walks the ancestor graph breadth-first over a whole set of rows at once**: one statement per
+   (table, edge) per level, regardless of how many rows are on screen.
+3. **Memoises what it resolved.** A node's level is computed once per request; the second question
+   about the same faculty costs nothing.
+4. **Tracks visited nodes instead of trusting a depth counter**, so `Course.parent_course_id` — an
+   entity that is its own ancestor type — cannot loop, and a legitimately deep chain is not silently
+   truncated into a denial. (The depth cap survives as a backstop at 32, and reaching it still ends
+   the walk early — a truncated graph is not memoised, and it can under-report a level. Nothing in
+   the domain model comes near it: the deepest real chain is
+   eleven edges.)
+
+Its surface:
+
+| Method | Answers |
+|---|---|
+| `levelsFor(entityClass, ids)` | the caller's level on each of many rows, resolved together |
+| `levelFor(entityClass, id)` / `allows(entityClass, id, required)` | the same for one row |
+| `levelForNew(entityClass, input)` | the level over a row that does not exist yet — the highest held over any parent named in the proposed input. Only `@PermissionParent` foreign keys count: nothing points at the row yet, so a `@PermissionJoinParent` path cannot apply, and a `LecturerWorkload` is created through its working-curriculum item rather than through the lecturer who will teach it. An entity created with none of its optional parent references set has no covering scope at all, so only a `GLOBAL` grant creates it: a `Room` belonging to no building and no faculty is a university-wide object |
+| `levelForResource(resourceType, resourceId)` | the same by grant-shaped name, including `GLOBAL` |
+| `coveringRefs(resourceType, resourceId)` | every node a grant could sit on and still cover this row — what the admin UI lists *effective* access from |
+| `holdsManageAbove(resourceType, resourceId)` | whether the caller's `MANAGE` comes from a **strict** ancestor — the revoke rule below |
+| `isAdmin()` / `globalLevel()` / `canDelegateSomewhere()` | the university-wide answers |
+
+Each mutation names the level it needs, in one `switch` in `AuthorizingDataFetcherProvider`:
+`create` and `update` need `EDIT`, `delete` needs `FULL`. Reads still need only a signed-in caller.
+
+### Delegation, and who can take access away
+
+Granting requires `MANAGE` over the resource — held on it, on any ancestor of it, or
+university-wide — and the granted level may not exceed the caller's own. Since `MANAGE` is the top
+of the scale that second rule never bites today; it is written down anyway, so that adding a level
+above `MANAGE` later cannot silently let a delegate mint it.
+
+Granting the same scope to the same grantee twice is an **update of the level**, not a failure:
+"give Ivanenko `FULL` here, he only had `EDIT`" is the same administrative act as granting it, and
+making the caller revoke-then-grant would leave a window where they had neither. The mutation
+reports `errorStatus: UPDATED` alongside `isSuccess: true` so the UI can say which happened.
+
+A note on how this behaved before, because it explains a symptom rather than only a design: the old
+`insertPermission` bound `user_id`, `group_id` and `resource_id` with a plain `bind(name, value)`,
+and every grant has at least one of those null — a grant is a user's *or* a group's. R2DBC rejects a
+plain bind of null (it has no type to send the parameter as), so the statement always failed; the
+repository swallowed the error with `onErrorResume(e -> Mono.empty())`, and the fetcher read the
+empty result as "the row is already there" and answered `ALREADY_GRANTED`. `grantPermission`
+therefore never once succeeded, for anybody, and said so in the least alarming way available. That
+is why the seeded «Деканат ФПМіІ» grant is inserted by `data.sql` rather than made through the UI.
+The nulls now go through `Parameters.in(R2dbcType.BIGINT, …)`, which carries the type alongside the
+absent value, and only a genuine integrity violation is translated into a status
+(`INVALID_GRANTEE`) — everything else propagates, so the next failure of this kind will be visible
+instead of comfortable.
+
+Revoking requires one thing more: the caller's `MANAGE` must come from **above** the grant's
+resource, or the grant must be one they made themselves (`granted_by`). This closes a hole the old
+rule left open. When delegation and modification were the same check, everyone holding a grant on a
+кафедра could revoke everyone else's grant on that same кафедра — including the one the deanery had
+just made, and including their own. Two heads of the same department could unseat each other, and a
+delegate could lock out the person who appointed them. Requiring authority from a strict ancestor
+means access is withdrawn by whoever is actually above it, while `granted_by` still lets anyone undo
+their own mistake immediately.
+
+### Two holes this closed on the way
+
+- `updateGlobalProperty` had **no authorization check at all**. Any signed-in account — every
+  student with a login — could change the semester dates and the timetable-generation weights the
+  solver runs on. University-wide settings belong to no entity, so there is no scope for a grant to
+  cascade from: changing them now requires `GLOBAL` at `EDIT` or above
+  (`DataFetcherProvider#globalSettingMutation`). Reading them stays open to any signed-in user, as
+  every page depends on it.
+- The `GlobalProperty` read fields bypassed even the signed-in check, because they were registered
+  straight from `DynamicDataFetchers` rather than through the authorizing decorator. They now go
+  through `DataFetcherProvider#authenticated`.
 
 ### GraphQL API
 
 | Field | Kind | Notes |
 |---|---|---|
 | `login(email, password)` | mutation | returns a JWT + whether the account must change its password |
-| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin`, `lecturerId`/`studentId`, groups, effective permissions), or `null` |
+| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin` — which is exactly `GLOBAL` at `MANAGE` — `lecturerId`/`studentId`, groups, and every effective grant with its `level`), or `null` |
 | `changePassword(currentPassword, newPassword)` | mutation | minimum 8 characters; clears `mustChangePassword` |
 | `createUser(email, firstName, lastName, temporaryPassword, lecturerId?, studentId?)` | mutation | **admin-only**; the created account must change its password on first login. The two optional ids link it to a person straight away — at most one of them, or `BOTH_LINKS_SET` |
 | `setUserLink(userId, lecturerId?, studentId?)` | mutation | **admin-only**; says which lecturer or student an account belongs to. Both omitted clears the link; both given fails `BOTH_LINKS_SET`; a person another account already claims fails `ALREADY_LINKED`; an id naming nobody fails `INVALID_LINK` |
@@ -1108,10 +1416,21 @@ full graph as actually declared across the domain model.
 | `users` | query | **admin-only**; all accounts |
 | `createGroup(name, description)`, `addUserToGroup`/`removeUserFromGroup` | mutation | **admin-only** group management |
 | `groups` | query | any authenticated user |
-| `grantPermission(granteeType, userId\|groupId, resourceType, resourceId)` | mutation | delegatable — see `canManageGrantsOn` above |
-| `revokePermission(permissionId)` | mutation | same delegation check, resolved from the grant's own resource |
-| `canModifyResources(resourceType, resourceIds)` | query | given candidate ids of one type, returns the subset the caller may modify — what the frontend uses to hide edit/delete buttons |
-| `grantsForResource(resourceType, resourceId)` | query | lists who currently has access on a resource; requires the caller to already be able to manage grants there |
+| `grantPermission(granteeType, userId\|groupId, resourceType, resourceId, level)` | mutation | needs `MANAGE` on the resource; `resourceId` is omitted only for `GLOBAL`. Re-granting an existing scope moves its level and answers `isSuccess: true` with `errorStatus: UPDATED`. Refusals: `FORBIDDEN` (no `MANAGE` there, or no access at all), `LEVEL_ABOVE_OWN`, `INVALID_GRANTEE` (neither or both of user/group, or an id naming nobody), `UNKNOWN_RESOURCE_TYPE`, `UNKNOWN_ACCESS_LEVEL` |
+| `revokePermission(permissionId)` | mutation | needs `MANAGE` from a **strict ancestor** of the grant's resource, or that the caller made it (`granted_by`) — that second branch is checked first and needs no level at all. Refusals: `FORBIDDEN`, `PERMISSION_NOT_FOUND` |
+| `accessLevels(resourceType, resourceIds)` | query | `[ResourceAccess!]!` — `{ id, level }` per reachable id, which is what the frontend uses to decide which buttons to show. Ids the caller cannot reach are omitted rather than returned with a null level. Replaces `canModifyResources`, whose yes/no answer could not say whether the Delete button next to Edit belonged there |
+| `grantsForResource(resourceType, resourceId, includeInherited)` | query | who can reach a resource and at what level; needs `MANAGE` on it. `includeInherited` defaults to true, adding grants held on ancestors and university-wide grants, each marked `inherited: true` — "who can edit this кафедра" is answered wrongly by a list that omits the deanery above it. Ordered direct-first, then strongest level first within each group |
+| `searchUsers(query, limit)` | query | finds active accounts by e-mail or name (either order), case-insensitive substring, for the grantee picker. Needs `MANAGE` somewhere — university-wide or on any one resource — and returns identity only, never the person link. A query under two characters returns `[]` rather than an error; `limit` defaults to 20 and is clamped to 1..50. The full `users` listing stays admin-only: a deanery needs to find the person they are handing a кафедра to, not to enumerate the university's staff |
+
+Two GraphQL types carry the model: the enum `AccessLevel { EDIT, FULL, MANAGE }` — an enum rather
+than a string so a client cannot invent a fourth value and so introspection carries what each one
+means — and `ResourceAccess { id, level }`. `PermissionGrant` gained `level: AccessLevel!` and
+`inherited: Boolean`, the latter set only by `grantsForResource` and only as a display hint: an
+inherited grant is shown as context and cannot be revoked from there.
+
+One consequence of the upsert worth knowing before it surprises somebody: `DO UPDATE` also sets
+`granted_by` to whoever re-granted. Since revocation keys on `granted_by`, re-levelling somebody
+else's grant transfers the right to revoke it from the original granter to you.
 
 All admin-only fields fail with a `GraphQlAuthException` for non-admins; unauthenticated calls to
 anything except `login` fail the same way with "You must be signed in to do this." Both arrive as a
@@ -1135,12 +1454,12 @@ real** — `--app.security.jwt-secret=…`, `APP_SECURITY_JWTSECRET`, or `SPRING
 
 | Email | Password | Role |
 |---|---|---|
-| `admin@lnu.edu.ua` | `Admin#2026` | `GLOBAL` admin grant, no forced password change |
+| `admin@lnu.edu.ua` | `Admin#2026` | `GLOBAL` at `MANAGE` — the administrator grant — and no forced password change |
 
 Everything else about the auth tables is left for that administrator to create, which matches the
 no-self-registration rule: there is no seeded example of a forced password change, of a scoped
 `FACULTY`/`DEPARTMENT` grant, or of an account linked to a lecturer or a student. Both groups are
-seeded empty — "Деканат ФПМіІ" keeps its `FACULTY` grant, so adding a user to it is enough to hand
+seeded empty — "Деканат ФПМіІ" keeps its `FACULTY` grant at `MANAGE`, so adding a user to it is enough to hand
 out faculty-wide access, and `permissions` carries just that grant plus the administrator's `GLOBAL`
 one.
 
@@ -1207,7 +1526,7 @@ timetable/
 │   │                 (which entity lives in which: "Where each entity is declared")
 │   ├── domain/       annotated POJOs, one per @GraphQLEntity table
 │   ├── framework/    the config-driven engine (see The framework above)
-│   ├── security/     JWT + PermissionService (see Authentication & authorization)
+│   ├── security/     JWT + AccessLevel/PermissionEvaluator (see Authentication & authorization)
 │   ├── controller/   IndexController redirects / to Apollo Sandbox; FrontendController
 │   │                 serves the built Angular client — one or the other, never both
 │   │                 (see Serving the frontend from this service)
@@ -1222,12 +1541,9 @@ timetable/
 │       ├── schema.sql     DDL; starts with DROP SCHEMA public CASCADE
 │       ├── data.sql       pg_dump-style seed: the real LNU structure plus the
 │       │                  transcribed ФПМІ 2025/2026 timetable (see Database setup)
-│       ├── global-properties-limits.sql
-│       │                  the curriculum limits alone, ON CONFLICT DO NOTHING
-│       └── users-person-link.sql
-│                          users.lecturer_id / users.student_id alone, as ALTER
-│                          TABLE — both files exist so a populated database can
-│                          take a change schema.sql would DROP it to apply
+│       └── migration/     Flyway migrations — every change a populated database
+│                          takes after schema.sql created it, applied at startup
+│                          and recorded in flyway_schema_history
 ├── src/test/java/…/SchemaBuildTest.java   assembles the whole GraphQL schema and
 │                                          asserts on the printed SDL — the fastest
 │                                          check that a schema-config change is valid
@@ -1257,24 +1573,27 @@ setup](#database-setup).
 
 ## Known limitations
 
-- **`schema.sql`/`data.sql` are applied manually, not on startup.** Unlike a Flyway/Liquibase
-  setup, nothing re-runs them when the app boots — see [Database setup](#database-setup). After
+- **`schema.sql`/`data.sql` are applied manually, not on startup.** Flyway now runs at startup, but
+  it *carries a database forward* rather than creating one: nothing re-runs those two files when the
+  app boots — see [Database setup](#database-setup) and [Migrations (Flyway)](#migrations-flyway).
+  After
   pulling a change that touches either file, you must re-run both against your local database
   yourself, or requests against the new/changed columns fail with a Postgres "column ... does
   not exist" error (surfaced as a generic `BadSqlGrammarException` / "bad SQL grammar" message,
   which doesn't make the real cause obvious). `scripts/reset_db.sh` does both steps in one
   command. Note that this makes every schema change destructive by default: a change that only
-  *adds* a column or an enum value can be applied in place with `ALTER TABLE`/`ALTER TYPE`
-  instead, but nothing in the repo tracks which of those you have already run.
+  *adds* a column or an enum value belongs in a Flyway migration instead, which is exactly what
+  `db/migration/` is now for — that half of the problem is solved, and it is the half that used to
+  have nothing tracking which incremental scripts a given database had already run.
 - **`spring.profiles.active=loc` is compiled into the jar.** A packaged deployment therefore still
   loads `application-loc.properties` — its dev credentials, its DEBUG SQL logging (every statement
   and every bound parameter, including the ones behind `login`), and `app.apollo-sandbox.enabled=true`,
   which leaves `/` redirecting to Apollo Sandbox rather than serving the client. Each has to be
   overridden per run, or the profile switched off with `--spring.profiles.active=`. Convenient for
   `mvn spring-boot:run`, a trap for anything else; a `prod` profile file would be the tidier answer.
-- **`FrontendController` matches at most three path segments.** Every client route fits today
-  (`/faculty/:id` is the deepest), but a deeper one added later would 404 on reload until another
-  pattern is added there. It is a fixed list of patterns rather than a catch-all precisely so that
+- **`FrontendController` matches at most six path segments.** Every client route fits today (the
+  deepest is three — `/faculty/:id/:section`), but a deeper one added later would 404 on reload
+  until another pattern is added there. It is a fixed list of patterns rather than a catch-all precisely so that
   requests for real files keep falling through to the static resource handler — see [Serving the
   frontend from this service](#serving-the-frontend-from-this-service).
 - **The `ukrainian` collation needs a Postgres built with ICU** (standard from v15). On a build
@@ -1341,12 +1660,20 @@ setup](#database-setup).
   `working_curriculum_items`), so a `TOGETHER` workload could be given pairings through the API.
   The frontend force-clears them whenever the format is anything else; a CHECK constraint can't
   express the rule without a trigger or a denormalized column.
-- Only one permission level exists: **modify** (update + delete + create/modify children). There's
-  no separate read-restriction — any authenticated user can query any entity; permission grants
-  only govern which edit/delete buttons the frontend shows and which mutations succeed.
+- There is **no read restriction**: any authenticated user can query any entity. Grants govern
+  which mutations succeed and, from that, which buttons the client shows — see [The permission
+  model](#the-permission-model) for the three levels and what each opens.
 - `grantsForResource` requires already knowing the exact `resourceType`/`resourceId` to audit — 
   there's no single query that lists every grant in the system across all resource types.
-- The ancestor-closure check in `PermissionService.ancestryOf` walks the permission graph with one
-  SQL round trip per edge (via sequential/parallel reactive composition, capped at depth 15) rather
-  than a single recursive CTE. Fine at this project's scale; a much larger entity graph or
-  permission volume would want that consolidated into one query.
+- `PermissionEvaluator` walks the permission graph breadth-first — one SQL statement per (table,
+  edge) per level, over the whole set of rows being asked about, memoised for the rest of the
+  request — rather than as a single recursive CTE. That is a large improvement on the per-row,
+  per-edge walk it replaced, and comfortably enough at this project's scale, but the ancestor
+  closure is still recomputed on every request. A much larger entity graph, or a page listing rows
+  from many different faculties at once, would want a materialised `resource_ancestors` closure
+  table maintained by triggers, which would additionally let the permission predicate be pushed
+  into the list queries themselves instead of being asked separately afterwards.
+- Reads are still gated only on being signed in. Scoping *visibility* the way modification is
+  scoped is a larger change than adding levels was — every list query would need the permission
+  predicate pushed into its `WHERE` clause — and it is not what the university asked for: a розклад
+  is public information within the institution.

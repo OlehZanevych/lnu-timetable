@@ -55,10 +55,13 @@ public class AuthenticationGraphQlInterceptor implements WebGraphQlInterceptor {
 
     private final JwtService jwtService;
     private final PermissionRepository permissionRepository;
+    private final PermissionService permissionService;
 
-    public AuthenticationGraphQlInterceptor(JwtService jwtService, PermissionRepository permissionRepository) {
+    public AuthenticationGraphQlInterceptor(JwtService jwtService, PermissionRepository permissionRepository,
+                                            PermissionService permissionService) {
         this.jwtService = jwtService;
         this.permissionRepository = permissionRepository;
+        this.permissionService = permissionService;
     }
 
     @Override
@@ -79,7 +82,13 @@ public class AuthenticationGraphQlInterceptor implements WebGraphQlInterceptor {
         // since it was issued, which is just as much a reason to send the client back to /login.
         return loadPrincipal(parsed.userId())
             .doOnNext(principal -> request.configureExecutionInput((executionInput, builder) ->
-                builder.graphQLContext(ctx -> ctx.put(Principal.class, principal)).build()))
+                builder.graphQLContext(ctx -> {
+                    ctx.put(Principal.class, principal);
+                    // One authorization state for the whole request: the caller's grants are loaded
+                    // once and the ancestry walked for one field is reused by every other field.
+                    // See PermissionEvaluator for why that matters on a page listing hundreds of rows.
+                    ctx.put(PermissionEvaluator.class, permissionService.newEvaluator(principal.userId()));
+                }).build()))
             .hasElement()
             .flatMap(resolved -> resolved
                 ? chain.next(request)

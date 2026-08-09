@@ -1,7 +1,7 @@
 import { Component, Input, OnChanges, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect } from './search-select';
 import { SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
@@ -178,13 +178,11 @@ export class TimetableView implements OnInit, OnChanges {
     this.load();
   }
 
-  private idListFilter(): string | null {
-    const list = (name: string, ids: string[]) =>
-      ids.length ? `${name}: [${ids.map((id) => `"${id}"`).join(', ')}]` : '';
+  private idListFilter(v: GqlVars): string | null {
     const parts = [
-      list('academicGroupIds', this.academicGroupIds),
-      list('lecturerIds', this.lecturerIds),
-      list('roomIds', this.roomIds)
+      v.optionalArg('academicGroupIds', '[ID!]', this.academicGroupIds),
+      v.optionalArg('lecturerIds', '[ID!]', this.lecturerIds),
+      v.optionalArg('roomIds', '[ID!]', this.roomIds)
     ].filter(Boolean);
     // No scope at all would fetch the whole university; the host page has simply not loaded its
     // ids yet, so nothing is shown rather than everything.
@@ -198,7 +196,8 @@ export class TimetableView implements OnInit, OnChanges {
     const token = ++this.loadToken;
     const groupScope = [...this.academicGroupIds];
 
-    const scope = this.idListFilter();
+    const v = new GqlVars();
+    const scope = this.idListFilter(v);
     if (!scope) {
       this.entries.set([]);
       this.entriesScope.set(groupScope);
@@ -207,10 +206,11 @@ export class TimetableView implements OnInit, OnChanges {
     }
 
     // Always applied — see `parityOptions` for why there is no unfiltered case to fall back to.
-    const parityFilter = `, semesterParity: "${this.semesterParity()}"`;
+    const parityFilter = `, ${v.arg('semesterParity', 'String', this.semesterParity())}`;
+    const paging = `${v.arg('limit', 'Int!', 2000)}, ${v.arg('offset', 'Int!', 0)}`;
     this.loading.set(true);
 
-    const q = `{ timetableEntries { timetableEntryConnection(limit: 2000, offset: 0, ${scope}${parityFilter}) { nodes {
+    const q = `${v.declaration()}{ timetableEntries { timetableEntryConnection(${paging}, ${scope}${parityFilter}) { nodes {
       id dayOfWeek weekParity
       classStartTime { id ordinal startTime }
       room { id number name }
@@ -234,7 +234,7 @@ export class TimetableView implements OnInit, OnChanges {
       }
     } } } }`;
 
-    this.gql.request(q).subscribe({
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         if (token !== this.loadToken) return;
         // Set together: `grid` filters columns by the scope these entries were fetched with.

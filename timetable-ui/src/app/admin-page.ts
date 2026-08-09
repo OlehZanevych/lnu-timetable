@@ -1,10 +1,12 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
 import { ENTITIES } from './entities';
 import { toResourceType } from './resource-type';
 import { Option, SearchSelect } from './search-select';
+import { ResourceAccessPanel } from './resource-access';
 import { compareUk } from './sort';
 
 interface AdminUser {
@@ -28,16 +30,6 @@ interface AdminGroup {
   description: string | null;
 }
 
-interface AdminGrant {
-  id: string;
-  granteeType: 'USER' | 'GROUP';
-  resourceType: string;
-  resourceId: string | null;
-  resourceLabel: string | null;
-  user?: { id: string; email: string } | null;
-  group?: { id: string; name: string } | null;
-}
-
 /**
  * Administrator console: create user accounts (with a temporary password — self-registration is
  * intentionally not supported anywhere in the app), manage groups and membership, and grant/revoke
@@ -46,7 +38,7 @@ interface AdminGrant {
 @Component({
   selector: 'app-admin-page',
   standalone: true,
-  imports: [FormsModule, SearchSelect],
+  imports: [FormsModule, RouterLink, SearchSelect, ResourceAccessPanel],
   templateUrl: './admin-page.html'
 })
 export class AdminPage implements OnInit {
@@ -64,7 +56,6 @@ export class AdminPage implements OnInit {
 
   users = signal<AdminUser[]>([]);
   groups = signal<AdminGroup[]>([]);
-  grants = signal<AdminGrant[]>([]);
   error = signal('');
 
   // create user form
@@ -87,11 +78,11 @@ export class AdminPage implements OnInit {
 
   lecturerOptions = signal<Option[]>([]);
   studentOptions = signal<Option[]>([]);
-  // Signals, not plain Maps: `personLabel()` is read unconditionally in the users table, while the
+  // Signals, not plain Maps: `person()` is read unconditionally in the users table, while the
   // only consumers of the two option lists sit behind an `@if` that is closed by default. Under
   // zoneless change detection a write to a signal nothing is reading marks no view dirty, so plain
-  // fields here left the column showing «Викладач: #123» until an unrelated click — the people
-  // query resolves well after the (much smaller) users one.
+  // fields here left the column showing a placeholder until an unrelated click — the people query
+  // resolves well after the (much smaller) users one.
   private lecturerNames = signal(new Map<string, string>());
   private studentNames = signal(new Map<string, string>());
 
@@ -103,10 +94,15 @@ export class AdminPage implements OnInit {
   membership = { userId: '', groupId: '' };
   membershipError = signal('');
 
-  // grant form
-  grant = { granteeType: 'USER' as 'USER' | 'GROUP', userId: '', groupId: '', resourceType: 'FACULTY', resourceId: '' };
-  grantError = signal('');
-  grantsLoading = signal(false);
+  /**
+   * Which resource the access panel below is pointed at. The panel itself — `<app-resource-access>`
+   * — is the same component the факультет and кафедра pages carry as their «Доступ» tab; all this
+   * console adds is the ability to name any resource by type and id, including GLOBAL, which is the
+   * one scope that has no page of its own.
+   */
+  target = { resourceType: 'FACULTY', resourceId: '' };
+  activeTarget = signal<{ resourceType: string; resourceId: string | null } | null>(null);
+  targetError = signal('');
 
   ngOnInit() {
     this.reload();
@@ -120,15 +116,15 @@ export class AdminPage implements OnInit {
 
   /** Options for the two person pickers, and the names the users table shows the link by. */
   private loadPeople() {
-    const q = `{
-      lecturers { lecturerConnection(limit: 3000, offset: 0) { nodes {
+    const q = `query($lecturerLimit: Int!, $offset: Int!, $studentLimit: Int!) {
+      lecturers { lecturerConnection(limit: $lecturerLimit, offset: $offset) { nodes {
         id firstName middleName lastName department { name }
       } } }
-      students { studentConnection(limit: 2000, offset: 0) { nodes {
+      students { studentConnection(limit: $studentLimit, offset: $offset) { nodes {
         id firstName middleName lastName academicGroup { name }
       } } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { lecturerLimit: 3000, offset: 0, studentLimit: 2000 }).subscribe({
       next: (d: any) => {
         const fullName = (n: any) => [n.lastName, n.firstName, n.middleName].filter(Boolean).join(' ');
         const lecturers = (d.lecturers.lecturerConnection.nodes ?? []).map((n: any) => ({
@@ -152,10 +148,21 @@ export class AdminPage implements OnInit {
   }
 
   /** What the users table prints in its «Особа» column. */
-  personLabel(u: AdminUser): string {
-    if (u.lecturerId) return `Викладач: ${this.lecturerNames().get(u.lecturerId) ?? '#' + u.lecturerId}`;
-    if (u.studentId) return `Студент: ${this.studentNames().get(u.studentId) ?? '#' + u.studentId}`;
-    return '';
+  /**
+   * Who this account belongs to, for the «Особа» column: the kind of person, their name, and the
+   * route to them when they have a page. A викладач does; a студент is only ever a row, so their
+   * name is plain text. The name used to fall back to the raw `users.lecturer_id` when the option
+   * lists had not resolved — a number that answered nothing the reader could act on.
+   */
+  person(u: AdminUser): { role: string; name: string; link: any[] | null } | null {
+    if (u.lecturerId) {
+      return { role: 'Викладач', name: this.lecturerNames().get(u.lecturerId) ?? 'без імені',
+               link: ['/lecturer', u.lecturerId] };
+    }
+    if (u.studentId) {
+      return { role: 'Студент', name: this.studentNames().get(u.studentId) ?? 'без імені', link: null };
+    }
+    return null;
   }
 
   /** Loads an existing account's current link into the edit form, so it opens on the truth. */
@@ -234,42 +241,22 @@ export class AdminPage implements OnInit {
     });
   }
 
-  /** Loads who currently has access on the resource selected in the grant form (see
-   *  Query.grantsForResource) — requires the caller to already be able to manage grants there. */
-  loadGrantsForSelectedResource() {
-    this.grantError.set('');
-    const resourceId = this.grant.resourceType === 'GLOBAL' ? null : this.grant.resourceId || null;
-    if (this.grant.resourceType !== 'GLOBAL' && !resourceId) {
-      this.grants.set([]);
+  /**
+   * Points the access panel at the resource named in the two fields above. Kept as an explicit
+   * action rather than reacting to every keystroke: `grantsForResource` refuses outright for a
+   * resource the caller cannot manage, and a query fired on each character typed would report that
+   * refusal against half-finished ids.
+   */
+  showAccessFor() {
+    this.targetError.set('');
+    const isGlobal = this.target.resourceType === 'GLOBAL';
+    const resourceId = isGlobal ? null : this.target.resourceId.trim();
+    if (!isGlobal && !resourceId) {
+      this.activeTarget.set(null);
+      this.targetError.set('Вкажіть ID ресурсу.');
       return;
     }
-    this.grantsLoading.set(true);
-    const q = `query($resourceType: String!, $resourceId: ID) {
-      grantsForResource(resourceType: $resourceType, resourceId: $resourceId) {
-        id granteeType resourceType resourceId resourceLabel
-        user { id email }
-        group { id name }
-      }
-    }`;
-    this.gql.request<{ grantsForResource: AdminGrant[] }>(q, { resourceType: this.grant.resourceType, resourceId }).subscribe({
-      next: (d) => { this.grants.set(d.grantsForResource); this.grantsLoading.set(false); },
-      error: (e) => { this.grantError.set(e.message); this.grantsLoading.set(false); }
-    });
-  }
-
-  revokeGrant(g: AdminGrant) {
-    const q = `mutation($permissionId: ID!) { revokePermission(permissionId: $permissionId) { isSuccess errorStatus } }`;
-    this.gql.request(q, { permissionId: g.id }).subscribe({
-      next: (d: any) => {
-        if (d.revokePermission.isSuccess) {
-          this.auth.clearModifyCache();
-          this.loadGrantsForSelectedResource();
-        } else {
-          this.grantError.set('Помилка відкликання доступу.');
-        }
-      },
-      error: (e) => this.grantError.set(e.message)
-    });
+    this.activeTarget.set({ resourceType: this.target.resourceType, resourceId });
   }
 
   createUser() {
@@ -357,38 +344,6 @@ export class AdminPage implements OnInit {
     this.gql.request(q, this.membership).subscribe({
       next: (d: any) => { if (!d.removeUserFromGroup.isSuccess) this.membershipError.set('Помилка видалення.'); },
       error: (e) => this.membershipError.set(e.message)
-    });
-  }
-
-  submitGrant() {
-    this.grantError.set('');
-    const variables: Record<string, any> = {
-      granteeType: this.grant.granteeType,
-      resourceType: this.grant.resourceType,
-      resourceId: this.grant.resourceType === 'GLOBAL' ? null : this.grant.resourceId,
-      userId: this.grant.granteeType === 'USER' ? this.grant.userId : null,
-      groupId: this.grant.granteeType === 'GROUP' ? this.grant.groupId : null
-    };
-    const q = `mutation($granteeType: String!, $userId: ID, $groupId: ID, $resourceType: String!, $resourceId: ID) {
-      grantPermission(granteeType: $granteeType, userId: $userId, groupId: $groupId, resourceType: $resourceType, resourceId: $resourceId) {
-        isSuccess errorStatus
-      }
-    }`;
-    this.gql.request(q, variables).subscribe({
-      next: (d: any) => {
-        const res = d.grantPermission;
-        if (!res.isSuccess) {
-          this.grantError.set(
-            res.errorStatus === 'FORBIDDEN'
-              ? 'Ви не маєте права надавати доступ до цього ресурсу.'
-              : (res.errorStatus || 'Помилка надання доступу.')
-          );
-          return;
-        }
-        this.auth.clearModifyCache();
-        this.loadGrantsForSelectedResource();
-      },
-      error: (e) => this.grantError.set(e.message)
     });
   }
 }

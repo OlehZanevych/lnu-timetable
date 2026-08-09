@@ -21,7 +21,6 @@
   <table>
     <thead>
       <tr>
-        <th>#</th>
         @for (f of tableFields; track f.name) {
           <th>{{ f.label }}</th>
         }
@@ -31,24 +30,32 @@
     <tbody>
       @for (row of visibleRows(); track row.id) {
         <tr>
-          <td>{{ row.id }}</td>
           @for (f of tableFields; track f.name) {
-            <td>{{ display(row, f) }}</td>
+            <td>
+              @let ref = refLink(row, f);
+              @if (ref) {
+                <a class="ent-link" [routerLink]="ref">{{ display(row, f) }}</a>
+              } @else {
+                {{ display(row, f) }}
+              }
+            </td>
           }
           <td class="row-actions">
             @let link = detailLink(row);
             @if (link) {
               <a class="open-link" [routerLink]="link">Відкрити &rarr;</a>
             }
-            @if (canModify(row)) {
+            @if (canEdit(row)) {
               <button type="button" class="ghost" (click)="edit(row)">Редагувати</button>
+            }
+            @if (canDelete(row)) {
               <button type="button" class="ghost danger" (click)="remove(row)">Видалити</button>
             }
           </td>
         </tr>
       } @empty {
         <tr>
-          <td [attr.colspan]="tableFields.length + 2" class="muted">
+          <td [attr.colspan]="tableFields.length + 1" class="muted">
             @if (filteredToNothing()) {
               За запитом «{{ search }}» нічого не знайдено.
             } @else {

@@ -1,8 +1,9 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, effect, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { GlobalPropertiesService } from './global-properties.service';
 import { courseTypeLabel, CONTROL_FORM_OPTIONS, COURSE_TYPE_OPTIONS, DAY_OF_WEEK_OPTIONS,
          HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, WEEK_PARITY_OPTIONS,
@@ -13,6 +14,7 @@ import { SearchSelect, Option } from './search-select';
 import { MultiSelect } from './multi-select';
 import { compareUk } from './sort';
 import { CourseTagRef, courseLabel, courseTagNames } from './course-label';
+import { sectionNav } from './section-route';
 
 type CourseSection = 'info' | 'electives' | 'curricula' | 'working' | 'workloads' | 'timetable';
 
@@ -182,7 +184,7 @@ interface DeliveryRow {
  * The info tab also edits and deletes the discipline, exactly as `FacultyPage` does for a faculty:
  * a modal over the entity's own fields — including the `specialtyIds` many-to-many and the `tags`
  * nested list the generic table offers — and a confirmation before `deleteCourse`, both hidden
- * unless `canModifyIds('COURSE', …)` says this account may.
+ * unless `accessLevels('COURSE', …)` says this account may.
  */
 @Component({
   selector: 'app-course-page',
@@ -238,15 +240,16 @@ export class CourseDetailPage implements OnInit {
   isElectiveGroup = computed(() => this.course()?.courseType === 'ELECTIVE_GROUP');
 
   /**
-   * The section actually rendered. «Вибіркові дисципліни» exists only on an umbrella, and the tab
-   * can outlive it two ways — navigating from a group to one of its children, and changing this
-   * course's own type in the edit modal. Either would otherwise leave `@switch` matching no case at
-   * all, which is a blank page rather than an error.
+   * The section actually rendered, and the last segment of the URL — see `section-route.ts`.
+   * «Вибіркові дисципліни» exists only on an umbrella, and the tab can outlive it three ways now:
+   * navigating from a group to one of its children, changing this course's own type in the edit
+   * modal, and a pasted `/course/:id/electives` for a course that is not one. Handing `sections()`
+   * to `sectionNav` as the keys it recognises makes all three fall back to «Інформація» rather than
+   * leaving `@switch` matching no case at all, which is a blank page rather than an error.
    */
-  resolvedSection = computed<CourseSection>(() => {
-    const key = this.activeSection();
-    return this.sections().some((sec) => sec.key === key) ? key : 'info';
-  });
+  private nav = sectionNav<CourseSection>(
+    () => ['/course', this.courseId], () => this.sections().map((sec) => sec.key), () => 'info');
+  readonly resolvedSection = this.nav.active;
 
   /** This umbrella's electives — the section's rows. */
   childCourses = computed(() => [...(this.course()?.childCourses ?? [])]
@@ -258,10 +261,15 @@ export class CourseDetailPage implements OnInit {
   private extraWorkingItems = signal<ExtraWorkingItem[]>([]);
   error = signal('');
   loading = signal(false);
-  activeSection = signal<CourseSection>('info');
 
-  /** Whether the current user may edit/delete this Course — see AuthService#canModifyIds. */
-  canModifyCourse = signal(false);
+  /** This user's level on the discipline itself — see AuthService#accessLevels. */
+  courseLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force here: the discipline's own, or a stronger university-wide grant. */
+  private effectiveCourseLevel = computed(() => maxLevel(this.auth.globalLevel(), this.courseLevel()));
+
+  canModifyCourse = computed(() => allows(this.effectiveCourseLevel(), 'EDIT'));
+  canDeleteCourse = computed(() => allows(this.effectiveCourseLevel(), 'FULL'));
 
   /**
    * Specialties and departments this account may edit, for the plan editors below.
@@ -273,44 +281,52 @@ export class CourseDetailPage implements OnInit {
    * course alone would show them nothing to click. These are the other two ancestors, asked for
    * once the rows are known.
    */
-  private modifiableSpecialties = signal<ReadonlySet<string>>(new Set());
-  private modifiableDepartments = signal<ReadonlySet<string>>(new Set());
+  private specialtyLevels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
+  private departmentLevels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
 
-  /** May this plan position be edited: through the discipline, or through its specialty. */
-  canModifyItem(item: CurriculumRow): boolean {
-    return this.canModifyCourse()
-      || (!!item.specialty && this.modifiableSpecialties().has(String(item.specialty.id)));
+  /** The level in force for a plan position: through the discipline, or through its specialty. */
+  private itemLevel(item: CurriculumRow): AccessLevel | null {
+    const viaSpecialty = item.specialty ? this.specialtyLevels().get(String(item.specialty.id)) : null;
+    return maxLevel(this.effectiveCourseLevel(), viaSpecialty);
   }
 
-  /** May this РНП position be edited: through the discipline, or through the кафедра holding it. */
-  canModifyDelivery(row: DeliveryRow): boolean {
-    return this.canModifyCourse() || this.modifiableDepartments().has(row.departmentId);
+  /** The level in force for a РНП position or a workload: through the discipline, or the кафедра. */
+  private departmentScopedLevel(departmentId: string): AccessLevel | null {
+    return maxLevel(this.effectiveCourseLevel(), this.departmentLevels().get(departmentId));
   }
+
+  canModifyItem(item: CurriculumRow): boolean { return allows(this.itemLevel(item), 'EDIT'); }
+  canDeleteItem(item: CurriculumRow): boolean { return allows(this.itemLevel(item), 'FULL'); }
+
+  canModifyDelivery(row: DeliveryRow): boolean { return allows(this.departmentScopedLevel(row.departmentId), 'EDIT'); }
+  canDeleteDelivery(row: DeliveryRow): boolean { return allows(this.departmentScopedLevel(row.departmentId), 'FULL'); }
 
   /** Whether anything at all on the plan tabs is editable — what the "+ add" buttons need. */
   canAddPlans = computed(() =>
-    this.canModifyCourse() || this.modifiableSpecialties().size > 0);
+    this.canModifyCourse() || [...this.specialtyLevels().values()].some((l) => allows(l, 'EDIT')));
   canAddDeliveries = computed(() =>
-    this.canModifyCourse() || this.modifiableDepartments().size > 0);
+    this.canModifyCourse() || [...this.departmentLevels().values()].some((l) => allows(l, 'EDIT')));
 
   /**
    * Asks about the specialties and departments actually on screen, once they are known. Admins
    * short-circuit, and a course-wide grant makes the question moot.
    */
   private loadRowPermissions() {
-    if (this.auth.isAdmin() || this.canModifyCourse()) return;
+    // A course-wide FULL grant already answers every row here; anything weaker still has to ask,
+    // because a grant on one specialty or кафедра can be stronger than the one on the discipline.
+    if (allows(this.effectiveCourseLevel(), 'FULL')) return;
 
     const specialtyIds = [...new Set(this.curricula()
       .map((i) => i.specialty?.id).filter(Boolean).map(String))];
     const departmentIds = [...new Set(this.deliveries().map((d) => d.departmentId).filter(Boolean))];
 
     if (specialtyIds.length) {
-      this.auth.canModifyIds('SPECIALTY', specialtyIds)
-        .subscribe((ids) => this.modifiableSpecialties.set(ids));
+      this.auth.accessLevels('SPECIALTY', specialtyIds)
+        .subscribe((levels) => this.specialtyLevels.set(levels));
     }
     if (departmentIds.length) {
-      this.auth.canModifyIds('DEPARTMENT', departmentIds)
-        .subscribe((ids) => this.modifiableDepartments.set(ids));
+      this.auth.accessLevels('DEPARTMENT', departmentIds)
+        .subscribe((levels) => this.departmentLevels.set(levels));
     }
   }
 
@@ -544,6 +560,28 @@ export class CourseDetailPage implements OnInit {
     return '';
   });
 
+  /**
+   * Leaving a tab closes whatever form was open on it, and two tabs need option lists nothing else
+   * does. Both belong to the section *changing* rather than to the click that changed it, now that
+   * a pasted `/course/:id/workloads` or the Back button can change it without one: those four
+   * unfiltered connections are still not worth a page view that never leaves «Інформація», but they
+   * have to be loaded whichever way that tab is reached.
+   */
+  constructor() {
+    effect(() => {
+      const section = this.resolvedSection();
+      if (section === 'workloads' || section === 'timetable') {
+        this.loadWorkloadOptions();
+        this.loadClassStartTimes();
+      }
+      this.closeChildForm();
+      this.closeItemForm();
+      this.closeWciForm();
+      this.closeWorkloadForm();
+      this.closeEntryForm();
+    });
+  }
+
   ngOnInit() {
     this.settings.ensureLoaded();
     // Course-independent, so it is loaded once rather than per navigation.
@@ -570,11 +608,10 @@ export class CourseDetailPage implements OnInit {
     this.curricula.set([]);
     this.extraWorkingItems.set([]);
     this.error.set('');
-    this.activeSection.set('info');
 
-    this.canModifyCourse.set(false);
-    this.modifiableSpecialties.set(new Set());
-    this.modifiableDepartments.set(new Set());
+    this.courseLevel.set(null);
+    this.specialtyLevels.set(new Map());
+    this.departmentLevels.set(new Map());
 
     this.showEditForm.set(false);
     this.showDeleteConfirm.set(false);
@@ -590,29 +627,15 @@ export class CourseDetailPage implements OnInit {
   }
 
   private loadCoursePermission() {
-    if (this.auth.isAdmin()) { this.canModifyCourse.set(true); return; }
     const id = this.courseId;
-    this.auth.canModifyIds('COURSE', [id]).subscribe((ids) => {
+    this.auth.accessLevel('COURSE', id).subscribe((level) => {
       // A late answer about the course the reader has already navigated away from is not an answer
       // about this one.
-      if (id === this.courseId) this.canModifyCourse.set(ids.has(id));
+      if (id === this.courseId) this.courseLevel.set(level);
     });
   }
 
-  selectSection(key: CourseSection) {
-    this.activeSection.set(key);
-    // Four unfiltered connections, for pickers only this tab opens — not worth a page view that
-    // never leaves «Інформація».
-    if (key === 'workloads' || key === 'timetable') {
-      this.loadWorkloadOptions();
-      this.loadClassStartTimes();
-    }
-    this.closeChildForm();
-    this.closeItemForm();
-    this.closeWciForm();
-    this.closeWorkloadForm();
-    this.closeEntryForm();
-  }
+  selectSection(key: CourseSection) { this.nav.select(key); }
 
   controlFormLabel(v: string): string {
     return CONTROL_FORM_OPTIONS.find((o) => o.value === v)?.label ?? v;
@@ -645,7 +668,7 @@ export class CourseDetailPage implements OnInit {
    */
   private load() {
     this.loading.set(true);
-    const courseQuery = `{ courses { course(id: "${this.courseId}") {
+    const courseQuery = `query($id: ID!) { courses { course(id: $id) {
       id name courseType
       faculty { id name }
       department { id name faculty { id name } }
@@ -657,7 +680,7 @@ export class CourseDetailPage implements OnInit {
 
     // `curriculumItemConnection` gained a `courseId` filter for this page — the connection is the
     // only way in, since Course carries no `curriculumItems` relation of its own.
-    const itemsQuery = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, courseId: "${this.courseId}") { nodes {
+    const itemsQuery = `query($courseId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, courseId: $courseId) { nodes {
       id semester controlForm ectsCredits
       specialty { id name code degree }
       hours {
@@ -692,14 +715,14 @@ export class CourseDetailPage implements OnInit {
     // Every response is checked against the id that is current when it arrives: navigating between
     // two courses leaves two sets of requests in flight, and they do not come back in order.
     const id = this.courseId;
-    this.gql.request(courseQuery).subscribe({
+    this.gql.request(courseQuery, { id: this.courseId }).subscribe({
       next: (d: any) => { if (id === this.courseId) this.course.set(d.courses.course); },
       error: (e) => { if (id === this.courseId) this.error.set(e.message); }
     });
 
     // Everything delivering this discipline in either sense — see `deliveries` for why the tree
     // alone is not enough on an elective's page.
-    const deliveriesQuery = `{ workingCurriculumItems { workingCurriculumItemConnection(limit: 500, offset: 0, courseId: "${this.courseId}") { nodes {
+    const deliveriesQuery = `query($courseId: ID, $limit: Int!, $offset: Int!) { workingCurriculumItems { workingCurriculumItemConnection(limit: $limit, offset: $offset, courseId: $courseId) { nodes {
       id lecturerCount teachingFormat
       combinedWorkingCurriculumItems { id workloads { id durationHours
         classStartTimeSet { id name }
@@ -728,7 +751,7 @@ export class CourseDetailPage implements OnInit {
       }
     } } } }`;
 
-    this.gql.request(itemsQuery).subscribe({
+    this.gql.request(itemsQuery, { courseId: this.courseId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         if (id !== this.courseId) return;
         this.curricula.set(
@@ -739,7 +762,7 @@ export class CourseDetailPage implements OnInit {
       error: (e) => { if (id === this.courseId) { this.error.set(e.message); this.loading.set(false); } }
     });
 
-    this.gql.request(deliveriesQuery).subscribe({
+    this.gql.request(deliveriesQuery, { courseId: this.courseId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         if (id !== this.courseId) return;
         this.extraWorkingItems.set(
@@ -753,13 +776,13 @@ export class CourseDetailPage implements OnInit {
   // ── Option lists for the edit form ────────────────────────────────────────
 
   private loadFormOptions() {
-    const q = `{
-      faculties { facultyConnection(limit: 200) { nodes { id name } } }
-      departments { departmentConnection(limit: 1000) { nodes { id name } } }
-      specialties { specialtyConnection(limit: 1000) { nodes { id code name } } }
-      courses { courseConnection(limit: 1000) { nodes { id name courseType tags { tag } } } }
+    const q = `query($facultyLimit: Int!, $departmentLimit: Int!) {
+      faculties { facultyConnection(limit: $facultyLimit) { nodes { id name } } }
+      departments { departmentConnection(limit: $departmentLimit) { nodes { id name } } }
+      specialties { specialtyConnection(limit: $departmentLimit) { nodes { id code name } } }
+      courses { courseConnection(limit: $departmentLimit) { nodes { id name courseType tags { tag } } } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { facultyLimit: 200, departmentLimit: 1000 }).subscribe({
       next: (d: any) => {
         this.facultyOptions.set(
           d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name })));
@@ -1344,15 +1367,15 @@ export class CourseDetailPage implements OnInit {
 
   private loadWorkloadOptions() {
     if (this.workloadOptionsLoaded) return;
-    const q = `{
-      classStartTimeSets { classStartTimeSetConnection(limit: 200, offset: 0) { nodes { id name isDefault faculty { id } } } }
-      combinedGroups { combinedGroupConnection(limit: 1000, offset: 0) { nodes { id name } } }
-      rooms { roomConnection(limit: 1000, offset: 0) { nodes { id number name faculty { id } } } }
-      roomGroups { roomGroupConnection(limit: 500, offset: 0) { nodes {
+    const q = `query($classStartTimeSetLimit: Int!, $offset: Int!, $combinedGroupLimit: Int!, $roomGroupLimit: Int!) {
+      classStartTimeSets { classStartTimeSetConnection(limit: $classStartTimeSetLimit, offset: $offset) { nodes { id name isDefault faculty { id } } } }
+      combinedGroups { combinedGroupConnection(limit: $combinedGroupLimit, offset: $offset) { nodes { id name } } }
+      rooms { roomConnection(limit: $combinedGroupLimit, offset: $offset) { nodes { id number name faculty { id } } } }
+      roomGroups { roomGroupConnection(limit: $roomGroupLimit, offset: $offset) { nodes {
         id name faculty { id } department { id faculty { id } } rooms { id }
       } } }
     }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { classStartTimeSetLimit: 200, offset: 0, combinedGroupLimit: 1000, roomGroupLimit: 500 }).subscribe({
       next: (d: any) => {
         this.allStartTimeSets.set(d.classStartTimeSets.classStartTimeSetConnection.nodes ?? []);
         this.allRooms.set(d.rooms.roomConnection.nodes ?? []);
@@ -1370,8 +1393,8 @@ export class CourseDetailPage implements OnInit {
     if (!departmentId) { this.deptLecturerOptions.set([]); return; }
     const cached = this.lecturersByDept.get(departmentId);
     if (cached) { this.deptLecturerOptions.set(cached); return; }
-    const q = `{ lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${departmentId}") { nodes { id firstName middleName lastName } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($departmentId: ID, $limit: Int!, $offset: Int!) { lecturers { lecturerConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes { id firstName middleName lastName } } } }`;
+    this.gql.request(q, { departmentId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = (d.lecturers.lecturerConnection.nodes ?? [])
           .map((l: any) => ({
@@ -1554,7 +1577,12 @@ export class CourseDetailPage implements OnInit {
 
   /** May this workload be edited: through the discipline, or through the кафедра holding it. */
   canModifyWorkload(card: WorkloadCard): boolean {
-    return this.canModifyCourse() || this.modifiableDepartments().has(card.departmentId);
+    return allows(this.departmentScopedLevel(card.departmentId), 'EDIT');
+  }
+
+  /** Deleting a workload — with its заняття — needs FULL, not EDIT. */
+  canDeleteWorkload(card: WorkloadCard): boolean {
+    return allows(this.departmentScopedLevel(card.departmentId), 'FULL');
   }
 
   // ── Timetable entries ─────────────────────────────────────────────────────
@@ -1567,10 +1595,10 @@ export class CourseDetailPage implements OnInit {
 
   private loadClassStartTimes() {
     if (this.classStartTimesLoaded) return;
-    const q = `{ classStartTimes { classStartTimeConnection(limit: 500) { nodes {
+    const q = `query($limit: Int!) { classStartTimes { classStartTimeConnection(limit: $limit) { nodes {
       id ordinal startTime classStartTimeSet { id }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { limit: 500 }).subscribe({
       next: (d: any) => {
         this.classStartTimes.set((d.classStartTimes.classStartTimeConnection.nodes ?? [])
           .map((t: any) => ({
@@ -1771,8 +1799,8 @@ export class CourseDetailPage implements OnInit {
    */
   private findConflicts(card: WorkloadCard, input: { dayOfWeek: number; weekParity: string;
                                                      classStartTimeId: string; roomId: string }) {
-    const list = (name: string, ids: string[]) =>
-      ids.length ? `${name}: [${ids.map((id) => `"${id}"`).join(', ')}]` : '';
+    const v = new GqlVars();
+    const limit = v.arg('limit', 'Int!', 500);
     const selection = `nodes {
       id dayOfWeek weekParity
       classStartTime { id }
@@ -1780,15 +1808,15 @@ export class CourseDetailPage implements OnInit {
       workload { id lecturers { lastName firstName } academicGroups { name } }
     }`;
     const parts = [
-      `byRoom: timetableEntryConnection(limit: 500, ${list('roomIds', [input.roomId])}) { ${selection} }`
+      `byRoom: timetableEntryConnection(${limit}, ${v.arg('roomIds', '[ID!]', [input.roomId])}) { ${selection} }`
     ];
     if (card.lecturerIds.length) {
-      parts.push(`byLecturer: timetableEntryConnection(limit: 500, ${list('lecturerIds', card.lecturerIds)}) { ${selection} }`);
+      parts.push(`byLecturer: timetableEntryConnection(${limit}, ${v.arg('lecturerIds', '[ID!]', card.lecturerIds)}) { ${selection} }`);
     }
     if (card.groupIds.length) {
-      parts.push(`byGroup: timetableEntryConnection(limit: 500, ${list('academicGroupIds', card.groupIds)}) { ${selection} }`);
+      parts.push(`byGroup: timetableEntryConnection(${limit}, ${v.arg('academicGroupIds', '[ID!]', card.groupIds)}) { ${selection} }`);
     }
-    return this.gql.request(`{ timetableEntries { ${parts.join(' ')} } }`);
+    return this.gql.request(`${v.declaration()}{ timetableEntries { ${parts.join(' ')} } }`, v.values);
   }
 
   private describeConflicts(d: any, input: { dayOfWeek: number; weekParity: string; classStartTimeId: string },
@@ -1988,8 +2016,8 @@ export class CourseDetailPage implements OnInit {
 
   private loadWciGroupOptions(specialtyId: string) {
     if (!specialtyId) { this.wciGroupOptions.set([]); return; }
-    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${specialtyId}") { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id name } } } }`;
+    this.gql.request(q, { specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.wciGroupOptions.set(
         (d.academicGroups.academicGroupConnection.nodes ?? [])
           .map((g: any) => ({ id: String(g.id), label: g.name }))
@@ -2075,7 +2103,7 @@ export class CourseDetailPage implements OnInit {
     if (c?.department) return ['/department', c.department.id];
     const fac = c?.faculty ?? c?.department?.faculty;
     if (fac) return ['/faculty', fac.id];
-    return ['/e/course'];
+    return ['/course'];
   }
 
   confirmDelete() {
