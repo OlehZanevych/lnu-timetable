@@ -15,12 +15,14 @@ watches the branch. Everything below is what it did and why.
 | `install-service.sh` | the one-shot configurator. Writes the credentials, the unit, the cron entry and the logrotate config; idempotent, so re-running it is how you change any of them |
 | `update.sh` | fetch → pull → build → deploy → restart, if and only if the branch moved. Cron runs this every ten minutes |
 | `run-service.sh` | what the unit executes. Resolves a JRE, checks it is 25, and `exec`s the jar |
+| `build-with-toolchain.sh` | puts nvm/sdkman on `PATH` before calling `build-app.sh` — see *The toolchain problem* |
 
 ## What gets installed where
 
 | Path | What |
 |---|---|
-| `/etc/lnu-timetable/service.env` | the database credentials, the JWT secret and the port. Root-owned, mode 600 |
+| `/etc/lnu-timetable/service.env` | the database credentials, the JWT secret, the port and the detected `JAVA_HOME`. Root-owned, mode 600 |
+| `/etc/lnu-timetable/build.env` | optional, and yours to write: sourced before every build when the toolchain cannot be found automatically |
 | `/etc/systemd/system/lnu-timetable.service` | the unit |
 | root's crontab | `update.sh`, every ten minutes |
 | `/etc/logrotate.d/lnu-timetable` | weekly rotation of `run/update.log` |
@@ -86,6 +88,48 @@ Two runs never overlap. `flock` on `run/update.lock` makes a tick that arrives w
 still going stand down, because a build can outlast the ten-minute interval and two Mavens in one
 tree is not a state worth reasoning about.
 
+## The toolchain problem
+
+The first thing that goes wrong on a real machine is `npm not found`, on a machine where `npm -v`
+answers perfectly well.
+
+Nothing is broken. `nvm` is not a program on your `PATH` — it is a shell function defined by
+`~/.nvm/nvm.sh`, sourced from `~/.bashrc`, and `~/.bashrc` returns immediately when the shell is not
+interactive. sdkman works the same way, and `sudo` clears `PATH` to `secure_path` besides. A
+deployment reaches the build through `sudo` → `runuser` → later `cron`, none of which is an
+interactive login shell, so a toolchain that is unmistakably present when you type at a prompt is
+unmistakably absent when the update job builds.
+
+`build-with-toolchain.sh` is the answer: it sources nvm and sdkman itself, in the *building user's*
+home, before handing off to `build-app.sh`. `update.sh` calls it instead of calling `build-app.sh`
+directly, and `install-service.sh` runs it with `--check` before it writes anything, so a machine
+missing a piece says so in a few seconds rather than a few minutes into a Maven run:
+
+```bash
+sudo -u zanevych scripts/deploy/build-with-toolchain.sh --check
+```
+
+If your toolchain is somewhere neither nvm nor sdkman knows about, write the paths down once:
+
+```bash
+sudo mkdir -p /etc/lnu-timetable
+sudo tee /etc/lnu-timetable/build.env >/dev/null <<'ENV'
+PATH=/opt/node-v24/bin:/opt/maven/bin:$PATH
+JAVA_HOME=/opt/jdk-25
+ENV
+```
+
+That file is sourced first and wins over everything the script would otherwise work out.
+
+Two related traps, both handled here and both invisible until the first scheduled run:
+
+- **`runuser` is in `/usr/sbin`**, which is not on cron's `PATH` for root (`/usr/bin:/bin`). The
+  installed cron line therefore states `PATH` explicitly. Without that, every scheduled update would
+  have died on `runuser: command not found` while the same script run by hand worked.
+- **systemd starts the service with a minimal `PATH` too**, so a JDK that only sdkman knows about
+  would be as invisible at run time as at build time. The installer detects `JAVA_HOME` during the
+  preflight and writes it into `service.env`, which the unit passes to the JVM.
+
 ## Privileges
 
 The unit runs as root, because port 80 is privileged. The git and Maven/npm work inside `update.sh`
@@ -141,6 +185,10 @@ JDK 25 and Maven (the update job builds on the machine it deploys to), Node.js 2
 reachable with the credentials you give the installer, and the schema already created — `schema.sql`
 and `data.sql` are still applied by hand, exactly as the root README's *Known limitations* says.
 Nothing here creates a database.
+
+They have to be reachable from a *non-interactive* shell belonging to the user who owns the working
+tree, which is not the same thing as being installed. `build-with-toolchain.sh --check` is how you
+find out which, and *The toolchain problem* above is what to do when the answer is no.
 
 ## Known limitations
 

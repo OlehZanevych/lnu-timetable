@@ -77,8 +77,15 @@ fi
 
 # ---- who does the unprivileged work -----------------------------------------------------------
 REPO_OWNER="$(stat -c '%U' "$REPO_ROOT")"
+# runuser lives in /usr/sbin, which is not on cron's PATH for root on Ubuntu. Resolve it once,
+# by absolute path if need be, rather than discovering at 3am that every scheduled run died on
+# "runuser: command not found".
+RUNUSER="$(command -v runuser || true)"
+[[ -n "$RUNUSER" ]] || for c in /usr/sbin/runuser /sbin/runuser; do [[ -x "$c" ]] && RUNUSER="$c" && break; done
+
 if [[ "$(id -u)" -eq 0 && "$REPO_OWNER" != "root" ]]; then
-    as_owner() { runuser -u "$REPO_OWNER" -- "$@"; }
+    [[ -n "$RUNUSER" ]] || die "runuser not found (looked on PATH and in /usr/sbin), and this is running as root against a tree owned by $REPO_OWNER"
+    as_owner() { "$RUNUSER" -u "$REPO_OWNER" -- "$@"; }
 else
     as_owner() { "$@"; }
 fi
@@ -123,8 +130,10 @@ if [[ "$NEW_COMMITS" == true ]]; then
 fi
 
 # ---- 3. build ---------------------------------------------------------------------------------
-log "building (scripts/build-app.sh ${BUILD_ARGS[*]:-})"
-if ! as_owner "$REPO_ROOT/scripts/build-app.sh" "${BUILD_ARGS[@]}"; then
+# Not build-app.sh directly: the toolchain wrapper first puts nvm/sdkman on PATH, because none of
+# sudo, runuser or cron reads the shell startup files that normally do that.
+log "building (scripts/deploy/build-with-toolchain.sh ${BUILD_ARGS[*]:-})"
+if ! as_owner "$SCRIPT_DIR/build-with-toolchain.sh" "${BUILD_ARGS[@]}"; then
     die "the build failed. The service is untouched and still running the previously deployed jar."
 fi
 
