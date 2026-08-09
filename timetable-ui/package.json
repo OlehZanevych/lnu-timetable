@@ -9,7 +9,8 @@
     "test": "ng test",
     "bench:generate": "node scripts/workload-bench/generate-datasets.mjs",
     "bench:check-data": "node scripts/workload-bench/generate-datasets.mjs --check",
-    "bench": "node scripts/workload-bench/run-benchmark.mjs"
+    "bench": "node scripts/workload-bench/run-benchmark.mjs",
+    "lint:graphql": "node scripts/check-graphql-variables.mjs"
   },
   "private": true,
   "packageManager": "npm@11.6.1",

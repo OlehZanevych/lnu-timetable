@@ -21,49 +21,56 @@
     <p class="faculty-nav-group">Кафедра</p>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'info'"
-            (click)="activeSection.set('info')">
+            (click)="selectSection('info')">
       &#x2139; Інформація
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'lecturers'"
-            (click)="activeSection.set('lecturers')">
+            (click)="selectSection('lecturers')">
       &#x1F393; Викладачі
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'combinedItems'"
-            (click)="activeSection.set('combinedItems')">
+            (click)="selectSection('combinedItems')">
       &#x1F517; Об'єднані позиції РНП
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'constraints'"
-            (click)="activeSection.set('constraints')">
+            (click)="selectSection('constraints')">
       &#x1F6E1; Обмеження навантаження
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'timetableConstraints'"
-            (click)="activeSection.set('timetableConstraints')">
+            (click)="selectSection('timetableConstraints')">
       &#x1F553; Обмеження розкладу
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloads'"
-            (click)="activeSection.set('workloads')">
+            (click)="selectSection('workloads')">
       &#x1F5C2; Навантаження викладачів
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloadSummary'"
-            (click)="activeSection.set('workloadSummary')">
+            (click)="selectSection('workloadSummary')">
       &#x1F4C8; Зведене навантаження
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloadDetail'"
-            (click)="activeSection.set('workloadDetail')">
+            (click)="selectSection('workloadDetail')">
       &#x1F4CA; Оцінка навантаження
     </button>
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'timetable'"
-            (click)="activeSection.set('timetable')">
+            (click)="selectSection('timetable')">
       &#x1F4C5; Розклад кафедри
     </button>
+    @if (canManageAccess()) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === 'access'"
+              (click)="selectSection('access')">
+        &#x1F511; Доступ
+      </button>
+    }
   </nav>
 
   <!-- Content -->
@@ -74,7 +81,9 @@
       @if (d) {
         <div class="page-header">
           <h2>Інформація про кафедру</h2>
-          <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          @if (canModifyDepartment()) {
+            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          }
         </div>
         <div class="card info-card">
           <table class="info-table">
@@ -136,6 +145,12 @@
         heading="Розклад занять кафедри"
         [report]="{ kind: 'DEPARTMENT', subjectName: d?.name ?? '',
                     facultyName: d?.faculty?.name ?? '' }" />
+    }
+
+    <!-- ── Who may edit this кафедра, and the form for delegating it ── -->
+    @if (activeSection() === 'access') {
+      <app-resource-access resourceType="DEPARTMENT" [resourceId]="departmentId"
+                           [resourceLabel]="d?.name || 'кафедру'" />
     }
 
   </div>

@@ -14,7 +14,7 @@
       </p>
     </div>
     <div class="faculty-header-actions">
-      @if (activeSection() === 'info' && canModifyLecturer()) {
+      @if (activeSection() === 'info' && canDeleteLecturer()) {
         <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
       }
     </div>

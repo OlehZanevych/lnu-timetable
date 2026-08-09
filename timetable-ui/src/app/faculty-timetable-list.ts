@@ -2,7 +2,7 @@ import { Component, Input, OnChanges, OnDestroy, OnInit, computed, inject, signa
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
 import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
 import { compareUk } from './sort';
@@ -13,6 +13,7 @@ import type {
   SolverFixedEntry,
   SolverOptions,
   SolverPlacement,
+  SolverConflict,
   SolverProblem,
   SolverProgress,
   SolverRequirement,
@@ -353,14 +354,14 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   // CurriculumSchemaConfig#configureWorkingCurriculumItem — so there's no need to fetch every
   // working curriculum item in the system and narrow it down client-side.
   private loadWorkingCurriculumItems(token: number) {
-    const q =`{ workingCurriculumItems { workingCurriculumItemConnection(limit: 5000, offset: 0, facultyId: "${this.facultyId}", semesterParity: "${this.selectedSemesterParity()}") { nodes {
+    const q =`query($facultyId: ID, $semesterParity: String, $limit: Int!, $offset: Int!) { workingCurriculumItems { workingCurriculumItemConnection(limit: $limit, offset: $offset, facultyId: $facultyId, semesterParity: $semesterParity) { nodes {
       id
       combinedWorkingCurriculumItems { id }
       course { id name tags { tag } }
       curriculumItemHours { hourType hours curriculumItem { course { id name courseType tags { tag } } } }
       workloads { ${WORKLOAD_SELECTION} }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { facultyId: this.facultyId, semesterParity: this.selectedSemesterParity(), limit: 5000, offset: 0 }).subscribe({
       next: (d: any) => {
         if (token !== this.loadToken) return;
         this.wciItems.set(d.workingCurriculumItems.workingCurriculumItemConnection.nodes);
@@ -374,7 +375,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   // working curriculum items — see CurriculumSchemaConfig#configureCombinedWorkingCurriculumItem),
   // so there's no need to fetch every combined item in the system and narrow it down client-side.
   private loadCombinedItems(token: number) {
-    const q = `{ combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: 2000, offset: 0, facultyId: "${this.facultyId}", semesterParity: "${this.selectedSemesterParity()}") { nodes {
+    const q = `query($facultyId: ID, $semesterParity: String, $limit: Int!, $offset: Int!) { combinedWorkingCurriculumItems { combinedWorkingCurriculumItemConnection(limit: $limit, offset: $offset, facultyId: $facultyId, semesterParity: $semesterParity) { nodes {
       id
       workingCurriculumItems {
         id
@@ -383,7 +384,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       }
       workloads { ${WORKLOAD_SELECTION} }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { facultyId: this.facultyId, semesterParity: this.selectedSemesterParity(), limit: 2000, offset: 0 }).subscribe({
       next: (d: any) => {
         if (token !== this.loadToken) return;
         this.combinedItems.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes);
@@ -394,12 +395,12 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   }
 
   private loadGlobalProperties() {
-    const q = `{ globalProperties {
-      parity: globalProperty(name: "current_semester_parity") { value }
-      weeks: globalProperty(name: "semester_duration_weeks") { value }
-      hourMinutes: globalProperty(name: "academic_hour_duration_minutes") { value }
+    const q = `query($parityName: ID!, $weeksName: ID!, $hourMinutesName: ID!) { globalProperties {
+      parity: globalProperty(name: $parityName) { value }
+      weeks: globalProperty(name: $weeksName) { value }
+      hourMinutes: globalProperty(name: $hourMinutesName) { value }
     } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { parityName: 'current_semester_parity', weeksName: 'semester_duration_weeks', hourMinutesName: 'academic_hour_duration_minutes' }).subscribe({
       next: (d: any) => {
         const props = d.globalProperties;
         const parity = props.parity?.value;
@@ -420,8 +421,8 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   }
 
   private loadRooms() {
-    const q = `{ rooms { roomConnection(limit: 1000, facultyId: "${this.facultyId}") { nodes { id number name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($facultyId: ID, $limit: Int!) { rooms { roomConnection(limit: $limit, facultyId: $facultyId) { nodes { id number name } } } }`;
+    this.gql.request(q, { facultyId: this.facultyId, limit: 1000 }).subscribe({
       next: (d: any) => {
         const nodes = d.rooms.roomConnection.nodes as RoomRef[];
         this.facultyRoomIds.set(nodes.map((r) => r.id));
@@ -456,10 +457,10 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
    * its own set's times — see classStartTimeOptionsFor.
    */
   private loadClassStartTimes() {
-    const q = `{ classStartTimes { classStartTimeConnection(limit: 500) { nodes {
+    const q = `query($limit: Int!) { classStartTimes { classStartTimeConnection(limit: $limit) { nodes {
       id ordinal startTime classStartTimeSet { id }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { limit: 500 }).subscribe({
       next: (d: any) => {
         const nodes = [...d.classStartTimes.classStartTimeConnection.nodes]
           .sort((a: any, b: any) => a.ordinal - b.ordinal);
@@ -847,18 +848,30 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     }
 
     this.genLoadingStep.set('Читаємо обмеження розкладу факультету…');
-    const scoped = await this.request(`{
-      lecturers { lecturerConnection(limit: 2000, facultyId: "${this.facultyId}") { nodes {
+    const scoped = await this.request(`query($facultyId: ID, $limit: Int!, $travelLimit: Int!, $offset: Int!) {
+      lecturers { lecturerConnection(limit: $limit, facultyId: $facultyId) { nodes {
         id timetableConstraints { constraintType dayOfWeek constraintValue } } } }
-      academicGroups { academicGroupConnection(limit: 2000, facultyId: "${this.facultyId}") { nodes {
+      academicGroups { academicGroupConnection(limit: $limit, facultyId: $facultyId) { nodes {
         id timetableConstraints { constraintType dayOfWeek constraintValue } } } }
-      rooms { roomConnection(limit: 2000, facultyId: "${this.facultyId}") { nodes {
-        id number name timetableConstraints { constraintType dayOfWeek constraintValue } } } }
-    }`);
+      rooms { roomConnection(limit: $limit, facultyId: $facultyId) { nodes {
+        id number name building { id }
+        timetableConstraints { constraintType dayOfWeek constraintValue } } } }
+      buildingTravelTimes { buildingTravelTimeConnection(limit: $travelLimit, offset: $offset) { nodes {
+        minutes fromBuilding { id } toBuilding { id } } } }
+    }`, { facultyId: this.facultyId, limit: 2000, travelLimit: 5000, offset: 0 });
 
     const lecturerConstraints = new Map<string, SolverConstraint[]>();
     const groupConstraints = new Map<string, SolverConstraint[]>();
     const roomConstraints = new Map<string, SolverConstraint[]>();
+    // Where each room is, and how long it takes to get between two of those places. A room with no
+    // building contributes nothing — see the solver's `roomBuilding`, which reads absence as
+    // "no journey" rather than inventing one.
+    const roomBuilding = new Map<string, string>();
+    const buildingTravel = new Map<string, number>();
+    for (const t of scoped.buildingTravelTimes?.buildingTravelTimeConnection?.nodes ?? []) {
+      const from = t.fromBuilding?.id, to = t.toBuilding?.id;
+      if (from && to && t.minutes != null) buildingTravel.set(`${from}>${to}`, t.minutes);
+    }
     const known = { lecturer: new Set<string>(), group: new Set<string>(), room: new Set<string>() };
 
     for (const n of scoped.lecturers.lecturerConnection.nodes) {
@@ -873,6 +886,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     for (const n of scoped.rooms.roomConnection.nodes) {
       known.room.add(n.id);
       roomConstraints.set(n.id, toConstraints(n.timetableConstraints));
+      if (n.building?.id) roomBuilding.set(String(n.id), String(n.building.id));
     }
     this.mergeRoomOptions(scopedRooms);
 
@@ -885,16 +899,17 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     if (extraLecturers.length || extraGroups.length || extraRooms.length) {
       this.genLoadingStep.set('Читаємо обмеження для викладачів, груп та аудиторій інших факультетів…');
       const RULES = 'timetableConstraints { constraintType dayOfWeek constraintValue }';
+      const v = new GqlVars();
       const sections = [
         extraLecturers.length
-          ? `lecturers { ${extraLecturers.map((id, i) => `l${i}: lecturer(id: "${id}") { id ${RULES} }`).join('\n')} }` : '',
+          ? `lecturers { ${extraLecturers.map((id, i) => `l${i}: lecturer(id: ${v.ref(`lecturer${i}`, 'ID!', id)}) { id ${RULES} }`).join('\n')} }` : '',
         extraGroups.length
-          ? `academicGroups { ${extraGroups.map((id, i) => `g${i}: academicGroup(id: "${id}") { id ${RULES} }`).join('\n')} }` : '',
+          ? `academicGroups { ${extraGroups.map((id, i) => `g${i}: academicGroup(id: ${v.ref(`group${i}`, 'ID!', id)}) { id ${RULES} }`).join('\n')} }` : '',
         extraRooms.length
-          ? `rooms { ${extraRooms.map((id, i) => `r${i}: room(id: "${id}") { id number name ${RULES} }`).join('\n')} }` : ''
+          ? `rooms { ${extraRooms.map((id, i) => `r${i}: room(id: ${v.ref(`room${i}`, 'ID!', id)}) { id number name building { id } ${RULES} }`).join('\n')} }` : ''
       ].filter(Boolean).join('\n');
 
-      const extra = await this.request(`{ ${sections} }`);
+      const extra = await this.request(`${v.declaration()}{ ${sections} }`, v.values);
       const extraRoomRefs: RoomRef[] = [];
       extraLecturers.forEach((id, i) => {
         const n = extra.lecturers?.[`l${i}`];
@@ -908,20 +923,21 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
         const n = extra.rooms?.[`r${i}`];
         if (!n) return;
         roomConstraints.set(id, toConstraints(n.timetableConstraints));
+        if (n.building?.id) roomBuilding.set(String(id), String(n.building.id));
         extraRoomRefs.push(n);
       });
       this.mergeRoomOptions(extraRoomRefs);
     }
 
     this.genLoadingStep.set('Читаємо поточний розклад спільних аудиторій, викладачів і груп…');
-    const shared = await this.request(`query($parity: String, $roomIds: [ID!], $lecturerIds: [ID!], $groupIds: [ID!]) {
+    const shared = await this.request(`query($parity: String, $roomIds: [ID!], $lecturerIds: [ID!], $groupIds: [ID!], $limit: Int!) {
       timetableEntries {
-        byRoom: timetableEntryConnection(limit: 5000, semesterParity: $parity, roomIds: $roomIds) { ${EXTERNAL_ENTRY_SELECTION} }
-        byLecturer: timetableEntryConnection(limit: 5000, semesterParity: $parity, lecturerIds: $lecturerIds) { ${EXTERNAL_ENTRY_SELECTION} }
-        byGroup: timetableEntryConnection(limit: 5000, semesterParity: $parity, academicGroupIds: $groupIds) { ${EXTERNAL_ENTRY_SELECTION} }
+        byRoom: timetableEntryConnection(limit: $limit, semesterParity: $parity, roomIds: $roomIds) { ${EXTERNAL_ENTRY_SELECTION} }
+        byLecturer: timetableEntryConnection(limit: $limit, semesterParity: $parity, lecturerIds: $lecturerIds) { ${EXTERNAL_ENTRY_SELECTION} }
+        byGroup: timetableEntryConnection(limit: $limit, semesterParity: $parity, academicGroupIds: $groupIds) { ${EXTERNAL_ENTRY_SELECTION} }
       }
     }`, {
-      parity: this.selectedSemesterParity(),
+      limit: 5000, parity: this.selectedSemesterParity(),
       roomIds: [...roomIds],
       lecturerIds: [...lecturerIds],
       groupIds: [...groupIds]
@@ -984,8 +1000,26 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       days: WORKING_DAYS,
       lecturerConstraints,
       groupConstraints,
-      roomConstraints
+      roomConstraints,
+      roomBuilding,
+      buildingTravel
     };
+  }
+
+  /**
+   * What kind of clash this is, in the words the reader entered the data in. The travel kinds are
+   * not overlaps at all — the two classes simply sit closer together than the walk between their
+   * корпуси allows — so naming them «накладка» without qualification would send someone looking for
+   * a double booking that is not there.
+   */
+  conflictKindLabel(kind: SolverConflict['kind']): string {
+    switch (kind) {
+      case 'LECTURER':        return 'викладач';
+      case 'GROUP':           return 'група';
+      case 'ROOM':            return 'аудиторія';
+      case 'GROUP_TRAVEL':    return 'група не встигає перейти між корпусами';
+      case 'LECTURER_TRAVEL': return 'викладач не встигає перейти між корпусами';
+    }
   }
 
   /** Only what the panel decides; everything else comes from the solver's own DEFAULT_OPTIONS. */
@@ -998,7 +1032,9 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       ...problem,
       lecturerConstraints: [...problem.lecturerConstraints.entries()],
       groupConstraints: [...problem.groupConstraints.entries()],
-      roomConstraints: [...problem.roomConstraints.entries()]
+      roomConstraints: [...problem.roomConstraints.entries()],
+      roomBuilding: [...problem.roomBuilding.entries()],
+      buildingTravel: [...problem.buildingTravel.entries()]
     };
     const options = this.solverOptions();
 

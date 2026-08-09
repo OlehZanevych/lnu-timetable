@@ -3,10 +3,13 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
+import { ResourceAccessPanel } from './resource-access';
 import { SearchSelect, Option } from './search-select';
 import { SEMESTER_PARITY_OPTIONS } from './entities';
 import { GlobalPropertiesService } from './global-properties.service';
 import { compareUk } from './sort';
+import { sectionNav } from './section-route';
 import { DepartmentList } from './department-list';
 import { SpecialtyList } from './specialty-list';
 import { AcademicGroupList } from './academic-group-list';
@@ -29,7 +32,8 @@ export type FacultySection =
   | 'info'
   | 'departments' | 'specialties' | 'rooms' | 'roomGroups'
   | 'courses' | 'roomAssignment' | 'timetable' | 'facultyTimetable' | 'academicGroups' | 'combinedGroups'
-  | 'groupConstraints' | 'roomConstraints';
+  | 'groupConstraints' | 'roomConstraints'
+  | 'access';
 
 interface SectionDef { key: FacultySection; label: string; group: string; }
 
@@ -59,7 +63,14 @@ const SECTIONS: SectionDef[] = [
   { key: 'roomConstraints',        label: 'Обмеження аудиторій',  group: 'Розклад' },
   { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад' },
   { key: 'facultyTimetable',       label: 'Розклад факультету',   group: 'Розклад' },
+  // Only rendered for someone holding «Керування доступом» here — see canManageAccess below and
+  // the panel's own guard. The деканат delegates their own faculty from this tab; there is no
+  // reason for it to be an administrator's errand.
+  { key: 'access',                 label: 'Доступ',               group: 'Факультет' },
 ];
+
+/** Which slugs `/faculty/:id/:section` recognises — see `section-route.ts`. */
+const SECTION_KEYS: FacultySection[] = SECTIONS.map((s) => s.key);
 
 @Component({
   selector: 'app-faculty-page',
@@ -67,7 +78,8 @@ const SECTIONS: SectionDef[] = [
   imports: [
     RouterLink, FormsModule, SearchSelect,
     DepartmentList, SpecialtyList, AcademicGroupList, RoomAssignmentList, FacultyTimetableList,
-    TimetableConstraintList, TimetableView, RoomPage, RoomGroupPage, CoursePage, CombinedGroupPage
+    TimetableConstraintList, TimetableView, RoomPage, RoomGroupPage, CoursePage, CombinedGroupPage,
+    ResourceAccessPanel
   ]
 })
 export class FacultyPage implements OnInit {
@@ -79,13 +91,28 @@ export class FacultyPage implements OnInit {
 
   readonly facultyId: string = this.route.snapshot.paramMap.get('id')!;
 
-  /** Whether the current user may edit/delete this Faculty (edit/delete buttons in the template
-   *  are gated on this — see AuthService#canModifyIds). */
-  canModifyFaculty = signal(false);
+  /**
+   * This user's level on this Faculty. Two signals rather than one boolean, because the two buttons
+   * they gate are no longer the same right: «Редагувати» needs EDIT, «Видалити» needs FULL.
+   */
+  facultyLevel = signal<AccessLevel | null>(null);
+  canModifyFaculty = computed(() => allows(maxLevel(this.auth.globalLevel(), this.facultyLevel()), 'EDIT'));
+  canDeleteFaculty = computed(() => allows(maxLevel(this.auth.globalLevel(), this.facultyLevel()), 'FULL'));
+
+  /** Whether the «Доступ» tab is offered — MANAGE on this faculty, or university-wide. */
+  canManageAccess = computed(() => allows(maxLevel(this.auth.globalLevel(), this.facultyLevel()), 'MANAGE'));
 
   faculty = signal<Faculty | null>(null);
   error = signal('');
-  activeSection = signal<FacultySection>('info');
+
+  /**
+   * The open tab, and the last segment of the URL — see `section-route.ts`. Read from the route
+   * rather than written here, so «Кафедри», «Спеціальності» and «Аудиторії» are addresses of their
+   * own that can be bookmarked and reloaded, and Back moves between them.
+   */
+  private nav = sectionNav<FacultySection>(
+    () => ['/faculty', this.facultyId], () => SECTION_KEYS, () => 'info');
+  readonly activeSection = this.nav.active;
 
   /**
    * Every academic group of the faculty — the columns of the published розклад, before the
@@ -220,6 +247,21 @@ export class FacultyPage implements OnInit {
   constructor() {
     this.sectionGroups = [...new Set(SECTIONS.map((s) => s.group))];
 
+    // Each tab's own filters start empty when it opens. Keyed on the section rather than on the
+    // click that changed it, so that arriving by a pasted URL or by the Back button leaves exactly
+    // the state pressing the tab leaves. The семестр is deliberately not reset: it is which
+    // half-year the reader is working in, not a narrowing of one tab's list, and re-defaulting it
+    // on every tab change would fight them.
+    effect(() => {
+      this.activeSection();
+      this.selectedDeptId = '';
+      this.selectedSpecId = '';
+      this.courseSearch.set('');
+      this.ttCourseYear.set('');
+      this.ttSpecialtyId.set('');
+      this.ttGroupId.set('');
+    });
+
     // Seeds the семестр picker once the settings resolve — see `TimetableView`'s constructor for
     // why an effect and not a microtask.
     effect(() => {
@@ -243,28 +285,15 @@ export class FacultyPage implements OnInit {
     this.loadSpecs();
     this.loadBuildings();
     this.loadGroupIds();
-    if (this.auth.isAdmin()) {
-      this.canModifyFaculty.set(true);
-    } else {
-      this.auth.canModifyIds('FACULTY', [this.facultyId]).subscribe((ids) => this.canModifyFaculty.set(ids.has(this.facultyId)));
-    }
+    this.auth.accessLevel('FACULTY', this.facultyId).subscribe((level) => this.facultyLevel.set(level));
   }
 
   sectionsForGroup(group: string): SectionDef[] {
-    return SECTIONS.filter((s) => s.group === group);
+    return SECTIONS.filter((s) => s.group === group)
+      .filter((s) => s.key !== 'access' || this.canManageAccess());
   }
 
-  selectSection(key: FacultySection) {
-    this.activeSection.set(key);
-    this.selectedDeptId = '';
-    this.selectedSpecId = '';
-    this.courseSearch.set('');
-    this.ttCourseYear.set('');
-    this.ttSpecialtyId.set('');
-    this.ttGroupId.set('');
-    // The семестр is deliberately not reset: it is which half-year the reader is working in, not a
-    // narrowing of one tab's list, and re-defaulting it on every tab change would fight them.
-  }
+  selectSection(key: FacultySection) { this.nav.select(key); }
 
   get facultyPreset(): Record<string, string> { return { facultyId: this.facultyId }; }
   get deptFilterValue(): string | null { return this.selectedDeptId || null; }
@@ -282,16 +311,16 @@ export class FacultyPage implements OnInit {
   }
 
   private loadFaculty() {
-    const q = `{ faculties { faculty(id: "${this.facultyId}") { id name abbreviation phone email website building { id name address } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($id: ID!) { faculties { faculty(id: $id) { id name abbreviation phone email website building { id name address } } } }`;
+    this.gql.request(q, { id: this.facultyId }).subscribe({
       next: (d: any) => this.faculty.set(d.faculties.faculty),
       error: (e) => this.error.set(e.message)
     });
   }
 
   private loadDepts() {
-    const q = `{ departments { departmentConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($facultyId: ID, $limit: Int!) { departments { departmentConnection(limit: $limit, facultyId: $facultyId) { nodes { id name } } } }`;
+    this.gql.request(q, { facultyId: this.facultyId, limit: 200 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.departments.departmentConnection.nodes.map((dep: any) => ({ id: dep.id, label: dep.name }));
         this.depts.set(opts);
@@ -300,8 +329,8 @@ export class FacultyPage implements OnInit {
   }
 
   private loadSpecs() {
-    const q = `{ specialties { specialtyConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($facultyId: ID, $limit: Int!) { specialties { specialtyConnection(limit: $limit, facultyId: $facultyId) { nodes { id name } } } }`;
+    this.gql.request(q, { facultyId: this.facultyId, limit: 200 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.specialties.specialtyConnection.nodes.map((sp: any) => ({ id: sp.id, label: sp.name }));
         this.specs.set(opts);
@@ -314,10 +343,10 @@ export class FacultyPage implements OnInit {
    * facultyId filter of its own, so the groups are resolved first and passed as `academicGroupIds`.
    */
   private loadGroupIds() {
-    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, facultyId: "${this.facultyId}") { nodes {
+    const q = `query($facultyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes {
       id name courseYear specialty { id name }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { facultyId: this.facultyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.allGroups.set(
         (d.academicGroups.academicGroupConnection.nodes ?? []).map((g: any) => ({
           id: String(g.id),
@@ -331,8 +360,8 @@ export class FacultyPage implements OnInit {
   }
 
   private loadBuildings() {
-    const q = `{ buildings { buildingConnection(limit: 100) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { buildings { buildingConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 100 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.buildings.buildingConnection.nodes.map((b: any) => ({ id: b.id, label: b.name }));
         this.buildingOptions.set(opts);

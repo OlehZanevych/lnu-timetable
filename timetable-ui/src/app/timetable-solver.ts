@@ -6,10 +6,11 @@
  * periodicity, and a schedule assigns it a day, a start time, a room and — for biweekly
  * requirements — a week parity. The objective is the article's Eq. (1),
  *
- *     f(σ) = Σ_{i=1..5} β_i · Π_i(σ)^{α_i},     β = (150, 100, 50, 5, 20),  α_i = 2
+ *     f(σ) = Σ_{i=1..7} β_i · Π_i(σ)^{α_i},     β = (150, 100, 50, 90, 120, 5, 20),  α_i = 2
  *
- * with Π₁/Π₂/Π₃ counting lecturer/group/room conflicts and Π₄/Π₅ the idle windows in
- * lecturers' and groups' days. The search is the article's two-phase multi-neighbourhood local
+ * with Π₁/Π₂/Π₃ counting lecturer/group/room conflicts, Π₄/Π₅ pairs of classes a group or a
+ * lecturer is not given time to walk between, and Π₆/Π₇ the idle windows in lecturers' and
+ * groups' days. The first five are hard (see `hardOf`), which is why they are numbered together. The search is the article's two-phase multi-neighbourhood local
  * search (N1 reassignment / N2 swap / N3 chain move under simulated-annealing acceptance and a
  * tabu list, then a bounded window-reduction phase) driven by an effectiveness-adaptive
  * intensity, started from a most-constrained-first greedy construction rather than from a random
@@ -111,6 +112,18 @@ export interface SolverProblem {
   lecturerConstraints: Map<string, SolverConstraint[]>;
   groupConstraints: Map<string, SolverConstraint[]>;
   roomConstraints: Map<string, SolverConstraint[]>;
+  /**
+   * Which building each room is in. A room missing from the map is treated as being nowhere in
+   * particular: no journey to or from it is ever too short, because the alternative is inventing a
+   * constraint out of an absent `rooms.building_id`.
+   */
+  roomBuilding: Map<string, string>;
+  /**
+   * How long it takes to get from one building to another, keyed `fromId + '>' + toId`, in minutes
+   * — `building_travel_times`, which is directed and may disagree with itself in the two
+   * directions. A pair with no entry is treated as reachable instantly, for the same reason.
+   */
+  buildingTravel: Map<string, number>;
 }
 
 export interface SolverOptions {
@@ -160,17 +173,27 @@ export const OBJECTIVE_WEIGHTS = {
   lecturerConflicts: 150,
   groupConflicts: 100,
   roomConflicts: 50,
+  // Π₄/Π₅ — a group or a lecturer given less time between two classes than the walk between their
+  // buildings takes. Weighted just below the corresponding double-booking, and for the same reason
+  // it is *below*: a clash makes a timetable impossible, an unreachable pair makes it late. Both
+  // are hard — see `hardOf` — because a schedule nobody can physically keep is not a schedule.
+  groupTravel: 90,
+  lecturerTravel: 120,
   lecturerWindows: 5,
   groupWindows: 20
 } as const;
 
 export const OBJECTIVE_EXPONENT = 2;
 
-/** Π₁..Π₅ of Eq. (1), separately, so a result can be read as well as compared. */
+/** Π₁..Π₇ of Eq. (1), in declaration order, so a result can be read as well as compared. */
 export interface Violations {
   lecturerConflicts: number;
   groupConflicts: number;
   roomConflicts: number;
+  /** Consecutive classes a group cannot physically get between in the gap they are given. */
+  groupTravel: number;
+  /** The same for a lecturer, who walks the same streets. */
+  lecturerTravel: number;
   lecturerWindows: number;
   groupWindows: number;
 }
@@ -185,7 +208,7 @@ export interface SolverProgress {
   /** f(σ) of the best schedule found so far. */
   objective: number;
   violations: Violations;
-  /** Π₁ + Π₂ + Π₃ — how far the best schedule still is from feasibility. */
+  /** Π₁..Π₅ — the hard terms, i.e. how far the best schedule still is from feasibility. */
   hardTotal: number;
   placed: number;
   total: number;
@@ -205,7 +228,7 @@ export interface SolverProgress {
 
 /** One remaining clash, named in the terms the user entered the data in. */
 export interface SolverConflict {
-  kind: 'LECTURER' | 'GROUP' | 'ROOM';
+  kind: 'LECTURER' | 'GROUP' | 'ROOM' | 'GROUP_TRAVEL' | 'LECTURER_TRAVEL';
   subjectId: string;
   dayOfWeek: number;
   /** Both sides of the clash, by requirement key. */
@@ -398,6 +421,30 @@ export function solveTimetable(
     if (e.roomId) intern(roomIdx, roomIds, e.roomId);
   }
 
+  // ── Buildings ─────────────────────────────────────────────────────────────
+  // Rooms are interned above; a building index per room turns "are these two classes in the same
+  // place?" into an integer comparison inside the innermost loop of the objective.
+  const buildingIdx = new Map<string, number>();
+  const buildingIds: string[] = [];
+  const roomBuildingIdx = roomIds.map((rid) => {
+    const b = problem.roomBuilding.get(rid);
+    return b === undefined ? -1 : intern(buildingIdx, buildingIds, b);
+  });
+  /** Minutes between two building indices, -1 when the pair has no stored time. */
+  const travelMatrix = new Int32Array(buildingIds.length * buildingIds.length).fill(-1);
+  for (let a = 0; a < buildingIds.length; a++) {
+    for (let b = 0; b < buildingIds.length; b++) {
+      if (a === b) continue;
+      const m = problem.buildingTravel.get(`${buildingIds[a]}>${buildingIds[b]}`);
+      if (m !== undefined && m > 0) travelMatrix[a * buildingIds.length + b] = m;
+    }
+  }
+  const travelBetween = (from: number, to: number): number =>
+    travelMatrix[from * buildingIds.length + to];
+  /** Nothing to check when no pair of buildings has a time, which is every run before this data
+   *  existed — the whole Π₄/Π₅ pass is then skipped rather than walked for nothing. */
+  const travelKnown = travelMatrix.some((m) => m > 0);
+
   const lecturerRules = lecturerIds.map((id) => resolveRules(problem.lecturerConstraints.get(id)));
   const groupRules = groupIds.map((id) => resolveRules(problem.groupConstraints.get(id)));
   const roomRules = roomIds.map((id) => resolveRules(problem.roomConstraints.get(id)));
@@ -441,6 +488,8 @@ export function solveTimetable(
     day: number;
     timeIdx: number;   // -1 when unplaced
     room: number;      // -1 when unplaced or roomless
+    /** Building of `room`, or -1 when there is no room or the room's building is unknown. */
+    building: number;
     parity: number;
     start: number;
     end: number;
@@ -535,6 +584,7 @@ export function solveTimetable(
       day: cur ? cur.dayOfWeek : -1,
       timeIdx: curTimeIdx,
       room: curRoom,
+      building: curRoom >= 0 ? roomBuildingIdx[curRoom] : -1,
       parity: curParity,
       start: curStart,
       end: curStart >= 0 ? curStart + durationMinutes : -1
@@ -544,6 +594,7 @@ export function solveTimetable(
   const movableCount = genes.length;
 
   for (const e of problem.fixedEntries) {
+    const externalRoom = e.roomId ? roomIdx.get(e.roomId) ?? -1 : -1;
     const start = parseMinutes(e.startTime);
     if (start < 0) continue;
     const durationMinutes = Math.max(1, e.durationHours) * hourMinutes;
@@ -559,7 +610,8 @@ export function solveTimetable(
       rooms: new Int32Array(0),
       day: e.dayOfWeek,
       timeIdx: -1,
-      room: e.roomId ? roomIdx.get(e.roomId) ?? -1 : -1,
+      room: externalRoom,
+      building: externalRoom >= 0 ? roomBuildingIdx[externalRoom] : -1,
       parity: parityCode(e.weekParity),
       start,
       end: start + durationMinutes
@@ -681,6 +733,7 @@ export function solveTimetable(
     g.timeIdx = timeIdx;
     g.parity = parity;
     g.room = room;
+    g.building = room >= 0 ? roomBuildingIdx[room] : -1;
     g.start = timeIdx >= 0 ? times[timeIdx].startMinutes : -1;
     g.end = g.start >= 0 ? g.start + g.durationMinutes : -1;
     indexInsert(i);
@@ -712,7 +765,7 @@ export function solveTimetable(
     return Math.floor(idle / hourMinutes);
   }
 
-  /** Π₄ / Π₅: window counts summed over every entity and day, averaged over the two weeks. */
+  /** Π₆ / Π₇: window counts summed over every entity and day, averaged over the two weeks. */
   function windowTotal(buckets: number[][]): number {
     let numerator = 0;
     let denominator = 0;
@@ -745,11 +798,49 @@ export function solveTimetable(
     return n;
   }
 
+  /**
+   * Π₄ / Π₅: pairs of classes one entity has on the same day, in overlapping weeks, in different
+   * buildings, with less time between them than the journey takes.
+   *
+   * Only *non-overlapping* pairs are counted. A pair that overlaps in time is already a clash and
+   * is counted by `conflictTotal`; charging it a second time here would make one mistake cost two
+   * penalties and pull the search toward fixing it twice.
+   *
+   * Both ends must have a known room in a known building, and the pair must have a stored travel
+   * time. Everything unknown is treated as reachable instantly — an unassigned room is not evidence
+   * of a long walk, and inventing one would reject schedules the data does not object to.
+   */
+  function travelTotal(buckets: number[][]): number {
+    if (!travelKnown) return 0;
+    let n = 0;
+    for (let b = 0; b < buckets.length; b++) {
+      const bucket = buckets[b];
+      for (let x = 0; x < bucket.length; x++) {
+        const a = genes[bucket[x]];
+        if (a.start < 0 || a.building < 0) continue;
+        for (let y = x + 1; y < bucket.length; y++) {
+          const c = genes[bucket[y]];
+          if (c.start < 0 || c.building < 0) continue;
+          if (!a.movable && !c.movable) continue;
+          if (a.building === c.building) continue;
+          if (!weeksOverlap(a.parity, c.parity)) continue;
+          if (timesOverlap(a.start, a.end, c.start, c.end)) continue;
+          const [first, second] = a.start <= c.start ? [a, c] : [c, a];
+          const need = travelBetween(first.building, second.building);
+          if (need > 0 && second.start - first.end < need) n++;
+        }
+      }
+    }
+    return n;
+  }
+
   function measure(): Violations {
     return {
       lecturerConflicts: conflictTotal(lecBuckets),
       groupConflicts: conflictTotal(grpBuckets),
       roomConflicts: conflictTotal(roomBuckets),
+      groupTravel: travelTotal(grpBuckets),
+      lecturerTravel: travelTotal(lecBuckets),
       lecturerWindows: windowTotal(lecBuckets),
       groupWindows: windowTotal(grpBuckets)
     };
@@ -761,11 +852,16 @@ export function solveTimetable(
     return OBJECTIVE_WEIGHTS.lecturerConflicts * p(v.lecturerConflicts)
       + OBJECTIVE_WEIGHTS.groupConflicts * p(v.groupConflicts)
       + OBJECTIVE_WEIGHTS.roomConflicts * p(v.roomConflicts)
+      + OBJECTIVE_WEIGHTS.groupTravel * p(v.groupTravel)
+      + OBJECTIVE_WEIGHTS.lecturerTravel * p(v.lecturerTravel)
       + OBJECTIVE_WEIGHTS.lecturerWindows * p(v.lecturerWindows)
       + OBJECTIVE_WEIGHTS.groupWindows * p(v.groupWindows);
   }
 
-  const hardOf = (v: Violations) => v.lecturerConflicts + v.groupConflicts + v.roomConflicts;
+  // A schedule with an unreachable pair is as unusable as one with a double booking — the class is
+  // simply not attended — so travel counts toward "how far from feasible", not toward comfort.
+  const hardOf = (v: Violations) =>
+    v.lecturerConflicts + v.groupConflicts + v.roomConflicts + v.groupTravel + v.lecturerTravel;
 
   // ── Construction ──────────────────────────────────────────────────────────
   // Most-constrained-first: a requirement with one viable placement has to claim it before a
@@ -1186,7 +1282,7 @@ export function solveTimetable(
 
     // A schedule is better when it is closer to feasibility, and — among equally feasible ones —
     // when f is lower. Eq. (1) alone would let a run trade a lecturer clash for a handful of
-    // windows once Π₄/Π₅ grow large, which is never the trade a deanery wants.
+    // windows once Π₆/Π₇ grow large, which is never the trade a deanery wants.
     const better = hardOf(v) < hardOf(bestV) || (hardOf(v) === hardOf(bestV) && currentF < bestF);
     if (better) {
       best = snapshot();
@@ -1290,9 +1386,44 @@ export function solveTimetable(
         }
       }
     };
+    /** The same sweep for Π₄/Π₅ — pairs that do not overlap but are too far apart to reach. */
+    const scanTravel = (buckets: number[][], ids: string[], kind: SolverConflict['kind']) => {
+      if (!travelKnown) return;
+      for (let b = 0; b < buckets.length; b++) {
+        const bucket = buckets[b];
+        if (bucket.length < 2) continue;
+        const entity = Math.floor(b / DAY_SLOTS);
+        const day = b % DAY_SLOTS;
+        for (let x = 0; x < bucket.length; x++) {
+          for (let y = x + 1; y < bucket.length; y++) {
+            const a = genes[bucket[x]];
+            const c = genes[bucket[y]];
+            if (a.start < 0 || c.start < 0 || a.building < 0 || c.building < 0) continue;
+            if (!a.movable && !c.movable) continue;
+            if (a.building === c.building) continue;
+            if (!weeksOverlap(a.parity, c.parity)) continue;
+            if (timesOverlap(a.start, a.end, c.start, c.end)) continue;
+            const [first, second] = a.start <= c.start ? [a, c] : [c, a];
+            const need = travelBetween(first.building, second.building);
+            if (need <= 0 || second.start - first.end >= need) continue;
+            if (out.length >= 200) return;
+            out.push({
+              kind,
+              subjectId: ids[entity],
+              dayOfWeek: day,
+              keys: [first.key, second.key],
+              descriptions: [first.label, second.label]
+            });
+          }
+        }
+      }
+    };
+
     scan(lecBuckets, lecturerIds, 'LECTURER');
     scan(grpBuckets, groupIds, 'GROUP');
     scan(roomBuckets, roomIds, 'ROOM');
+    scanTravel(grpBuckets, groupIds, 'GROUP_TRAVEL');
+    scanTravel(lecBuckets, lecturerIds, 'LECTURER_TRAVEL');
     return out;
   }
 }

@@ -9,6 +9,7 @@ import { WorkingCurriculumView } from './working-curriculum-view';
 import { AcademicGroupList } from './academic-group-list';
 import { SearchSelect } from './search-select';
 import { toOptions } from './entities';
+import { sectionNav } from './section-route';
 
 type SpecSection = 'info' | 'curriculaEditor' | 'curricula'
                  | 'workingCurriculaEditor' | 'workingCurricula' | 'academicGroups';
@@ -44,6 +45,9 @@ const SECTIONS: { key: SpecSection; label: string }[] = [
   { key: 'academicGroups',         label: '&#x1F393; Академічні групи' },
 ];
 
+/** Which slugs `/specialty/:id/:section` recognises — see `section-route.ts`. */
+const SECTION_KEYS: SpecSection[] = SECTIONS.map((s) => s.key);
+
 @Component({
   selector: 'app-specialty-page',
   templateUrl: './specialty-page.html',
@@ -60,7 +64,11 @@ export class SpecialtyDetailPage implements OnInit {
 
   specialty = signal<Specialty | null>(null);
   error = signal('');
-  activeSection = signal<SpecSection>('info');
+
+  /** The open tab, and the last segment of the URL — see `section-route.ts`. */
+  private nav = sectionNav<SpecSection>(
+    () => ['/specialty', this.specialtyId], () => SECTION_KEYS, () => 'info');
+  readonly activeSection = this.nav.active;
 
   showEditForm = signal(false);
   editError = signal('');
@@ -78,14 +86,14 @@ export class SpecialtyDetailPage implements OnInit {
   ngOnInit() { this.load(); }
 
   private load() {
-    const q = `{ specialties { specialty(id: "${this.specialtyId}") { id code name degree faculty { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($id: ID!) { specialties { specialty(id: $id) { id code name degree faculty { id name } } } }`;
+    this.gql.request(q, { id: this.specialtyId }).subscribe({
       next: (d: any) => this.specialty.set(d.specialties.specialty),
       error: (e) => this.error.set(e.message)
     });
   }
 
-  selectSection(key: SpecSection) { this.activeSection.set(key); }
+  selectSection(key: SpecSection) { this.nav.select(key); }
 
   openEdit() {
     const s = this.specialty();

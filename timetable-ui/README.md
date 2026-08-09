@@ -35,8 +35,41 @@ npm start          # ng serve on http://localhost:4200
 backend must be running. Then open **http://localhost:4200**.
 
 ```bash
-npm run build      # production build into dist/
+npm run build          # production build into dist/
+npm run lint:graphql   # every GraphQL argument is a variable — see below
 ```
+
+`lint:graphql` is the one check this project can run without a service, a browser or a test runner.
+It reads the TypeScript AST of every file in `src/app`, finds the string and template literals that
+are GraphQL documents, and fails on a value written into one — an interpolated id, a hard-coded
+`limit`, or a `GqlVars` header read before the arguments it is supposed to describe. See [Every
+value travels as a variable](#every-value-travels-as-a-variable-graphqlservicets) for the rule it
+enforces and why.
+
+It also checks something the rule above does not cover: that every argument *name* is one the
+service actually declares, listed in the script's `ARG_TYPES`. That check exists because a document
+can satisfy every other rule and still be rejected on arrival. `GqlVars.ref` renames a variable
+whose name is taken but whose value differs — a second `limit` on one document becomes `$limit2` —
+and reaching for `v.arg('timeLimit', …)` to get that separation renames the *argument* instead,
+emitting `timeLimit: $timeLimit`. It is a variable, it is declared, nothing is interpolated; only
+the server disagrees, with `Unknown field argument 'timeLimit'`. Both spellings are checked — the
+literal one written into a document, and the `v.arg(…)` call that produces it at runtime, which is
+the one that has to be read from the call site because the offending text never appears in the
+source. To rename only the variable, use `v.ref('<the real argument name>', …)` and write the
+argument name yourself.
+
+And one rule more, for the other half of the same mistake: **every variable a document reads must be
+declared by its operation**. A document can name the right argument, bind it to a variable, and pass
+that variable's value in the map, and still be rejected — because the operation header never heard
+of it. That is checked only where the header is fully literal; one assembled from `v.declaration()`
+is by construction the list of whatever was asked for.
+
+Two exemptions keep it honest. An entity's create/update payload argument is named after the entity
+(`faculty:`, `buildingTravelTime:`, `timetableEntry:`) and so cannot be listed in advance — those
+are recognised instead by the variable they bind to, whose declared type ends in `InputPayload`,
+collected per file because a document assembled from parts keeps its declarations in a different
+template literal from the field that uses them. And the scan is `src/app` itself, non-recursively,
+`.ts` only: a subdirectory added later would go unchecked.
 
 The workload generator has a benchmark of its own, which needs neither the service nor a browser —
 it runs the shipped TypeScript under Node:
@@ -100,11 +133,12 @@ just depends on whether it needed a bespoke layout.
 ```
 src/app/
 ├── entities.ts               # metadata for the generic CRUD tables: fields, FK refs, options
-├── graphql.service.ts        # tiny GraphQL-over-HTTP client (POST /graphql, query + variables)
+├── graphql.service.ts        # tiny GraphQL-over-HTTP client (POST /graphql, query + variables),
+│                             #   and GqlVars for the documents assembled at runtime
 ├── base-entity.ts            # BaseEntity: shared list/create/update/delete + option loading,
-│                             #   now also gated by modifiableIds/canShowCreate (see Authentication)
+│                             #   now also gated by accessById/canEdit/canDelete (see Authentication)
 ├── entity-page.html          # shared table + modal-form template for the generic pages
-├── entity-pages.ts           # thin components extending BaseEntity, one per entity, → /e/:single
+├── entity-pages.ts           # thin components extending BaseEntity, one per entity, → /:single
 ├── search-select.ts          # SearchSelect: select2-like searchable single-value dropdown
 ├── multi-select.ts           # MultiSelect: checkbox-list dropdown for many-to-many fields
 ├── time-select.ts            # TimeSelect: hour + minute dropdown pair bound to one "HH:mm" string
@@ -113,27 +147,32 @@ src/app/
 ├── course-label.ts           # courseLabel(): a discipline's name with its course_tags in
 │                             #   parentheses — the one rule, used by every screen, by no sheet
 ├── auth.service.ts           # AuthService: session state (JWT, CurrentUser), login/logout,
-│                             #   changePassword, canModifyIds() permission lookups — see Authentication
+│                             #   changePassword, accessLevels() permission lookups — see Authentication
 ├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests,
 │                             #   and ends the session when a response says that token is dead
 ├── auth.guard.ts             # authGuard (must be signed in + password changed), adminGuard
 ├── resource-type.ts          # toResourceType(): entity name → backend permission resource type
+├── access-level.ts           # AccessLevel: EDIT < FULL < MANAGE, the ordering, labels and hints
+├── resource-access.ts/.html  # ResourceAccessPanel: who can reach one resource, and the form for
+│                             #   delegating it — the «Доступ» tab of a faculty and a department
 ├── login-page.ts/.html       # "/login"
 ├── change-password-page.ts/.html  # "/change-password" — forced after signing in with a temporary password
-├── admin-page.ts/.html       # "/admin" — user/group/permission management console (admin-only)
+├── admin-page.ts/.html       # "/admin" — user/group/access management console (admin-only)
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
 ├── app.css                    # empty — every style in this app is global, in src/styles.css
 ├── app.config.ts             # bootstrap providers: router + HttpClient with authInterceptor
+├── section-route.ts          # kebabCase() — the one identifier→URL-slug rule — and sectionNav(),
+│                             #   which binds a tabbed page's open section to its :section parameter
 ├── app.routes.ts             # route table (see below)
 │
 ├── faculty-home.ts/.html         # "/" — faculty tiles (drill-down entry point)
-├── faculty-page.ts/.html         # "/faculty/:id" — faculty detail with tabbed sections
-├── building-home.ts/.html        # "/e/building" — building tiles
-├── building-page.ts/.html        # "/building/:id" — building detail (rooms)
-├── department-page.ts/.html      # "/department/:id" — department detail (lecturers, combined
+├── faculty-page.ts/.html         # "/faculty/:id/:section" — faculty detail with tabbed sections
+├── building-home.ts/.html        # "/building" — building tiles
+├── building-page.ts/.html        # "/building/:id/:section" — building detail (rooms)
+├── department-page.ts/.html      # "/department/:id/:section" — department detail (lecturers, combined
 │                                 #   working curriculum items, lecturer workloads)
-├── specialty-page.ts/.html       # "/specialty/:id" — specialty detail (curricula, groups)
-├── academic-group-page.ts/.html  # "/academic-group/:id" — group detail (students)
+├── specialty-page.ts/.html       # "/specialty/:id/:section" — specialty detail (curricula, groups)
+├── academic-group-page.ts/.html  # "/academic-group/:id/:section" — group detail (students)
 ├── department-list.ts/.html          # child-list widget: departments within a faculty
 ├── specialty-list.ts/.html           # child-list widget: specialties within a faculty
 ├── academic-group-list.ts/.html      # child-list widget: academic groups within a specialty
@@ -157,11 +196,11 @@ src/app/
 ├── working-curriculum-plan.ts        # which department delivers what, and what it adds up to
 │                                     #   per department — pure
 ├── working-curriculum-report.ts      # the printable «РОБОЧИЙ НАВЧАЛЬНИЙ ПЛАН» — pure, returns bytes
-├── course-page.ts/.html              # "/course/:id" — one discipline across curricula, working
+├── course-page.ts/.html              # "/course/:id/:section" — one discipline across curricula, working
 │                                     #   curricula and workloads; edits/deletes it (lazy route)
-├── lecturer-page.ts/.html            # "/lecturer/:id" — one lecturer: classes and timetable;
+├── lecturer-page.ts/.html            # "/lecturer/:id/:section" — one lecturer: classes and timetable;
 │                                     #   edits/deletes them (lazy)
-├── room-page.ts/.html                # "/room/:id" — one room: details and occupancy;
+├── room-page.ts/.html                # "/room/:id/:section" — one room: details and occupancy;
 │                                     #   edits/deletes it (lazy)
 ├── timetable-grid.ts                 # timetable entries → the grid every view and the PDF read
 │                                     #   — pure
@@ -196,11 +235,17 @@ src/app/
 │                                     #   "Формування розкладу" (see below)
 ├── timetable-solver.ts               # the UCTP solver itself — pure, no Angular/GraphQL/I-O
 ├── timetable-solver.worker.ts        # runs it off the main thread and reports progress
-├── global-properties-page.ts/.html   # "/global-properties" — edit the global_properties settings
+├── global-properties-page.ts/.html   # "/global-properties" — edit the global_properties settings (lazy)
+├── building-travel-times.ts/.html    # "/building-travel-times" — the directed travel-time matrix
+│                                     #   between buildings (lazy)
 │
-└── me-page.ts/.html          # "/me" — «Мій кабінет»: the signed-in user's own навантаження or
+└── me-page.ts/.html          # "/me/:section" — «Мій кабінет»: the signed-in user's own навантаження or
                               #   навчальний план, and their own розклад (lazy route)
 ```
+
+Outside `src/app`, `scripts/` holds the two things that run without the application: the
+`workload-bench/` harness described below, and `check-graphql-variables.mjs` behind
+`npm run lint:graphql`.
 
 The `/timetable` page that used to sit at the end of this list is **gone**. It was a read-only
 weekly grid over `timetableEntryConnection(limit: 1000)` with no faculty scope and no
@@ -209,6 +254,77 @@ silently dropped 428 rows to its limit and overlaid autumn on spring in the cell
 other consumer of that table has filtered by semester since the filter existed. `TimetableView`
 already does everything that page did and does it correctly, five times over; `me-page.ts` is what
 took its place in the sidebar.
+
+### Every value travels as a variable (`graphql.service.ts`)
+
+`GraphqlService` is thirty lines: it POSTs `{ query, variables }` to `/graphql`, throws on
+`errors[]`, and returns `data`. What is worth stating is the rule the whole client follows about
+what goes in which half.
+
+**No value is ever written into a query document.** Not an id, not a filter, not a page size, not
+the name of a `global_properties` row. Every argument names a variable, and the value travels beside
+the document:
+
+```ts
+const q = `query($facultyId: ID, $limit: Int!) { specialties {
+  specialtyConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } }
+} }`;
+this.gql.request(q, { facultyId: this.facultyId, limit: 200 });
+```
+
+The client used to interpolate them —
+``` `specialtyConnection(limit: 200, facultyId: "${this.facultyId}")` ``` — which worked because
+every value it ever interpolated happened to be a database id. That is not a property of the code,
+it is a property of the data it has been given so far: the same template with a name in it produces
+a broken document the moment the name contains a quote, and a query built by concatenation cannot be
+told apart from a query built by an attacker who supplied one of the pieces. Variables remove the
+question rather than answer it — the value is transported as JSON and typed by the server, and a
+quote in it is a quote in a string.
+
+Two things follow that are worth having anyway. The document is now a **constant**: the same screen
+sends byte-identical text every time, which is what a server-side parse cache is for. And the
+argument's type is now *written down* at the call site — `$facultyId: ID`, `$limit: Int!`,
+`$roomIds: [ID!]` — where before it was implied by whether the interpolation had quotes around it.
+Those types are the ones `QueryDefinition` declares: `filter(…)`/`relationFilter(…)` → `ID`,
+`relationFilterList(…)` → `[ID!]`, `relationFilterString(…)` → `String`, a connection's paging →
+`Int!`, an entity lookup's `id` and a `globalProperty`'s `name` → `ID!`.
+
+#### Documents assembled at runtime (`GqlVars`)
+
+Most queries are fixed text with a fixed set of variables and say so inline. A handful are not:
+*which* filters apply, or *how many* aliased sub-queries there are, is decided in the browser.
+«Академічні групи» filters by спеціальність, by факультет, by both or by neither; the student loader
+asks for one aliased `studentConnection` per group; `BaseEntity` names its filter arguments from
+entity metadata, so even the argument *names* are assembled. Those documents are built by
+concatenation — and concatenating a value in with them is exactly what the rule above forbids.
+
+`GqlVars` is the answer, and it is small enough to read in one sitting. `arg(name, type, value)`
+records the value, returns `name: $name` for the document, and keeps the value on the side;
+`optionalArg` returns `''` instead when there is nothing to filter by, so an unused filter is
+*absent* from the document rather than present and null — the shape the server has always been sent.
+`declaration()` returns the operation header naming everything recorded, and `values` is what goes
+to `request`:
+
+```ts
+const v = new GqlVars();
+const args = [
+  v.arg('limit', 'Int!', 500),
+  v.optionalArg('specialtyId', 'ID', this.specialtyId),
+  v.optionalArg('facultyId', 'ID', this.facultyId)
+].filter(Boolean).join(', ');
+const q = `${v.declaration()}{ academicGroups { academicGroupConnection(${args}) { … } } }`;
+this.gql.request(q, v.values);
+```
+
+Two things to know before using it. **Build the arguments before the template**, not inside it: a
+template literal evaluates left to right, so `${v.declaration()}` read ahead of the `v.arg(…)` calls
+it is supposed to describe emits a header missing half its variables — a document the server
+rejects, and one the compiler is perfectly happy with. And when the argument name is not the
+variable name — an aliased sub-query repeats one argument across N fields — use `ref` and write the
+argument yourself: `` `g${i}: studentConnection(academicGroupId: ${v.ref(`group${i}`, 'ID', id)})` ``.
+`ref` also reuses a name already bound to the same value and numbers it when bound to a different
+one, because two declarations of one name is a document GraphQL rejects outright and the parts that
+assemble one cannot see what the other parts declared.
 
 ### The pure modules
 
@@ -299,7 +415,7 @@ and the warning card on «Робочі навчальні плани» names a d
 table above it. Splitting the check in two to fix a parenthesis was not worth it.
 
 **Two screens are left out, because they already answer the question this rule exists to answer.**
-The generic «Дисципліни» table (`/e/course`) has a «Теги» column of its own, and the course page
+The generic «Дисципліни» table (`/course`) has a «Теги» column of its own, and the course page
 (`/course/:id`) prints its tags on the line under the heading — on the page *about* that course they
 have room to be a fact rather than a parenthesis. Both are read the other way round from every other
 screen: you arrive knowing which discipline you want. Every *other* course either of them names —
@@ -351,11 +467,26 @@ be made the default but never un-made.
 
 An entity may also declare `detailRoute` — the path of its own drill-down page. Set it, and every
 generic table of that entity grows an **«Відкрити →»** link in its actions column: not only the
-standalone `/e/…` page but every embedding of it, so the faculty page's «Дисципліни» and «Аудиторії»
+standalone table page but every embedding of it, so the faculty page's «Дисципліни» and «Аудиторії»
 tabs and the department page's «Викладачі» tab all lead somewhere without a line of their own.
-`Course`, `Lecturer`, `Room`, `Specialty` and `AcademicGroup` carry one. That the link is metadata
-rather than markup is the point: the alternative was the same anchor pasted into four call sites and
-forgotten in the fifth.
+`Course`, `Lecturer`, `Room`, `Specialty`, `AcademicGroup`, `Faculty`, `Department` and `Building`
+carry one. That the link is metadata rather than markup is the point: the alternative was the same
+anchor pasted into four call sites and forgotten in the fifth.
+
+`detailRoute` does a second job: **a `ref` column renders as a link to the row it points at.** The
+cell used to print the referenced row's database id beside its name — «Дискретна математика (#42)»,
+and the same in every foreign-key dropdown — and the tables carried a leading `#` column of their
+own id besides. Both are gone. An id is not something a reader can act on: it was there because it
+was the only thing telling two same-named rows apart and the only way to get from one to the other,
+and a link does both, properly. Where a referenced entity has no page — `AcademicDegree`,
+`RoomGroup`, `ClassStartTimeSet`, `TimetableEntry`, `Student` — the cell is its name as plain text,
+and an empty reference is still an em dash.
+
+One thing was lost with the ids and is worth naming: two rows with the same name now read
+identically in a **dropdown**, which cannot hold a link. Where that matters the picker already says
+more than the name — `AdminPage`'s two person pickers append the кафедра or the академічна група —
+and the general fix, if a list ever needs it, is to append the distinguishing parent rather than to
+put the id back.
 
 A `ref` field may also carry `parentFilter: { namespace, list, label }`. That swaps its plain
 dropdown for `DeptFacultySelect` — a second select above it, loaded from that connection, which
@@ -408,8 +539,10 @@ server-side кафедра filter.
 
 `entity-pages.ts` currently registers 13 such pages (`academicDegree`, `faculty`,
 `department`, `specialty`, `course`, `lecturer`, `student`, `academicGroup`,
-`room`, `roomGroup`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at
-`/e/:single`. These are the fallback / power-user screens — useful for bulk edits or entities
+`room`, `roomGroup`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at the
+**kebab-case of its `single`** — `roomGroup` becomes `/room-group`, `classStartTimeSet` becomes
+`/class-start-time-set` — by the same `kebabCase` that turns a section key into a section slug. These
+are the fallback / power-user screens — useful for bulk edits or entities
 without a dedicated drill-down page (`Room`, `RoomGroup`, `ClassStartTimeSet`, `ClassStartTime`,
 `AcademicDegree`, `TimetableEntry`). Two of them lean on the metadata in ways worth noting:
 `RoomGroup` uses `multiref` for its rooms and offers both a faculty and a department picker even
@@ -428,7 +561,12 @@ they're managed exclusively through the hand-written drill-down pages below
 ### Hierarchical drill-down pages
 
 The main browsing flow is a set of hand-written pages, each fetching its own GraphQL query
-and composing purpose-built child-list components rather than going through `BaseEntity`:
+and composing purpose-built child-list components rather than going through `BaseEntity`.
+Every one of them is tabbed, and **each tab is an address of its own** —
+`/faculty/:id/room-assignment`, `/specialty/:id/working-curricula`, `/me/timetable` — so any of them
+can be bookmarked, sent to a colleague and reloaded; see [The open tab is part of the
+URL](#the-open-tab-is-part-of-the-url-section-routets). The paths below name the pages; their default
+tab is `info`, which the bare path redirects to.
 
 - **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
   tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
@@ -444,7 +582,7 @@ and composing purpose-built child-list components rather than going through `Bas
   not "every group in the university"), and "Об'єднані групи" passes the same scope to the
   generic table through `extraFilterParam`/`extraFilterValue` — both backed by the
   `facultyId` relation filters described in the backend README.
-- **`BuildingHome`** (`/e/building`) → **`BuildingPage`** (`/building/:id`): info + rooms
+- **`BuildingHome`** (`/building`) → **`BuildingPage`** (`/building/:id`): info + rooms
   (each room shows/edits its own faculty; there's no separate "faculties in this building" tab).
 - **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
   items (`CombinedWorkingCurriculumItemList` — merge proposals, see below), workload constraints
@@ -475,6 +613,13 @@ The faculty page gained two tabs in the same round: «Групи аудитор�
 carrying both a faculty and a department, so presetting `facultyId` is what keeps a created row
 valid) and «Розклад факультету» under *Розклад*. The department page gained «Розклад кафедри».
 
+Both pages later gained one more, **«Доступ»**, which differs from every other tab in being
+*conditional*: it is filtered out of the navigation unless the account holds `MANAGE` on that
+faculty or department, and the panel it shows re-checks the same thing rather than trusting its
+host. See [Delegating access](#delegating-access-resourceaccesspanel). The department page's
+«✎ Редагувати» became conditional in the same round — it used to render for everybody and rely on
+the server to refuse, which it did, after the form had been filled in.
+
 #### Editing a curriculum course-first (`CurriculumEditor`, specialty "Редагування планів" tab)
 
 The same `curriculum_items` rows as the tab below it, inverted: one block per **course** the
@@ -483,6 +628,20 @@ each holding its semester blocks, each of those holding a row per hour type. Cou
 curriculum items yet are listed too — sorted to the top alphabetically — so gaps in the plan are
 visible rather than merely absent, which a table of existing rows cannot show. Everything is edited
 inline, one save per semester block, rather than through a modal.
+
+**An `ELECTIVE` is not one of those courses.** It is a choice inside an `ELECTIVE_GROUP`, and the
+group is what the plan reserves a slot for; which child fills it is decided a level down, on
+`WorkingCurriculumItem.course`. Listing the children here put «Основи web програмування (пм)» and
+its forty siblings on the page as top-level blocks marked «без позицій плану», burying the
+components that *are* the plan under courses that structurally never can be. `isPlannable` filters
+them out at load, so an elective reaches this page only through its група — and the «Навчальні
+плани» tab's discipline picker is filtered the same way, with one exception: a position that
+already names an elective keeps naming it in the edit form, because an edit form must never
+silently drop a value the database holds. The rule is the course's own `courseType` rather than
+"has a parent course", so that it is the same rule the database is cleaned by — see the service
+README's [`V1__delete_curriculum_items_on_elective_courses.sql`](../timetable/README.md#v1__delete_curriculum_items_on_elective_coursessql),
+which removes the 28 positions that should never have been attached to one. In the seeded data the
+two readings coincide exactly: all 664 electives have a parent, and nothing else does.
 
 - **Ordering** — courses sort by their lowest semester, ties broken by course name; semester blocks
   sort by semester. Unplanned courses come first.
@@ -658,7 +817,8 @@ Permissions are asked per row, not per page. A Course grant authorises everythin
 `CurriculumItem` and `WorkingCurriculumItem` name Course among their `@PermissionParent`s and the
 server ORs over the ancestor closure — but it is not the only thing that does: a гарант of one
 specialty may edit that specialty's plan positions without any right over the discipline itself, so
-the page also asks `canModifyIds` for the specialties and departments actually on screen.
+the page also asks `accessLevels` for the specialties and departments actually on screen and takes
+the highest level any of the three scopes yields.
 
 «Розклад занять» places this discipline's classes by hand: day, пара, week parity and room, per
 workload, through the same `createTimetableEntry` / `updateTimetableEntry` mutations «Формування
@@ -717,7 +877,7 @@ and on only the second, every ordinary discipline's.
 Its «Інформація» tab also **edits and deletes the discipline**, on the pattern set out under
 [Editing and deleting from a drill-down page](#editing-and-deleting-from-a-drill-down-page) below.
 The modal covers every `Course` field the generic table offers, `specialtyIds` and `tags` included —
-so a discipline no longer has to be opened twice, once here to read it and once at `/e/course` to
+so a discipline no longer has to be opened twice, once here to read it and once at `/course` to
 change it. The one departure is the **«Група вибіркових»** picker: it lists the `ELECTIVE_GROUP`
 courses rather than all several thousand, plus whatever is currently stored even if it is not one,
 because an edit form must never silently drop a value the database holds.
@@ -743,10 +903,10 @@ Both «Інформація» tabs **edit and delete their subject** as well, on
 had, and carry them the same way: **«✎ Редагувати»** in the info tab's `page-header` opening a modal
 over the entity's own fields, **«Видалити»** in the page header — shown only while the info tab is
 open, since the button acts on the page's subject and not on whatever list is on screen — and a
-confirmation modal naming what is about to go. Both are gated on
-`canModifyIds('COURSE' | 'LECTURER' | 'ROOM', [id])`, admins short-circuited, exactly as described
-under [Hiding UI the user can't use](#hiding-ui-the-user-cant-use); the mutation is re-checked
-server-side regardless.
+confirmation modal naming what is about to go. They are gated
+separately now — «Редагувати» on `EDIT` and «Видалити» on `FULL`, both derived from one
+`accessLevel('COURSE' | 'LECTURER' | 'ROOM', id)` lookup — exactly as described under [Hiding UI the
+user can't use](#hiding-ui-the-user-cant-use); the mutation is re-checked server-side regardless.
 
 Three things about the payload are worth stating, because two of them are silent-data-loss traps
 rather than preferences:
@@ -765,8 +925,48 @@ rather than preferences:
 
 After a delete each page navigates back to where its subject was reached from — a course to its
 кафедра then its факультет, a lecturer to their кафедра, a room to its корпус then its факультет —
-falling back to the generic `/e/…` table, because staying on the page of a row that no longer exists
+falling back to the entity's own table, because staying on the page of a row that no longer exists
 would only render an empty shell.
+
+#### The travel-time matrix (`BuildingTravelTimesPage`, `/building-travel-times`)
+
+Nineteen корпуси, 342 directed journeys, one screen — the numbers the seeded data happens to hold;
+the page draws whatever `buildingConnection` returns. Rows are where a journey starts, columns where
+it ends, and every cell is an editable number of minutes. Rows and columns are ordered by address
+with `compareUk`, falling back to the building's name where it has no address.
+
+**Why a matrix and not 342 rows in a table.** The value being edited is not a row, it is a relation
+between two buildings — and the thing a reader most wants to compare it against is the same journey
+walked the other way. A table sorts those two apart; a matrix puts one at (i, j) and the other at
+(j, i), so an asymmetry is read by glancing across the diagonal instead of by searching. Lviv is
+built on hills and the two numbers genuinely differ, which is the whole reason `building_travel_times`
+is directed at all.
+
+Columns are numbered rather than named because nineteen building names will not fit across a screen;
+the row headers carry the same numbers with the addresses, so the table is its own legend. The
+diagonal is not a cell — a database CHECK forbids a row from a building to itself.
+
+- **A blank cell is a real state**, not a hole. Every ordered pair gets an input whether or not the
+  database has a row for it, because a missing journey is entered by typing into the blank; saving a
+  cell that had a value and now does not **deletes** the row, which is the only way to take one back
+  out.
+- **One save for everything touched.** Each edited cell becomes a create, an update or a delete
+  depending on what it was and what it now is, and the whole batch goes in one `forkJoin`. Values
+  are validated *before* any of it is sent — a half-applied matrix is worse than a refused one — and
+  the page reloads from the server afterwards whatever happened, so what is on screen is what was
+  stored.
+- **«Дзеркально»** copies the edits just made into the opposite direction, for the majority of pairs
+  where the walk is flat and the two numbers are the same. It fills the fields; it does not save.
+  **«Скасувати»** puts every cell back to what the server last returned.
+- **What counts as a value.** A whole number of minutes, zero or more — `0` is legitimate and means
+  "no walk worth counting", which is not the same as blank. Edited cells are highlighted until
+  saved, and an invalid one is highlighted differently with its reason beside it.
+- **Permissions follow the entity's two parents.** A cell is editable when the account holds `EDIT`
+  on *either* корпус, which is the same OR the server applies — so a deanery holding one building can
+  correct the walks into and out of it without a grant over the university. Emptying a cell deletes
+  a row, so it needs `FULL`; that is checked before the batch is sent, so the whole save is refused
+  together rather than half of it landing. An account that can edit no building at all sees the
+  matrix without the save bar.
 
 #### Getting to those pages (`.ent-link`)
 
@@ -1410,15 +1610,15 @@ written until «Застосувати», which then shows exactly what would ch
 
 The solver is a University Course Timetabling heuristic using the objective function of
 *"Adaptive Memetic Algorithm for University Course Timetabling"* —
-`f(σ) = Σ βᵢ·Πᵢ(σ)^αᵢ` with `β = (150, 100, 50, 5, 20)` over lecturer/group/room conflicts and
-lecturer/group windows — reached by a most-constrained-first greedy construction followed by the
+`f(σ) = Σ βᵢ·Πᵢ(σ)^αᵢ` with `β = (150, 100, 50, 90, 120, 5, 20)` over lecturer/group/room conflicts,
+group/lecturer travel between buildings and lecturer/group windows — reached by a most-constrained-first greedy construction followed by the
 article's two-phase multi-neighbourhood local search (reassign / swap / chain move under simulated
 annealing and a tabu list, then bounded window reduction) under an effectiveness-adaptive intensity.
 **[TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) documents it in full**: the formulation,
 every deviation from the paper, the constraint semantics, complexity bounds, and what is and isn't
 guaranteed.
 
-Three things about it are specific to scheduling *one faculty inside a shared university*:
+Four things about it are specific to scheduling *one faculty inside a shared university*:
 
 - **Rooms, lecturers and groups are shared.** Before searching, the tab reads the current timetable
   of every room this faculty's workloads may use, of every lecturer of the faculty, and of every
@@ -1431,6 +1631,12 @@ Three things about it are specific to scheduling *one faculty inside a shared un
   `MAX_CLASSES_PER_DAY` for lecturers, groups *and* rooms filter candidate placements outright,
   resolved with the "more specific wins" rule; so do the workload's allowed rooms and its own grid
   of bells. A block with no admissible placement is reported by name rather than squeezed in.
+- **The university is nineteen buildings, so distance is a constraint.** The same request reads each
+  room's building and the whole of `building_travel_times`, and a pair of classes one group or one
+  lecturer cannot walk between in the gap they are given counts against the objective as hard as a
+  double booking does. Where no travel times are stored the terms are skipped and the generator
+  behaves exactly as it did before they existed. See
+  [TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) §1.2 and §2.5.
 - **The plan is applied in batches, and never deletes.** Updates go out first (a move frees the slot
   it leaves), then creates, 25 per GraphQL document under aliases, so a full faculty is about twenty
   requests rather than several hundred. A block the solver could not place keeps whatever entry it
@@ -1575,30 +1781,32 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 |---|---|---|
 | `/login` | `LoginPage` | the only route with no guard |
 | `/change-password` | `ChangePasswordPage` | `authGuard` only — reachable while `mustChangePassword` is set |
-| `/admin` | `AdminPage` | **lazy** — `authGuard` + `adminGuard`; user/group/permission management and the person link |
+| `/admin` | `AdminPage` | **lazy** — `authGuard` + `adminGuard`; user/group/access management and the person link |
 | `/` | `FacultyHome` | faculty tiles, drill-down entry point |
-| `/faculty/:id` | `FacultyPage` | tabbed faculty detail |
-| `/building/:id` | `BuildingPage` | building detail |
-| `/department/:id` | `DepartmentDetailPage` | department detail |
-| `/specialty/:id` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
-| `/academic-group/:id` | `AcademicGroupDetailPage` | group detail |
-| `/course/:id` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads; edits/deletes it |
-| `/lecturer/:id` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable; edits/deletes them |
-| `/room/:id` | `RoomDetailPage` | **lazy** — one room and its occupancy; edits/deletes it |
-| `/me` | `MyDeskPage` | **lazy** — «Мій кабінет»: own workload or curriculum, and own timetable |
-| `/global-properties` | `GlobalPropertiesPage` | system-wide settings editor |
-| `/e/building` | `BuildingHome` | building tiles (overrides the generic table for this entity) |
-| `/e/:single` | generic `entity-pages.ts` component | one per remaining entity — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
+| `/faculty/:id/:section` | `FacultyPage` | **lazy** — tabbed faculty detail, incl. the «Доступ» tab |
+| `/building/:id/:section` | `BuildingPage` | building detail |
+| `/department/:id/:section` | `DepartmentDetailPage` | **lazy** — department detail, incl. the «Доступ» tab |
+| `/specialty/:id/:section` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
+| `/academic-group/:id/:section` | `AcademicGroupDetailPage` | group detail |
+| `/course/:id/:section` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads; edits/deletes it |
+| `/lecturer/:id/:section` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable; edits/deletes them |
+| `/room/:id/:section` | `RoomDetailPage` | **lazy** — one room and its occupancy; edits/deletes it |
+| `/me/:section` | `MyDeskPage` | **lazy** — «Мій кабінет»: own workload or curriculum, and own timetable |
+| `/global-properties` | `GlobalPropertiesPage` | **lazy** — system-wide settings editor |
+| `/building-travel-times` | `BuildingTravelTimesPage` | **lazy** — «Час переходу між корпусами»: the directed travel-time matrix |
+| `/building` | `BuildingHome` | building tiles (this entity's table is a page of tiles, not a table) |
+| `/:single` | generic `entity-pages.ts` component | one per remaining entity, at the kebab-case of its `single` — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
 
 The sidebar (`app.html`) links to the drill-down entry point ("🎓 Факультети") and — only when the
 signed-in account is linked to a lecturer or a student — to «📅 Мій кабінет»,
 then a flat "Загальне" group of generic-table links for entities with no dedicated page
-(`Building`, `RoomGroup`, `ClassStartTimeSet`, `ClassStartTime`, `AcademicDegree`) plus the global
-settings page ("Глобальні властивості"), and — only for an administrator — an
+(`/building`, `/room-group`, `/class-start-time-set`, `/class-start-time`, `/academic-degree`) plus
+«Час переходу між корпусами» and the global settings page ("Глобальні властивості"), and — only for
+an administrator — an
 "Адміністрування" group holding the single "Користувачі та права" link. The top bar carries the
 signed-in user's name, an «АДМІН» badge where it applies, and the password / sign-out controls.
 `CombinedGroup` has no sidebar link of its own — it's only reachable embedded in the Faculty page's
-"Об'єднані групи" tab (see above), not as a standalone `/e/…` route.
+"Об'єднані групи" tab (see above), not as a route of its own.
 
 «Мій кабінет» is hidden rather than shown-and-empty for an account that is neither: a deanery
 administrator has no навантаження and no навчальний план of their own, and reaches every timetable
@@ -1610,17 +1818,112 @@ link either, and that is deliberate: nobody navigates to a discipline or a room 
 arrive from the list they were already reading. Every such list carries an «Відкрити →» link in its
 last column, driven by `EntityMeta.detailRoute` (see [Generic CRUD
 tables](#generic-crud-tables-entitiests--baseentity)), so the route is reachable from wherever the
-entity is mentioned rather than from one place. They are three of the five `loadComponent` routes
+entity is mentioned rather than from one place. They are three of the nine `loadComponent` routes
 in the file. Each pulls in `TimetableView`, the grid and — on the Course page — the whole aggregation
-of curricula and workloads; eagerly bundled they took the initial chunk to 995.66 kB against a
-1.00 MB error budget. Lazily loaded it sits at 963.53 kB, and the cost is one extra request the
-first time a user opens one of the three.
+of curricula and workloads, and the cost of deferring them is one extra request the first time a
+user opens one.
 
-`/me` and `/admin` are the other two, on the same reasoning. «Мій кабінет» mounts `TimetableView`
-and is opened only by an account that is a person; the administration console carries its own
-queries including the full lecturer and student lists behind the person pickers, and is opened only
-by an administrator. Making `/admin` lazy in the same round more than paid for the new page: the
-initial chunk is **949.06 kB**, below where it stood before either existed.
+The other six are there on the same reasoning, and the list has grown as the application has.
+«Мій кабінет» mounts `TimetableView` and is opened only by an account that is a person; the
+administration console carries its own queries, including the full lecturer and student lists behind
+the person pickers, and is opened only by an administrator; `/global-properties` and
+`/building-travel-times` are single-purpose editors with stylesheets of their own. `FacultyPage` and
+`DepartmentDetailPage` were the last to move, and they moved the most: `FacultyPage` alone pulls in
+every tab it can show — the department, specialty and group lists, the room and course pages, the
+constraint editors and the timetable view — and it is not on the path to the one screen most people
+open the application for. Together the nine take the initial chunk from just over the 1.00 MB error
+budget to **684 kB**.
+
+The budget is worth stating plainly, because it is the thing that keeps forcing these decisions: the
+production build *fails* above 1.00 MB and warns above 500 kB. Anything added to a route that is
+eager pays that toll on every cold load, including the student who only ever reads a розклад.
+
+### The open tab is part of the URL (`section-route.ts`)
+
+Each of the nine tabbed pages above is **two** route entries, not one:
+
+```ts
+{ path: 'faculty/:id', pathMatch: 'full', redirectTo: '/faculty/:id/info' },
+{ path: 'faculty/:id/:section', canActivate: [authGuard],
+  loadComponent: () => import('./faculty-page').then((m) => m.FacultyPage) },
+```
+
+The tab used to live in a component signal, which meant «Кафедри», «Спеціальності» and «Аудиторії»
+were all the same address as «Інформація» — `/faculty/3`. That address could not be bookmarked, sent
+to a colleague, reloaded, or reached with the browser's Back button; every one of those led back to
+the first tab. Now the tab *is* the last path segment, so what is on screen and what is in the
+address bar are the same thing.
+
+The redirect is what keeps that from being a half-measure: a bare `/faculty/3` — an old bookmark, a
+link written before this change, a `routerLink` in a list — resolves to `/faculty/3/info`, so every
+screen has exactly one canonical URL and nothing that used to work stopped working. `:id`
+substitution in a `redirectTo` string is the router's own, so the redirect needs no code. `/me` is
+the one exception and the one function, because its default tab is not a constant: a викладач lands
+on «Моє навантаження», a студент on «Мій навчальний план». A `RedirectFunction` runs in an injection
+context, so it asks `AuthService` which of the two this account is.
+
+`sectionNav` in `section-route.ts` is the whole of the component side — three lines per page:
+
+```ts
+private nav = sectionNav<FacultySection>(
+  () => ['/faculty', this.facultyId], () => SECTION_KEYS, () => 'info');
+readonly activeSection = this.nav.active;
+
+selectSection(key: FacultySection) { this.nav.select(key); }
+```
+
+Four things it settles, each of which was a decision:
+
+- **The section key stays camelCase and the URL slug is its kebab-case.** `roomAssignment` is the
+  union member the templates `@switch` on and `/faculty/3/room-assignment` is the address;
+  `kebabCase` is the only place the two forms meet, so no page carries a second table of names. The
+  same function names the generic tables — `roomGroup` → `/room-group` — because there is one
+  convention for identifiers in this app's URLs, not two.
+- **`activeSection` is read-only.** Navigation is the only thing that changes it, which is what makes
+  Back and Forward work; `DepartmentDetailPage.openAssessment` — the "who is overloaded?" → "why?"
+  jump — goes through `selectSection` like a click does.
+- **Switching tabs does not rebuild the page.** `/faculty/3/departments` and `/faculty/3/rooms` are
+  the same route *configuration*, so the router reuses the component instance and only the parameter
+  changes. The page's queries run once, exactly as when the tab was a signal — which is why the
+  parameter is read from `paramMap` rather than from `snapshot`.
+- **An unrecognised slug falls back rather than rendering nothing.** `keys()` may be a computed:
+  `CourseDetailPage` passes `sections()`, whose «Вибіркові дисципліни» exists only on an
+  `ELECTIVE_GROUP`, so a pasted `/course/:id/electives` for a course that is not one — like changing
+  the course's type in the edit modal, or walking from an umbrella to one of its children — lands on
+  «Інформація» instead of leaving `@switch` matching no case at all.
+
+One consequence worth stating: work that used to hang off the *click* now hangs off the section
+*changing*, in an `effect`, because a pasted URL and the Back button change it without a click.
+`FacultyPage` clears each tab's filters that way, and `CourseDetailPage` loads the four picker
+connections that only «Навантаження викладачів» and «Розклад занять» need — so a deep link to either
+tab arrives with its pickers filled, which a click-handler version would not do.
+
+Served from the packaged jar, a deep link is answered by `FrontendController`; see the [service
+README](../timetable/README.md#serving-the-frontend-from-this-service) for how it tells a client
+route from a request for a real file.
+
+### One flat namespace, and the check that keeps it honest
+
+The generic tables were once at `/e/:single` — `e` for entity, and the segment after it the entity's
+GraphQL singular verbatim, so `/e/roomGroup`. Both halves of that were the schema showing through
+rather than anything anyone chose: the prefix said "generated route" to whoever wrote the generator,
+and camelCase in a path is what an identifier looks like when it is used as a URL without being asked
+whether it reads like one. Neither survived being read next to `/faculty/3/room-assignment`, so the
+prefix is gone and the singular is kebab-cased: `/room-group`, `/academic-degree`,
+`/class-start-time-set`. The old `/e/…` paths were not kept alive — they fall through to `**`.
+
+`pathMatch: 'full'` on each table is what lets `/faculty` (every faculty) and `/faculty/3/departments`
+(one of them) be different screens without either shadowing the other, and it is why `BuildingHome`
+now sits in `ENTITY_TABLE_ROUTES` rather than above them: `/building` *is* the Building table's path,
+it just renders tiles instead of rows.
+
+What the prefix bought for free was collision safety. `ENTITY_TABLE_ROUTES` is generated from
+`entities.ts` and `PAGE_ROUTES` is written by hand, and in a flat namespace nothing stops the two from
+claiming the same address — add an entity whose `single` is `admin`, `me` or `login` and one of the
+pair simply stops opening, quietly, depending on which comes first in the array. A dev-mode check at
+the bottom of `app.routes.ts` compares the two lists and throws at startup, where the entity is being
+added, rather than leaving it to be found in whichever screen went dark. Today the sets are disjoint:
+every hand-written path that shares a first segment with a table carries `/:id` after it.
 
 ---
 
@@ -1637,9 +1940,9 @@ A single root-provided service, injected the same way `GraphqlService` is used e
   refresh doesn't sign the user out; `isAuthenticated` is just `token() !== null`. A stored token
   already past its `exp` never reaches the signal — see [When the session ends by
   itself](#when-the-session-ends-by-itself).
-- `currentUser` (signal) — the result of `Query.me` (profile, `isAdmin`, `groups`,
-  `permissions`), re-fetched via `refreshMe()` after login and on app bootstrap when a token is
-  already stored. Deliberately **not** decoded from the JWT itself — the token only carries a user
+- `currentUser` (signal) — the result of `Query.me` (profile, `isAdmin`, `groups`, and
+  `permissions`, each grant carrying the `level` it was made at), re-fetched via `refreshMe()` after
+  login and on app bootstrap when a token is already stored. Deliberately **not** decoded from the JWT itself — the token only carries a user
   id — so a permission change or account deactivation is reflected the moment `refreshMe()` runs
   again, without needing a new token.
 - `login(email, password)` / `logout()` / `changePassword(current, new)` — thin wrappers around the
@@ -1649,10 +1952,15 @@ A single root-provided service, injected the same way `GraphqlService` is used e
 - `endSession(reason)` / `clearSession(reason)` / `sessionEndReason` (signal) — ending a session
   that stopped working, as opposed to one the user signed out of. The reason is what `LoginPage`
   turns into «Термін дії сеансу минув…» instead of presenting an unexplained empty form.
-- `canModifyIds(resourceType, ids)` — given a batch of ids of one entity type, asks
-  `Query.canModifyResources` which of them the signed-in user may edit/delete, backed by a
-  per-`resourceType` cache (`clearModifyCache()` invalidates it, called after granting/revoking a
-  permission in the admin console) so re-rendering an already-checked list doesn't re-query.
+- `accessLevels(resourceType, ids)` / `accessLevel(resourceType, id)` — given ids of one entity
+  type, asks `Query.accessLevels` for the caller's level on each, backed by a per-`resourceType`
+  cache (`clearAccessCache()` invalidates it, called after granting or revoking access) so
+  re-rendering an already-checked list doesn't re-query. The cache stores "no access" as
+  deliberately as it stores a level: without that, every re-render re-asked about every row the
+  user cannot touch — which, on a faculty page seen by a visitor, is all of them.
+- `globalLevel` (computed) — the caller's university-wide level, if they hold a `GLOBAL` grant.
+  `MANAGE` is what `isAdmin` means; `EDIT` or `FULL` is somebody trusted with everything except
+  handing the right away.
 - `personLink` / `hasPersonLink` (computed) — `'lecturer' | 'student' | null`, from the
   `lecturerId`/`studentId` on `Query.me`. **Deliberately not a permission**: it decides only whether
   «Мій кабінет» has anything to show, and therefore whether its sidebar link appears. Everything a
@@ -1701,6 +2009,17 @@ faculty" from logging anybody out.
 
 ### Route guards (`auth.guard.ts`)
 
+**Both guards can wait, and both have to.** Angular runs a route's `canActivate` guards
+*concurrently*, not one after another, and takes the first non-`true` answer in declaration order.
+`/admin` carries two — `authGuard` then `adminGuard` — so on a cold load they reach for the session
+in the same tick, and `adminGuard` used to answer from an empty one: `isAdmin()` read `null` while
+`authGuard` beside it was still fetching `me`, so it returned a redirect, and the redirect won. The
+symptom was narrow enough to hide for a long time: `/admin` worked perfectly when clicked from the
+sidebar, because the profile was already loaded by then, and bounced to the faculty home every time
+it was bookmarked, pasted or reloaded. It now resolves the profile the same way `authGuard` does,
+and `AuthService.refreshMe` shares one in-flight request between however many callers ask, so the
+two guards cost one `me` query rather than two.
+
 - **`authGuard`** — redirects to `/login` (with a `redirectTo` query param) when there's no
   signed-in user; redirects to `/change-password` when `mustChangePassword` is still set (except
   for that route itself). Applied to every route except `/login`. A stored token whose profile
@@ -1742,35 +2061,100 @@ pushes a scrollbar.
 
 ### Hiding UI the user can't use
 
-Every list/table in the app — both the generic `BaseEntity` tables and the hand-written
-drill-down widgets (`DepartmentList`, `SpecialtyList`, `AcademicGroupList`, etc.) — follows the
-same pattern:
+Access is not one boolean any more. A grant carries an ordered **level** — `EDIT` < `FULL` <
+`MANAGE` — and the client mirrors the backend's `AccessLevel` in `access-level.ts`, which is the
+only place the ordering, the Ukrainian labels and the one-line explanations live:
 
-1. After loading a page of rows, batch-call `auth.canModifyIds(resourceType, ids)` (skipped
-   entirely for admins, who can modify everything) and store the resulting id set.
-2. `canModify(row)` (`isAdmin() || modifiableIds().has(row.id)`) gates the row's "Редагувати"/
-   "Видалити" buttons in the template.
-3. A separate, coarser check gates the "+ Додати" (create) control: for the generic tables,
-   `BaseEntity.canShowCreate` is simply "is admin, or holds *any* permission grant at all" (cheap,
-   since the real check happens server-side anyway); the drill-down list widgets do the precise
-   check instead — e.g. `DepartmentList` calls `canModifyIds('FACULTY', [facultyId])` on its own
-   parent faculty, since creating a `Department` requires modify permission on the `Faculty` it
-   would belong to (`PermissionService#canCreate` on the backend walks the same edge).
+| Level | Label | What it opens in the UI |
+|---|---|---|
+| `EDIT` | Редагування | «+ Додати» and «Редагувати» |
+| `FULL` | Повний доступ | the above, plus «Видалити» |
+| `MANAGE` | Керування доступом | the above, plus the «Доступ» tab |
 
-A **detail page** does the same check for a batch of one: `FacultyPage`, `CourseDetailPage`,
-`LecturerDetailPage` and `RoomDetailPage` each call `canModifyIds(<TYPE>, [routeId])` in `ngOnInit`
-and gate their own «Редагувати»/«Видалити» on the result — see [Editing and deleting from a
-drill-down page](#editing-and-deleting-from-a-drill-down-page).
+Every list/table in the app — both the generic `BaseEntity` tables and the hand-written drill-down
+widgets (`DepartmentList`, `SpecialtyList`, `AcademicGroupList`, etc.) — follows the same pattern:
 
-`resourceType.ts`'s `toResourceType()` converts an entity's PascalCase name (`WorkingCurriculumItem`)
+1. After loading a page of rows, batch-call `auth.accessLevels(resourceType, ids)` and store the
+   resulting `id -> level` map. Rows the caller cannot reach at all are simply absent from it.
+   The call is skipped only for a university-wide `MANAGE`; anything weaker still has to ask,
+   because a grant on an individual row can be *stronger* than the global one.
+2. `canEdit(row)` and `canDelete(row)` gate «Редагувати» and «Видалити» **separately** — the two
+   buttons are no longer the same right, and this is the one place the split is visible to a user.
+   Somebody who maintains a table every day sees «Редагувати» without «Видалити» beside it.
+3. A separate check gates «+ Додати»: for the generic tables, `BaseEntity.canShowCreate` is the same
+   coarse "holds any grant at all" heuristic as before (cheap, since the real check happens
+   server-side anyway); the drill-down list widgets do the precise thing instead — `DepartmentList`
+   asks for its own faculty's level and requires `EDIT` on it, since creating a `Department` needs
+   `EDIT` on the `Faculty` it would belong to, which is exactly the edge
+   `PermissionEvaluator#levelForNew` walks on the backend.
+
+A **detail page** does the same for a batch of one: `FacultyPage`, `DepartmentDetailPage`,
+`CourseDetailPage`, `LecturerDetailPage` and `RoomDetailPage` each call
+`auth.accessLevel(<TYPE>, routeId)` in `ngOnInit` and derive `canModifyX` / `canDeleteX` /
+`canManageAccess` from it as computed signals. `CoursePage` composes three scopes, since a plan
+position can be reachable through the discipline *or* through its specialty, and a workload through
+the discipline *or* through the кафедра holding it: the level in force is the highest of them.
+
+The «Час переходу між корпусами» matrix applies the same split per cell — a корпус you hold at
+`EDIT` lets you correct a walk, and emptying the cell (which deletes the row) needs `FULL`. That is
+checked before the batch is sent, so the whole save is refused together rather than half of it
+landing.
+
+`resource-type.ts`'s `toResourceType()` converts an entity's PascalCase name (`WorkingCurriculumItem`)
 to the `UPPER_SNAKE_CASE` identifier the backend's grants use (`WORKING_CURRICULUM_ITEM`) —
 mirroring `EntityMetadata#resourceType()` on the backend so the two sides never need to agree on
 a hand-maintained list.
 
 **Every hidden button is a UI convenience, not the security boundary** — the corresponding
-mutation re-checks the same permission server-side regardless (see the backend README's
+mutation re-checks the same level server-side regardless (see the backend README's
 [Authentication & authorization](../timetable/README.md#authentication--authorization)); hiding a
 button just avoids a wasted round trip through a request the server would reject anyway.
+
+### Delegating access (`ResourceAccessPanel`)
+
+`resource-access.ts` is one component used in three places: as the «Доступ» tab of a факультет, as
+the «Доступ» tab of a кафедра, and on the administration console, where a resource is named by type
+and id instead of being the page you are already on.
+
+That reuse is the fix for something that had quietly made delegation unusable. The backend has
+always allowed a non-administrator to hand out access within what they hold — but the only UI for it
+lived on `/admin`, behind `adminGuard`. A deanery holding the right to delegate their own факультет
+had nowhere to exercise it. Putting the panel on the resource's own page makes «дати завідувачу
+кафедри право редагувати її навантаження» something the deanery does themselves, in the place they
+are already looking at. The tab only renders for someone holding `MANAGE` there, and the panel
+re-checks that itself rather than trusting its host.
+
+The panel shows:
+
+- **Direct grants** — who was given access *here*, with a level dropdown that re-grants in place
+  (the mutation is an upsert, so changing somebody from «Редагування» to «Повний доступ» is one
+  call and leaves no window where they have neither) and a «Відкликати» button.
+- **Inherited grants** — greyed, with no controls, labelled with where they come from
+  («Успадковано: Факультет прикладної математики та інформатики», or «Загальний доступ (уся
+  система)»). They are the answer to "why can this person edit my кафедра?", and they are not
+  withdrawable from here: revoking needs authority from *above* the grant, so peers cannot unseat
+  each other and a delegate cannot lock out whoever appointed them.
+- **A grant form** — a user or a group, plus the level, with its explanation shown under the
+  dropdown so nobody has to guess what «Повний доступ» includes. The two grantee pickers are
+  deliberately asymmetric: groups are few, so the whole list is offered; accounts are not, so a user
+  is *found* — type at least two characters, press «Знайти», and `Query.searchUsers` answers with
+  identity only. A picker preloaded with every account would be both a slow first paint and a
+  directory of the university handed to anyone who can delegate.
+
+Success is reported as «Доступ надано» or «Рівень доступу оновлено», the second being what the
+mutation's `UPDATED` status means. Failures come back as named statuses and are shown in Ukrainian:
+`FORBIDDEN`, `LEVEL_ABOVE_OWN` (you cannot give away more than you hold), `INVALID_GRANTEE`,
+`UNKNOWN_RESOURCE_TYPE`, `UNKNOWN_ACCESS_LEVEL`, and — for revoke — `PERMISSION_NOT_FOUND` plus the
+sentence that explains the strict-ancestor rule rather than just refusing. A failed level change
+also reloads the list, so the row stops showing a value that was not accepted.
+
+Two implementation notes worth keeping. The level dropdown binds `[selected]` on each `<option>`
+rather than `[value]` on the `<select>`: Angular applies a select's own property binding before
+`@for` has created any options, so the assignment matches nothing, the browser falls back to the
+first option, and the binding is never re-applied because the value it holds has not changed — the
+row then reads «Редагування» whatever the grant says. And when the caller does not hold `MANAGE` the
+panel renders nothing at all; on the faculty and department pages the tab is hidden in that case, so
+only `/admin`, where any resource can be named by hand, can show an empty area.
 
 ### Administration console (`AdminPage`, `/admin`)
 
@@ -1789,13 +2173,11 @@ spec asked an administrator to be able to do, in one screen:
   statuses and are shown in Ukrainian. The users table gains an «Особа» column so the current state
   of every account is visible without opening anything. This is administrator-only for a reason
   worth stating: an account able to point itself at a lecturer could read that lecturer's workload.
-- **Grant/revoke permissions** — pick a grantee (a user or a group), a resource type (every entity
-  in `entities.ts` plus `GLOBAL` and the curriculum/scheduling entities that only have bespoke
-  drill-down UI, e.g. `WORKING_CURRICULUM_ITEM`), and — unless the type is `GLOBAL` — a resource
-  id; `grantPermission`/`revokePermission` enforce the delegation rule server-side (you can only
-  grant a scope you already hold). Selecting a resource also lists everyone who currently has a
-  grant on it (`Query.grantsForResource`), so an admin (or anyone with modify rights on that
-  resource) can review and revoke existing access.
+- **Access to any resource** — pick a resource type (every entity in `entities.ts` plus `GLOBAL` and
+  the curriculum/scheduling entities that only have bespoke drill-down UI, e.g.
+  `WORKING_CURRICULUM_ITEM`) and, unless the type is `GLOBAL`, an id; the same
+  `ResourceAccessPanel` described above then opens on it. `GLOBAL` is the one scope with no page of
+  its own, which is why this console keeps a way to name a resource by hand at all.
 
 ### Seeded accounts (local dev)
 
@@ -1834,8 +2216,9 @@ needs nothing more than one «+ Створити користувача».
   affected workload's blocks after either change.
 - **Manual scheduling still checks nothing.** The generator applies every timetable constraint as a
   hard filter, but the per-block form beside it does not: assigning a day/time/room by hand will
-  happily put a class inside a lecturer's `UNAVAILABLE` window, past a group's `NOT_AFTER`, or in a
-  room the workload doesn't allow. The one rule the form does apply is the start-time set, by
+  happily put a class inside a lecturer's `UNAVAILABLE` window, past a group's `NOT_AFTER`, in a
+  room the workload doesn't allow, or in a building the group cannot reach from its previous class
+  in the gap between them — which the generator now treats as a hard rule. The one rule the form does apply is the start-time set, by
   offering each block only its own set's times. The machinery exists but is not reachable:
   `timetable-solver.ts` exports only `parseMinutes` and `solveTimetable`, keeping `resolveRules`,
   `timeAllowed` and the room / `MAX_CLASSES_PER_DAY` checks module-private, so applying the same
@@ -1858,11 +2241,12 @@ needs nothing more than one «+ Створити користувача».
   [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) lists for the printed plan, surfacing here for the first
   time in front of the person it concerns. It also means the page cannot show a student what they
   have already passed: there is no enrolment or grade in the model at all.
-- **A route deeper than three path segments would 404 on reload** when the app is served from the
+- **A route deeper than six path segments would 404 on reload** when the app is served from the
   packaged jar rather than from `ng serve`. The service's deep-link fallback matches a fixed list of
   patterns rather than a catch-all, so that requests for real files still reach the static resource
-  handler; nothing today comes close (`/faculty/:id` is the deepest route in `app.routes.ts`), but
-  adding one means adding a pattern in `FrontendController` too. See the [service
+  handler; the deepest route in `app.routes.ts` is three (`/faculty/:id/:section`), so there is
+  double the headroom, but adding a seventh segment means adding a pattern in `FrontendController`
+  too. See the [service
   README](../timetable/README.md#serving-the-frontend-from-this-service).
 - **There is no unit-test suite in the frontend** — no `*.spec.ts`, no runner in `devDependencies`,
   and `npm test` (`ng test`) fails. Anywhere this README says a module *can* be unit-tested, read it
@@ -1876,7 +2260,7 @@ needs nothing more than one «+ Створити користувача».
   contrast, has `SchemaBuildTest`.
 - **`entity-pages.ts` declares fifteen components but routes thirteen.** `CombinedGroupPage` is
   deliberately unrouted (it is embedded in the Faculty page's "Об'єднані групи" tab). The other,
-  `BuildingPage`, is dead code: `/e/building` is claimed by `BuildingHome`, and the `BuildingPage`
+  `BuildingPage`, is dead code: `/building` is claimed by `BuildingHome`, and the `BuildingPage`
   that `app.routes.ts` imports is the unrelated drill-down component from `building-page.ts`. Two
   different classes share the name, and the generic one has no importer.
 - **The printed curriculum measures every specialty against the 25 % elective share of
@@ -1905,7 +2289,7 @@ needs nothing more than one «+ Створити користувача».
   presets and filters on `facultyId`, which is what makes a row created there satisfy
   `room_groups_scope_check` (a group may carry a faculty **or** a department, not both). The
   consequence is that a department-scoped group is invisible on the faculty page even when it
-  belongs to one of that faculty's departments, and can only be created from `/e/room-group` or from
+  belongs to one of that faculty's departments, and can only be created from `/room-group` or from
   the department page's own list. The tab is a scoped view, not the full picture — which is the
   right default, since a faculty-level group is the common case, but it means "this faculty has no
   room groups" should be read as "no faculty-scoped ones".

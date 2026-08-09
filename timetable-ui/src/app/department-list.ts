@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 
 interface Department {
   id: string;
@@ -30,7 +31,8 @@ export class DepartmentList implements OnInit, OnChanges {
    *  permission on the parent — see PermissionService#canCreate on the backend.) */
   canCreate = signal(false);
   /** Departments (by id) the user may edit. */
-  modifiableIds = signal<Set<string>>(new Set());
+  /** This user's access level per row; absent means they cannot touch that row at all. */
+  accessById = signal<Map<string, AccessLevel>>(new Map());
 
   showCreateForm = signal(false);
   createError = signal('');
@@ -43,28 +45,31 @@ export class DepartmentList implements OnInit, OnChanges {
   ngOnInit() { this.load(); this.loadPermissions(); }
   ngOnChanges() { this.load(); this.loadPermissions(); }
 
-  canModify(d: Department): boolean {
-    return this.auth.isAdmin() || this.modifiableIds().has(String(d.id));
+  canEdit(d: Department): boolean {
+    return allows(maxLevel(this.auth.globalLevel(), this.accessById().get(String(d.id))), 'EDIT');
   }
 
   private loadPermissions() {
     if (!this.facultyId) return;
-    if (this.auth.isAdmin()) {
+    if (this.auth.globalLevel() === 'MANAGE') {
       this.canCreate.set(true);
       return;
     }
-    this.auth.canModifyIds('FACULTY', [this.facultyId]).subscribe((ids) => this.canCreate.set(ids.has(this.facultyId)));
+    // Creating a child needs EDIT on the parent it is attached to — the same rule the server applies.
+    this.auth.accessLevel('FACULTY', this.facultyId)
+      .subscribe((level) => this.canCreate.set(allows(maxLevel(this.auth.globalLevel(), level), 'EDIT')));
   }
 
   load() {
     if (!this.facultyId) return;
-    const q = `{ departments { departmentConnection(limit: 200, facultyId: "${this.facultyId}") { nodes { id name abbreviation email phone } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($facultyId: ID, $limit: Int!) { departments { departmentConnection(limit: $limit, facultyId: $facultyId) { nodes { id name abbreviation email phone } } } }`;
+    this.gql.request(q, { facultyId: this.facultyId, limit: 200 }).subscribe({
       next: (d: any) => {
         const nodes = d.departments.departmentConnection.nodes;
         this.departments.set(nodes);
-        if (!this.auth.isAdmin() && nodes.length) {
-          this.auth.canModifyIds('DEPARTMENT', nodes.map((n: Department) => n.id)).subscribe((ids) => this.modifiableIds.set(ids));
+        if (this.auth.globalLevel() !== 'MANAGE' && nodes.length) {
+          this.auth.accessLevels('DEPARTMENT', nodes.map((n: Department) => String(n.id)))
+            .subscribe((levels) => this.accessById.set(levels));
         }
       },
       error: (e) => this.error.set(e.message)

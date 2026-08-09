@@ -188,7 +188,7 @@ public class DynamicGraphQLSchemaBuilder {
         registerMutationFetchers(codeRegistry, mutationsByEntity, fetchers);
         registerRelationFetchers(codeRegistry, schemaDef.getTypes(), fetchers);
         if (globalPropertyFetchers != null) {
-            registerGlobalPropertyFetchers(codeRegistry, globalPropertyFetchers);
+            registerGlobalPropertyFetchers(codeRegistry, fetchers, globalPropertyFetchers);
         }
         if (authFetchers != null) {
             registerAuthFetchers(codeRegistry, authFetchers);
@@ -290,12 +290,16 @@ public class DynamicGraphQLSchemaBuilder {
      * that interface — they're one-off additions for the one entity that doesn't fit the generic,
      * id-keyed CRUD model.
      */
-    private void registerGlobalPropertyFetchers(GraphQLCodeRegistry.Builder codeRegistry, DynamicDataFetchers fetchers) {
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "globalProperties"), fetchers.namespace());
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyQueries", "list"), fetchers.globalPropertyList());
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyQueries", "globalProperty"), fetchers.globalProperty());
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "globalProperties"), fetchers.namespace());
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyMutations", "updateGlobalProperty"), fetchers.updateGlobalProperty());
+    private void registerGlobalPropertyFetchers(GraphQLCodeRegistry.Builder codeRegistry,
+                                                 DataFetcherProvider authorizing, DynamicDataFetchers fetchers) {
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "globalProperties"), authorizing.namespace());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyQueries", "list"),
+            authorizing.authenticated(fetchers.globalPropertyList()));
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyQueries", "globalProperty"),
+            authorizing.authenticated(fetchers.globalProperty()));
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "globalProperties"), authorizing.namespace());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("GlobalPropertyMutations", "updateGlobalProperty"),
+            authorizing.globalSettingMutation(fetchers.updateGlobalProperty()));
     }
 
     // -------------------------------------------------------------------------
@@ -409,6 +413,23 @@ public class DynamicGraphQLSchemaBuilder {
             .build();
         builtTypes.put("Group", groupType);
 
+        // The three ordered access levels. An enum rather than a string so that a client cannot
+        // invent a fourth, and so introspection documents what each one means for anyone building
+        // against the API.
+        GraphQLEnumType accessLevelEnum = newEnum().name("AccessLevel")
+            .value("EDIT", "EDIT", "Create and update this resource and everything below it; no deletes")
+            .value("FULL", "FULL", "EDIT, plus deleting")
+            .value("MANAGE", "MANAGE", "FULL, plus granting and revoking access to this resource and its descendants")
+            .build();
+        builtEnumTypes.put("AccessLevel", accessLevelEnum);
+
+        // What Query.accessLevels answers with: one row per resource the caller can reach.
+        builtTypes.put("ResourceAccess", newObject().name("ResourceAccess")
+            .field(newFieldDefinition().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
+            .field(newFieldDefinition().name("level").type(GraphQLNonNull.nonNull(
+                GraphQLTypeReference.typeRef("AccessLevel"))))
+            .build());
+
         GraphQLObjectType permissionGrantType = newObject().name("PermissionGrant")
             .field(newFieldDefinition().name("id").type(GraphQLNonNull.nonNull(GraphQLID)))
             .field(newFieldDefinition().name("granteeType").type(GraphQLNonNull.nonNull(GraphQLString))
@@ -416,8 +437,15 @@ public class DynamicGraphQLSchemaBuilder {
             .field(newFieldDefinition().name("user").type(GraphQLTypeReference.typeRef("User")))
             .field(newFieldDefinition().name("group").type(GraphQLTypeReference.typeRef("Group")))
             .field(newFieldDefinition().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString))
-                .description("The entity type this grant covers (e.g. FACULTY), or GLOBAL for full admin access"))
+                .description("The entity type this grant covers (e.g. FACULTY), or GLOBAL for university-wide scope"))
             .field(newFieldDefinition().name("resourceId").type(GraphQLID))
+            .field(newFieldDefinition().name("level").type(GraphQLNonNull.nonNull(
+                    GraphQLTypeReference.typeRef("AccessLevel")))
+                .description("What the grantee may do within the scope, and within everything below it"))
+            .field(newFieldDefinition().name("inherited").type(GraphQLBoolean)
+                .description("Set by grantsForResource: true when the grant sits on an ancestor of the " +
+                    "queried resource (or is university-wide) rather than on the resource itself, and " +
+                    "therefore cannot be revoked from there"))
             .field(newFieldDefinition().name("resourceLabel").type(GraphQLString)
                 .description("Best-effort human-readable label for the target resource"))
             .field(newFieldDefinition().name("grantedBy").type(GraphQLTypeReference.typeRef("User")))
@@ -430,7 +458,8 @@ public class DynamicGraphQLSchemaBuilder {
             .field(newFieldDefinition().name("firstName").type(GraphQLNonNull.nonNull(GraphQLString)))
             .field(newFieldDefinition().name("lastName").type(GraphQLNonNull.nonNull(GraphQLString)))
             .field(newFieldDefinition().name("mustChangePassword").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
-            .field(newFieldDefinition().name("isAdmin").type(GraphQLNonNull.nonNull(GraphQLBoolean)))
+            .field(newFieldDefinition().name("isAdmin").type(GraphQLNonNull.nonNull(GraphQLBoolean))
+                .description("Shorthand for holding GLOBAL at MANAGE — the only level that opens user and group administration"))
             .field(newFieldDefinition().name("lecturerId").type(GraphQLID)
                 .description("The lecturer this account belongs to, if any. At most one of lecturerId and studentId is ever set — a user is a Lecturer or a Student, or neither"))
             .field(newFieldDefinition().name("studentId").type(GraphQLID)
@@ -505,18 +534,28 @@ public class DynamicGraphQLSchemaBuilder {
             .description("Administrator-only: all user accounts"));
         queryBuilder.field(newFieldDefinition().name("groups")
             .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))));
-        queryBuilder.field(newFieldDefinition().name("canModifyResources")
-            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLID))))
-            .description("Given a resource type and a list of candidate ids, returns the subset the caller may modify")
+        queryBuilder.field(newFieldDefinition().name("searchUsers")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("User")))))
+            .description("Finds active accounts by name or e-mail, for the grantee picker on the access panels. " +
+                "Requires MANAGE somewhere; returns identity only. Queries shorter than two characters return nothing")
+            .argument(newArgument().name("query").type(GraphQLNonNull.nonNull(GraphQLString)))
+            .argument(newArgument().name("limit").type(GraphQLInt)));
+        queryBuilder.field(newFieldDefinition().name("accessLevels")
+            .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(
+                GraphQLTypeReference.typeRef("ResourceAccess")))))
+            .description("Given a resource type and candidate ids, returns the caller's access level on each. " +
+                "Ids the caller cannot reach at all are omitted rather than returned with a null level")
             .argument(newArgument().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString)))
             .argument(newArgument().name("resourceIds").type(GraphQLNonNull.nonNull(
                 GraphQLList.list(GraphQLNonNull.nonNull(GraphQLID))))));
         queryBuilder.field(newFieldDefinition().name("grantsForResource")
             .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("PermissionGrant")))))
-            .description("Lists who currently has modify access granted directly on this resource; requires the " +
-                "caller to already be able to manage grants on it themselves (see grantPermission)")
+            .description("Who can reach this resource, and at what level. Requires MANAGE on it. By default the " +
+                "answer includes grants inherited from ancestors and university-wide grants, marked inherited: true")
             .argument(newArgument().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString)))
-            .argument(newArgument().name("resourceId").type(GraphQLID)));
+            .argument(newArgument().name("resourceId").type(GraphQLID))
+            .argument(newArgument().name("includeInherited").type(GraphQLBoolean)
+                .description("Default true. Set false to see only the grants attached to this exact resource")));
     }
 
     private void addAuthMutationFields(GraphQLObjectType.Builder mutationBuilder) {
@@ -568,15 +607,20 @@ public class DynamicGraphQLSchemaBuilder {
             .argument(newArgument().name("groupId").type(GraphQLNonNull.nonNull(GraphQLID))));
 
         mutationBuilder.field(newFieldDefinition().name("grantPermission").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
-            .description("Grants modify access on a resource to a user or group; requires the caller to already " +
-                "be able to modify that resource themselves (or be an administrator)")
+            .description("Grants access on a resource to a user or group, or moves an existing grant to a " +
+                "different level. Requires MANAGE on the resource, and the granted level may not exceed the " +
+                "caller's own. errorStatus UPDATED (with isSuccess true) means an existing grant was re-levelled")
             .argument(newArgument().name("granteeType").type(GraphQLNonNull.nonNull(GraphQLString)).description("USER or GROUP"))
             .argument(newArgument().name("userId").type(GraphQLID))
             .argument(newArgument().name("groupId").type(GraphQLID))
             .argument(newArgument().name("resourceType").type(GraphQLNonNull.nonNull(GraphQLString)))
-            .argument(newArgument().name("resourceId").type(GraphQLID).description("Omit (null) only when resourceType is GLOBAL")));
+            .argument(newArgument().name("resourceId").type(GraphQLID).description("Omit (null) only when resourceType is GLOBAL"))
+            .argument(newArgument().name("level").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("AccessLevel")))));
 
         mutationBuilder.field(newFieldDefinition().name("revokePermission").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
+            .description("Withdraws a grant. Requires MANAGE inherited from above the grant's resource, or that " +
+                "the caller made the grant themselves — holding MANAGE on the same resource is not enough, so " +
+                "peers cannot unseat each other")
             .argument(newArgument().name("permissionId").type(GraphQLNonNull.nonNull(GraphQLID))));
     }
 
@@ -584,7 +628,8 @@ public class DynamicGraphQLSchemaBuilder {
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "me"), fetchers.me());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "users"), fetchers.users());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "groups"), fetchers.groups());
-        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "canModifyResources"), fetchers.canModifyResources());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "searchUsers"), fetchers.searchUsers());
+        codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "accessLevels"), fetchers.accessLevels());
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Query", "grantsForResource"), fetchers.grantsForResource());
 
         codeRegistry.dataFetcher(FieldCoordinates.coordinates("Mutation", "login"), fetchers.login());

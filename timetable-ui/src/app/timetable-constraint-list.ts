@@ -1,6 +1,6 @@
 import { Component, Input, OnChanges, OnInit, WritableSignal, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { compareUk } from './sort';
 import { TimeSelect } from './time-select';
 
@@ -213,12 +213,18 @@ export class TimetableConstraintList implements OnInit, OnChanges {
     const m = this.meta;
     this.loading.set(true);
 
-    const q = `{ ${m.namespace} { ${m.connection}(limit: 500, offset: 0, ${m.filterArg}: "${this.scopeId}") { nodes {
+    // `m.filterArg` is metadata — `departmentId` for lecturers, `facultyId` for groups and rooms —
+    // so the argument *name* is assembled here. Its value is not: it goes through a variable named
+    // after whichever parameter this list scopes by.
+    const v = new GqlVars();
+    const args = `${v.arg('limit', 'Int!', 500)}, ${v.arg('offset', 'Int!', 0)}, `
+      + `${m.filterArg}: ${v.ref(m.filterArg, 'ID', this.scopeId)}`;
+    const q = `${v.declaration()}{ ${m.namespace} { ${m.connection}(${args}) { nodes {
       id ${m.selection}
       timetableConstraints { id constraintType dayOfWeek constraintValue }
     } } } }`;
 
-    this.gql.request(q).subscribe({
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         const dirtyBefore = new Map<string, Block>();
         for (const b of this.blocks()) {

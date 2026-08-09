@@ -69,10 +69,10 @@ time. Strings never appear in the inner loops.
 
 ### 1.2 The objective function
 
-Straight from the article's Eq. (1):
+The article's Eq. (1), with two terms of our own:
 
 ```
-f(σ) = Σ_{i=1..5} β_i · Π_i(σ)^{α_i},     β = (150, 100, 50, 5, 20),   α_i = 2
+f(σ) = Σ_{i=1..7} β_i · Π_i(σ)^{α_i},     β = (150, 100, 50, 90, 120, 5, 20),   α_i = 2
 ```
 
 | i | Π_i | β_i | Meaning |
@@ -80,8 +80,10 @@ f(σ) = Σ_{i=1..5} β_i · Π_i(σ)^{α_i},     β = (150, 100, 50, 5, 20),   �
 | 1 | lecturer conflicts | 150 | **H1** — two classes of one lecturer at overlapping times |
 | 2 | group conflicts | 100 | **H2** — two classes one academic group attends, overlapping |
 | 3 | room conflicts | 50 | **H3** — two classes in one room, overlapping |
-| 4 | lecturer windows | 5 | **S4** — idle academic hours between a lecturer's first and last class of a day |
-| 5 | group windows | 20 | **S5** — the same for an academic group |
+| 4 | group travel | 90 | **H4** — a group given less time between two classes than the walk between their buildings takes |
+| 5 | lecturer travel | 120 | **H5** — the same for a lecturer |
+| 6 | lecturer windows | 5 | **S6** — idle academic hours between a lecturer's first and last class of a day |
+| 7 | group windows | 20 | **S7** — the same for an academic group |
 
 The quadratic exponent penalises large accumulated violations of one kind more heavily than
 isolated ones, which pushes the search to eliminate a whole class of violations rather than shave a
@@ -100,7 +102,35 @@ weeksOverlap(p, q) ≡ p = WEEKLY ∨ q = WEEKLY ∨ p = q
 
 A pair in which **both** classes are immovable is not counted — see §3.
 
-**Π₄, Π₅ — windows.** For one entity, one day and one calendar week: sort that day's classes by
+**Π₄, Π₅ — travel.** Not in the article, and the reason they are here is that ЛНУ is not one
+building: it is nineteen, spread across Lviv, and a group sent from вул. Університетська 1 to вул.
+Черемшини 31 in the ten minutes between two bells does not arrive. A pair counts when one entity has
+both classes on the same day, in overlapping weeks, **not** overlapping in time, in different
+buildings, and
+
+```
+second.start − first.end  <  travel(building(first), building(second))
+```
+
+where `travel` is `building_travel_times`, which is *directed* — the journey made is the one
+checked, and the return leg may cost something else. Three absences are read as "no journey" rather
+than as a constraint: a room with no `building_id`, a building pair with no stored time, and — the
+one that matters most in practice — a database with no travel times at all, which skips the whole
+pass. Inventing a walk out of missing data would reject schedules the data does not object to.
+
+A stored time of zero counts as no journey too: the matrix accepts `0` as a legitimate value (two
+rooms in one building, entered explicitly), and the solver reads any non-positive figure as "nothing
+to cross". A pair in which **both** classes are immovable is skipped here exactly as it is for the
+conflict terms — no run could fix it, so counting it would only put a floor under `f`.
+
+Overlapping pairs are excluded deliberately: such a pair is already a clash counted by Π₁/Π₂/Π₃, and
+charging it again here would make one mistake cost two penalties and pull the search toward fixing
+it twice. Both terms are **hard** — `hardOf` sums Π₁..Π₅ — because a class nobody can reach is a
+class nobody attends. They sit just below their conflict counterparts (90 against 100, 120 against
+150) on the reading that a clash makes a timetable impossible while an unreachable pair makes it
+late; when the search must choose, it should resolve the double booking first.
+
+**Π₆, Π₇ — windows.** For one entity, one day and one calendar week: sort that day's classes by
 start, walk them keeping `reach = max(end so far)`, and sum `start_k − reach` wherever the next
 class starts after `reach` (so overlapping classes contribute no idle time). The sum is then divided
 by `academic_hour_duration_minutes` and floored, which is what turns "35 idle minutes" into 0
@@ -124,10 +154,11 @@ purely weekly schedule is not charged twice for the same gap.
    not a window.
 
 3. **The incumbent is compared lexicographically.** `f(σ)` is computed exactly as in Eq. (1), but
-   the *best-so-far* is chosen by `(Π₁+Π₂+Π₃, f)` rather than by `f` alone. Because Π₄/Π₅ are
+   the *best-so-far* is chosen by `(hard, f)` — where `hard` is `Π₁..Π₅`, every term a schedule
+   has to satisfy to be usable at all — rather than by `f` alone. Because Π₆/Π₇ are
    aggregates over the whole faculty, they grow much larger than the conflict counts, and squaring
    them would eventually make `f` prefer a schedule with a lecturer clash and fewer windows — never
-   the trade a deanery wants. (Concretely: on a 300-class faculty Π₅ ≈ 230, so `20·230² ≈ 1.06 M`,
+   the trade a deanery wants. (Concretely: on a 300-class faculty Π₇ ≈ 230, so `20·230² ≈ 1.06 M`,
    while one group conflict is `100·1² = 100`; a single window removed is worth ~9 200, ninety-two
    times a whole group clash.) The search structure in the paper already implies the ordering —
    Phase 2 only runs on a conflict-free schedule and checks constraint safety — so making it
@@ -192,6 +223,20 @@ us, a room belonging to another faculty, a group studying on another faculty's s
 measure windows), `semester_duration_weeks` (how many class sessions a workload's hours require) and
 `current_semester_parity` (which the tab already reads as the default for its own picker).
 
+### 2.5 Buildings and the walks between them
+
+Two maps, both read in the same request as the constraints above:
+
+- **`roomBuilding`** — each room's `building_id`, from `rooms { … building { id } }` on the scoped
+  room connection and on the by-id lookup for rooms belonging to other faculties. A room with no
+  building simply has no entry.
+- **`buildingTravel`** — every row of `building_travel_times`, keyed `"<from>><to>"`. Directed, so
+  the two directions are separate entries and may differ.
+
+Neither is required. With no travel rows at all the Π₄/Π₅ pass is skipped outright and the solver
+behaves exactly as it did before these terms existed — which is what makes the feature additive for
+an institution that has not measured its walks.
+
 ---
 
 ## 3. Constraints
@@ -247,11 +292,15 @@ to another faculty and does not even have its own constraints loaded.
 
 ### 3.2 Optimised — the objective
 
-H1/H2/H3 conflicts and S4/S5 windows are what `f(σ)` minimises. They are *not* filtered out, because
+H1/H2/H3 conflicts, H4/H5 travel and S6/S7 windows are what `f(σ)` minimises. They are *not* filtered out, because
 a heavily loaded faculty may have no conflict-free schedule at all and a schedule with two clashes
 you can see is more useful than a refusal. What remains is listed in the result, by day and by the
 two classes involved — up to a cap of 200 entries, since a genuinely over-subscribed instance can
 produce thousands and the point of the list is to be read.
+
+The report distinguishes five kinds, not three: `LECTURER`, `GROUP` and `ROOM` for the overlaps, and
+`GROUP_TRAVEL` / `LECTURER_TRAVEL` for a pair nobody can walk between in the gap they were given.
+The tab labels each line accordingly, so an unreachable pair is not read as a double booking.
 
 A clash between two classes that are **both** immovable is not counted: no run could resolve it, and
 counting it would put a floor under `f` that the search would chase forever. (The seeded ФПМІ data
@@ -279,8 +328,13 @@ interface Gene {
   rooms: Int32Array       // admissible room indices
   day, timeIdx, room, parity: number     // current placement; day = -1 means unplaced
   start, end: number                     // minutes since midnight, derived from timeIdx
+  building: number                       // interned index of the current room's building, -1 if none
 }
 ```
+
+`building` is maintained alongside `room` on every placement, so Π₄/Π₅ can be evaluated without a
+map lookup per pair. `travelMatrix` is interned the same way — a flat `Int32Array` indexed
+`from · buildings + to` — and `travelKnown` records whether it holds anything at all.
 
 The array is laid out in one deliberate order:
 
@@ -418,7 +472,7 @@ solveTimetable(problem, opts, onProgress, shouldStop):
             stagnation ← stagnation + 1
             intensity ← max(0.15, intensity − 0.5δ)
 
-        if hard(bestV) = 0 and Π₄ = Π₅ = 0: break     # f(σ) = 0, nothing left to find
+        if hard(bestV) = 0 and Π₆ = Π₇ = 0: break     # f(σ) = 0, nothing left to find
 
         if stagnation ≥ 30:                           # §5.7
             restore(best);  emit(PERTURB)
@@ -521,8 +575,8 @@ from a constructed schedule. With one individual instead of a population of twen
 would spend the whole budget doing what the greedy pass does in one sweep. On the 120-class instance
 of §8, construction alone already reaches Π₁ = Π₂ = Π₃ = 0 — every hard conflict gone before the
 local search has run once — so everything that follows is window reduction. It is not close to
-finished, though: `f` after construction is 352 225 (Π₄ = 109, Π₅ = 121) against 6 705 (Π₄ = 21,
-Π₅ = 15) at the end of a three-second budget. Feasibility is what greedy gives you cheaply; quality
+finished, though: `f` after construction is 352 225 (Π₆ = 109, Π₇ = 121) against 6 705 (Π₆ = 21,
+Π₇ = 15) at the end of a three-second budget. Feasibility is what greedy gives you cheaply; quality
 is what the rest of the run is for.
 
 Note that the ordering is static — computed once from the domain sizes — rather than the dynamic
@@ -632,11 +686,11 @@ windowPhase(maxMoves):
     for move in 1..maxMoves:
         worst ← argmax over a sample of ≤250 placed movable genes of windowCostAt(i, day(i))
         if none has a positive cost: return
-        beforeScore ← 5·Π₄² + 20·Π₅²
+        beforeScore ← 5·Π₆² + 20·Π₇²
         cand ← scanBest(worst, wantWindows = true)
         if cand = null, or cand has the same (day, time, room), or cand.overlap > 0: return
         place(worst, cand)
-        if 5·Π₄² + 20·Π₅² ≥ beforeScore: undo the move; return
+        if 5·Π₆² + 20·Π₇² ≥ beforeScore: undo the move; return
 ```
 
 (The "same placement" test compares day, time and room but not parity, so a candidate that only
@@ -790,7 +844,7 @@ vary while the outcome does not):
    intervals, and A ends at 10:20 while C starts at 10:40. `windowCostAt(C, Tue) = 0` too — that
    20-minute gap floors to zero academic hours. Placed.
 
-Result after construction: Π₁ = Π₂ = Π₃ = 0 and Π₄ = Π₅ = 0, so `f = 0` and the outer loop's first
+Result after construction: Π₁ = Π₂ = Π₃ = 0, Π₄ = Π₅ = 0 and Π₆ = Π₇ = 0, so `f = 0` and the outer loop's first
 check breaks before a single local-search round runs.
 
 **Now change one thing** that looks harmless: give `G2` a `NOT_BEFORE 10:00`. The 09:00 bell leaves
@@ -825,9 +879,10 @@ number of classes an entity has in one day (~5).
 | one `scanBest` | `O(S · A · E · k)` worst case; far less with (P1)/(P2) and (E1)/(E2) |
 | construction | `V` scans, plus `O(V log V)` for the order |
 | one Phase 1 round | `O(V · intensity · S · A · E · k)` |
-| `windowTotal` (Π₄, Π₅) | `O(entities · days · k log k)` — a sort per bucket per week |
+| `windowTotal` (Π₆, Π₇) | `O(entities · days · k log k)` — a sort per bucket per week |
 | `conflictTotal` (Π₁, Π₂, Π₃) | `O(entities · days · k²)` — all pairs inside each bucket |
-| `measure()` (all five Π) | the two above, summed |
+| `travelTotal` (Π₄, Π₅) | the same `O(entities · days · k²)`, over the group and lecturer buckets only — a room does not walk anywhere. Skipped entirely when no building pair has a stored time |
+| `measure()` (all seven Π) | the three above, summed |
 | one Phase 2 move | picking the gene: `O(min(V, 250) · E · k log k)`; then one `scanBest` and **two** `totalWindowScore()` sweeps, each of `windowTotal`'s order |
 | `snapshot` | `O(V)` — a flat copy |
 | `restore` | `O(V · E · k)` — a `place` per movable gene, and each one re-indexes |
@@ -845,9 +900,9 @@ main grid plus a 2-bell PE grid, under Node 22 on one core:
 
 | Instance | Budget | Outcome | Outer iterations |
 |---|---|---|---|
-| 120 classes | 3 s | conflict-free; Π₄ = 21, Π₅ = 15 | 8 146 |
-| 300 classes + constraint tables | 5 s | conflict-free; Π₄ = 240, Π₅ = 227 | 3 440 |
-| 300 classes + 12 external | 5 s | Π₁ = 1 (provably unavoidable), Π₂ = Π₃ = 0; Π₄ = 329, Π₅ = 240 | 6 579 |
+| 120 classes | 3 s | conflict-free; Π₆ = 21, Π₇ = 15 | 8 146 |
+| 300 classes + constraint tables | 5 s | conflict-free; Π₆ = 240, Π₇ = 227 | 3 440 |
+| 300 classes + 12 external | 5 s | Π₁ = 1 (provably unavoidable), Π₂ = Π₃ = 0; Π₆ = 329, Π₇ = 240 | 6 579 |
 | 900 classes on 12 rooms (over-subscribed) | 8 s | 874 placed, 26 unplaceable under a 2-per-day cap; Π₁ = 187, Π₂ = 338, Π₃ = 458 | 23 |
 
 Read these as indicative, not as fixtures. The search is deterministic *given the number of
@@ -904,7 +959,7 @@ search itself. (`shouldStop` is still honoured by the inline, no-worker path use
 
 ### What the modal reports while it runs
 
-Each `SolverProgress` carries the phase, the elapsed time, `f(σ)` and all five Π_i separately, how
+Each `SolverProgress` carries the phase, the elapsed time, `f(σ)` and all seven Π_i separately, how
 many blocks are placed out of how many this run may move, how many are currently unplaced, plus the
 temperature, the adaptive intensity and the stagnation counter. The Π decomposition is shown as a
 table with each term's β and its contribution, so it is visible at a glance whether the run is still
@@ -944,8 +999,16 @@ fighting conflicts or has moved on to windows.
 - **Stability across runs with different budgets.** A longer budget may produce a wholly different
   arrangement of equal quality. There is no term rewarding similarity to the previous timetable.
 - **Atomicity of the write.** See §9.
-- **Anything the model does not know.** Room capacity versus group size, travel time between
-  buildings, a lecturer's preference for mornings that they never entered as a constraint.
+- **Anything the model does not know.** Room capacity versus group size, a lecturer's preference for
+  mornings that they never entered as a constraint. (Travel time between buildings *was* on this list
+  and no longer is — it is Π₄/Π₅ — but only where somebody has entered the figures.)
+- **Travel during Phase 2.** The window-reduction phase accepts or rejects a move on its window
+  score alone, so a move that shortens a window may put the class in another building and create a
+  Π₄/Π₅ violation. The next `measure()` sees it and Phase 1 unpicks it, but within the phase the
+  "cannot make things worse" property holds for conflicts and windows, not for travel.
+- **What the modal shows.** The Π table lists the five terms it always listed; the two travel terms
+  are counted in `f(σ)` and in the hard total, but have no row of their own, so the table's
+  contributions no longer add up to the `f(σ)` printed above it.
 
 ---
 
@@ -967,7 +1030,7 @@ fighting conflicts or has moved on to windows.
 | `lecBuckets` / `grpBuckets` / `roomBuckets`, `indexInsert`, `indexRemove`, `place` | ScheduleIndex (§4.2) |
 | `clashesIn`, `overlapAt`, `overlapOf` | Eq. (2) |
 | `dayLoadExceeds`, `placementAllowed` | the dynamic hard rules (§3.1) |
-| `windowsIn`, `windowTotal`, `conflictTotal`, `measure`, `objectiveOf` | the objective (§1.2) |
+| `windowsIn`, `windowTotal`, `conflictTotal`, `travelTotal`, `travelBetween`, `hardOf`, `measure`, `objectiveOf` | the objective (§1.2) |
 | `scanBest`, `windowCostAt` | the candidate scan (§5.2) |
 | `construct`, `constructionFailures`, `pendingUnplaced` | construction (§5.3) |
 | `repairPhase`, `swapPlacements`, `tabu`, `tabuKey`, `temperature` | Phase 1 (§5.4) |
@@ -977,8 +1040,8 @@ fighting conflicts or has moved on to windows.
 | `emit`, the `while` loop, `collectConflicts` | the top level (§5.1) and the report |
 
 `timetable-solver.worker.ts` is the message boundary: `SerializedProblem` (the three constraint
-`Map`s flattened to entry arrays), `SolverRequest` (`solve` / `cancel`) and `SolverResponse`
-(`progress` / `done` / `error`).
+`Map`s plus `roomBuilding` and `buildingTravel`, all five flattened to entry arrays), `SolverRequest`
+(`solve` / `cancel`) and `SolverResponse` (`progress` / `done` / `error`).
 
 `faculty-timetable-list.ts` holds everything that talks to the outside: `buildProblem` (up to three
 GraphQL requests — the faculty-scoped constraints, the by-id extras when a workload reaches outside
@@ -1006,7 +1069,8 @@ shares no code with the solver — every placement's room is in the requirement'
 the faculty's rooms when it has none), its start time belongs to the workload's set, its parity
 matches its periodicity, no `NOT_BEFORE`/`NOT_AFTER`/`UNAVAILABLE` is broken, no per-day cap is
 exceeded in either calendar week, and a from-scratch pairwise conflict count matches the reported
-Π₁/Π₂/Π₃. That last equality is what catches index bookkeeping bugs, which are otherwise silent.
+Π₁/Π₂/Π₃ — and, over the same pairs, a from-scratch travel check matches Π₄/Π₅. Those two equalities
+are what catch index bookkeeping bugs, which are otherwise silent.
 
 Cases worth pinning individually:
 
@@ -1020,7 +1084,11 @@ Cases worth pinning individually:
 - a locked requirement appearing in no assignment at all;
 - a requirement whose domain is empty being reported and, if it has a current placement, kept there;
 - determinism: two runs with the same seed and the same iteration bound produce identical
-  assignments.
+  assignments;
+- travel: a directed pair whose two directions differ, so that the journey actually made is the one
+  charged; a room with no `building_id` and a building pair with no row, both of which must cost
+  nothing; an empty travel table, which must skip the pass and reproduce the pre-travel result
+  exactly; and a pair of immovable classes in different buildings, which must not be counted.
 
 ---
 
@@ -1028,7 +1096,7 @@ Cases worth pinning individually:
 
 - **Make `measure()` incremental.** It is the one part of the loop that costs `O(faculty)` per
   iteration regardless of how little moved. Maintaining Π₁–Π₃ as deltas inside `place` is
-  straightforward; Π₄/Π₅ need per-(entity, day) window caches invalidated on the days a move
+  straightforward; Π₆/Π₇ need per-(entity, day) window caches invalidated on the days a move
   touches. This is what would lift the 900-class instance in §8 from 23 iterations to thousands.
 - **A full memetic algorithm.** The article's population of 20 with three-parent crossover, adaptive
   mutation and selective LS is a strict superset of what runs here; the objective, the index and the

@@ -19,11 +19,20 @@ import {
   solveTimetable
 } from './timetable-solver';
 
-/** `SolverProblem` with its three constraint maps flattened, so the message is plain data. */
-export interface SerializedProblem extends Omit<SolverProblem, 'lecturerConstraints' | 'groupConstraints' | 'roomConstraints'> {
+/**
+ * `SolverProblem` with every map flattened, so the message is plain data.
+ *
+ * `structuredClone` does carry a `Map` across, so the two travel maps would survive untouched — but
+ * "the message is plain data" is a rule worth keeping whole rather than one that holds for three
+ * fields and not for five.
+ */
+export interface SerializedProblem extends Omit<SolverProblem,
+  'lecturerConstraints' | 'groupConstraints' | 'roomConstraints' | 'roomBuilding' | 'buildingTravel'> {
   lecturerConstraints: [string, SolverConstraint[]][];
   groupConstraints: [string, SolverConstraint[]][];
   roomConstraints: [string, SolverConstraint[]][];
+  roomBuilding: [string, string][];
+  buildingTravel: [string, number][];
 }
 
 export type SolverRequest =
@@ -50,7 +59,9 @@ addEventListener('message', ({ data }: MessageEvent<SolverRequest>) => {
       ...data.problem,
       lecturerConstraints: new Map(data.problem.lecturerConstraints),
       groupConstraints: new Map(data.problem.groupConstraints),
-      roomConstraints: new Map(data.problem.roomConstraints)
+      roomConstraints: new Map(data.problem.roomConstraints),
+      roomBuilding: new Map(data.problem.roomBuilding),
+      buildingTravel: new Map(data.problem.buildingTravel)
     };
     const result = solveTimetable(
       problem,

@@ -1,8 +1,9 @@
 import { Directive, Input, OnChanges, OnInit, SimpleChanges, computed, inject, signal } from '@angular/core';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { EntityMeta, FieldMeta, entityBySingle, toOptions } from './entities';
 import { Option } from './search-select';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { toResourceType } from './resource-type';
 
 /** Shared CRUD logic for every entity page. Subclasses only provide `meta`. */
@@ -111,8 +112,8 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   error = signal('');
   form: Record<string, any> = {};
 
-  /** ids (of this page's entity type) the current user is allowed to update/delete. */
-  modifiableIds = signal<Set<string>>(new Set());
+  /** The current user's access level per row id of this page's entity type; absent means none. */
+  accessById = signal<Map<string, AccessLevel>>(new Map());
 
   /** Whether the "+ Add" control should be shown at all — a coarse, cheap heuristic (any admin or
    *  any delegated permission at all); the actual create mutation is still authoritatively checked
@@ -123,15 +124,29 @@ export abstract class BaseEntity implements OnInit, OnChanges {
 
   /**
    * The route to a row's own page, or null when this entity has none. Declared once per entity in
-   * `entities.ts`, so every table of it — the standalone /e/… page and every embedding on a faculty
+   * `entities.ts`, so every table of it — the standalone table page and every embedding on a faculty
    * or department page alike — offers the same «Відкрити →».
    */
   detailLink(row: any): any[] | null {
     return this.meta.detailRoute ? ['/' + this.meta.detailRoute, row.id] : null;
   }
 
-  canModify(row: any): boolean {
-    return this.auth.isAdmin() || this.modifiableIds().has(String(row.id));
+  /** The level this user holds on a row — their university-wide grant, or the row's own, whichever is higher. */
+  levelOf(row: any): AccessLevel | null {
+    return maxLevel(this.auth.globalLevel(), this.accessById().get(String(row.id)));
+  }
+
+  canEdit(row: any): boolean {
+    return allows(this.levelOf(row), 'EDIT');
+  }
+
+  /**
+   * Deleting needs FULL, not EDIT. This is the one place the split is visible to a user: somebody
+   * who maintains this table every day sees «Редагувати» without «Видалити» beside it, and cannot
+   * remove a row — with everything under it — by mis-clicking.
+   */
+  canDelete(row: any): boolean {
+    return allows(this.levelOf(row), 'FULL');
   }
 
   private initialized = false;
@@ -147,11 +162,17 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     // presets changes do not need a reload — they only affect the create form
   }
 
-  private filterClause(): string {
+  /**
+   * The two optional scope filters, as arguments naming variables. Which of them apply is decided
+   * here, so the *argument names* are metadata (`meta.filterParam` is `facultyId` on one entity and
+   * `departmentId` on another) while the values they carry are not: each is bound to a variable of
+   * its own, named for the parameter it fills.
+   */
+  private filterClause(v: GqlVars): string {
     const m = this.meta;
     const parts: string[] = [];
-    if (m.filterParam && this._filterValue) parts.push(`${m.filterParam}: "${this._filterValue}"`);
-    if (this.extraFilterParam && this._extraFilterValue) parts.push(`${this.extraFilterParam}: "${this._extraFilterValue}"`);
+    if (m.filterParam && this._filterValue) parts.push(`${m.filterParam}: ${v.ref(m.filterParam, 'ID', this._filterValue)}`);
+    if (this.extraFilterParam && this._extraFilterValue) parts.push(`${this.extraFilterParam}: ${v.ref(this.extraFilterParam, 'ID', this._extraFilterValue)}`);
     return parts.length ? `, ${parts.join(', ')}` : '';
   }
 
@@ -177,23 +198,28 @@ export abstract class BaseEntity implements OnInit, OnChanges {
 
   load() {
     const m = this.meta;
-    const filter = this.filterClause();
-    const q = `{ ${m.namespace} { ${m.list}(limit: 1000, offset: 0${filter}) { nodes { ${this.selection()} } } } }`;
-    this.gql.request(q).subscribe({
+    const v = new GqlVars();
+    const paging = `${v.arg('limit', 'Int!', 1000)}, ${v.arg('offset', 'Int!', 0)}`;
+    const filter = this.filterClause(v);
+    const q = `${v.declaration()}{ ${m.namespace} { ${m.list}(${paging}${filter}) { nodes { ${this.selection()} } } } }`;
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
         const nodes = d[m.namespace][m.list].nodes;
         this.rows.set(nodes);
-        this.loadModifiablePermissions(nodes);
+        this.loadAccessLevels(nodes);
       },
       error: (e) => this.error.set(e.message)
     });
   }
 
-  /** Batched permission check for every loaded row's edit/delete buttons — see AuthService#canModifyIds. */
-  private loadModifiablePermissions(rows: any[]) {
-    if (this.auth.isAdmin() || rows.length === 0) return;
+  /** Batched permission check for every loaded row's edit/delete buttons — see AuthService#accessLevels. */
+  private loadAccessLevels(rows: any[]) {
+    // A university-wide MANAGE grant already answers every row; anything weaker still has to ask,
+    // because a grant on an individual row can be stronger than the global one.
+    if (this.auth.globalLevel() === 'MANAGE' || rows.length === 0) return;
     const resourceType = toResourceType(this.meta.name);
-    this.auth.canModifyIds(resourceType, rows.map((r) => String(r.id))).subscribe((ids) => this.modifiableIds.set(ids));
+    this.auth.accessLevels(resourceType, rows.map((r) => String(r.id)))
+      .subscribe((levels) => this.accessById.set(levels));
   }
 
   private loadOptions() {
@@ -203,8 +229,10 @@ export abstract class BaseEntity implements OnInit, OnChanges {
 
       if (f.parentFilter) {
         // Load ref entities with their parent's info (e.g. departments with faculty { id name })
-        const q = `{ ${r.namespace} { ${r.list}(limit: 1000) { nodes { id ${f.refLabel} faculty { id name } } } } }`;
-        this.gql.request(q).subscribe((d: any) => {
+        const v = new GqlVars();
+        const limit = v.arg('limit', 'Int!', 1000);
+        const q = `${v.declaration()}{ ${r.namespace} { ${r.list}(${limit}) { nodes { id ${f.refLabel} faculty { id name } } } } }`;
+        this.gql.request(q, v.values).subscribe((d: any) => {
           const opts = d[r.namespace][r.list].nodes.map((n: any) => ({
             id: n.id,
             label: n[f.refLabel!],
@@ -214,17 +242,22 @@ export abstract class BaseEntity implements OnInit, OnChanges {
         });
         // Load parent entities (faculties) for the filter
         const pf = f.parentFilter;
-        const pq = `{ ${pf.namespace} { ${pf.list}(limit: 1000) { nodes { id name } } } }`;
-        this.gql.request(pq).subscribe((d: any) => {
+        const pv = new GqlVars();
+        const pLimit = pv.arg('limit', 'Int!', 1000);
+        const pq = `${pv.declaration()}{ ${pf.namespace} { ${pf.list}(${pLimit}) { nodes { id name } } } }`;
+        this.gql.request(pq, pv.values).subscribe((d: any) => {
           const opts: Option[] = d[pf.namespace][pf.list].nodes.map((n: any) => ({ id: n.id, label: n.name }));
           this.options.update((o) => ({ ...o, [f.name + '_parent']: opts }));
         });
       } else {
         const refFilterVal = this._refFilters[f.name];
-        const extraFilter = refFilterVal && r.filterParam ? `, ${r.filterParam}: "${refFilterVal}"` : '';
-        const q = `{ ${r.namespace} { ${r.list}(limit: 1000${extraFilter}) { nodes { id ${f.refLabel} } } } }`;
-        this.gql.request(q).subscribe((d: any) => {
-          const opts: Option[] = d[r.namespace][r.list].nodes.map((n: any) => ({ id: n.id, label: `${n[f.refLabel!]} (#${n.id})` }));
+        const v = new GqlVars();
+        const limit = v.arg('limit', 'Int!', 1000);
+        const extraFilter = refFilterVal && r.filterParam
+          ? `, ${r.filterParam}: ${v.ref(r.filterParam, 'ID', refFilterVal)}` : '';
+        const q = `${v.declaration()}{ ${r.namespace} { ${r.list}(${limit}${extraFilter}) { nodes { id ${f.refLabel} } } } }`;
+        this.gql.request(q, v.values).subscribe((d: any) => {
+          const opts: Option[] = d[r.namespace][r.list].nodes.map((n: any) => ({ id: n.id, label: n[f.refLabel!] }));
           this.options.update((o) => ({ ...o, [f.name]: opts }));
         });
       }
@@ -241,8 +274,22 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     return toOptions(f.enumOptions || []);
   }
 
+  /**
+   * The route to the entity a `ref` column points at, or null when that entity has no page of its
+   * own (or the column is empty). The cell used to print the referenced row's database id beside
+   * its name — «Дискретна математика (#42)» — which is the only thing that told two same-named rows
+   * apart and the only way to get from one to the other. A link does both, and does the second one
+   * properly: the id was never something to be read, only something to be looked up.
+   */
+  refLink(row: any, f: FieldMeta): any[] | null {
+    if (f.type !== 'ref' || !f.ref) return null;
+    const target = row[f.relation!];
+    const meta = entityBySingle(f.ref);
+    return target && meta?.detailRoute ? ['/' + meta.detailRoute, target.id] : null;
+  }
+
   display(row: any, f: FieldMeta): any {
-    if (f.type === 'ref') return row[f.relation!] ? `${row[f.relation!][f.refLabel!]} (#${row[f.relation!].id})` : '—';
+    if (f.type === 'ref') return row[f.relation!] ? row[f.relation!][f.refLabel!] : '—';
     if (f.type === 'multiref') return (row[f.relation!] ?? []).map((x: any) => x[f.refLabel!]).join(', ') || '—';
     if (f.type === 'tags') return (row[f.relation!] ?? []).map((x: any) => x[f.tagField!]).join(', ') || '—';
     if (f.type === 'enum') {

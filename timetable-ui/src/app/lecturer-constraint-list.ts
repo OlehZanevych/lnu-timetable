@@ -157,13 +157,13 @@ export class LecturerConstraintList implements OnInit, OnChanges {
     if (!this.departmentId) return;
     this.loading.set(true);
 
-    const lecturers = `{ lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes {
+    const lecturers = `query($departmentId: ID, $limit: Int!, $offset: Int!) { lecturers { lecturerConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
       id firstName middleName lastName
       workloadConstraints { id constraintType value }
     } } } }`;
-    const property = `{ globalProperties { globalProperty(name: "default_max_hours_per_year") { value } } }`;
+    const property = `query($name: ID!) { globalProperties { globalProperty(name: $name) { value } } }`;
 
-    forkJoin({ l: this.gql.request(lecturers), p: this.gql.request(property) }).subscribe({
+    forkJoin({ l: this.gql.request(lecturers, { departmentId: this.departmentId, limit: 500, offset: 0 }), p: this.gql.request(property, { name: 'default_max_hours_per_year' }) }).subscribe({
       next: ({ l, p }: any) => {
         const raw = p.globalProperties.globalProperty?.value;
         const parsed = raw != null ? Number(raw) : NaN;

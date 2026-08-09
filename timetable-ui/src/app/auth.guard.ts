@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { CanActivateFn, Router, UrlTree } from '@angular/router';
+import { CanActivateFn, GuardResult, Router, UrlTree } from '@angular/router';
 import { catchError, map, of } from 'rxjs';
 import { AuthService } from './auth.service';
 
@@ -47,9 +47,26 @@ export const authGuard: CanActivateFn = (route, state) => {
   );
 };
 
-/** Guards /admin: requires an authenticated administrator. */
+/**
+ * Guards /admin: requires an authenticated administrator.
+ *
+ * It has to be able to *wait*. Angular runs a route's `canActivate` guards concurrently and takes
+ * the first non-`true` result in declaration order — so this one used to answer from an empty
+ * session while `authGuard`, beside it, was still fetching the profile. `isAdmin()` read `null`,
+ * this returned a redirect, and the redirect won: a bookmarked or reloaded `/admin` always bounced
+ * to the faculty home, and the page could only be reached by clicking the sidebar link from inside
+ * an already-loaded app. Resolving `me` here costs nothing extra — `AuthService.refreshMe` shares
+ * one request between however many callers ask in the same tick.
+ */
 export const adminGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  return auth.isAdmin() ? true : router.createUrlTree(['/']);
+
+  const decide = (): GuardResult => auth.isAdmin() ? true : router.createUrlTree(['/']);
+
+  // Not signed in at all is `authGuard`'s answer to give, not this one's; deciding here would send
+  // an anonymous visitor to the faculty home instead of to the login page they can act on.
+  if (!auth.isAuthenticated() || auth.currentUser()) return decide();
+
+  return auth.refreshMe().pipe(map(() => decide()), catchError(() => of(decide())));
 };

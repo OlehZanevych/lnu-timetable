@@ -37,8 +37,8 @@ export class BuildingHome {
   }
 
   load() {
-    const q = `{ buildings { buildingConnection(limit: 200) { nodes { id name address city postalCode } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { buildings { buildingConnection(limit: $limit) { nodes { id name address city postalCode } } } }`;
+    this.gql.request(q, { limit: 200 }).subscribe({
       next: (d: any) => this.buildings.set(d.buildings.buildingConnection.nodes),
       error: (e) => this.error.set(e.message)
     });

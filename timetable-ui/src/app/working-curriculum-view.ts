@@ -98,7 +98,7 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
   private load() {
     if (!this.specialtyId) return;
     this.loading.set(true);
-    const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType tags { tag } }
       hours { id hourType hours
@@ -110,7 +110,7 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
         }
       }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         this.items.set(d.curriculumItems.curriculumItemConnection.nodes.map(toPlanItem));
         this.error.set('');
@@ -122,8 +122,8 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
 
   private loadStudyForms() {
     if (!this.specialtyId) return;
-    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id studyForm } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id studyForm } } } }`;
+    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.studyForms.set(
         d.academicGroups.academicGroupConnection.nodes.map((g: any) => g.studyForm).filter(Boolean)),
       error: () => this.studyForms.set([])

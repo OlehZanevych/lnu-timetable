@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { HOUR_TYPE_OPTIONS, POSITION_OPTIONS, TEACHING_FORMAT_OPTIONS, positionLabel,
          termLabelShort, toOptions } from './entities';
 import { fmtNumber } from './curriculum-plan';
@@ -12,8 +13,12 @@ import { SearchSelect, Option } from './search-select';
 import { DeptFacultySelect, DeptOption } from './dept-faculty-select';
 import { compareUk } from './sort';
 import { courseLabel } from './course-label';
+import { sectionNav } from './section-route';
 
 type LecturerSection = 'info' | 'classes' | 'timetable';
+
+/** Which slugs `/lecturer/:id/:section` recognises — see `section-route.ts`. */
+const SECTION_KEYS: LecturerSection[] = ['info', 'classes', 'timetable'];
 
 interface LecturerInfo {
   id: string;
@@ -59,7 +64,7 @@ interface ClassRow {
  *
  * The info tab also edits and deletes the lecturer, exactly as `FacultyPage` does for a faculty: a
  * modal over the entity's own fields and a confirmation before `deleteLecturer`, both hidden unless
- * `canModifyIds('LECTURER', …)` says this account may — see the README's *Hiding UI the user can't
+ * `accessLevels('LECTURER', …)` says this account may — see the README's *Hiding UI the user can't
  * use*.
  */
 @Component({
@@ -89,10 +94,19 @@ export class LecturerDetailPage implements OnInit {
   classes = signal<ClassRow[]>([]);
   error = signal('');
   loading = signal(false);
-  activeSection = signal<LecturerSection>('info');
 
-  /** Whether the current user may edit/delete this Lecturer — see AuthService#canModifyIds. */
-  canModifyLecturer = signal(false);
+  /** The open tab, and the last segment of the URL — see `section-route.ts`. */
+  private nav = sectionNav<LecturerSection>(
+    () => ['/lecturer', this.lecturerId], () => SECTION_KEYS, () => 'info');
+  readonly activeSection = this.nav.active;
+
+  /**
+   * This user's level on this Lecturer. Two signals rather than one boolean, because the two buttons
+   * they gate are no longer the same right: «Редагувати» needs EDIT, «Видалити» needs FULL.
+   */
+  lecturerLevel = signal<AccessLevel | null>(null);
+  canModifyLecturer = computed(() => allows(maxLevel(this.auth.globalLevel(), this.lecturerLevel()), 'EDIT'));
+  canDeleteLecturer = computed(() => allows(maxLevel(this.auth.globalLevel(), this.lecturerLevel()), 'FULL'));
 
   showEditForm = signal(false);
   editError = signal('');
@@ -135,15 +149,10 @@ export class LecturerDetailPage implements OnInit {
     this.loadDegrees();
     this.loadDepartments();
     this.loadFaculties();
-    if (this.auth.isAdmin()) {
-      this.canModifyLecturer.set(true);
-    } else {
-      this.auth.canModifyIds('LECTURER', [this.lecturerId])
-        .subscribe((ids) => this.canModifyLecturer.set(ids.has(this.lecturerId)));
-    }
+    this.auth.accessLevel('LECTURER', this.lecturerId).subscribe((level) => this.lecturerLevel.set(level));
   }
 
-  selectSection(key: LecturerSection) { this.activeSection.set(key); }
+  selectSection(key: LecturerSection) { this.nav.select(key); }
 
   hourTypeLabel(v: string): string {
     return HOUR_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
@@ -157,7 +166,7 @@ export class LecturerDetailPage implements OnInit {
 
   private load() {
     this.loading.set(true);
-    const q = `{ lecturers { lecturer(id: "${this.lecturerId}") {
+    const q = `query($id: ID!) { lecturers { lecturer(id: $id) {
       id firstName middleName lastName email position
       academicDegree { id name }
       department { id name faculty { id name } }
@@ -183,7 +192,7 @@ export class LecturerDetailPage implements OnInit {
       }
     } } }`;
 
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { id: this.lecturerId }).subscribe({
       next: (d: any) => {
         const l = d.lecturers.lecturer;
         this.lecturer.set(l);
@@ -247,8 +256,8 @@ export class LecturerDetailPage implements OnInit {
   // ── Option lists for the edit form ────────────────────────────────────────
 
   private loadDegrees() {
-    const q = `{ academicDegrees { academicDegreeConnection(limit: 200) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { academicDegrees { academicDegreeConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 200 }).subscribe({
       next: (d: any) => this.degreeOptions.set(
         d.academicDegrees.academicDegreeConnection.nodes.map((x: any) => ({ id: x.id, label: x.name }))),
       error: () => {}
@@ -257,8 +266,8 @@ export class LecturerDetailPage implements OnInit {
 
   /** Departments carry their faculty so `DeptFacultySelect` can narrow them — see that component. */
   private loadDepartments() {
-    const q = `{ departments { departmentConnection(limit: 1000) { nodes { id name faculty { id name } } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { departments { departmentConnection(limit: $limit) { nodes { id name faculty { id name } } } } }`;
+    this.gql.request(q, { limit: 1000 }).subscribe({
       next: (d: any) => this.departmentOptions.set(
         d.departments.departmentConnection.nodes.map((x: any) => ({
           id: x.id, label: x.name, facultyId: x.faculty?.id ?? ''
@@ -268,8 +277,8 @@ export class LecturerDetailPage implements OnInit {
   }
 
   private loadFaculties() {
-    const q = `{ faculties { facultyConnection(limit: 200) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { faculties { facultyConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 200 }).subscribe({
       next: (d: any) => this.facultyOptions.set(
         d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name }))),
       error: () => {}
@@ -335,7 +344,7 @@ export class LecturerDetailPage implements OnInit {
 
   confirmDelete() {
     const dept = this.lecturer()?.department;
-    const back = dept ? ['/department', dept.id] : ['/e/lecturer'];
+    const back = dept ? ['/department', dept.id] : ['/lecturer'];
     const q = `mutation($id: ID!) { lecturers { deleteLecturer(id: $id) { isSuccess errorStatus } } }`;
     this.gql.request(q, { id: this.lecturerId }).subscribe({
       next: (d: any) => {

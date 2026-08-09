@@ -5,8 +5,12 @@ import { GraphqlService } from './graphql.service';
 import { StudentPage } from './entity-pages';
 import { SearchSelect } from './search-select';
 import { STUDY_FORM_OPTIONS, toOptions } from './entities';
+import { sectionNav } from './section-route';
 
 type GroupSection = 'info' | 'students';
+
+/** Which slugs `/academic-group/:id/:section` recognises — see `section-route.ts`. */
+const SECTION_KEYS: GroupSection[] = ['info', 'students'];
 
 interface AcademicGroup {
   id: string;
@@ -31,7 +35,13 @@ export class AcademicGroupDetailPage implements OnInit {
 
   group = signal<AcademicGroup | null>(null);
   error = signal('');
-  activeSection = signal<GroupSection>('info');
+
+  /** The open tab, and the last segment of the URL — see `section-route.ts`. */
+  private nav = sectionNav<GroupSection>(
+    () => ['/academic-group', this.groupId], () => SECTION_KEYS, () => 'info');
+  readonly activeSection = this.nav.active;
+
+  selectSection(key: GroupSection) { this.nav.select(key); }
 
   /** Pre-fills academicGroupId when creating a student. */
   readonly groupPreset: Record<string, string>;
@@ -57,8 +67,8 @@ export class AcademicGroupDetailPage implements OnInit {
   }
 
   private load() {
-    const q = `{ academicGroups { academicGroup(id: "${this.groupId}") { id name courseYear studyForm studentsCount specialty { id name faculty { id name } } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($id: ID!) { academicGroups { academicGroup(id: $id) { id name courseYear studyForm studentsCount specialty { id name faculty { id name } } } } }`;
+    this.gql.request(q, { id: this.groupId }).subscribe({
       next: (d: any) => {
         const g = d.academicGroups.academicGroup;
         this.group.set(g);

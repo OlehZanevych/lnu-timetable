@@ -4,8 +4,12 @@ import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
 import { ROOM_KIND_OPTIONS, toOptions } from './entities';
+import { sectionNav } from './section-route';
 
 type BuildingSection = 'info' | 'rooms';
+
+/** Which slugs `/building/:id/:section` recognises — see `section-route.ts`. */
+const SECTION_KEYS: BuildingSection[] = ['info', 'rooms'];
 
 interface Room {
   id: string;
@@ -40,7 +44,13 @@ export class BuildingPage implements OnInit {
 
   building = signal<Building | null>(null);
   error = signal('');
-  activeSection = signal<BuildingSection>('info');
+
+  /** The open tab, and the last segment of the URL — see `section-route.ts`. */
+  private nav = sectionNav<BuildingSection>(
+    () => ['/building', this.buildingId], () => SECTION_KEYS, () => 'info');
+  readonly activeSection = this.nav.active;
+
+  selectSection(key: BuildingSection) { this.nav.select(key); }
 
   // Edit building
   showEditForm = signal(false);
@@ -70,19 +80,19 @@ export class BuildingPage implements OnInit {
   // ── Data loading ──────────────────────────────────────────────────────────
 
   private loadBuilding() {
-    const q = `{ buildings { building(id: "${this.buildingId}") {
+    const q = `query($id: ID!) { buildings { building(id: $id) {
       id name address city postalCode
       rooms { id number name capacity kind faculty { id name } }
     } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { id: this.buildingId }).subscribe({
       next: (d: any) => this.building.set(d.buildings.building),
       error: (e) => this.error.set(e.message)
     });
   }
 
   private loadFaculties() {
-    const q = `{ faculties { facultyConnection(limit: 100) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { faculties { facultyConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 100 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name }));
         this.facultyOptions.set(opts);
@@ -144,7 +154,7 @@ export class BuildingPage implements OnInit {
     this.gql.request(q, { id: this.buildingId }).subscribe({
       next: (d: any) => {
         const res = d.buildings.deleteBuilding;
-        if (res.isSuccess) this.router.navigate(['/e/building']);
+        if (res.isSuccess) this.router.navigate(['/building']);
         else this.deleteError.set(res.errorStatus || 'Помилка видалення');
       },
       error: (e) => this.deleteError.set(e.message)

@@ -16,7 +16,7 @@
       </p>
     </div>
     <div class="faculty-header-actions">
-      @if (resolvedSection() === 'info' && canModifyCourse()) {
+      @if (resolvedSection() === 'info' && canDeleteCourse()) {
         <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
       }
     </div>
@@ -220,6 +220,8 @@
                   <td class="row-actions">
                     @if (canModifyItem(item)) {
                       <button type="button" class="ghost" (click)="openItemEdit(item)">Редагувати</button>
+                    }
+                    @if (canDeleteItem(item)) {
                       <button type="button" class="ghost danger" (click)="askRemoveItem(item)">Видалити</button>
                     }
                   </td>
@@ -307,6 +309,8 @@
                   <td class="row-actions">
                     @if (canModifyDelivery(d)) {
                       <button type="button" class="ghost" (click)="openWciEdit(d)">Редагувати</button>
+                    }
+                    @if (canDeleteDelivery(d)) {
                       <button type="button" class="ghost danger" (click)="askRemoveWci(d)">Видалити</button>
                     }
                   </td>
@@ -384,6 +388,8 @@
                     <td class="row-actions">
                       @if (canModifyWorkload(w)) {
                         <button type="button" class="ghost" (click)="openEntryEdit(w, e)">Редагувати</button>
+                      }
+                      @if (canDeleteWorkload(w)) {
                         <button type="button" class="ghost danger" (click)="askRemoveEntry(e)">Видалити</button>
                       }
                     </td>
@@ -463,6 +469,8 @@
                   <td class="row-actions">
                     @if (canModifyWorkload(w)) {
                       <button type="button" class="ghost" (click)="openWorkloadEdit(w)">Редагувати</button>
+                    }
+                    @if (canDeleteWorkload(w)) {
                       <button type="button" class="ghost danger" (click)="askRemoveWorkload(w)">Видалити</button>
                     }
                   </td>

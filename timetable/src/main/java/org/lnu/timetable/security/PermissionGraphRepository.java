@@ -5,9 +5,8 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.LinkedHashMap;
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Small, purpose-built reader for walking the permission-ancestor graph declared via
@@ -15,9 +14,23 @@ import java.util.Map;
  * separate from {@link org.lnu.timetable.framework.query.R2dbcQueryEngine} because its queries
  * (raw FK-column reads, join-table parent lookups) don't fit that engine's per-request,
  * selection-set-driven column projection model.
+ * <p>
+ * Every method here is <em>set-at-a-time</em>: it takes all the row ids the walk is currently
+ * standing on and returns all their parent edges in one statement. That shape is the whole point.
+ * The previous version read one row per call, so answering "which of these 200 courses may I edit?"
+ * cost 200 independent chains of round trips up the hierarchy — the same faculty fetched two
+ * hundred times. {@link PermissionEvaluator} now walks the graph breadth-first, one query per
+ * (table, edge) per level, which makes that same question a handful of statements regardless of how
+ * many rows are on screen.
  */
 @Component
 public class PermissionGraphRepository {
+
+    /** One resolved foreign key: {@code childId}'s {@code column} points at {@code parentId}. */
+    public record FkEdge(Long childId, String column, Long parentId) {}
+
+    /** One resolved join-table edge: {@code childId} is linked to {@code parentId}. */
+    public record JoinEdge(Long childId, Long parentId) {}
 
     private final DatabaseClient db;
 
@@ -25,28 +38,39 @@ public class PermissionGraphRepository {
         this.db = db;
     }
 
-    /** Reads the given FK columns of a single row, by id. Missing row -> empty map. */
-    public Mono<Map<String, Object>> fetchForeignKeys(String table, List<String> columns, Long id) {
-        if (columns.isEmpty()) return Mono.just(Map.of());
-        String sql = "SELECT " + String.join(", ", columns) + " FROM " + table + " WHERE id = :id";
-        return db.sql(sql).bind("id", id)
+    /**
+     * Reads the given FK columns for every id in {@code ids}, emitting one {@link FkEdge} per
+     * non-null value. Rows that do not exist, and columns that are null (an optional parent that
+     * was never set), simply produce nothing — an unreachable ancestor is indistinguishable from an
+     * absent one for authorization purposes, and both mean "this path grants nothing".
+     */
+    public Flux<FkEdge> fetchForeignKeys(String table, List<String> columns, Collection<Long> ids) {
+        if (columns.isEmpty() || ids.isEmpty()) return Flux.empty();
+        String sql = "SELECT id, " + String.join(", ", columns) + " FROM " + table + " WHERE id = ANY(:ids)";
+        return db.sql(sql).bind("ids", ids.toArray(new Long[0]))
             .map(row -> {
-                Map<String, Object> values = new LinkedHashMap<>();
-                for (String col : columns) {
-                    values.put(col, row.get(col));
-                }
-                return values;
+                Long childId = ((Number) row.get("id")).longValue();
+                return columns.stream()
+                    .map(column -> {
+                        Object raw = row.get(column);
+                        return raw == null ? null : new FkEdge(childId, column, ((Number) raw).longValue());
+                    })
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
             })
-            .one()
-            .onErrorResume(e -> Mono.just(Map.of()))
-            .defaultIfEmpty(Map.of());
+            .all()
+            .flatMapIterable(edges -> edges);
     }
 
-    /** Resolves the parent id(s) linked to {@code selfId} through a many-to-many join table. */
-    public Flux<Long> fetchJoinParentIds(String joinTable, String selfColumn, String parentColumn, Long selfId) {
-        String sql = "SELECT " + parentColumn + " AS parent_id FROM " + joinTable + " WHERE " + selfColumn + " = :id";
-        return db.sql(sql).bind("id", selfId)
-            .map(row -> ((Number) row.get("parent_id")).longValue())
+    /** Resolves the parent ids linked to each of {@code ids} through a many-to-many join table. */
+    public Flux<JoinEdge> fetchJoinParents(String joinTable, String selfColumn, String parentColumn,
+                                            Collection<Long> ids) {
+        if (ids.isEmpty()) return Flux.empty();
+        String sql = "SELECT " + selfColumn + " AS child_id, " + parentColumn + " AS parent_id " +
+            "FROM " + joinTable + " WHERE " + selfColumn + " = ANY(:ids)";
+        return db.sql(sql).bind("ids", ids.toArray(new Long[0]))
+            .map(row -> new JoinEdge(((Number) row.get("child_id")).longValue(),
+                ((Number) row.get("parent_id")).longValue()))
             .all();
     }
 

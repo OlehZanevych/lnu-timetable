@@ -104,18 +104,18 @@ export class LecturerWorkloadDetail implements OnInit, OnChanges {
 
   private load() {
     this.loading.set(true);
-    const lecturersQuery = `{
-      lecturers { lecturerConnection(limit: 500, offset: 0, departmentId: "${this.departmentId}") { nodes {
+    const lecturersQuery = `query($departmentId: ID, $id: ID!, $limit: Int!, $offset: Int!, $name: ID!) {
+      lecturers { lecturerConnection(limit: $limit, offset: $offset, departmentId: $departmentId) { nodes {
         id firstName middleName lastName position
         academicDegree { name }
         workloadConstraints { constraintType value }
       } } }
-      departments { department(id: "${this.departmentId}") { name faculty { name } } }
-      globalProperties { globalProperty(name: "default_max_hours_per_year") { value } }
+      departments { department(id: $id) { name faculty { name } } }
+      globalProperties { globalProperty(name: $name) { value } }
     }`;
 
     forkJoin({
-      meta: this.gql.request(lecturersQuery),
+      meta: this.gql.request(lecturersQuery, { departmentId: this.departmentId, id: this.departmentId, limit: 500, offset: 0, name: 'default_max_hours_per_year' }),
       workloads: loadDepartmentWorkloads(this.gql, this.departmentId)
     }).subscribe({
       next: ({ meta, workloads }: any) => {

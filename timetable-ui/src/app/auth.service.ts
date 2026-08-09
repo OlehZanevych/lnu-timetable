@@ -1,7 +1,8 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, map, tap } from 'rxjs';
+import { Observable, finalize, map, shareReplay, tap } from 'rxjs';
 import { GraphqlService } from './graphql.service';
+import { AccessLevel, allows } from './access-level';
 
 export interface CurrentGroup {
   id: string;
@@ -14,7 +15,15 @@ export interface PermissionGrant {
   granteeType: 'USER' | 'GROUP';
   resourceType: string;
   resourceId: string | null;
+  /** What the grantee may do inside the scope — and inside everything below it. */
+  level: AccessLevel;
   resourceLabel: string | null;
+  /**
+   * Only set by `grantsForResource`: the grant sits on an ancestor of the resource being inspected
+   * (or is university-wide) rather than on that resource itself, so it is shown as context and
+   * cannot be revoked from there.
+   */
+  inherited?: boolean;
 }
 
 export interface CurrentUser {
@@ -129,6 +138,15 @@ export class AuthService {
 
   isAuthenticated = computed(() => this.token() !== null);
   isAdmin = computed(() => this.currentUser()?.isAdmin ?? false);
+
+  /**
+   * The caller's university-wide level, if they hold a GLOBAL grant. `MANAGE` is what `isAdmin`
+   * means; `EDIT` or `FULL` is somebody trusted with everything except handing out access.
+   */
+  globalLevel = computed<AccessLevel | null>(
+    () => this.currentUser()?.permissions?.find((p) => p.resourceType === 'GLOBAL')?.level ?? null
+  );
+
   mustChangePassword = computed(() => this.currentUser()?.mustChangePassword ?? false);
 
   /**
@@ -179,8 +197,13 @@ export class AuthService {
 
   hasPersonLink = computed(() => this.personLink() !== null);
 
-  /** Cache of resourceType -> (id -> canModify) so list views don't re-query on every render. */
-  private modifyCache = new Map<string, Map<string, boolean>>();
+  /**
+   * Cache of resourceType -> (id -> level, or null for "no access") so list views don't re-query on
+   * every render. `null` is cached as deliberately as a level is: "this row is not yours" is an
+   * answer worth remembering, and without it every re-render re-asked about every row the user
+   * cannot touch — which, on a faculty page seen by a visitor, is all of them.
+   */
+  private accessCache = new Map<string, Map<string, AccessLevel | null>>();
 
   login(email: string, password: string): Observable<{ isSuccess: boolean; errorStatus?: string; mustChangePassword?: boolean }> {
     // Sign-in is an unauthenticated operation, and a token left over from the session that just
@@ -225,7 +248,7 @@ export class AuthService {
   clearSession(reason: SessionEndReason | null) {
     this.setToken(null);
     this.currentUser.set(null);
-    this.modifyCache.clear();
+    this.accessCache.clear();
     this.sessionEndReason.set(reason);
   }
 
@@ -284,15 +307,28 @@ export class AuthService {
   }
 
   /** Re-fetches Query.me; call after login and on app bootstrap when a token is already stored. */
+  /**
+   * The `me` request in flight, if there is one.
+   *
+   * Angular runs a route's `canActivate` guards *concurrently*, not in sequence, so on a cold load
+   * `authGuard` and `adminGuard` both reach for the profile in the same tick. Without this they
+   * would send two identical queries and race to write the same signal. One request, shared.
+   */
+  private meInFlight: Observable<CurrentUser | null> | null = null;
+
   refreshMe(): Observable<CurrentUser | null> {
+    if (this.meInFlight) return this.meInFlight;
     const q = `{ me { id email firstName lastName mustChangePassword isAdmin lecturerId studentId
       groups { id name description }
-      permissions { id granteeType resourceType resourceId resourceLabel }
+      permissions { id granteeType resourceType resourceId level resourceLabel }
     } }`;
-    return this.gql.request<{ me: CurrentUser | null }>(q).pipe(
+    this.meInFlight = this.gql.request<{ me: CurrentUser | null }>(q).pipe(
       tap((d) => this.currentUser.set(d.me)),
-      map((d) => d.me)
+      map((d) => d.me),
+      finalize(() => { this.meInFlight = null; }),
+      shareReplay({ bufferSize: 1, refCount: false })
     );
+    return this.meInFlight;
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<{ isSuccess: boolean; errorStatus?: string }> {
@@ -310,36 +346,59 @@ export class AuthService {
   }
 
   /**
-   * Returns which of `ids` (all of the given `resourceType`) the current user may modify, backed
-   * by a per-resourceType cache so re-rendering a list already checked doesn't re-query. Callers
-   * (see `BaseEntity`) should call this once after loading a list's rows.
+   * The current user's access level on each of `ids` (all of the given `resourceType`), backed by a
+   * per-resourceType cache so re-rendering a list already checked doesn't re-query. Callers (see
+   * `BaseEntity`) should call this once after loading a list's rows.
+   *
+   * Rows the user cannot reach at all are simply absent from the returned map. This replaced a
+   * yes/no `canModifyIds`: a boolean could not say whether the Delete button next to Edit should
+   * be there too, so every page drew both or neither.
    */
-  canModifyIds(resourceType: string, ids: string[]): Observable<Set<string>> {
-    const cache = this.modifyCache.get(resourceType) ?? new Map<string, boolean>();
-    this.modifyCache.set(resourceType, cache);
+  accessLevels(resourceType: string, ids: string[]): Observable<Map<string, AccessLevel>> {
+    const cache = this.accessCache.get(resourceType) ?? new Map<string, AccessLevel | null>();
+    this.accessCache.set(resourceType, cache);
     const uncached = ids.filter((id) => !cache.has(id));
+
+    const collect = () => {
+      const result = new Map<string, AccessLevel>();
+      for (const id of ids) {
+        const level = cache.get(id);
+        if (level) result.set(id, level);
+      }
+      return result;
+    };
 
     if (uncached.length === 0) {
       return new Observable((sub) => {
-        sub.next(new Set(ids.filter((id) => cache.get(id))));
+        sub.next(collect());
         sub.complete();
       });
     }
 
     const q = `query($resourceType: String!, $resourceIds: [ID!]!) {
-      canModifyResources(resourceType: $resourceType, resourceIds: $resourceIds)
+      accessLevels(resourceType: $resourceType, resourceIds: $resourceIds) { id level }
     }`;
-    return this.gql.request<{ canModifyResources: string[] }>(q, { resourceType, resourceIds: uncached }).pipe(
-      map((d) => {
-        const allowed = new Set(d.canModifyResources.map(String));
-        for (const id of uncached) cache.set(id, allowed.has(id));
-        return new Set(ids.filter((id) => cache.get(id)));
-      })
-    );
+    return this.gql
+      .request<{ accessLevels: { id: string; level: AccessLevel }[] }>(q, { resourceType, resourceIds: uncached })
+      .pipe(
+        map((d) => {
+          const granted = new Map(d.accessLevels.map((a) => [String(a.id), a.level] as const));
+          for (const id of uncached) cache.set(id, granted.get(id) ?? null);
+          return collect();
+        })
+      );
   }
 
-  /** Invalidate the cached modify-permission results (e.g. after a grantPermission/revokePermission mutation). */
-  clearModifyCache() {
-    this.modifyCache.clear();
+  /** Convenience for the many pages that ask about exactly one row. */
+  accessLevel(resourceType: string, id: string): Observable<AccessLevel | null> {
+    return this.accessLevels(resourceType, [id]).pipe(map((levels) => levels.get(id) ?? null));
+  }
+
+  /** Whether a level held (as returned above) is enough for a given action. */
+  allows = allows;
+
+  /** Invalidate the cached access levels (e.g. after a grantPermission/revokePermission mutation). */
+  clearAccessCache() {
+    this.accessCache.clear();
   }
 }

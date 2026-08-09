@@ -70,16 +70,16 @@ export class FacultyHome {
   }
 
   private loadFaculties() {
-    const q = `{ faculties { facultyConnection(limit: 100) { nodes { id name abbreviation building { id address } phone email website } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { faculties { facultyConnection(limit: $limit) { nodes { id name abbreviation building { id address } phone email website } } } }`;
+    this.gql.request(q, { limit: 100 }).subscribe({
       next: (d: any) => this.faculties.set(d.faculties.facultyConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
   }
 
   private loadBuildings() {
-    const q = `{ buildings { buildingConnection(limit: 100) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!) { buildings { buildingConnection(limit: $limit) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 100 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.buildings.buildingConnection.nodes.map((b: any) => ({ id: b.id, label: b.name }));
         this.buildingOptions.set(opts);

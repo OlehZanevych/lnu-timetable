@@ -679,3 +679,31 @@ button.danger:hover { background: #991b1b !important; }
 
 .cp-chip { display: inline-block; margin: 0 4px 3px 0; padding: 1px 7px; border-radius: 10px;
   background: #eef2f9; color: #55606e; font-size: 11px; white-space: nowrap; }
+
+/* ── Час переходу між корпусами (BuildingTravelTimesPage) ─────────────────────
+   A 19x19 grid of number inputs. The row headers carry the names and the column
+   headers only their numbers, because nineteen building names will not fit
+   across a screen and the row header is already the legend for both axes. */
+.btt-bar { display: flex; align-items: center; justify-content: space-between;
+           padding: 12px 16px; margin-bottom: 12px; position: sticky; top: 0; z-index: 3; }
+.btt-bar-actions { display: flex; gap: 8px; }
+.btt-card { overflow: auto; max-height: calc(100vh - 260px); padding: 0; }
+.btt-table { border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.btt-table th, .btt-table td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
+.btt-corner { position: sticky; left: 0; top: 0; z-index: 2; background: #f7f9fc;
+              padding: 6px 10px; text-align: left; white-space: nowrap; color: #6b7a90; font-weight: 500; }
+.btt-col { position: sticky; top: 0; z-index: 1; background: #f7f9fc; width: 46px;
+           padding: 6px 0; text-align: center; color: #6b7a90; font-weight: 600; }
+.btt-row { position: sticky; left: 0; z-index: 1; background: #fff; padding: 4px 10px;
+           text-align: left; white-space: nowrap; font-weight: 500; max-width: 260px; overflow: hidden;
+           text-overflow: ellipsis; }
+.btt-index { display: inline-block; min-width: 22px; color: #6b7a90; font-weight: 600; }
+.btt-self { background: #f2f5f9; text-align: center; color: #9aa7b8; }
+.btt-cell { padding: 0; text-align: center; }
+.btt-cell input { width: 46px; border: 0; background: transparent; padding: 6px 0;
+                  text-align: center; font: inherit; color: inherit; }
+.btt-cell input:focus { outline: 2px solid var(--blue); outline-offset: -2px; background: #fff; }
+.btt-cell input:disabled { color: #9aa7b8; }
+.btt-cell.dirty { background: #fff6e0; }
+.btt-cell.bad { background: #ffe6e6; }
+.btt-note { margin-top: 10px; }

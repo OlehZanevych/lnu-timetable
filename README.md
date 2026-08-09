@@ -53,9 +53,12 @@ items, working curriculum items, workloads, room assignment, timetable entries �
 level in place, so fixing one discipline no longer means visiting a specialty page, then a
 department page, then a faculty page in turn. An `ELECTIVE_GROUP` also manages its electives there.
 
-Alongside it: JWT sign-in with entity-scoped, cascading permissions; **«Мій кабінет»**, where an
-account linked to a викладач or a студент reads its own навантаження or навчальний план and its own
-розклад, defaulting to the half-year that is running; and four printable forms —
+Alongside it: JWT sign-in with entity-scoped, cascading permissions, at three ordered levels — edit,
+full (which adds deletion) and manage (which adds the right to hand the same access to somebody
+else, so a deanery delegates a кафедра itself rather than queuing behind an administrator);
+**«Мій кабінет»**, where an account linked to a викладач or a студент reads its own навантаження or
+навчальний план and its own розклад, defaulting to the half-year that is running; and four printable
+forms —
 the [**«Навчальний план»**](./timetable-ui/CURRICULUM-PDF.md) of a specialty, the
 [**«Робочий навчальний план»**](./timetable-ui/WORKING-CURRICULUM-PDF.md) of one of its academic
 years, the [**«Розрахунок навчального навантаження»**](./timetable-ui/WORKLOAD-PDF.md) of a
@@ -94,10 +97,19 @@ npm start
 
 `npm start` proxies `/graphql` to `http://localhost:8080`, so the service has to be up first.
 `timetable/scripts/reset_db.sh` re-applies both SQL files in one command, which is the usual way to
-pick up a schema change — see the service README's *Known limitations* for why that step is manual.
-Two files beside them apply one change each *without* dropping the database, for a deployment that
-already holds data: `global-properties-limits.sql` (the curriculum limits) and
-`users-person-link.sql` (the `users.lecturer_id` / `users.student_id` columns).
+pick up a schema change on a database you do not mind losing — see the service README's *Known
+limitations* for why that step is manual.
+
+A database you *do* mind losing is carried forward by **Flyway** instead: the migrations in
+`timetable/src/main/resources/db/migration` run at startup, in order, once each. There is no
+separate command — starting the service is what applies them, and it refuses to start if one fails.
+See the service README's [Migrations](./timetable/README.md#migrations-flyway) for what each one
+does and for the one dependency whose absence makes the whole mechanism silently do nothing.
+
+Everything *after* that first load is **Flyway's**. `db/migration/V*.sql` runs at startup, against a
+database the two files above have already created, so a deployment holding real data is carried
+forward instead of being rebuilt: see the service README's [Migrations
+(Flyway)](./timetable/README.md#migrations-flyway).
 
 Everything environment-specific lives in one file,
 [`timetable/src/main/resources/application-loc.properties`](./timetable/src/main/resources/application-loc.properties):
@@ -116,9 +128,9 @@ Sign in with one of the seeded accounts:
 That is the **only** seeded account. There is no sign-up screen anywhere — every other account is
 created from «Користувачі та права», by design — so the first thing a fresh database needs is for
 that administrator to create the accounts the institution actually wants, scope them with permission
-grants, and (for a lecturer or a student) point them at the person they belong to. The two seeded
-groups survive with no members, «Деканат ФПМіІ» still holding its `FACULTY` grant, ready to be
-populated.
+grants at the level each job actually needs, and (for a lecturer or a student) point them at the
+person they belong to. The two seeded groups survive with no members, «Деканат ФПМіІ» still holding
+its `FACULTY` grant, ready to be populated.
 
 ---
 
@@ -184,8 +196,8 @@ database once first.
 
 | Document | What it covers |
 |---|---|
-| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files), the generated GraphQL surface and its query catalogue, N+1-safe relation batching, authentication, the permission cascade, and the person link that says who an account is |
-| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI |
+| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files), the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, the levelled permission model and how it is evaluated, and the person link that says who an account is |
+| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI down to which button each level opens |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
 | [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, a traced example, complexity, and the code map |
@@ -240,7 +252,7 @@ lnu-timetable/
 │   │   ├── controller/   IndexController / FrontendController — the two owners of "/"
 │   │   ├── domain/       annotated POJOs, one per table
 │   │   ├── framework/    the config-driven engine (metadata → schema → SQL)
-│   │   └── security/     JWT + the entity-scoped permission model
+│   │   └── security/     JWT + the entity-scoped, levelled permission model
 │   ├── src/main/resources/
 │   │   ├── application.properties      what is the same in every environment
 │   │   ├── application-loc.properties  what is not: credentials, JWT secret, SQL
@@ -249,18 +261,16 @@ lnu-timetable/
 │   │   └── db/
 │   │       ├── schema.sql   DDL — starts with DROP SCHEMA public CASCADE
 │   │       ├── data.sql     the real LNU structure plus the ФПМІ 2025/2026 timetable
-│   │       ├── global-properties-limits.sql
-│   │       │                the curriculum limits alone, ON CONFLICT DO NOTHING —
-│   │       │                for a database seeded before they existed
-│   │       └── users-person-link.sql
-│   │                        the users.lecturer_id / users.student_id columns alone,
-│   │                        as ALTER TABLE — same purpose, same re-runnability
+│   │       └── migration/   Flyway migrations, applied at startup to a database
+│   │                        schema.sql has already created
 │   └── scripts/          reset/backup helpers, and the lnu.edu.ua import pipeline
 └── timetable-ui/         the Angular client
     ├── src/app/          pages, child-list widgets, form controls, and the pure modules
     ├── src/styles.css    every style in the app is global and lives here
     ├── public/fonts/     Liberation Serif subsets, fetched on demand by the PDF export
     └── scripts/
+        ├── check-graphql-variables.mjs  npm run lint:graphql — the one check that needs
+        │                                neither a service nor a browser
         └── workload-bench/  the benchmark for the workload generator: two Node scripts,
                              48 generated department instances, and the measured
                              before-and-after — see its own README
@@ -271,7 +281,8 @@ lnu-timetable/
 ## Status
 
 Local-development quality, and deliberately so in a few places the sub-READMEs each spell out under
-*Known limitations*: `schema.sql`/`data.sql` are applied by hand rather than by a migration tool, the
+*Known limitations*: `schema.sql`/`data.sql` are still applied by hand (Flyway carries a database
+forward from there but does not create it), the
 JWT secret and database password checked into `application-loc.properties` are dev-only values and
 that profile is active inside the packaged jar too, the CORS filter allows any origin, and the
 client has no automated tests. Read those sections — and *Running it as a single jar* above, for

@@ -14,18 +14,24 @@
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Ел. пошта</th><th>Ім'я</th><th>Прізвище</th><th>Особа</th><th>Тимч. пароль</th><th>Активний</th><th></th>
+        <th>Ел. пошта</th><th>Ім'я</th><th>Прізвище</th><th>Особа</th><th>Тимч. пароль</th><th>Активний</th><th></th>
       </tr>
     </thead>
     <tbody>
       @for (u of users(); track u.id) {
         <tr>
-          <td>{{ u.id }}</td>
           <td>{{ u.email }}</td>
           <td>{{ u.firstName }}</td>
           <td>{{ u.lastName }}</td>
           <td>
-            @if (personLabel(u)) { {{ personLabel(u) }} } @else { <span class="muted">&mdash;</span> }
+            @let p = person(u);
+            @if (p) {
+              @if (p.link) {
+                <a class="ent-link" [routerLink]="p.link">{{ p.role }}: {{ p.name }}</a>
+              } @else {
+                {{ p.role }}: {{ p.name }}
+              }
+            } @else { <span class="muted">&mdash;</span> }
           </td>
           <td>{{ u.mustChangePassword ? 'Так' : 'Ні' }}</td>
           <td>{{ u.isActive ? 'Так' : 'Ні' }}</td>
@@ -39,7 +45,7 @@
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="8" class="muted">Користувачів ще немає.</td></tr>
+        <tr><td colspan="7" class="muted">Користувачів ще немає.</td></tr>
       }
     </tbody>
   </table>
@@ -146,12 +152,12 @@
 <h3 class="hours-title" style="margin-top: 28px;">Групи</h3>
 <div class="card">
   <table>
-    <thead><tr><th>#</th><th>Назва</th><th>Опис</th></tr></thead>
+    <thead><tr><th>Назва</th><th>Опис</th></tr></thead>
     <tbody>
       @for (g of groups(); track g.id) {
-        <tr><td>{{ g.id }}</td><td>{{ g.name }}</td><td>{{ g.description || '&mdash;' }}</td></tr>
+        <tr><td>{{ g.name }}</td><td>{{ g.description || '&mdash;' }}</td></tr>
       } @empty {
-        <tr><td colspan="3" class="muted">Груп ще немає.</td></tr>
+        <tr><td colspan="2" class="muted">Груп ще немає.</td></tr>
       }
     </tbody>
   </table>
@@ -192,80 +198,54 @@
   </form>
 </div>
 
-<!-- ── Permission grants ── -->
+<!-- ── Access ── -->
 
-<h3 class="hours-title" style="margin-top: 28px;">Дозволи на редагування</h3>
+<h3 class="hours-title" style="margin-top: 28px;">Доступ до ресурсів</h3>
 <p class="muted">
-  Дозвіл, наданий на факультет/кафедру/спеціальність тощо, поширюється на всі пов'язані сутності
-  (наприклад дозвіл на факультет дає право редагувати його кафедри, спеціальності, навчальні плани,
-  навантаження викладачів тощо). Надати доступ можна лише в межах того, що ви самі можете редагувати
-  (або GLOBAL — повний доступ, лише для адміністратора).
+  Доступ, наданий на факультет / кафедру / спеціальність тощо, поширюється на все, що їм
+  підпорядковане — дозвіл на факультет дає право працювати з його кафедрами, спеціальностями,
+  академічними групами, навчальними планами, навантаженнями викладачів та розкладом. Рівень доступу
+  не слабшає донизу.
+</p>
+<p class="muted">
+  Рівні: <strong>Редагування</strong> — створення та зміна без видалення;
+  <strong>Повний доступ</strong> — те саме плюс видалення;
+  <strong>Керування доступом</strong> — те саме плюс право надавати доступ іншим у межах цього
+  ресурсу. Надати можна лише те, що маєте самі. <code>GLOBAL</code> — рівень усієї системи;
+  <code>GLOBAL</code> + «Керування доступом» і є адміністратор.
+</p>
+<p class="muted">
+  Цю саму панель деканат і завідувачі кафедр бачать на вкладці «Доступ» сторінки факультету
+  та кафедри — тут її можна навести на будь-який ресурс за типом та ідентифікатором.
 </p>
 
 <div class="card" style="padding: 16px 20px;">
-  @if (grantError()) { <p class="error">{{ grantError() }}</p> }
+  @if (targetError()) { <p class="error">{{ targetError() }}</p> }
 
   <form class="entity-form">
     <label>
       <span>Тип ресурсу *</span>
-      <select [(ngModel)]="grant.resourceType" name="grantResourceType">
+      <select [(ngModel)]="target.resourceType" name="targetResourceType">
         @for (rt of resourceTypes; track rt) {
           <option [value]="rt">{{ rt }}</option>
         }
       </select>
     </label>
-    @if (grant.resourceType !== 'GLOBAL') {
+    @if (target.resourceType !== 'GLOBAL') {
       <label>
         <span>ID ресурсу *</span>
-        <input type="text" [(ngModel)]="grant.resourceId" name="grantResourceId" />
+        <input type="text" [(ngModel)]="target.resourceId" name="targetResourceId" />
       </label>
     }
     <div class="actions">
-      <button type="button" class="ghost" [disabled]="grantsLoading()" (click)="loadGrantsForSelectedResource()">
-        {{ grantsLoading() ? 'Завантаження…' : 'Переглянути дозволи' }}
-      </button>
-    </div>
-  </form>
-
-  @if (grants().length) {
-    <table style="margin-top: 12px;">
-      <thead><tr><th>Кому</th><th>Тип</th><th></th></tr></thead>
-      <tbody>
-        @for (g of grants(); track g.id) {
-          <tr>
-            <td>
-              @if (g.granteeType === 'USER') { Користувач: {{ g.user?.email }} }
-              @else { Група: {{ g.group?.name }} }
-            </td>
-            <td>{{ g.granteeType }}</td>
-            <td><button type="button" class="ghost danger" (click)="revokeGrant(g)">Відкликати</button></td>
-          </tr>
-        }
-      </tbody>
-    </table>
-  }
-
-  <form class="entity-form" style="margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px;">
-    <label>
-      <span>Кому надати *</span>
-      <select [(ngModel)]="grant.granteeType" name="grantGranteeType">
-        <option value="USER">Користувачу</option>
-        <option value="GROUP">Групі</option>
-      </select>
-    </label>
-    @if (grant.granteeType === 'USER') {
-      <label>
-        <span>Користувач (ID) *</span>
-        <input type="text" [(ngModel)]="grant.userId" name="grantUserId" />
-      </label>
-    } @else {
-      <label>
-        <span>Група (ID) *</span>
-        <input type="text" [(ngModel)]="grant.groupId" name="grantGroupId" />
-      </label>
-    }
-    <div class="actions">
-      <button type="button" (click)="submitGrant()">+ Надати дозвіл</button>
+      <button type="button" class="ghost" (click)="showAccessFor()">Показати доступ</button>
     </div>
   </form>
 </div>
+
+@if (activeTarget(); as t) {
+  <div style="margin-top: 16px;">
+    <app-resource-access [resourceType]="t.resourceType" [resourceId]="t.resourceId"
+                         [resourceLabel]="t.resourceType === 'GLOBAL' ? 'усю систему' : (t.resourceType + ' #' + t.resourceId)" />
+  </div>
+}

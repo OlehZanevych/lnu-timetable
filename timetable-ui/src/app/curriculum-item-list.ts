@@ -1,7 +1,7 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { GraphqlService } from './graphql.service';
+import { GqlVars, GraphqlService } from './graphql.service';
 import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
@@ -157,8 +157,8 @@ export class CurriculumItemList implements OnInit, OnChanges {
   }
 
   private loadFacultyOptions() {
-    const q = `{ faculties { facultyConnection(limit: 1000, offset: 0) { nodes { id name } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!, $offset: Int!) { faculties { facultyConnection(limit: $limit, offset: $offset) { nodes { id name } } } }`;
+    this.gql.request(q, { limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: Option[] = d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name }));
         this.facultyOptions.set(opts);
@@ -168,8 +168,8 @@ export class CurriculumItemList implements OnInit, OnChanges {
   }
 
   private loadDepartmentOptions() {
-    const q = `{ departments { departmentConnection(limit: 1000, offset: 0) { nodes { id name faculty { id } } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($limit: Int!, $offset: Int!) { departments { departmentConnection(limit: $limit, offset: $offset) { nodes { id name faculty { id } } } } }`;
+    this.gql.request(q, { limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: DeptOption[] = d.departments.departmentConnection.nodes.map((dept: any) => ({
           id: dept.id, label: dept.name, facultyId: dept.faculty?.id ?? ''
@@ -191,11 +191,25 @@ export class CurriculumItemList implements OnInit, OnChanges {
     if (!this.specialtyId) return;
     const deptId = this.courseDepartmentFilter();
     const facultyId = this.courseFacultyFilter();
-    const scopeFilter = deptId ? `, departmentId: "${deptId}"` : facultyId ? `, facultyId: "${facultyId}"` : '';
-    const q = `{ courses { courseConnection(limit: 1000, offset: 0, specialtyId: "${this.specialtyId}"${scopeFilter}) { nodes { id name tags { tag } } } } }`;
-    this.gql.request(q).subscribe({
+    const v = new GqlVars();
+    const args = [
+      v.arg('limit', 'Int!', 1000),
+      v.arg('offset', 'Int!', 0),
+      v.arg('specialtyId', 'ID', this.specialtyId),
+      deptId ? v.arg('departmentId', 'ID', deptId) : v.optionalArg('facultyId', 'ID', facultyId)
+    ].filter(Boolean).join(', ');
+    const q = `${v.declaration()}{ courses { courseConnection(${args}) { nodes { id name courseType tags { tag } } } } }`;
+    this.gql.request(q, v.values).subscribe({
       next: (d: any) => {
-        const opts: Option[] = d.courses.courseConnection.nodes.map((c: any) => ({ id: c.id, label: courseLabel(c.name, c.tags) }));
+        // An `ELECTIVE` is a choice inside a `ELECTIVE_GROUP`, and it is the group that a plan
+        // reserves a position for — so the picker offers groups and never their children. The one
+        // exception is the course this form is already editing: an edit form must never silently
+        // drop a value the database holds, so a position that names an elective keeps naming it
+        // until someone changes it on purpose.
+        const editing = String(this.form['courseId'] ?? '');
+        const opts: Option[] = d.courses.courseConnection.nodes
+          .filter((c: any) => c.courseType !== 'ELECTIVE' || String(c.id) === editing)
+          .map((c: any) => ({ id: c.id, label: courseLabel(c.name, c.tags) }));
         this.courseOptions.set(opts);
       },
       error: () => {}
@@ -223,12 +237,12 @@ export class CurriculumItemList implements OnInit, OnChanges {
     // courseType is selected for the printed plan: it is what sorts an item into «Обов'язкові» /
     // «Вибіркові компоненти», «Практична підготовка» or «Атестація», and the 25 % share of
     // ст. 62 ч. 1 п. 15 cannot be computed without it.
-    const q = `{ curriculumItems { curriculumItemConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes {
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType tags { tag } faculty { id } department { id faculty { id } } }
       hours { id hourType hours }
     } } } }`;
-    this.gql.request(q).subscribe({
+    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.items.set(d.curriculumItems.curriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
@@ -241,8 +255,8 @@ export class CurriculumItemList implements OnInit, OnChanges {
    */
   private loadStudyForms() {
     if (!this.specialtyId) return;
-    const q = `{ academicGroups { academicGroupConnection(limit: 500, offset: 0, specialtyId: "${this.specialtyId}") { nodes { id studyForm } } } }`;
-    this.gql.request(q).subscribe({
+    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id studyForm } } } }`;
+    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.studyForms.set(
         d.academicGroups.academicGroupConnection.nodes.map((g: any) => g.studyForm).filter(Boolean)),
       error: () => this.studyForms.set([])

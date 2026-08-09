@@ -1,0 +1,88 @@
+<div class="page-header">
+  <div>
+    <h2>Час переходу між корпусами</h2>
+    <p class="muted">
+      Скільки хвилин потрібно, щоб спокійно дістатися з одного корпусу до іншого. Рядок &mdash;
+      звідки, стовпець &mdash; куди; час у двох напрямках може відрізнятися.
+    </p>
+  </div>
+  <a routerLink="/building" class="btn-link">&#x1F3DB; Корпуси &rarr;</a>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+@if (saveError()) { <p class="error">{{ saveError() }}</p> }
+@if (saved()) { <p class="muted">Збережено змін: {{ saved() }}.</p> }
+
+@if (loading()) {
+  <p class="muted">Завантаження&hellip;</p>
+} @else if (!buildings().length) {
+  <p class="muted">Корпусів ще немає &mdash; додайте їх на сторінці &laquo;Корпуси&raquo;.</p>
+} @else {
+
+  @if (canEditAnything()) {
+    <div class="card btt-bar">
+      <span [class.muted]="!changedCount()">
+        @if (changedCount()) { Незбережених змін: <strong>{{ changedCount() }}</strong> }
+        @else { Змін немає }
+      </span>
+      <span class="btt-bar-actions">
+        <button type="button" class="ghost" [disabled]="!changedCount() || saving()"
+                (click)="mirrorChanged()"
+                title="Скопіювати введені значення у зворотний напрямок">
+          &#x21C6; Дзеркально
+        </button>
+        <button type="button" class="ghost" [disabled]="!changedCount() || saving()" (click)="revert()">
+          Скасувати
+        </button>
+        <button type="button" [disabled]="!changedCount() || saving()" (click)="save()">
+          @if (saving()) { Збереження&hellip; } @else { Зберегти }
+        </button>
+      </span>
+    </div>
+  }
+
+  <div class="card btt-card">
+    <table class="btt-table">
+      <thead>
+        <tr>
+          <th class="btt-corner">з \ до</th>
+          @for (b of buildings(); track b.id; let j = $index) {
+            <th class="btt-col" [title]="b.name">{{ j + 1 }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (from of buildings(); track from.id; let i = $index) {
+          <tr>
+            <th class="btt-row" [title]="from.name">
+              <span class="btt-index">{{ i + 1 }}</span>{{ from.label }}
+            </th>
+            @for (to of buildings(); track to.id) {
+              @if (from.id === to.id) {
+                <td class="btt-self">&mdash;</td>
+              } @else {
+                @let c = cell(from.id, to.id);
+                <td class="btt-cell"
+                    [class.dirty]="c && c.minutes().trim() !== c.original"
+                    [class.bad]="c && c.error()"
+                    [title]="from.label + ' → ' + to.label">
+                  @if (c) {
+                    <input type="text" inputmode="numeric" maxlength="3"
+                           [disabled]="!canEdit(from.id, to.id) || saving()"
+                           [ngModel]="c.minutes()" (ngModelChange)="onCellInput(c, $event)"
+                           [name]="'t-' + from.id + '-' + to.id" [ngModelOptions]="{ standalone: true }" />
+                  }
+                </td>
+              }
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <p class="muted btt-note">
+    Порожня комірка означає, що час переходу не задано &mdash; збереження порожньої комірки, яка
+    мала значення, вилучає його. Час у межах одного корпусу не зберігається взагалі.
+  </p>
+}
