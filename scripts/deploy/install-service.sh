@@ -111,6 +111,23 @@ done
 
 REPO_OWNER="$(stat -c '%U' "$REPO_ROOT")"
 
+RUNUSER="$(command -v runuser || true)"
+[[ -n "$RUNUSER" ]] || for c in /usr/sbin/runuser /sbin/runuser; do [[ -x "$c" ]] && RUNUSER="$c" && break; done
+[[ -n "$RUNUSER" ]] || die "runuser not found on PATH or in /usr/sbin"
+as_owner() { if [[ "$REPO_OWNER" == "root" ]]; then "$@"; else "$RUNUSER" -u "$REPO_OWNER" -- "$@"; fi; }
+
+# ---- the toolchain, as the user who will actually build ----------------------------------------
+# Before anything is written. A toolchain that only exists inside an interactive shell is the most
+# likely reason this script fails, and finding out now costs nothing.
+say "checking the build toolchain as $REPO_OWNER"
+if ! TOOLCHAIN="$(as_owner "$SCRIPT_DIR/build-with-toolchain.sh" --check 2>&1)"; then
+    printf '%s\n' "$TOOLCHAIN" >&2
+    die "the build toolchain is not usable from a non-interactive shell (see above). Nothing has been changed."
+fi
+printf '%s\n' "$TOOLCHAIN" | sed 's/^/    /'
+DETECTED_JAVA_HOME="$(printf '%s\n' "$TOOLCHAIN" | sed -n 's/.*JAVA_HOME=//p' | tail -n1)"
+[[ "$DETECTED_JAVA_HOME" == "<unset>" ]] && DETECTED_JAVA_HOME=""
+
 # ---- credentials --------------------------------------------------------------------------------
 if (( ${#POSITIONAL[@]} == 3 )); then
     DB_USERNAME="${POSITIONAL[0]}"; DB_PASSWORD="${POSITIONAL[1]}"; JWT_SECRET="${POSITIONAL[2]}"
@@ -147,7 +164,7 @@ chmod 700 "$ENV_DIR"
 PRESERVED=""
 if [[ -f "$ENV_FILE" ]]; then
     PRESERVED="$(grep -vE '^[[:space:]]*(#|$)' "$ENV_FILE" \
-        | grep -vE '^(SPRING_R2DBC_USERNAME|SPRING_R2DBC_PASSWORD|APP_SECURITY_JWTSECRET|SERVER_PORT)=' || true)"
+        | grep -vE '^(SPRING_R2DBC_USERNAME|SPRING_R2DBC_PASSWORD|APP_SECURITY_JWTSECRET|SERVER_PORT|JAVA_HOME)=' || true)"
     [[ -n "$PRESERVED" ]] && say "keeping $(printf '%s\n' "$PRESERVED" | wc -l | tr -d ' ') setting(s) already in $ENV_FILE"
 fi
 
@@ -163,6 +180,14 @@ SPRING_R2DBC_PASSWORD=$DB_PASSWORD
 APP_SECURITY_JWTSECRET=$JWT_SECRET
 SERVER_PORT=$PORT
 EOF
+if [[ -n "$DETECTED_JAVA_HOME" ]]; then
+    cat >> "$ENV_FILE" <<EOF
+
+# systemd starts the service with a PATH of its own, which will not include a JDK installed by
+# sdkman or unpacked into a home directory. This is the one detected at install time.
+JAVA_HOME=$DETECTED_JAVA_HOME
+EOF
+fi
 if [[ -n "$PRESERVED" ]]; then
     cat >> "$ENV_FILE" <<EOF
 
@@ -233,7 +258,11 @@ done
 
 # ---- cron --------------------------------------------------------------------------------------------
 say "installing the update job in root's crontab (every $INTERVAL minutes)"
-CRON_LINE="*/$INTERVAL * * * * TIMETABLE_SERVICE_NAME=$SERVICE_NAME TIMETABLE_GIT_REMOTE=$GIT_REMOTE TIMETABLE_GIT_BRANCH=$GIT_BRANCH $SCRIPT_DIR/update.sh >> $RUN_DIR/update.log 2>&1 $CRON_MARK"
+# PATH is stated explicitly because cron's default for root is /usr/bin:/bin, which does not
+# include /usr/sbin — where runuser lives. Without this the scheduled runs would all die on
+# "runuser: command not found" while a hand-run of the same script worked perfectly.
+CRON_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+CRON_LINE="*/$INTERVAL * * * * PATH=$CRON_PATH TIMETABLE_SERVICE_NAME=$SERVICE_NAME TIMETABLE_GIT_REMOTE=$GIT_REMOTE TIMETABLE_GIT_BRANCH=$GIT_BRANCH $SCRIPT_DIR/update.sh >> $RUN_DIR/update.log 2>&1 $CRON_MARK"
 { (crontab -l 2>/dev/null || true) | grep -vF "$CRON_MARK"; echo "$CRON_LINE"; } | crontab -
 
 # ---- logrotate ---------------------------------------------------------------------------------------
