@@ -558,7 +558,7 @@ public class AuthDataFetchers {
             if (labelColumn == null) {
                 return Mono.<String>just(resourceType + " #" + resourceId).toFuture();
             }
-            return graphRepo.fetchLabel(md.tableName(), labelColumn, resourceId).toFuture();
+            return graphRepo.fetchLabel(md.tableName(), md.keyColumn(), labelColumn, resourceId).toFuture();
         };
     }
 

@@ -9,6 +9,13 @@ import java.util.Map;
 public record EntityMetadata(
     Class<?> entityClass,
     String tableName,
+    /**
+     * The column that identifies one row of {@code tableName} — {@code "id"} for all but the
+     * entities keyed by their parent (see {@code @GraphQLEntity#key()}). Generated SQL selects it
+     * aliased as {@code id}, so relation batching, the create response and the GraphQL
+     * {@code id: ID!} field never have to know which column it actually is.
+     */
+    String keyColumn,
     Map<String, EntityFieldMetadata> fields,
     List<String> selectableColumns,
     Map<String, RelationMetadata> relations,

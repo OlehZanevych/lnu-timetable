@@ -355,7 +355,7 @@ public class PermissionEvaluator {
             }
             List<String> columns = new ArrayList<>(parentByColumn.keySet());
 
-            Flux<Edge> viaForeignKeys = graphRepo.fetchForeignKeys(md.tableName(), columns, ids)
+            Flux<Edge> viaForeignKeys = graphRepo.fetchForeignKeys(md.tableName(), md.keyColumn(), columns, ids)
                 .map(fk -> new Edge(new ResourceRef(md.resourceType(), fk.childId()),
                     parentByColumn.get(fk.column()), fk.parentId()));
 

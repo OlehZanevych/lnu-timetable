@@ -277,6 +277,10 @@ button.danger:hover { background: #991b1b !important; }
 .tt-block-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
 .tt-block-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 180px; }
 .tt-block-form .actions { display: flex; gap: 8px; margin-left: auto; }
+/* The read-only «Місце проведення» that stands in for the room dropdown when the class is held in
+   an abstract room or online. Given the height of a field so the row's captions stay on one line —
+   it is a value, not a hint, so it is not .muted. */
+.tt-block-form .tt-block-place { display: flex; align-items: center; min-height: 36px; font-weight: 500; }
 
 /* ── Room assignment (faculty page): the same block card, coloured by whether the class has
       anywhere in particular to be held. Red is not "invalid" here — an unrestricted class still
@@ -284,6 +288,14 @@ button.danger:hover { background: #991b1b !important; }
 .ra-block.unassigned { border-left: 4px solid #b91c1c; background: #fdf3f2; }
 .ra-block:not(.unassigned) { border-left: 4px solid #16a34a; }
 .ra-hint { margin: -6px 0 14px; max-width: 70ch; }
+/* The three-way choice of where the class is held, above the fields of whichever is chosen. It is
+   separated by a rule rather than boxed: the row is the question and the fields under it are the
+   answer, and a border around both would read as two unrelated groups of controls. */
+.ra-mode { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center;
+  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
+.ra-mode > span { font-size: 13px; font-weight: 600; color: var(--navy); }
+/* A посилання needs the room a room number does not — .tt-block-form's 180px would wrap a URL. */
+.ra-field-wide { flex: 1 1 300px; }
 
 /* ── Lecturer workloads (department page): one level deeper than .wci-hours-block ── */
 .lw-record { margin-bottom: 12px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }

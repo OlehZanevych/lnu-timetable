@@ -8,8 +8,8 @@ resulting schedule as a weekly grid. Styled after
 - Angular 21 (standalone components, **signals**, **zoneless** change detection, new `@if`/`@for`/`@switch` control flow)
 - Automatic lecturer-workload generation runs **in the browser** — see
   [WORKLOAD-GENERATION.md](./WORKLOAD-GENERATION.md) for the algorithm in full
-- Automatic **timetable** generation runs in the browser too, in a Web Worker — a UCTP solver
-  built on the objective function of *"Adaptive Memetic Algorithm for University Course
+- Automatic **timetable** generation runs in the browser too, in a portfolio of Web Workers — a UCTP
+  solver built on the objective function of *"Adaptive Memetic Algorithm for University Course
   Timetabling"*; see [TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md)
 - Talks to the service over plain GraphQL-over-HTTP (`GraphqlService`, no Apollo Client dependency)
 - JWT sign-in with forced password change on first login, and permission-aware UI that hides
@@ -234,7 +234,8 @@ src/app/
 │                                     #   workload hours and assigns day/start-time/room —
 │                                     #   "Формування розкладу" (see below)
 ├── timetable-solver.ts               # the UCTP solver itself — pure, no Angular/GraphQL/I-O
-├── timetable-solver.worker.ts        # runs it off the main thread and reports progress
+├── timetable-solver.worker.ts        # runs it off the main thread and reports progress; several
+│                                     #   instances run at once, best answer wins (§8a there)
 ├── global-properties-page.ts/.html   # "/global-properties" — edit the global_properties settings (lazy)
 ├── building-travel-times.ts/.html    # "/building-travel-times" — the directed travel-time matrix
 │                                     #   between buildings (lazy)
@@ -243,9 +244,9 @@ src/app/
                               #   навчальний план, and their own розклад (lazy route)
 ```
 
-Outside `src/app`, `scripts/` holds the two things that run without the application: the
-`workload-bench/` harness described below, and `check-graphql-variables.mjs` behind
-`npm run lint:graphql`.
+Outside `src/app`, `scripts/` holds the three things that run without the application: the
+`workload-bench/` and `timetable-bench/` harnesses, each described below, and
+`check-graphql-variables.mjs` behind `npm run lint:graphql`.
 
 The `/timetable` page that used to sit at the end of this list is **gone**. It was a read-only
 weekly grid over `timetableEntryConnection(limit: 1000)` with no faculty scope and no
@@ -352,8 +353,11 @@ allowed to reach for a service.
 | `course-label.ts` | `courseLabel` — a discipline's name with its `courses.semester` and `course_tags` in parentheses | *Naming a discipline*, below |
 
 Only one of them needs a host that is not a component: `timetable-solver.worker.ts` runs the solver
-on its own thread. `workload-generator.ts` does not, because it is three greedy passes over a
-department rather than a search with a time budget — it returns before a frame is missed.
+on its own thread — and, since the search is stochastic and different seeds land in different local
+optima, several of those workers run at once on the same problem and the best answer wins
+([TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) §8a). `workload-generator.ts` needs no host at
+all, because it is three greedy passes over a department rather than a search with a time budget —
+it returns before a frame is missed.
 
 ### Option lists are declared once
 
@@ -569,14 +573,14 @@ search is active, and the empty row distinguishes "nothing matched «X»" from "
 otherwise looks like an empty database. The faculty page's «Дисципліни» tab uses it beside the
 server-side кафедра filter.
 
-`entity-pages.ts` currently registers 13 such pages (`academicDegree`, `faculty`,
+`entity-pages.ts` currently registers 14 such pages (`academicDegree`, `faculty`,
 `department`, `specialty`, `course`, `lecturer`, `student`, `academicGroup`,
-`room`, `roomGroup`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at the
+`room`, `roomGroup`, `abstractRoom`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at the
 **kebab-case of its `single`** — `roomGroup` becomes `/room-group`, `classStartTimeSet` becomes
 `/class-start-time-set` — by the same `kebabCase` that turns a section key into a section slug. These
 are the fallback / power-user screens — useful for bulk edits or entities
-without a dedicated drill-down page (`Room`, `RoomGroup`, `ClassStartTimeSet`, `ClassStartTime`,
-`AcademicDegree`, `TimetableEntry`). Two of them lean on the metadata in ways worth noting:
+without a dedicated drill-down page (`Room`, `RoomGroup`, `AbstractRoom`, `ClassStartTimeSet`,
+`ClassStartTime`, `AcademicDegree`, `TimetableEntry`). Two of them lean on the metadata in ways worth noting:
 `RoomGroup` uses `multiref` for its rooms and offers both a faculty and a department picker even
 though the two are mutually exclusive — the database rejects a row that sets both
 (`room_groups_scope_check`), so a form that does fails on save rather than being prevented here;
@@ -1289,6 +1293,31 @@ of load assigned above the statutory ceiling by 98 %. `scripts/workload-bench/RE
 instances, the metric definitions, the before-and-after table, and a list of the things that were
 tried and did not work.
 
+#### Measuring the timetable solver (`scripts/timetable-bench/`)
+
+The same idea applied to the harder algorithm, and it went further because the question was harder.
+
+The trap with a timetabling benchmark is that a generated instance may simply have no good answer,
+and then a stalled search and an impossible problem look identical. `build.mjs` avoids it by
+**constructing a valid schedule first and deriving the instance from it** — it walks the week slot by
+slot placing classes into free resources, then reads the courses, cohorts, eligibility and every
+availability constraint back off the finished schedule. A perfect answer therefore provably exists
+for every instance, and the hidden schedule doubles as the yardstick each result is quoted against.
+`validate.mjs` re-scores what the solver returns from the schema semantics alone, sharing no code
+with it — which caught two real bugs that a self-scoring solver would have reported as improvements.
+
+```bash
+cd scripts/timetable-bench
+node experiment.mjs --repeats 25    # the full study: 10 sizes × 25 repetitions, resumable
+node bestknown.mjs                  # refresh the best-known table
+node fleet-sim.mjs                  # check the worker portfolio's completion arithmetic
+```
+
+50 instances (25 → 12,800 classes) are committed with the 375 measurements taken during the study.
+`scripts/timetable-bench/README.md` explains the methodology and the flags;
+[SOLVER-OPTIMISATION.md](./SOLVER-OPTIMISATION.md) records what the study concluded — including the
+seven mechanisms that were built, measured and rejected.
+
 #### Workload constraints (`LecturerConstraintList`, department "Обмеження навантаження" tab)
 
 One card per lecturer of the department, each showing **all 21** `lecturer_workload_constraints`
@@ -1602,18 +1631,36 @@ group into a new combined item via the `workingCurriculumItemIds` many-to-many m
 after which it shows up in `LecturerWorkloadList`'s "Об'єднані позиції" section instead of the
 plain tree.
 
-#### Where each class may be held (`RoomAssignmentList`, faculty "Призначення аудиторій" tab)
+#### Where each class is held (`RoomAssignmentList`, faculty "Призначення аудиторій" tab)
 
-One card per class — one `lecturer_workloads` row — carrying two multi-selects: **Аудиторії** and
-**Групи аудиторій**. The eligible rooms of a class are the **union** of the two, and naming nothing
-means no restriction: the solver on the next tab may then put that class in any room of the faculty.
+One card per class — one `lecturer_workloads` row — carrying a **three-way choice** of where the
+class is held, because the three are alternatives rather than three independent fields:
 
-That last case is the reason this page exists as a board of cards rather than a column in a table.
-"No restriction" is not an error — it schedules perfectly well — but it is almost never what anyone
-*decided*, and until now it was invisible: a лекція for 120 students would quietly become eligible
-for a 12-seat lab, and nobody found out until the generated timetable was read. **A card with
-neither a room nor a group is tinted red**, and the header counts them, so the question "what has
-nobody assigned yet?" is answered by looking rather than by auditing.
+| Choice | What the card offers | What a save sends |
+|---|---|---|
+| **В аудиторії** | the two multi-selects **Аудиторії** and **Групи аудиторій**; the eligible rooms are the **union** of the two, and naming nothing means no restriction | `roomIds`, `roomGroupIds`, and `abstractRoomIds: []`; deletes any online row |
+| **Абстрактна аудиторія** | one `SearchSelect` over `AbstractRoom` — a place several classes legitimately occupy at the same hour (спортивні зали, «дистанційно») | `roomIds: []`, `roomGroupIds: []`, `abstractRoomIds: [<one id>]`; deletes any online row |
+| **Онлайн** | optional платформа, посилання and нотатка | all three lists empty, and the online row created or updated |
+
+`LecturerWorkload.abstractRooms` is a list in GraphQL and at most one row in the database —
+`lecturer_workload_abstract_rooms` is keyed on the workload alone — which is why the card offers a
+single choice and sends a 0- or 1-element array. And the online row's **presence** is the fact that
+the class is online; its three columns only say how to attend, and all of them may be empty. That is
+why the mutation set is create/update/delete rather than a field on the workload's payload, and why
+a save here is up to **two** requests: `updateLecturerWorkload` first, then the online row (the
+namespace is `lecturerWorkloadOnlineClasss`, with three s's — the schema builder pluralises by
+appending one). The order is chosen for its half-done state: clearing the rooms and failing to write
+the online row leaves a class the board tints red, while the reverse would leave a class claiming to
+be in two places at once with nothing on screen saying so. The card stays in «Збереження…» until both
+have settled.
+
+An unassigned class — no room, no room group, no abstract room, not online — is the reason this page
+exists as a board of cards rather than a column in a table. "No restriction" is not an error — it
+schedules perfectly well — but it is almost never what anyone *decided*, and until this page it was
+invisible: a лекція for 120 students would quietly become eligible for a 12-seat lab, and nobody
+found out until the generated timetable was read. **Such a card is tinted red**, and the header
+counts them, so the question "what has nobody assigned yet?" is answered by looking rather than by
+auditing.
 
 The card is a sibling of «Формування розкладу»'s (`.tt-block`, same header and record rows), but the
 unit is deliberately different: that page splits a workload into its individual weekly/biweekly
@@ -1637,17 +1684,25 @@ class unfilterable. The converse gap is real and deliberate: a specialty of this
 discipline is delivered by another faculty's department is that faculty's class to place, and is
 assigned on its page.
 
-Saving writes the same two join tables through the same `updateLecturerWorkload` mutation the
-department modal always used. Two details are load-bearing. Both id lists are sent **in full**,
-including when empty, because an empty array is the meaningful value "no restriction" and an omitted
-many-to-many field would leave the stored rows alone instead. And `durationHours` is echoed back
-untouched, because it is `NOT NULL` in the database and therefore `Int!` on
-`LecturerWorkloadInputPayload` — an update that omits it is rejected by GraphQL validation before it
-reaches the resolver, however little it has to do with rooms.
+The room half still writes the same two join tables through the same `updateLecturerWorkload`
+mutation the department modal always used. Two details are load-bearing. All three id lists are sent
+**in full**, including when empty, because an empty array is the meaningful value here ("no
+restriction", or "not there any more") and an omitted many-to-many field would leave the stored rows
+alone instead. And `durationHours` is echoed back untouched, because it is `NOT NULL` in the database
+and therefore `Int!` on `LecturerWorkloadInputPayload` — an update that omits it is rejected by
+GraphQL validation before it reaches the resolver, however little it has to do with rooms.
 
 Anything already assigned but outside the offered options — a room of another faculty, a group
-scoped elsewhere — is merged into the option lists on load. Without that, a multi-select would
-render the value as an unchecked blank and the first save would silently drop it.
+scoped elsewhere, an abstract room of another faculty — is merged into the option lists on load.
+Without that, a multi-select would render the value as an unchecked blank and the first save would
+silently drop it. The three option lists are all fetched **unfiltered** and narrowed client-side to
+this faculty's rows plus the unscoped ones, because the server's `facultyId` filter is an equality on
+the column and would drop exactly the shared rows most often wanted — which for an abstract room is
+the usual case, not the exception.
+
+One draft is not saveable: «Абстрактна аудиторія» with nothing chosen. It would write the same
+emptiness as «В аудиторії» with nothing chosen, so the mode a reader saw afterwards would not be the
+one they left the card in; saying "no restriction" is what «В аудиторії» is for.
 
 #### Building the schedule (`FacultyTimetableList`, faculty "Формування розкладу" tab)
 
@@ -1685,18 +1740,29 @@ The same tab opens with a generation panel offering the same two modes the workl
 **лише невизначені заняття** (place only the blocks with no `TimetableEntry` yet) and
 **перевизначити весь розклад** — plus a search budget (10 s … 2 min). Pressing «Згенерувати розклад»
 opens a modal that reports the search live: the phase, the objective function `f(σ)` decomposed per
-constraint, how many blocks are placed, and the adaptive intensity and temperature. Nothing is
-written until «Застосувати», which then shows exactly what would change.
+constraint, how many blocks are placed, and the iteration count with moves-since-improvement. (It
+used to report an adaptive intensity and a temperature as well; both belonged to the annealing search
+that measurement retired, so rather than show frozen numbers they were removed.) Nothing is written
+until «Застосувати», which then shows exactly what would change.
 
 The solver is a University Course Timetabling heuristic using the objective function of
 *"Adaptive Memetic Algorithm for University Course Timetabling"* —
-`f(σ) = Σ βᵢ·Πᵢ(σ)^αᵢ` with `β = (150, 100, 50, 90, 120, 5, 20)` over lecturer/group/room conflicts,
-group/lecturer travel between buildings and lecturer/group windows — reached by a most-constrained-first greedy construction followed by the
-article's two-phase multi-neighbourhood local search (reassign / swap / chain move under simulated
-annealing and a tabu list, then bounded window reduction) under an effectiveness-adaptive intensity.
+`f(σ) = Σ βᵢ·Πᵢ(σ)^αᵢ` with `β = (150, 100, 50, 90, 120, 50, 5, 20, 30)` over lecturer/group/room
+conflicts, group/lecturer travel between buildings, abstract rooms holding more students than they
+seat, lecturer/group windows and days that mix online with in-room classes — reached by a
+most-constrained-first greedy construction followed by a **move-level stochastic local search**:
+one move at a time from a composite neighbourhood, evaluated incrementally, accepted by late
+acceptance, with an ejection chain that switches itself off once the search stops improving. The
+article's two-phase annealing search was measured and retired — its repair phase reached a local
+optimum in its first iteration and never moved again. Several searches run **concurrently** on
+different seeds and the best schedule wins, which is worth about 20% at no cost in wall clock.
 **[TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) documents it in full**: the formulation,
 every deviation from the paper, the constraint semantics, complexity bounds, and what is and isn't
-guaranteed.
+guaranteed. [SOLVER-OPTIMISATION.md](./SOLVER-OPTIMISATION.md) records the study that produced the
+current search, including the negative results, and `scripts/timetable-bench/` is the harness it was
+measured with — instances built around a hidden feasible schedule, an independent scorer, the raw
+measurements, and `experiment.mjs`, which reruns the whole study on your own hardware. Measured
+there: **12,800 class sessions scheduled with zero hard violations in two minutes** on two cores.
 
 Four things about it are specific to scheduling *one faculty inside a shared university*:
 

@@ -135,7 +135,9 @@ nothing on a second run rather than to assume it runs once. Each does it differe
 what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF NOT EXISTS` and
 `ON CONFLICT DO NOTHING`, V3 and V4 by testing `pg_constraint` / the rows themselves, V5 by testing
 `pg_type` and `ADD COLUMN IF NOT EXISTS`, V6 by both — `ADD COLUMN IF NOT EXISTS` for the column and
-`pg_constraint` for the `CHECK`, since there is no `ADD CONSTRAINT IF NOT EXISTS`.
+`pg_constraint` for the `CHECK`, since there is no `ADD CONSTRAINT IF NOT EXISTS` — and V7 by
+`IF NOT EXISTS` on every object it creates, a `pg_type` guard around its `CREATE TYPE`, and
+`ON CONFLICT (name) DO NOTHING` on the `global_properties` rows it seeds.
 
 ### `V1__delete_curriculum_items_on_elective_courses.sql`
 
@@ -264,6 +266,28 @@ it is absent. Both routes were built and `\d courses` diffed — they end at the
 constraint name included, with the column last on the migrated route for the same reason V2's `id`
 is (a migration can only append).
 
+
+### `V7__abstract_rooms_and_online_classes.sql`
+
+Adds the two answers to "where is this held?" that are not a room, and the two global properties the
+scheduler needs to cost them.
+
+- `abstract_rooms` — a place several classes legitimately share at one hour (see *Where a class may
+  be held*), optionally scoped to a faculty and optionally sited in a building, with an optional
+  `capacity`.
+- `lecturer_workload_abstract_rooms` — the link, **keyed on `lecturer_workload_id` alone**, which is
+  what makes "at most one abstract room per class, any number of classes per abstract room" a
+  structural guarantee rather than a convention.
+- `online_class_platform` enum and `lecturer_workload_online_classes`, keyed the same way.
+- `timetable_entries.room_id` becomes nullable — a class held in an abstract room or online still
+  has an entry, and that entry has no room.
+- Two `global_properties` rows: `abstract_room_travel_time_minutes` (60) and
+  `university_commute_time_minutes` (80).
+
+Idempotent throughout, because it has to run against databases created from `schema.sql`, which
+already carries all of it: `IF NOT EXISTS` on every object, a `pg_type` guard around `CREATE TYPE`
+(Postgres has no `CREATE TYPE IF NOT EXISTS`), `ON CONFLICT (name) DO NOTHING` on the property rows,
+and `DROP NOT NULL`, which is naturally idempotent.
 
 ---
 
@@ -444,6 +468,7 @@ ordering significance beyond their values, because `ORDER BY` on an enum column 
 | `control_form` | `EXAM`, `CREDIT`, `GRADED_CREDIT` |
 | `course_type` | `MANDATORY`, `ELECTIVE_GROUP`, `ELECTIVE`, `OPTIONAL`, `INTERNSHIP`, `COURSE_PROJECT`, `COURSE_WORK`, `QUALIFICATION_WORK` |
 | `week_parity` | `WEEKLY`, `NUMERATOR`, `DENOMINATOR` |
+| `online_class_platform` | `ZOOM`, `MICROSOFT_TEAMS`, `GOOGLE_MEET`, `MOODLE`, `SKYPE`, `WEBEX`, `BIGBLUEBUTTON`, `OTHER` — nullable, because "online, platform not yet decided" is a real state |
 | `grantee_type` | `USER`, `GROUP` — which column of a `permissions` row is set |
 | `access_level` | `EDIT`, `FULL`, `MANAGE` — how much a grant permits. The clearest case of why these are enums: the service asks `level >= 'FULL'` in SQL and `held.allows(required)` in Java, and both mean the same thing only because declaration order is comparison order |
 | `study_form`, `degree`, `lecturer_position`, `room_kind`, `property_type` | see `schema.sql` |
@@ -492,10 +517,9 @@ client-side — see its README's *Ukrainian sorting*.
 
 `global_properties` (`name` VARCHAR **primary key**, `type` a `property_type` enum, `value`
 VARCHAR) is a generic name/type/value store for system-wide settings. It deliberately has **no** annotated
-`GlobalProperty` domain class: the whole framework (`EntityMetadataRegistry`,
-`DynamicGraphQLSchemaBuilder`, `DynamicDataFetchers`, `R2dbcQueryEngine.selectOne`/`insert`/
-`update`/`delete`) hardcodes the assumption that every entity has a `Long id` primary key, which
-a `String`-keyed table can't satisfy. Rather than generalize that assumption across every
+`GlobalProperty` domain class: the framework assumes every entity has a **`Long`** primary key — it
+no longer requires the *column* to be called `id` (see `@GraphQLEntity(key = …)` below), but a
+`String` key is still outside what it can express. Rather than generalize that assumption across every
 existing entity, the `GlobalProperty`/`GlobalPropertyQueries`/`GlobalPropertyMutations` GraphQL
 types and their `list` / `globalProperty(name)` / `updateGlobalProperty(name, value)` fields are
 hand-built directly in `DynamicGraphQLSchemaBuilder.buildGlobalPropertyTypes()` and wired to
@@ -557,6 +581,7 @@ there is nothing to query or mutate directly:
 | `lecturer_workload_academic_groups` | `LecturerWorkload` ↔ `AcademicGroup` | `academicGroupIds` input |
 | `lecturer_workload_combined_groups` | `LecturerWorkload` ↔ `CombinedGroup` | `combinedGroupIds` input |
 | `lecturer_workload_rooms` | `LecturerWorkload` ↔ `Room` | `LecturerWorkload.rooms`, `roomIds` input |
+| `lecturer_workload_abstract_rooms` | `LecturerWorkload` ↔ `AbstractRoom` | `LecturerWorkload.abstractRooms`, `AbstractRoom.workloads`, `abstractRoomIds` input — keyed on the workload, so the list holds 0 or 1 |
 | `lecturer_workload_room_groups` | `LecturerWorkload` ↔ `RoomGroup` | `LecturerWorkload.roomGroups`, `roomGroupIds` input |
 | `room_group_rooms` | `RoomGroup` ↔ `Room` | `RoomGroup.rooms`, `roomIds` input |
 
@@ -572,6 +597,29 @@ the same case again.
 Two questions about a `LecturerWorkload` that the timetable needs answered before a
 `TimetableEntry` can be built, both stored on the workload rather than on the entry — they are
 properties of the *class*, not of one of its weekly occurrences.
+
+**Where.** Three alternatives, and they are mutually exclusive in practice even though nothing in
+the database says so:
+
+1. **In rooms of its own** — the ordinary case, described immediately below.
+2. **In an abstract room** (`lecturer_workload_abstract_rooms` → `abstract_rooms`) — «Спортивні
+   зали», «Басейн»: one line on the розклад that classes from different groups and different
+   specialities legitimately share at the same hour. It is deliberately **not** a `Room`, because
+   everything reasoning about rooms is built on one room holding one class at a time, and recording
+   this as a room would be a lie the scheduler believes; nothing testing room exclusivity reads that
+   table. Its `capacity`, when set, caps the *total* students of all the classes sharing it in one
+   slot rather than the size of any one of them. Sited in a building, the journey to it is that
+   building's like any room's; sited nowhere, there is no address to measure from and the journey is
+   the flat `abstract_room_travel_time_minutes`.
+3. **Online** (`lecturer_workload_online_classes`) — the row's *presence* is the fact; its columns
+   only say how to attend. Creating one marks the class online, deleting it puts it back in a room.
+
+Both links key on `lecturer_workload_id` **alone**, so a class has at most one abstract room and at
+most one online-class row, while an abstract room hosts as many classes as its capacity allows. The
+asymmetry is the whole point of the design, and it is the primary key that enforces it.
+
+A class held either way still gets a `timetable_entries` row; that row's `room_id` is `NULL`, which
+is why the column is nullable.
 
 **Rooms.** A workload may name individual rooms (`lecturer_workload_rooms`), whole reusable room
 groups (`lecturer_workload_room_groups`), or both. The eligible rooms are the **union** of the two
@@ -910,6 +958,18 @@ public class Course {
 }
 ```
 
+**A primary key that is not called `id`.** `@GraphQLEntity(table = "…", key = "lecturer_workload_id")`
+says the table's key lives in that column instead. It exists for the tables whose "at most one row
+per parent" rule *is* the primary key — `lecturer_workload_online_classes` is the first — where a
+surrogate `id` alongside a unique constraint would be two ways of saying the same thing and one of
+them enforceable only by convention.
+
+The rest of the framework is untouched by it, because the key column is **projected under the alias
+`id`** (`new Col(md.keyColumn(), "id")`). Every consumer — the row mapper, the `Connection`
+pagination cursor, `DataLoader` batching, the permission joins — still reads `id`, and the GraphQL
+type still exposes `id: ID!`. Only `EntityMetadata.keyColumn` and the SQL that names the column
+know the difference. `key` defaults to `"id"`, so nothing else in the codebase changed.
+
 Field → column names are derived `lowerCamel → lower_snake` (e.g. `ectsCredits` →
 `ects_credits`). `@Description` text appears in the GraphQL schema. `@Nullable` makes a
 field/relation optional; `@PgEnum("pg_type_name")` marks a `String` field backed by a native
@@ -1034,19 +1094,22 @@ instead of widening to every group in the university.
 
 ### Where each entity is declared
 
-The four `*SchemaConfig` classes are the whole API surface — 29 entities, one `configure<Entity>`
+The four `*SchemaConfig` classes are the whole API surface — 31 entities, one `configure<Entity>`
 method each, split by subject area:
 
 | Config class | Entities declared |
 |---|---|
-| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `Specialty`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup` |
+| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `Specialty`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup`, `AbstractRoom` |
 | `CurriculumSchemaConfig` | `Course`, `CourseTag`\*, `CurriculumItem`, `CurriculumItemHours`, `WorkingCurriculumItem`, `CombinedWorkingCurriculumItem` |
 | `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `LecturerTimetableConstraint`\*, `Student`, `AcademicGroup`, `AcademicGroupTimetableConstraint`\*, `CombinedGroup` |
-| `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTimeSet`, `ClassStartTime`, `TimetableEntry` |
+| `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTimeSet`, `ClassStartTime`, `TimetableEntry`, `LecturerWorkloadOnlineClass`\*\*\* |
 
-Twenty-one of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
+Twenty-two of them get the full set — `<entity>Connection` + `<entity>` + `create`/`update`/`delete`.
 The exceptions are all children written through a parent:
 
+- \*\*\* **mutations but no queries** (`LecturerWorkloadOnlineClass`): reached only through
+  `LecturerWorkload.onlineClass`, so it needs no query of its own, but creating and deleting it is
+  how a class is marked online and put back in a room — so the mutations are the API.
 - \* **type-only** (`s.type(...)` with no queries or mutations): registered so a parent's relation
   field resolves, but written exclusively through that parent's `.nestedList(...)` —
   `CourseTag` through `Course.tags`, `LecturerWorkloadConstraint` through
@@ -1107,16 +1170,19 @@ single-row `<entity>(id:)` query.
 | `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r) |
 | `combinedWorkingCurriculumItemConnection` | `id` | `facultyId` (r), `departmentIds` (r), `semesterParity` (r) |
 | `lecturerWorkloadConnection` | `id` | — |
+| `abstractRoomConnection` | `name` | `facultyId`, `buildingId` |
 | `classStartTimeSetConnection` | `name` | `facultyId` |
 | `classStartTimeConnection` | `ordinal` | `classStartTimeSetId` |
 | `timetableEntryConnection` | `dayOfWeek` | `workloadId`, `roomId`, `roomIds` (r), `lecturerIds` (r), `academicGroupIds` (r), `semesterParity` (r) |
 
-Eight entities are missing from this table on purpose, and the omission is the design rather than a
+Nine entities are missing from this table on purpose, and the omission is the design rather than a
 gap: `CourseTag`, `LecturerWorkloadConstraint`, `LecturerTimetableConstraint`,
 `AcademicGroupTimetableConstraint`, `RoomTimetableConstraint`, `LecturerWorkloadStudent` and
 `LecturerWorkloadCandidateConstraint` are read through their parent's relation field and written
-through its `.nestedList(...)`, and `LecturerWorkloadCandidate` is read through
-`LecturerWorkload.candidates` while being written through mutations of its own. See [Where each
+through its `.nestedList(...)`; `LecturerWorkloadCandidate` is read through
+`LecturerWorkload.candidates` while being written through mutations of its own; and
+`LecturerWorkloadOnlineClass` is read through `LecturerWorkload.onlineClass` while being written
+through create/update/delete mutations of its own, since its *existence* is the fact being edited. See [Where each
 entity is declared](#where-each-entity-is-declared).
 
 `curriculumItemConnection`'s `courseId` exists for one screen: the client's discipline page asks

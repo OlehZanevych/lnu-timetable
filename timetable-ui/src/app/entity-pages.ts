@@ -26,6 +26,7 @@ const TPL = './entity-page.html';
 @Component({ selector: 'app-combined-group', templateUrl: TPL, imports: IMPORTS }) export class CombinedGroupPage extends BaseEntity { meta = meta('CombinedGroup'); }
 @Component({ selector: 'app-room', templateUrl: TPL, imports: IMPORTS }) export class RoomPage extends BaseEntity { meta = meta('Room'); }
 @Component({ selector: 'app-room-group', templateUrl: TPL, imports: IMPORTS }) export class RoomGroupPage extends BaseEntity { meta = meta('RoomGroup'); }
+@Component({ selector: 'app-abstract-room', templateUrl: TPL, imports: IMPORTS }) export class AbstractRoomPage extends BaseEntity { meta = meta('AbstractRoom'); }
 @Component({ selector: 'app-class-start-time-set', templateUrl: TPL, imports: IMPORTS }) export class ClassStartTimeSetPage extends BaseEntity { meta = meta('ClassStartTimeSet'); }
 @Component({ selector: 'app-class-start-time', templateUrl: TPL, imports: IMPORTS }) export class ClassStartTimePage extends BaseEntity { meta = meta('ClassStartTime'); }
 @Component({ selector: 'app-timetable-entry', templateUrl: TPL, imports: IMPORTS }) export class TimetableEntryPage extends BaseEntity { meta = meta('TimetableEntry'); }
@@ -42,6 +43,7 @@ export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
   { single: 'academicGroup', component: AcademicGroupPage },
   { single: 'room', component: RoomPage },
   { single: 'roomGroup', component: RoomGroupPage },
+  { single: 'abstractRoom', component: AbstractRoomPage },
   { single: 'classStartTimeSet', component: ClassStartTimeSetPage },
   { single: 'classStartTime', component: ClassStartTimePage },
   { single: 'timetableEntry', component: TimetableEntryPage }

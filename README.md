@@ -216,7 +216,9 @@ arguments, which are the two things in this section that are easiest to forget.
 | [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI down to which button each level opens |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
 | [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
-| [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, a traced example, complexity, and the code map |
+| [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, the worker portfolio, a traced example, complexity, and the code map |
+| [`timetable-ui/SOLVER-OPTIMISATION.md`](./timetable-ui/SOLVER-OPTIMISATION.md) | the study that produced the current solver — what was wrong with the old search, what replaced it, how it scales, and the seven mechanisms that were built and rejected on measurement |
+| [`timetable-ui/scripts/timetable-bench/README.md`](./timetable-ui/scripts/timetable-bench/README.md) | the benchmark behind the solver — why the instances are built backwards around a hidden feasible schedule, the independent scorer, and how to re-run the whole study |
 | [`timetable-ui/CURRICULUM-PDF.md`](./timetable-ui/CURRICULUM-PDF.md) | the printable curriculum — which of its parts are required by the Закон України «Про вищу освіту» and which are settled practice, the compliance checks it carries, and what the data model cannot yet fill in |
 | [`timetable-ui/WORKING-CURRICULUM-PDF.md`](./timetable-ui/WORKING-CURRICULUM-PDF.md) | the printable working curriculum — why it has no legal footing at all since 1993, what institutional practice actually puts in one, and how department teaching hours are projected from it |
 | [`timetable-ui/WORKLOAD-PDF.md`](./timetable-ui/WORKLOAD-PDF.md) | the printable workload sheet — what each part of the document answers to in Ukrainian practice, and the ДСТУ 4163:2020 layout rules |
@@ -241,14 +243,17 @@ uniqueness, cascades — plus authorization.
 arithmetic and its statutory checks, the PDF engine and the Ukrainian collator are hand-written
 modules in `timetable-ui/src/app`, free of Angular, GraphQL and I/O, so each can be run and tested
 on plain objects. The timetable solver additionally
-runs in a Web Worker, because it is a search with a time budget rather than a computation.
+runs in Web Workers — several at once on different seeds, best answer wins — because it is a search
+with a time budget rather than a computation.
 
 That the algorithms are free of the framework is not a stylistic preference — it is what lets them be
 *measured*. `timetable-ui/scripts/workload-bench` runs the shipped workload generator, unmodified,
 under Node across 48 generated department instances and re-checks every plan it produces against the
 database's own constraint semantics. The one time that harness was pointed at the code it found a
-quadratic in the search and a class of constraint breach nobody had noticed; the same approach is
-open to the timetable solver, which has no equivalent yet.
+quadratic in the search and a class of constraint breach nobody had noticed.
+`timetable-ui/scripts/timetable-bench` now does the same for the timetable solver, on instances built
+around a hidden feasible schedule so that a perfect answer is known to exist; pointing it at the code
+found that the search was reaching a local optimum in its first iteration and never moving again.
 
 **The contract between them is the generated schema**, and the service README's *The query
 catalogue* is worth reading before adding a query — several connections carry `EXISTS`-subquery

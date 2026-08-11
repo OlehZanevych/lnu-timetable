@@ -57,10 +57,12 @@ const DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src',
  */
 const ARG_TYPES = {
   id: 'ID!', name: 'ID!', limit: 'Int!', offset: 'Int!',
-  academicGroupId: 'ID', buildingId: 'ID', classStartTimeSetId: 'ID', courseId: 'ID',
-  curriculumItemId: 'ID', departmentId: 'ID', facultyId: 'ID', fromBuildingId: 'ID',
-  parentCourseId: 'ID', roomId: 'ID', specialtyId: 'ID', toBuildingId: 'ID', workloadId: 'ID',
-  academicGroupIds: '[ID!]', departmentIds: '[ID!]', lecturerIds: '[ID!]', roomIds: '[ID!]',
+  abstractRoomId: 'ID', academicGroupId: 'ID', buildingId: 'ID', classStartTimeSetId: 'ID',
+  courseId: 'ID', curriculumItemId: 'ID', departmentId: 'ID', facultyId: 'ID',
+  fromBuildingId: 'ID', parentCourseId: 'ID', roomId: 'ID', specialtyId: 'ID',
+  toBuildingId: 'ID', workloadId: 'ID',
+  abstractRoomIds: '[ID!]', academicGroupIds: '[ID!]', departmentIds: '[ID!]',
+  lecturerIds: '[ID!]', roomIds: '[ID!]',
   semesterParity: 'String',
   value: 'String!',
   // Authentication, accounts and access — the hand-rolled half of the schema

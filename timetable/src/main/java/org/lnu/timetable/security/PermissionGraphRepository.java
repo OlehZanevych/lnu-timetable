@@ -43,10 +43,16 @@ public class PermissionGraphRepository {
      * non-null value. Rows that do not exist, and columns that are null (an optional parent that
      * was never set), simply produce nothing — an unreachable ancestor is indistinguishable from an
      * absent one for authorization purposes, and both mean "this path grants nothing".
+     * <p>
+     * {@code keyColumn} is the entity's own key (see {@code EntityMetadata#keyColumn()}), aliased
+     * to {@code id} here so the walk above stays written in terms of ids. For an entity keyed by
+     * its parent that column is also one of {@code columns} — selecting it twice under two labels
+     * is what lets the same row be both the child being asked about and the edge upward.
      */
-    public Flux<FkEdge> fetchForeignKeys(String table, List<String> columns, Collection<Long> ids) {
+    public Flux<FkEdge> fetchForeignKeys(String table, String keyColumn, List<String> columns, Collection<Long> ids) {
         if (columns.isEmpty() || ids.isEmpty()) return Flux.empty();
-        String sql = "SELECT id, " + String.join(", ", columns) + " FROM " + table + " WHERE id = ANY(:ids)";
+        String sql = "SELECT " + keyColumn + " AS id, " + String.join(", ", columns)
+            + " FROM " + table + " WHERE " + keyColumn + " = ANY(:ids)";
         return db.sql(sql).bind("ids", ids.toArray(new Long[0]))
             .map(row -> {
                 Long childId = ((Number) row.get("id")).longValue();
@@ -75,8 +81,8 @@ public class PermissionGraphRepository {
     }
 
     /** Best-effort human label for a resource, used only for admin-UI display (never for authz decisions). */
-    public Mono<String> fetchLabel(String table, String column, Long id) {
-        String sql = "SELECT " + column + " AS label FROM " + table + " WHERE id = :id";
+    public Mono<String> fetchLabel(String table, String keyColumn, String column, Long id) {
+        String sql = "SELECT " + column + " AS label FROM " + table + " WHERE " + keyColumn + " = :id";
         return db.sql(sql).bind("id", id)
             .map(row -> (String) row.get("label"))
             .one()

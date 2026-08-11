@@ -4,11 +4,13 @@ import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { GqlVars, GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
-import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS } from './entities';
+import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS,
+         onlineClassPlatformLabel } from './entities';
 import { compareUk } from './sort';
 // Types only: the solver itself must not land in the initial bundle. It is reached through the Web
 // Worker, and — in the rare host with no `Worker` — through a dynamic import in runSolver().
 import type {
+  SolverAbstractRoom,
   SolverConstraint,
   SolverFixedEntry,
   SolverOptions,
@@ -37,9 +39,33 @@ const WORKING_DAYS = DAY_OF_WEEK_OPTIONS.map((o) => Number(o.value));
 /** How many mutations are sent per GraphQL request when the plan is applied (aliased into one document). */
 const APPLY_BATCH = 25;
 
+/**
+ * The first seed of the search portfolio; each worker gets `BASE_SEED + i * 7919`.
+ *
+ * The stride is a prime well away from the solver's mulberry32 state size, so the k streams start
+ * far apart rather than a few steps into each other — two searches whose random sequences overlap
+ * are one search that costs twice as much.
+ */
+const BASE_SEED = 20260802;
+
 interface GroupRef {
   id: string;
   name: string;
+  /** `academic_groups.students_count`, nullable — an abstract room's capacity is a ceiling on the
+   *  sum of these across everything sharing it, and an unknown one counts as 0. */
+  studentsCount?: number | null;
+}
+
+/**
+ * One `abstract_rooms` row a workload may be held in: a place several classes legitimately share
+ * at the same hour («Спортивні зали»). Not a room — nothing that reasons about room exclusivity
+ * reads it — and its `capacity` caps the *total* students of everything in it at once.
+ */
+interface AbstractRoomRef {
+  id: string;
+  name: string;
+  capacity?: number | null;
+  building?: { id: string } | null;
 }
 
 interface RoomRef {
@@ -60,7 +86,8 @@ interface RawEntry {
   dayOfWeek: number;
   weekParity: string;
   classStartTime: { id: string; ordinal: number; startTime: string };
-  room: { id: string; number: string };
+  /** Nullable since V7: an abstract-room or online class has no room to record. */
+  room: { id: string; number: string } | null;
 }
 
 interface RawWorkload {
@@ -73,6 +100,11 @@ interface RawWorkload {
   /** Where the class may be held: the union of these two, empty meaning unrestricted. */
   rooms: RoomRef[];
   roomGroups: { id: string; name: string; rooms: RoomRef[] }[];
+  /** A list in GraphQL because the framework reads a join table as a many-to-many, but
+   *  lecturer_workload_abstract_rooms is keyed on the workload alone, so at most one element. */
+  abstractRooms?: AbstractRoomRef[] | null;
+  /** Present when this workload is held online — the row's existence *is* the fact. */
+  onlineClass?: { platform?: string | null } | null;
   timetableEntries: RawEntry[];
 }
 
@@ -126,8 +158,18 @@ interface WorkloadSource {
   lecturerNames: string[];
   lecturerIds: string[];
   academicGroupIds: string[];
-  /** Eligible rooms (rooms ∪ roomGroups' rooms); empty means "any room of the faculty". */
+  /** Eligible rooms (rooms ∪ roomGroups' rooms); empty means "any room of the faculty" — but only
+   *  for a class that is in a room at all, see `abstractRoom` and `isOnline`. */
   roomIds: string[];
+  /** The shared place this class is held in instead of a room, if any. */
+  abstractRoom: AbstractRoomRef | null;
+  /** Held online, so in no place at all. Overrides both of the above. */
+  isOnline: boolean;
+  /** `lecturer_workload_online_classes.platform`; null is legal — the row's presence is the fact,
+   *  its columns only say how to attend. Shown beside «Онлайн», never used to decide anything. */
+  onlinePlatform: string | null;
+  /** Students attending, summed over the groups; a group with no `students_count` adds 0. */
+  studentsCount: number;
   entries: RawEntry[];
 }
 
@@ -148,6 +190,14 @@ interface Block {
   lecturerIds: string[];
   academicGroupIds: string[];
   roomIds: string[];
+  /** The shared place this class is held in instead of a room, if any (see AbstractRoomRef). */
+  abstractRoom: AbstractRoomRef | null;
+  /** Held online — no place at all. */
+  isOnline: boolean;
+  /** The platform, when the online row names one — display only. */
+  onlinePlatform: string | null;
+  /** Students attending, for the abstract room's capacity ceiling. */
+  studentsCount: number;
   isBiweekly: boolean;
   dayOfWeek: number | null;
   /** The grid of bells this class runs on — decided per workload, not per occurrence. */
@@ -203,8 +253,10 @@ const EXTERNAL_ENTRY_SELECTION = `nodes {
   workload {
     id durationHours
     lecturers { id }
-    academicGroups { id }
-    combinedGroups { academicGroups { id } }
+    academicGroups { id studentsCount }
+    combinedGroups { academicGroups { id studentsCount } }
+    abstractRooms { id name capacity building { id } }
+    onlineClass { platform }
   }
 }`;
 
@@ -249,6 +301,13 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
    *  (see endTimeFor). Defaults match data.sql's seed values until loadGlobalProperties resolves. */
   semesterDurationWeeks = signal(16);
   academicHourDurationMinutes = signal(40);
+
+  /** abstract_room_travel_time_minutes — the journey to or from a shared place that has no
+   *  building, which is the only figure there can be when there is no address to measure from. */
+  abstractRoomTravelMinutes = signal(60);
+  /** university_commute_time_minutes — how long it takes to get between home and the university,
+   *  which is the gap a day mixing an online class with an in-room one has to leave. */
+  universityCommuteMinutes = signal(80);
 
   private wciItems = signal<RawWorkingItem[]>([]);
   private combinedItems = signal<RawCombinedItem[]>([]);
@@ -298,7 +357,30 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   applyDone = signal(0);
   applyTotal = signal(0);
 
-  private worker: Worker | null = null;
+  /**
+   * The search runs as a **portfolio**: several workers on the same problem with different seeds,
+   * and the best answer wins.
+   *
+   * Measured, one instance at one budget across four seeds gives 438 / 510 / 547 / 665 — a 52%
+   * spread, because a stochastic local search converges into whichever basin its trajectory reaches
+   * and the basins differ. Best-of-four therefore beats the median by about 20% at **no cost in
+   * wall clock**, provided the runs are concurrent. Splitting one budget across four sequential
+   * runs instead is 4.3x *worse*, so the concurrency is not incidental to the gain, it is the whole
+   * of it: each worker must get the full budget.
+   *
+   * One core is deliberately left to the page, which still has a modal animating on it.
+   */
+  private workers: Worker[] = [];
+  /**
+   * How many searches this run started.
+   *
+   * Deliberately *not* `workers.length`: that array is emptied by `terminateWorkers`, so reading it
+   * to decide "have all of them reported?" would make the answer depend on whether a stop happened
+   * to have run first. The count is what the arithmetic needs, so the count is what is stored.
+   */
+  private fleetSize = 0;
+  private finished: SolverResult[] = [];
+  private failures = 0;
   private cancelRequested = false;
   private genBusy = false;
   private pendingBlocks: Block[] = [];
@@ -327,8 +409,18 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.worker?.terminate();
-    this.worker = null;
+    this.terminateWorkers();
+  }
+
+  private terminateWorkers() {
+    for (const w of this.workers) w.terminate();
+    this.workers = [];
+  }
+
+  /** Π₁..Π₆ — the terms a schedule has to satisfy to be usable, summed. */
+  private hardOf(v: SolverResult['violations']): number {
+    return v.lecturerConflicts + v.groupConflicts + v.roomConflicts
+      + v.groupTravel + v.lecturerTravel + v.abstractRoomOverflow;
   }
 
   /**
@@ -395,12 +487,19 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   }
 
   private loadGlobalProperties() {
-    const q = `query($parityName: ID!, $weeksName: ID!, $hourMinutesName: ID!) { globalProperties {
+    const q = `query($parityName: ID!, $weeksName: ID!, $hourMinutesName: ID!, $abstractTravelName: ID!, $commuteName: ID!) { globalProperties {
       parity: globalProperty(name: $parityName) { value }
       weeks: globalProperty(name: $weeksName) { value }
       hourMinutes: globalProperty(name: $hourMinutesName) { value }
+      abstractTravel: globalProperty(name: $abstractTravelName) { value }
+      commute: globalProperty(name: $commuteName) { value }
     } }`;
-    this.gql.request(q, { parityName: 'current_semester_parity', weeksName: 'semester_duration_weeks', hourMinutesName: 'academic_hour_duration_minutes' }).subscribe({
+    this.gql.request(q, {
+      parityName: 'current_semester_parity', weeksName: 'semester_duration_weeks',
+      hourMinutesName: 'academic_hour_duration_minutes',
+      abstractTravelName: 'abstract_room_travel_time_minutes',
+      commuteName: 'university_commute_time_minutes'
+    }).subscribe({
       next: (d: any) => {
         const props = d.globalProperties;
         const parity = props.parity?.value;
@@ -409,6 +508,14 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
         if (weeks > 0) this.semesterDurationWeeks.set(weeks);
         const hourMinutes = Number(props.hourMinutes?.value);
         if (hourMinutes > 0) this.academicHourDurationMinutes.set(hourMinutes);
+        // These two differ from the three above in what a *blank* value means. They are journeys,
+        // and the solver's convention is that a journey of no positive length is no journey at
+        // all — so an administrator who clears one is switching the rule off, not asking for the
+        // seeded default back. The row being absent entirely (a database older than V7) is the
+        // only case that keeps the default.
+        const minutes = (row: any) => { const n = Number(row?.value); return Number.isFinite(n) && n > 0 ? n : 0; };
+        if (props.abstractTravel) this.abstractRoomTravelMinutes.set(minutes(props.abstractTravel));
+        if (props.commute) this.universityCommuteMinutes.set(minutes(props.commute));
         this.parityResolved = true;
         this.loadItems();
       },
@@ -572,6 +679,17 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       lecturerNames: (w.lecturers ?? []).map((l) => this.lecturerName(l)),
       lecturerIds: (w.lecturers ?? []).map((l) => l.id),
       roomIds: rooms.map((r) => r.id),
+      // The three ways a class can be held are alternatives, and they override each other in this
+      // order: an online class is online whatever else the workload names, and an abstract room
+      // replaces the rooms rather than joining them (see the V7 migration). `abstractRooms` is a
+      // list only because the framework reads a join table as a many-to-many — the primary key on
+      // lecturer_workload_abstract_rooms guarantees at most one element.
+      abstractRoom: (w.abstractRooms ?? [])[0] ?? null,
+      isOnline: !!w.onlineClass,
+      onlinePlatform: w.onlineClass?.platform ?? null,
+      // A group with no students_count adds 0: an unentered figure is not evidence of a crowd, and
+      // treating it as one would reject placements the data does not object to.
+      studentsCount: groups.reduce((n, g) => n + (g.studentsCount ?? 0), 0),
       entries: w.timetableEntries ?? []
     };
   }
@@ -653,11 +771,17 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       lecturerIds: s.lecturerIds,
       academicGroupIds: s.academicGroupIds,
       roomIds: s.roomIds,
+      abstractRoom: s.abstractRoom,
+      isOnline: s.isOnline,
+      onlinePlatform: s.onlinePlatform,
+      studentsCount: s.studentsCount,
       isBiweekly,
       dayOfWeek: entry?.dayOfWeek ?? null,
       classStartTimeSetId: s.classStartTimeSetId,
       classStartTimeSetName: s.classStartTimeSetName,
       classStartTimeId: entry?.classStartTime?.id ?? null,
+      // `room` is nullable on the entry now, not only absent when the entry is: a scheduled
+      // abstract-room or online class resolves it to null.
       roomId: entry?.room?.id ?? null,
       weekParity: entry?.weekParity ?? (isBiweekly ? 'NUMERATOR' : 'WEEKLY')
     };
@@ -718,9 +842,36 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     return b.lecturerNames.join(', ') || '—';
   }
 
+  /**
+   * Whether this class is held in a room of its own — the only one of the three ways that leaves a
+   * room to choose. A class in an abstract room shares a place with several others and a class held
+   * online has no place at all; both write `timetable_entries.room_id = NULL`.
+   */
+  isInRoom(block: Block): boolean {
+    return !block.isOnline && !block.abstractRoom;
+  }
+
+  /**
+   * Where a class that is *not* in a room is held, for the read-only field that stands in for the
+   * room dropdown. Read-only deliberately: which of the three ways a class is held is a property of
+   * the workload, edited on «Призначення аудиторій», not a per-occurrence decision this board makes.
+   */
+  placeLabel(block: Block): string {
+    if (block.isOnline) {
+      return block.onlinePlatform
+        ? `Онлайн (${onlineClassPlatformLabel(block.onlinePlatform)})`
+        : 'Онлайн';
+    }
+    return block.abstractRoom?.name ?? '';
+  }
+
   canSave(block: Block): boolean {
     const f = this.form(block);
-    return !!f.dayOfWeek && !!f.classStartTimeId && !!f.roomId && (!block.isBiweekly || !!f.weekParity);
+    // A room is required only of a class that is in one: demanding one of an online class would
+    // make an entry the generator can write impossible to correct by hand.
+    return !!f.dayOfWeek && !!f.classStartTimeId
+      && (!this.isInRoom(block) || !!f.roomId)
+      && (!block.isBiweekly || !!f.weekParity);
   }
 
   save(block: Block) {
@@ -731,7 +882,9 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       weekParity: block.isBiweekly ? f.weekParity : 'WEEKLY',
       workloadId: block.workloadId,
       classStartTimeId: f.classStartTimeId,
-      roomId: f.roomId
+      // NULL rather than whatever the form last held: a class not held in a room must not carry
+      // one, and the field is not offered for it in the first place.
+      roomId: this.isInRoom(block) ? f.roomId : null
     };
     this.actionError.set('');
     const op = block.entryId ? 'updateTimetableEntry' : 'createTimetableEntry';
@@ -839,11 +992,27 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     const groupIds = new Set<string>();
     const roomIds = new Set<string>(this.facultyRoomIds());
     const workloadIds = new Set<string>();
+    /**
+     * Every shared place any class of this run is held in — ours from the blocks below, other
+     * faculties' from the entries loaded as obstacles. The solver needs each one's capacity and
+     * building, and an external class in «Спортивні зали» counts against the same ceiling ours do.
+     */
+    const abstractRooms = new Map<string, SolverAbstractRoom>();
+    const noteAbstractRoom = (a: AbstractRoomRef | null | undefined) => {
+      if (!a?.id || abstractRooms.has(a.id)) return;
+      abstractRooms.set(a.id, {
+        id: a.id,
+        name: a.name ?? '',
+        capacity: a.capacity ?? null,
+        buildingId: a.building?.id ?? null
+      });
+    };
     for (const b of all) {
       b.lecturerIds.forEach((id) => lecturerIds.add(id));
       b.academicGroupIds.forEach((id) => groupIds.add(id));
       b.roomIds.forEach((id) => roomIds.add(id));
       if (b.roomId) roomIds.add(b.roomId);
+      noteAbstractRoom(b.abstractRoom);
       workloadIds.add(b.workloadId);
     }
 
@@ -950,11 +1119,15 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
         // rescheduled class would be asked to avoid the slot it is being moved out of.
         if (workloadIds.has(n.workload?.id)) continue;
         if (fixedById.has(n.id)) continue;
-        const groups = new Set<string>();
-        for (const g of n.workload?.academicGroups ?? []) groups.add(g.id);
+        // A map rather than a set: the students are wanted too, and only deduplicated by group id
+        // — a combined group repeating one of the workload's own groups must not count twice.
+        const groups = new Map<string, number>();
+        for (const g of n.workload?.academicGroups ?? []) groups.set(g.id, g.studentsCount ?? 0);
         for (const cg of n.workload?.combinedGroups ?? []) {
-          for (const g of cg.academicGroups ?? []) groups.add(g.id);
+          for (const g of cg.academicGroups ?? []) groups.set(g.id, g.studentsCount ?? 0);
         }
+        const abstractRoom = (n.workload?.abstractRooms ?? [])[0] ?? null;
+        noteAbstractRoom(abstractRoom);
         fixedById.set(n.id, {
           id: n.id,
           dayOfWeek: n.dayOfWeek,
@@ -962,8 +1135,11 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
           startTime: n.classStartTime?.startTime ?? '',
           durationHours: n.workload?.durationHours ?? 2,
           lecturerIds: (n.workload?.lecturers ?? []).map((l: any) => l.id),
-          groupIds: [...groups],
-          roomId: n.room?.id ?? null
+          groupIds: [...groups.keys()],
+          roomId: n.room?.id ?? null,
+          abstractRoomId: abstractRoom?.id ?? null,
+          isOnline: !!n.workload?.onlineClass,
+          studentsCount: [...groups.values()].reduce((a, b) => a + b, 0)
         });
       }
     }
@@ -979,8 +1155,14 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       lecturerIds: b.lecturerIds,
       groupIds: b.academicGroupIds,
       roomIds: b.roomIds,
+      abstractRoomId: b.abstractRoom?.id ?? null,
+      isOnline: b.isOnline,
+      studentsCount: b.studentsCount,
       isBiweekly: b.isBiweekly,
-      current: b.entryId && b.dayOfWeek != null && b.classStartTimeId && b.roomId
+      // No `&& b.roomId` any more: a scheduled abstract-room or online class has no room, and
+      // requiring one would hide its existing placement from the solver and let the rest of the
+      // run schedule into a slot the timetable still occupies.
+      current: b.entryId && b.dayOfWeek != null && b.classStartTimeId
         ? {
             dayOfWeek: b.dayOfWeek,
             classStartTimeId: b.classStartTimeId,
@@ -1002,7 +1184,10 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       groupConstraints,
       roomConstraints,
       roomBuilding,
-      buildingTravel
+      buildingTravel,
+      abstractRooms: [...abstractRooms.values()],
+      abstractRoomTravelMinutes: this.abstractRoomTravelMinutes(),
+      universityCommuteMinutes: this.universityCommuteMinutes()
     };
   }
 
@@ -1019,6 +1204,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       case 'ROOM':            return 'аудиторія';
       case 'GROUP_TRAVEL':    return 'група не встигає перейти між корпусами';
       case 'LECTURER_TRAVEL': return 'викладач не встигає перейти між корпусами';
+      case 'ABSTRACT_ROOM_CAPACITY': return 'перевищено місткість спільного місця';
     }
   }
 
@@ -1048,28 +1234,112 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
       return;
     }
 
-    const worker = this.ensureWorker();
-    const request: SolverRequest = { type: 'solve', problem: serialized, options };
-    worker.postMessage(request);
+    this.terminateWorkers();
+    this.finished = [];
+    this.failures = 0;
+
+    const count = this.workerCount(problem.requirements.length);
+    this.fleetSize = count;
+    // The loop is synchronous, so no worker's first message can be delivered until every worker has
+    // been spawned — a `done` cannot arrive while the fleet is still half-built and finish the run
+    // early. `fleetSize` is set before the loop rather than after it for the same reason: it is the
+    // value every handler reads.
+    for (let i = 0; i < count; i++) {
+      // Same problem, same budget, different seed — that is the whole of the portfolio.
+      const seeded: Partial<SolverOptions> = { ...options, seed: BASE_SEED + i * 7919 };
+      this.workers.push(this.spawnWorker({ type: 'solve', problem: serialized, options: seeded }));
+    }
   }
 
-  private ensureWorker(): Worker {
-    if (!this.worker) {
-      this.worker = new Worker(new URL('./timetable-solver.worker', import.meta.url), { type: 'module' });
-      this.worker.onmessage = ({ data }: MessageEvent<SolverResponse>) => {
-        if (data.type === 'progress') this.genProgress.set(data.progress);
-        else if (data.type === 'done') this.onSolved(data.result);
-        else {
-          this.genError.set(data.message);
-          this.genStage.set('error');
-        }
-      };
-      this.worker.onerror = (e) => {
-        this.genError.set(e.message || 'Помилка обчислення розкладу');
-        this.genStage.set('error');
-      };
+  /**
+   * How many searches to run at once. One core is left for the page, and the fleet is capped at
+   * four: best-of-k has sharply diminishing returns — the measured spread is between the best and
+   * the median, and a fifth seed moves the best very little — while every extra worker copies the
+   * whole problem into another heap.
+   */
+  private workerCount(blocks: number): number {
+    const cores = typeof navigator !== 'undefined' && navigator.hardwareConcurrency
+      ? navigator.hardwareConcurrency : 2;
+    let fleet = Math.max(1, Math.min(4, cores - 1));
+    // Every worker holds its own copy of the schedule and its indexes. Measured under Node, a
+    // 12,800-class instance costs about 250 MB of heap per search, so four of them would ask a
+    // browser tab for a gigabyte to win 20% — a trade worth making at faculty scale and not at
+    // university scale. A faculty is a few thousand classes and stays on the full fleet.
+    if (blocks > 8000) fleet = Math.min(fleet, 2);
+    else if (blocks > 4000) fleet = Math.min(fleet, 3);
+    return fleet;
+  }
+
+  private spawnWorker(request: SolverRequest): Worker {
+    const worker = new Worker(new URL('./timetable-solver.worker', import.meta.url), { type: 'module' });
+    worker.onmessage = ({ data }: MessageEvent<SolverResponse>) => {
+      if (data.type === 'progress') this.onProgress(data.progress);
+      else if (data.type === 'done') this.onWorkerDone(data.result);
+      else this.onWorkerFailed(data.message);
+    };
+    worker.onerror = (e) => this.onWorkerFailed(e.message || 'Помилка обчислення розкладу');
+    worker.postMessage(request);
+    return worker;
+  }
+
+  /**
+   * Progress from whichever worker is currently ahead.
+   *
+   * The modal shows one search, not k, because k progress bars would say nothing a reader can act
+   * on — and because the snapshot attached to these messages is what «Зупинити й показати
+   * результат» plans against, so it has to be the best schedule anyone has found, not the most
+   * recent. Ties go to the newer message, which keeps the iteration counter moving.
+   */
+  private onProgress(p: SolverProgress) {
+    const cur = this.genProgress();
+    if (cur) {
+      const better = p.hardTotal < cur.hardTotal
+        || (p.hardTotal === cur.hardTotal && p.objective <= cur.objective);
+      if (!better) return;
     }
-    return this.worker;
+    this.genProgress.set(p);
+  }
+
+  /** A worker finished. The run is over when all of them have, and the best answer wins. */
+  private onWorkerDone(result: SolverResult) {
+    if (!this.genBusy) return;
+    this.finished.push(result);
+    this.finishIfFleetIdle();
+  }
+
+  /**
+   * The run ends when every worker has either returned or failed, and the best answer wins —
+   * lexicographically by `(hard, objective)`, the same order the solver picks its own incumbent by,
+   * because a schedule with fewer clashes beats a prettier one whatever it costs in windows.
+   */
+  private finishIfFleetIdle() {
+    if (this.finished.length + this.failures < this.fleetSize) return;
+    if (!this.finished.length) return;   // all failed: onWorkerFailed has already reported it
+
+    let best = this.finished[0];
+    for (const r of this.finished) {
+      const bh = this.hardOf(best.violations), rh = this.hardOf(r.violations);
+      if (rh < bh || (rh === bh && r.objective < best.objective)) best = r;
+    }
+    this.terminateWorkers();
+    this.onSolved(best);
+  }
+
+  /**
+   * One search failing is not the run failing — the others are still going, and any of them can
+   * answer. Only a fleet that has *all* failed is an error the user needs to see.
+   */
+  private onWorkerFailed(message: string) {
+    if (!this.genBusy) return;
+    this.failures++;
+    if (this.failures >= this.fleetSize) {
+      this.genBusy = false;
+      this.terminateWorkers();
+      this.genError.set(message);
+      this.genStage.set('error');
+      return;
+    }
+    this.finishIfFleetIdle();
   }
 
   private onSolved(result: SolverResult) {
@@ -1098,6 +1368,10 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
         plan.creates.push({ block, placement: a.placement });
         continue;
       }
+      // Both sides of the room comparison are `string | null` since V7: an abstract-room or online
+      // class stores no room, so `null === null` is exactly the "unchanged" it should be, and a
+      // class that gained or lost a room compares unequal and is written. No `??` needed — the two
+      // are read from the same nullable column.
       const same = block.dayOfWeek === a.placement.dayOfWeek
         && block.classStartTimeId === a.placement.classStartTimeId
         && block.roomId === a.placement.roomId
@@ -1126,12 +1400,12 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   private stopSolver() {
     this.cancelRequested = true;
     this.genBusy = false;
-    if (this.worker) {
-      const request: SolverRequest = { type: 'cancel' };
-      this.worker.postMessage(request);   // honoured by an inline (non-worker) run
-      this.worker.terminate();
-      this.worker = null;
+    const request: SolverRequest = { type: 'cancel' };
+    for (const w of this.workers) {
+      w.postMessage(request);   // honoured by an inline (non-worker) run
+      w.terminate();
     }
+    this.workers = [];
   }
 
   /** Stop early and plan whatever the last progress message carried. */
@@ -1189,13 +1463,20 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     }
   }
 
+  /**
+   * One `timetable_entries` row's input payload. `roomId` may legitimately be null since V7 — a
+   * class held in an abstract room has nothing to allocate and one held online has nowhere to be,
+   * and *which* of the two it is is read from the workload rather than copied onto the entry.
+   */
   private entryInput(block: Block, p: SolverPlacement) {
     return {
       dayOfWeek: p.dayOfWeek,
       weekParity: block.isBiweekly ? p.weekParity : 'WEEKLY',
       workloadId: block.workloadId,
       classStartTimeId: p.classStartTimeId,
-      roomId: p.roomId
+      // The solver already returns null for a class held in an abstract room or online; asking the
+      // block the same question here keeps the invariant beside the write instead of two files away.
+      roomId: this.isInRoom(block) ? p.roomId : null
     };
   }
 
@@ -1278,10 +1559,12 @@ const WORKLOAD_SELECTION = `
   durationHours
   classStartTimeSet { id name }
   lecturers { id firstName middleName lastName }
-  academicGroups { id name }
-  combinedGroups { id academicGroups { id name } }
+  academicGroups { id name studentsCount }
+  combinedGroups { id academicGroups { id name studentsCount } }
   rooms { id number name }
   roomGroups { id name rooms { id number name } }
+  abstractRooms { id name capacity building { id } }
+  onlineClass { platform }
   timetableEntries {
     id dayOfWeek weekParity
     classStartTime { id ordinal startTime }

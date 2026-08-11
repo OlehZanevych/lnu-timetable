@@ -94,11 +94,23 @@
           @if (computedEndTime(b); as endTime) {
             <span class="muted">Закінчення: {{ endTime }}</span>
           }
-          <label>
-            <span>Аудиторія</span>
-            <app-search-select [options]="roomOptions()" [(ngModel)]="f.roomId"
-                                [name]="b.key + '-room'" [ngModelOptions]="{ standalone: true }" />
-          </label>
+          <!-- Where the class is held. Only one of the three ways leaves anything to choose here:
+               an abstract room is shared with other classes and an online class has no place at
+               all, and *which* of the three it is belongs to the workload («Призначення
+               аудиторій»), not to one occurrence of it. Offering the dropdown for those two would
+               invite a room onto a row that must store NULL. -->
+          @if (isInRoom(b)) {
+            <label>
+              <span>Аудиторія</span>
+              <app-search-select [options]="roomOptions()" [(ngModel)]="f.roomId"
+                                  [name]="b.key + '-room'" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          } @else {
+            <label>
+              <span>Місце проведення</span>
+              <span class="tt-block-place">{{ placeLabel(b) }}</span>
+            </label>
+          }
           @if (b.isBiweekly) {
             <label>
               <span>Парність тижня</span>
@@ -201,22 +213,40 @@
                   <td>{{ 50 * p.violations.roomConflicts * p.violations.roomConflicts }}</td>
                 </tr>
                 <tr>
-                  <td>Вікна викладачів (S4)</td>
+                  <td>Групи не встигають перейти між корпусами (H4)</td>
+                  <td>{{ p.violations.groupTravel }}</td><td>90</td>
+                  <td>{{ 90 * p.violations.groupTravel * p.violations.groupTravel }}</td>
+                </tr>
+                <tr>
+                  <td>Викладачі не встигають перейти між корпусами (H5)</td>
+                  <td>{{ p.violations.lecturerTravel }}</td><td>120</td>
+                  <td>{{ 120 * p.violations.lecturerTravel * p.violations.lecturerTravel }}</td>
+                </tr>
+                <tr>
+                  <td>Перевищення місткості спільних місць (H6)</td>
+                  <td>{{ p.violations.abstractRoomOverflow }}</td><td>50</td>
+                  <td>{{ 50 * p.violations.abstractRoomOverflow * p.violations.abstractRoomOverflow }}</td>
+                </tr>
+                <tr>
+                  <td>Вікна викладачів (S7)</td>
                   <td>{{ p.violations.lecturerWindows }}</td><td>5</td>
                   <td>{{ 5 * p.violations.lecturerWindows * p.violations.lecturerWindows }}</td>
                 </tr>
                 <tr>
-                  <td>Вікна груп (S5)</td>
+                  <td>Вікна груп (S8)</td>
                   <td>{{ p.violations.groupWindows }}</td><td>20</td>
                   <td>{{ 20 * p.violations.groupWindows * p.violations.groupWindows }}</td>
+                </tr>
+                <tr>
+                  <td>Змішані дні (онлайн + аудиторія) у групах (S9)</td>
+                  <td>{{ p.violations.mixedOnlineDays }}</td><td>30</td>
+                  <td>{{ 30 * p.violations.mixedOnlineDays * p.violations.mixedOnlineDays }}</td>
                 </tr>
               </tbody>
             </table>
 
             <p class="muted tt-gen-meta">
-              Ітерація {{ p.iteration }} · інтенсивність локального пошуку
-              {{ (p.intensity * 100).toFixed(0) }}% · температура {{ p.temperature.toFixed(2) }} ·
-              без покращення: {{ p.stagnation }}
+              Ітерація {{ p.iteration }} · без покращення: {{ p.stagnation }}
               @if (p.unplaced) { · неможливо розмістити: {{ p.unplaced }} }
             </p>
           }
