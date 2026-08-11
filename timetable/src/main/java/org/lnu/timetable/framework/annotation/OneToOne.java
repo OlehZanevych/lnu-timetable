@@ -22,7 +22,10 @@ public @interface OneToOne {
     boolean owning() default true;
 
     /**
-     * For non-owning side: the field in the target entity that maps back.
+     * For the non-owning side: the column on the target table that points back at this entity
+     * (as {@code @OneToMany#mappedBy}, a column name rather than a field name). Setting it is what
+     * makes this the inverse side — the foreign key is over there — so a field that names it is
+     * never the owner, whatever {@link #owning()} says.
      */
     String mappedBy() default "";
 }

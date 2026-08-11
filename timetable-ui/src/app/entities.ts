@@ -191,6 +191,29 @@ export const ROOM_KIND_OPTIONS = [
   { value: 'SEMINAR_ROOM', label: 'Семінарська аудиторія' }
 ];
 
+/**
+ * `lecturer_workload_online_classes.platform` — where an online class is actually held. Almost
+ * every value is a product name and stays in Latin script; only «Інша» is translated, and it is the
+ * value the row's нотатка exists to explain.
+ *
+ * The platform is optional: a class whose online row names none is still online, because it is the
+ * row's presence and not its columns that says so.
+ */
+export const ONLINE_CLASS_PLATFORM_OPTIONS = [
+  { value: 'ZOOM',            label: 'Zoom' },
+  { value: 'MICROSOFT_TEAMS', label: 'Microsoft Teams' },
+  { value: 'GOOGLE_MEET',     label: 'Google Meet' },
+  { value: 'MOODLE',          label: 'Moodle' },
+  { value: 'SKYPE',           label: 'Skype' },
+  { value: 'WEBEX',           label: 'Webex' },
+  { value: 'BIGBLUEBUTTON',   label: 'BigBlueButton' },
+  { value: 'OTHER',           label: 'Інша' }
+];
+
+/** Ukrainian label for an online class platform; falls back to the raw value if ever unknown. */
+export const onlineClassPlatformLabel = (v: string): string =>
+  ONLINE_CLASS_PLATFORM_OPTIONS.find((o) => o.value === v)?.label ?? v;
+
 export const WEEK_PARITY_OPTIONS = [
   { value: 'WEEKLY',      label: 'Щотижня' },
   { value: 'NUMERATOR',   label: 'Чисельник' },
@@ -346,6 +369,23 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'departmentId', label: 'Кафедра', type: 'ref', ref: 'department', relation: 'department', refLabel: 'name',
         parentFilter: { namespace: 'faculties', list: 'facultyConnection', label: 'Факультет' } },
       multiref('roomIds', 'Аудиторії', 'room', 'rooms', 'number')
+    ]
+  },
+  {
+    // A place several classes legitimately share in one slot — «Спортивні зали», «Дистанційно з
+    // кафедри». Deliberately not a `Room`, because everything that reasons about rooms is built on
+    // one room holding one class at a time, and recording a sports complex as a room would be a
+    // clash the solver spends its search avoiding. A null факультет means the place is
+    // university-wide, which such a place usually is — so, exactly as for a room group, the
+    // факультет filter above the table matches the column and returns one faculty's entries
+    // *without* the shared ones a reader normally also wants. `min` mirrors the CHECK on the column.
+    name: 'AbstractRoom', label: 'Абстрактні аудиторії', single: 'abstractRoom', namespace: 'abstractRooms', list: 'abstractRoomConnection', filterParam: 'facultyId',
+    fields: [
+      { name: 'name', label: 'Назва', type: 'text', required: true },
+      { name: 'purpose', label: 'Призначення', type: 'text' },
+      { name: 'capacity', label: 'Місткість', type: 'number', min: 1 },
+      ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name'),
+      ref('buildingId', 'Корпус', 'building', 'building', 'name')
     ]
   },
   {

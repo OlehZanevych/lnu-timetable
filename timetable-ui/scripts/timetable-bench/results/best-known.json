@@ -1,0 +1,305 @@
+{
+ "note": "Best soft cost ever recorded per instance. Feasible runs only. Monotone: only ever improves.",
+ "instances": {
+  "n400-s1": {
+   "soft": 2,
+   "n": 400,
+   "instanceSeed": 1,
+   "solver": "v18-ruin.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T08:05:58.311Z",
+   "referenceSoft": 362
+  },
+  "n400-s2": {
+   "soft": 5,
+   "n": 400,
+   "instanceSeed": 2,
+   "solver": "v15-window.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T06:45:47.236Z",
+   "referenceSoft": 412
+  },
+  "n400-s3": {
+   "soft": 3,
+   "n": 400,
+   "instanceSeed": 3,
+   "solver": "v15-window.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T06:46:17.632Z",
+   "referenceSoft": 357
+  },
+  "n400-s4": {
+   "soft": 6,
+   "n": 400,
+   "instanceSeed": 4,
+   "solver": "v15-window.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T06:46:17.639Z",
+   "referenceSoft": 324
+  },
+  "n400-s5": {
+   "soft": 6,
+   "n": 400,
+   "instanceSeed": 5,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:18:01.088Z",
+   "referenceSoft": 365
+  },
+  "n800-s1": {
+   "soft": 24,
+   "n": 800,
+   "instanceSeed": 1,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T13:01:34.228Z",
+   "referenceSoft": 755
+  },
+  "n800-s2": {
+   "soft": 18,
+   "n": 800,
+   "instanceSeed": 2,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:18:31.293Z",
+   "referenceSoft": 753
+  },
+  "n800-s3": {
+   "soft": 16,
+   "n": 800,
+   "instanceSeed": 3,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:19:01.527Z",
+   "referenceSoft": 753
+  },
+  "n800-s4": {
+   "soft": 18,
+   "n": 800,
+   "instanceSeed": 4,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:19:31.702Z",
+   "referenceSoft": 801
+  },
+  "n800-s5": {
+   "soft": 11,
+   "n": 800,
+   "instanceSeed": 5,
+   "solver": "v15-window.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T06:47:48.988Z",
+   "referenceSoft": 807
+  },
+  "n1600-s1": {
+   "soft": 40,
+   "n": 1600,
+   "instanceSeed": 1,
+   "solver": "v19-chain.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T09:46:13.387Z",
+   "referenceSoft": 1582
+  },
+  "n1600-s2": {
+   "soft": 20,
+   "n": 1600,
+   "instanceSeed": 2,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:20:32.205Z",
+   "referenceSoft": 1590
+  },
+  "n1600-s4": {
+   "soft": 28,
+   "n": 1600,
+   "instanceSeed": 4,
+   "solver": "v15-window.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T06:48:50.382Z",
+   "referenceSoft": 1641
+  },
+  "n1600-s3": {
+   "soft": 38,
+   "n": 1600,
+   "instanceSeed": 3,
+   "solver": "v15-window.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T06:48:50.409Z",
+   "referenceSoft": 1567
+  },
+  "n1600-s5": {
+   "soft": 55,
+   "n": 1600,
+   "instanceSeed": 5,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:22:03.023Z",
+   "referenceSoft": 1567
+  },
+  "n3200-s1": {
+   "soft": 71,
+   "n": 3200,
+   "instanceSeed": 1,
+   "solver": "v19-chain.ts",
+   "budgetMs": 60000,
+   "searchSeed": null,
+   "ts": "2026-08-11T09:27:48.897Z",
+   "referenceSoft": 3144
+  },
+  "n3200-s2": {
+   "soft": 72,
+   "n": 3200,
+   "instanceSeed": 2,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T13:55:46.987Z",
+   "referenceSoft": 3239
+  },
+  "n3200-s3": {
+   "soft": 121,
+   "n": 3200,
+   "instanceSeed": 3,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T14:34:17.769Z",
+   "referenceSoft": 3110
+  },
+  "n3200-s4": {
+   "soft": 122,
+   "n": 3200,
+   "instanceSeed": 4,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:23:34.316Z",
+   "referenceSoft": 3159
+  },
+  "n3200-s5": {
+   "soft": 108,
+   "n": 3200,
+   "instanceSeed": 5,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:24:04.657Z",
+   "referenceSoft": 3153
+  },
+  "n6400-s1": {
+   "soft": 209,
+   "n": 6400,
+   "instanceSeed": 1,
+   "solver": "v16-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T12:39:16.230Z",
+   "referenceSoft": 6173
+  },
+  "n6400-s2": {
+   "soft": 153,
+   "n": 6400,
+   "instanceSeed": 2,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T13:57:47.537Z",
+   "referenceSoft": 6205
+  },
+  "n6400-s3": {
+   "soft": 232,
+   "n": 6400,
+   "instanceSeed": 3,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T14:36:18.580Z",
+   "referenceSoft": 6126
+  },
+  "n6400-s4": {
+   "soft": 594,
+   "n": 6400,
+   "instanceSeed": 4,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:25:36.268Z",
+   "referenceSoft": 6255
+  },
+  "n6400-s5": {
+   "soft": 593,
+   "n": 6400,
+   "instanceSeed": 5,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 30000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:26:06.830Z",
+   "referenceSoft": 6238
+  },
+  "n12800-s1": {
+   "soft": 438,
+   "n": 12800,
+   "instanceSeed": 1,
+   "solver": "v16-shipped.ts",
+   "budgetMs": 300000,
+   "searchSeed": null,
+   "ts": "2026-08-11T07:36:18.049Z",
+   "referenceSoft": 12464
+  },
+  "n12800-s2": {
+   "soft": 401,
+   "n": 12800,
+   "instanceSeed": 2,
+   "solver": "v16-shipped.ts",
+   "budgetMs": 300000,
+   "searchSeed": null,
+   "ts": "2026-08-11T11:56:57.605Z",
+   "referenceSoft": 12513
+  },
+  "n12800-s3": {
+   "soft": 600,
+   "n": 12800,
+   "instanceSeed": 3,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 120000,
+   "searchSeed": null,
+   "ts": "2026-08-11T10:32:10.375Z",
+   "referenceSoft": 12340
+  },
+  "n31000-s1": {
+   "soft": 1463,
+   "n": 31000,
+   "instanceSeed": 1,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 470000,
+   "searchSeed": null,
+   "ts": "2026-08-11T11:24:27.502Z",
+   "referenceSoft": 30551
+  },
+  "n31000-s2": {
+   "soft": 1125,
+   "n": 31000,
+   "instanceSeed": 2,
+   "solver": "v20-shipped.ts",
+   "budgetMs": 470000,
+   "searchSeed": null,
+   "ts": "2026-08-11T11:44:51.181Z",
+   "referenceSoft": 29944
+  }
+ }
+}

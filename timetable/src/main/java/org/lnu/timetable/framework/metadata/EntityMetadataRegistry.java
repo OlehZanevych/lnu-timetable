@@ -63,6 +63,7 @@ public class EntityMetadataRegistry {
         String tableName = annotation.table().isEmpty()
             ? CaseFormat.UPPER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, entityClass.getSimpleName()) + "s"
             : annotation.table();
+        String keyColumn = annotation.key();
 
         Map<String, EntityFieldMetadata> fields = new LinkedHashMap<>();
         List<String> selectableColumns = new ArrayList<>();
@@ -89,7 +90,12 @@ public class EntityMetadataRegistry {
                 ));
             } else if (field.isAnnotationPresent(OneToOne.class)) {
                 OneToOne rel = field.getAnnotation(OneToOne.class);
-                String joinCol = rel.owning()
+                // Naming a mappedBy column *is* what puts the foreign key on the other table, so a
+                // field that has one is the inverse side whatever owning() says (which defaults to
+                // true, for the far commoner owning case). A null joinColumn is how the rest of the
+                // framework recognises that side.
+                boolean owning = rel.owning() && rel.mappedBy().isEmpty();
+                String joinCol = owning
                     ? (rel.joinColumn().isEmpty()
                         ? CaseFormat.LOWER_CAMEL.to(CaseFormat.LOWER_UNDERSCORE, field.getName()) + "_id"
                         : rel.joinColumn())
@@ -118,7 +124,11 @@ public class EntityMetadataRegistry {
                     field.getName(), columnName, field.getType(), nullable, description, pgEnumType
                 ));
 
-                if (!"id".equals(field.getName())) {
+                // The key is exposed as the GraphQL `id` field and nothing else, so it must not also
+                // become an ordinary selectable scalar. Matched on the column rather than on the
+                // field name: for an entity keyed by its parent the field is called e.g.
+                // `lecturerWorkloadId`, and only its column says that it is the key.
+                if (!keyColumn.equals(columnName)) {
                     selectableColumns.add(field.getName());
                 }
             }
@@ -136,7 +146,7 @@ public class EntityMetadataRegistry {
                 pjp.value(), pjp.joinTable(), pjp.selfColumn(), pjp.parentColumn()));
         }
 
-        return new EntityMetadata(entityClass, tableName, fields, selectableColumns, relations,
+        return new EntityMetadata(entityClass, tableName, keyColumn, fields, selectableColumns, relations,
             resourceType, permissionParents, permissionJoinParents);
     }
 

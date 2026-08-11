@@ -111,8 +111,17 @@ public class R2dbcQueryEngine {
 
     /** Batched many-to-one / one-to-one lookup: fetches every row of {@code table} whose id is in {@code ids} in a single query. */
     public Flux<Map<String, Object>> selectByIds(String table, List<Col> cols, Collection<Object> ids) {
+        return selectByIds(table, cols, ids, "id");
+    }
+
+    /**
+     * As {@link #selectByIds(String, List, Collection)}, for an entity whose key column is not
+     * {@code id} (see {@code EntityMetadata#keyColumn()}). The rows still come back with the key
+     * projected as {@code id}, because {@code cols} says so.
+     */
+    public Flux<Map<String, Object>> selectByIds(String table, List<Col> cols, Collection<Object> ids, String keyColumn) {
         if (ids.isEmpty()) return Flux.empty();
-        String sql = "SELECT " + projection(cols) + " FROM " + table + " WHERE id = ANY(:ids)";
+        String sql = "SELECT " + projection(cols) + " FROM " + table + " WHERE " + keyColumn + " = ANY(:ids)";
         return db.sql(sql).bind("ids", toLongArray(ids)).map(row -> mapRow(row, cols)).all();
     }
 
@@ -122,9 +131,19 @@ public class R2dbcQueryEngine {
      * caller can group rows back per parent id.
      */
     public Flux<KeyedRow> selectWhereIn(String table, List<Col> cols, String fkColumn, Collection<Object> fkValues) {
+        return selectWhereIn(table, cols, fkColumn, fkValues, "id");
+    }
+
+    /**
+     * As {@link #selectWhereIn(String, List, String, Collection)}, for a child table keyed by
+     * something other than {@code id} — which is only about the ORDER BY here, since the batch key
+     * is the foreign key either way.
+     */
+    public Flux<KeyedRow> selectWhereIn(String table, List<Col> cols, String fkColumn,
+                                        Collection<Object> fkValues, String keyColumn) {
         if (fkValues.isEmpty()) return Flux.empty();
         String sql = "SELECT " + projection(cols) + ", " + fkColumn + " AS \"__batchFk\" FROM " + table
-            + " WHERE " + fkColumn + " = ANY(:vals) ORDER BY id";
+            + " WHERE " + fkColumn + " = ANY(:vals) ORDER BY " + keyColumn;
         return db.sql(sql).bind("vals", toLongArray(fkValues))
             .map(row -> new KeyedRow(row.get("__batchFk"), mapRow(row, cols)))
             .all();
@@ -137,42 +156,68 @@ public class R2dbcQueryEngine {
      */
     public Flux<KeyedRow> selectViaJoinTableBatch(String table, List<Col> cols, String joinTable,
                                                   String joinColumn, String inverseJoinColumn, Collection<Object> parentIds) {
+        return selectViaJoinTableBatch(table, cols, joinTable, joinColumn, inverseJoinColumn, parentIds, "id");
+    }
+
+    /**
+     * As {@link #selectViaJoinTableBatch(String, List, String, String, String, Collection)}, for a
+     * target table whose key column is not {@code id} — the join table's inverse column points at
+     * that key, so it is what the JOIN and the ORDER BY have to name.
+     */
+    public Flux<KeyedRow> selectViaJoinTableBatch(String table, List<Col> cols, String joinTable,
+                                                  String joinColumn, String inverseJoinColumn,
+                                                  Collection<Object> parentIds, String keyColumn) {
         if (parentIds.isEmpty()) return Flux.empty();
         String sql = "SELECT " + projectionQualified(cols, "t") + ", jt." + joinColumn + " AS \"__batchFk\" FROM " + joinTable + " jt"
-            + " JOIN " + table + " t ON t.id = jt." + inverseJoinColumn
-            + " WHERE jt." + joinColumn + " = ANY(:vals) ORDER BY t.id";
+            + " JOIN " + table + " t ON t." + keyColumn + " = jt." + inverseJoinColumn
+            + " WHERE jt." + joinColumn + " = ANY(:vals) ORDER BY t." + keyColumn;
         return db.sql(sql).bind("vals", toLongArray(parentIds))
             .map(row -> new KeyedRow(row.get("__batchFk"), mapRow(row, cols)))
             .all();
     }
 
     public Mono<Object> insert(String table, LinkedHashMap<String, Object> columnValues) {
+        return insert(table, columnValues, "id");
+    }
+
+    /**
+     * As {@link #insert(String, LinkedHashMap)}, returning {@code keyColumn} rather than {@code id}.
+     * For the usual surrogate key that is the value the sequence just generated; for an entity keyed
+     * by its parent it is the value the caller supplied in the input, handed back so the mutation
+     * response can carry it as {@code id} like any other.
+     */
+    public Mono<Object> insert(String table, LinkedHashMap<String, Object> columnValues, String keyColumn) {
         // Entities with no own scalar/FK input fields (e.g. a pure many-to-many hub like
         // CombinedWorkingCurriculumItem) reach this with an empty map — "INSERT INTO t () VALUES ()"
         // isn't valid Postgres syntax, so fall back to DEFAULT VALUES for every column.
         if (columnValues.isEmpty()) {
-            return db.sql("INSERT INTO " + table + " DEFAULT VALUES RETURNING id")
-                .map(row -> row.get("id")).one();
+            return db.sql("INSERT INTO " + table + " DEFAULT VALUES RETURNING " + keyColumn)
+                .map(row -> row.get(keyColumn)).one();
         }
         String columns = String.join(", ", columnValues.keySet());
         String binds = columnValues.entrySet().stream()
             .map(e -> ":" + e.getKey() + castSuffix(e.getValue()))
             .collect(Collectors.joining(", "));
-        String sql = "INSERT INTO " + table + " (" + columns + ") VALUES (" + binds + ") RETURNING id";
+        String sql = "INSERT INTO " + table + " (" + columns + ") VALUES (" + binds + ") RETURNING " + keyColumn;
         DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
         for (var e : columnValues.entrySet()) {
             spec = bindValue(spec, e.getKey(), e.getValue());
         }
-        return spec.map(row -> row.get("id")).one();
+        return spec.map(row -> row.get(keyColumn)).one();
     }
 
     public Mono<Long> update(String table, LinkedHashMap<String, Object> columnValues, Object id) {
+        return update(table, columnValues, id, "id");
+    }
+
+    /** As {@link #update(String, LinkedHashMap, Object)}, keyed by {@code keyColumn}. */
+    public Mono<Long> update(String table, LinkedHashMap<String, Object> columnValues, Object id, String keyColumn) {
         // Entities with no own scalar/FK input fields (e.g. a pure many-to-many hub like
         // CombinedWorkingCurriculumItem) reach this with an empty map — there's no "SET" clause to
         // build, so just confirm the row exists (callers use the returned count to distinguish
         // "not found" from "updated", then reconcile many-to-many lists regardless).
         if (columnValues.isEmpty()) {
-            return db.sql("SELECT 1 FROM " + table + " WHERE id = :idValue")
+            return db.sql("SELECT 1 FROM " + table + " WHERE " + keyColumn + " = :idValue")
                 .bind("idValue", id)
                 .map(row -> 1L)
                 .first()
@@ -181,7 +226,7 @@ public class R2dbcQueryEngine {
         String assignments = columnValues.entrySet().stream()
             .map(e -> e.getKey() + " = :" + e.getKey() + castSuffix(e.getValue()))
             .collect(Collectors.joining(", "));
-        String sql = "UPDATE " + table + " SET " + assignments + " WHERE id = :idValue";
+        String sql = "UPDATE " + table + " SET " + assignments + " WHERE " + keyColumn + " = :idValue";
         DatabaseClient.GenericExecuteSpec spec = db.sql(sql);
         for (var e : columnValues.entrySet()) {
             spec = bindValue(spec, e.getKey(), e.getValue());
@@ -191,8 +236,9 @@ public class R2dbcQueryEngine {
 
     /**
      * Updates rows of {@code table} matching {@code whereColumn} = {@code whereValue}. Unlike
-     * {@link #update}, which always keys off an {@code id} column, this supports entities whose
-     * primary key is something else (e.g. {@code global_properties}, keyed by {@code name}).
+     * {@link #update(String, LinkedHashMap, Object, String)}, which keys off the entity's declared
+     * key column and binds it as an id, this takes an arbitrary column and value — which is what
+     * {@code global_properties}, keyed by a {@code name} rather than by a number, needs.
      */
     public Mono<Long> updateWhere(String table, LinkedHashMap<String, Object> columnValues, String whereColumn, Object whereValue) {
         String assignments = columnValues.entrySet().stream()
@@ -225,7 +271,12 @@ public class R2dbcQueryEngine {
     }
 
     public Mono<Long> delete(String table, Object id) {
-        return db.sql("DELETE FROM " + table + " WHERE id = :v").bind("v", id).fetch().rowsUpdated();
+        return delete(table, id, "id");
+    }
+
+    /** As {@link #delete(String, Object)}, keyed by {@code keyColumn}. */
+    public Mono<Long> delete(String table, Object id, String keyColumn) {
+        return db.sql("DELETE FROM " + table + " WHERE " + keyColumn + " = :v").bind("v", id).fetch().rowsUpdated();
     }
 
     /** Deletes every row of {@code table} whose {@code column} equals {@code value}; used to clear join-table rows. */

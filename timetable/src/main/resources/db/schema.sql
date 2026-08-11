@@ -392,6 +392,64 @@ CREATE TABLE room_group_rooms
     PRIMARY KEY (room_group_id, room_id)
 );
 
+-- ============================ Infrastructure: Abstract rooms ============================
+--
+-- A place a class is held that the timetable does *not* have to keep to itself. Physical education
+-- is the case that forces it: «спортивні зали» is one line on the schedule, and the groups of half
+-- a faculty are in it at the same hour without that being a clash at all.
+--
+-- Recording that as a rooms row would be a lie the scheduler believes. Every consumer of `rooms`
+-- is built on one room holding one class at a time — the conflict test in the generator, the
+-- occupancy drawn on «Призначення аудиторій», timetableEntryConnection(roomIds:), and
+-- room_timetable_constraints. A boolean column there would leave every one of those quietly wrong
+-- until it was taught to check the flag. A table of its own instead, which nothing that reasons
+-- about room exclusivity reads.
+--
+-- What is still true of an abstract room:
+--
+--   * it may belong to a building — a спортивний комплекс has an address — and then the journey
+--     to it is that building's, straight out of building_travel_times, exactly as for a room;
+--   * or it may not, and then there is no address to measure from, so the journey is one fixed
+--     figure from anywhere: the `abstract_room_travel_time_minutes` global property, seeded at 60
+--     and editable by an administrator like every other institutional figure in that table;
+--   * it may declare a capacity, which — unlike a room's — is a ceiling on the *total* students of
+--     the classes sharing it in one slot, not on the size of any one class. NULL means no ceiling,
+--     which is the ordinary case: «дистанційно» holds everybody.
+--
+-- Scoped the way rooms and room_groups are: faculty_id set means only that faculty's workloads may
+-- reach for it, NULL means university-wide — which is what physical education needs, one pool of
+-- halls serving every faculty.
+CREATE TABLE abstract_rooms
+(
+    id          BIGSERIAL PRIMARY KEY,
+    name        VARCHAR(96)  COLLATE ukrainian NOT NULL,
+    -- An optional note on what the entry is for, as room_groups.purpose and combined_groups carry.
+    purpose     VARCHAR(200) COLLATE ukrainian,
+    -- NULL = attached to no building, which is the case the constant travel time above exists for.
+    -- ON DELETE SET NULL rather than CASCADE, matching rooms.building_id: deleting a корпус should
+    -- not delete the places, and a row with no building is already a state this table defines, so
+    -- what is left behind still means something exact.
+    building_id BIGINT REFERENCES buildings (id) ON DELETE SET NULL,
+    -- NULL = university-wide. ON DELETE CASCADE rather than the SET NULL rooms.faculty_id uses: a
+    -- room outlives its faculty because it is a physical thing, an abstract room that exists *for*
+    -- one faculty does not. Widening it instead would silently promote a private entry into a
+    -- university-wide one, and — where a university-wide row already carries the same name — make
+    -- deleting the faculty fail on the index below. Same reasoning as room_groups.faculty_id.
+    faculty_id  BIGINT REFERENCES faculties (id) ON DELETE CASCADE,
+    -- Read by the timetable generator, which sums the groups of every class placed in this
+    -- abstract room in the same (day, start time, week parity) and refuses the placement that
+    -- would carry the total past this. Zero is rejected rather than read as "nothing may be
+    -- scheduled here": not assigning the abstract room already says that, and unambiguously.
+    capacity    INTEGER CHECK (capacity > 0)
+);
+
+-- Unique within its scope, so a faculty may keep a «Спортивні зали» of its own beside the
+-- university-wide one. COALESCE rather than NULLS NOT DISTINCT, matching room_groups_unique_name.
+CREATE UNIQUE INDEX abstract_rooms_unique_name
+    ON abstract_rooms (name, COALESCE(faculty_id, 0));
+
+CREATE INDEX abstract_rooms_faculty_idx ON abstract_rooms (faculty_id) WHERE faculty_id IS NOT NULL;
+
 -- ============================ Infrastructure: Class start times ============================
 --
 -- Not every kind of class runs on the same bells. Physical education, for instance, usually starts
@@ -509,6 +567,23 @@ CREATE TABLE lecturer_workload_combined_groups
     PRIMARY KEY (lecturer_workload_id, combined_group_id)
 );
 
+-- ------------------------------------------------------------------ where the classes are held
+--
+-- Three answers to "where is this held?", and they are alternatives:
+--
+--   a room            lecturer_workload_rooms ∪ lecturer_workload_room_groups, empty = anywhere;
+--   an abstract room  a lecturer_workload_abstract_rooms row — at most one, and shared with the
+--                     other classes sitting in it that hour;
+--   online            a lecturer_workload_online_classes row, and no place at all.
+--
+-- All three hang off lecturer_workloads rather than sitting on it, so nothing enforces that only
+-- one of them is used: a CHECK cannot see across into another table. That is the line drawn
+-- everywhere else here — the database guarantees what is structural and leaves the cross-table
+-- rules to the client, which offers the three as one choice and clears the other two when one is
+-- picked.
+--
+-- The four tables that follow are those three answers, in that order.
+
 -- Which rooms this workload's classes may be held in, said two ways: individually named rooms, and
 -- whole reusable room groups. Both exist because both are natural — a lecture that must happen in
 -- the one hall large enough for it names that hall directly, while a lab that can run in any
@@ -533,6 +608,76 @@ CREATE TABLE lecturer_workload_room_groups
     lecturer_workload_id BIGINT NOT NULL REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
     room_group_id        BIGINT NOT NULL REFERENCES room_groups (id) ON DELETE CASCADE,
     PRIMARY KEY (lecturer_workload_id, room_group_id)
+);
+
+-- The one abstract room this workload's classes are held in, when they are held in one.
+--
+-- Written as a table rather than a column on lecturer_workloads so that the workload row carries
+-- no knowledge of it, matching how rooms and room groups are already attached. The limit — no more
+-- than one abstract room per class — survives the move intact, and is the primary key: keying on
+-- lecturer_workload_id *alone* is exactly the statement "at most one row per workload". Contrast
+-- lecturer_workload_rooms above, whose PRIMARY KEY (workload, room) deliberately lets a workload
+-- name many. Nothing stops the same abstract room appearing against any number of workloads, which
+-- is the whole point of one: they sit in it together.
+--
+-- ON DELETE CASCADE on both sides. Losing the workload takes the assignment with it; losing the
+-- abstract room un-assigns every class that named it, leaving the workloads themselves unrestricted
+-- again — the same thing deleting a room does through lecturer_workload_rooms.
+CREATE TABLE lecturer_workload_abstract_rooms
+(
+    lecturer_workload_id BIGINT PRIMARY KEY REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    abstract_room_id     BIGINT NOT NULL   REFERENCES abstract_rooms (id)     ON DELETE CASCADE
+);
+
+-- The primary key indexes the workload side only, and the question the capacity ceiling asks runs
+-- the other way — "every class placed in this abstract room" — so that direction gets an index of
+-- its own. It is the one read the generator makes per candidate placement.
+CREATE INDEX lecturer_workload_abstract_rooms_abstract_room_idx
+    ON lecturer_workload_abstract_rooms (abstract_room_id);
+
+CREATE TYPE online_class_platform AS ENUM (
+    'ZOOM',
+    'MICROSOFT_TEAMS',
+    'GOOGLE_MEET',
+    'MOODLE',
+    'SKYPE',
+    'WEBEX',
+    'BIGBLUEBUTTON',
+    'OTHER'
+);
+
+-- A workload held online instead of in a place. At most one row per workload — which is what the
+-- primary key below says — and the row's *presence* is the fact; the columns only say how to
+-- attend.
+--
+-- A table rather than a boolean on lecturer_workloads because there is something to record beyond
+-- yes/no: «Мій кабінет» and the printed «Розклад занять» both have to tell a student where to
+-- go, and a URL on lecturer_workloads would be a column that is NULL for very nearly every row.
+--
+-- Keyed by lecturer_workload_id itself, with no surrogate id beside it. That is the honest key —
+-- a second column would be a second way to name a row that the foreign key already names uniquely,
+-- and a UNIQUE constraint would then be carrying the real rule while the primary key carried none.
+-- It does mean this table is *not* addressable by the entity framework as it stands, which assumes
+-- every entity has a `Long id` (see the service README, «global_properties» — outside the entity
+-- framework); teaching the framework to take an entity's key column from its metadata rather than
+-- from that assumption is what makes this row reachable, and is a change to
+-- org.lnu.timetable.framework, not to this file.
+CREATE TABLE lecturer_workload_online_classes
+(
+    -- ON DELETE CASCADE: the row describes one workload and means nothing without it.
+    lecturer_workload_id BIGINT PRIMARY KEY REFERENCES lecturer_workloads (id) ON DELETE CASCADE,
+    -- NULL = held online, platform unstated. OTHER is for one that is stated but not on this list,
+    -- and `note` is where it gets named.
+    --
+    -- Declaration order is what ORDER BY on this column sorts by, so the values run from the ones
+    -- actually in use here to the ones that only might be, and OTHER is last on purpose. Adding a
+    -- value to a populated database is ALTER TYPE … ADD VALUE … BEFORE 'OTHER' rather than a plain
+    -- append, or the new platform sorts behind it — the same trap hour_type documents.
+    platform             online_class_platform,
+    -- Not collated, for the same reason the e-mail, phone and website columns are not: an
+    -- identifier nobody reads in alphabetical order.
+    meeting_url          VARCHAR(512),
+    note                 VARCHAR(200) COLLATE ukrainian
 );
 
 -- Lecturer<->student pairings for a workload whose working curriculum item is taught
@@ -607,7 +752,16 @@ CREATE TABLE timetable_entries
     -- Likewise: the room must be one the workload allows — the union of lecturer_workload_rooms and
     -- the rooms of its lecturer_workload_room_groups, or any room at all when both are empty. That
     -- is a set-membership test across two join tables, so the scheduler enforces it, not a CHECK.
-    room_id      BIGINT NOT NULL REFERENCES rooms (id) ON DELETE CASCADE
+    --
+    -- NULL when the class occupies no room: its workload names an abstract room, which is shared
+    -- with whatever else is in it at that hour and so has nothing to allocate, or it is held
+    -- online. Which of the two, and which abstract room, is read from the workload rather than
+    -- copied here — a second copy could only ever disagree with the first, the same reason the
+    -- class start time set is not repeated on this row either.
+    --
+    -- ON DELETE CASCADE survives that: deleting a room still deletes the classes scheduled in it,
+    -- rather than leaving entries whose NULL room_id would now read as "abstract room or online".
+    room_id      BIGINT REFERENCES rooms (id) ON DELETE CASCADE
 );
 
 -- ============================ Scheduling constraints ============================
@@ -948,3 +1102,43 @@ CREATE UNIQUE INDEX permissions_unique_grant
 CREATE INDEX permissions_user_idx ON permissions (user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX permissions_group_idx ON permissions (group_id) WHERE group_id IS NOT NULL;
 CREATE INDEX permissions_resource_idx ON permissions (resource_type, resource_id);
+
+
+-- ============================ Flyway's own bookkeeping ============================
+--
+-- Flyway creates this table itself the first time it runs, so it would be reasonable to expect it
+-- not to belong in a hand-written schema. It belongs here for one concrete reason: data.sql is a
+-- data-only pg_dump of a real database, and that database had the table, so the dump carries six
+-- INSERT INTO public.flyway_schema_history rows. Loading data.sql into a schema this file has just
+-- created therefore needs the table to already exist — without it, reset_db.sh gets as far as the
+-- дамп's flyway block and fails there.
+--
+-- The definition below is Flyway's own, column for column, so Flyway adopts this table rather than
+-- finding one it does not recognise. Column order matters as much as the types do: data.sql's
+-- INSERTs name their columns, but pg_dump wrote that list in attnum order and a future re-dump
+-- will do the same.
+--
+-- What this changes about a freshly reset database. Flyway baselines a schema only when the history
+-- table is *missing*; now it is present and populated, so spring.flyway.baseline-on-migrate never
+-- fires, and the migrations data.sql already records as applied (V1..V5) are not run a second time.
+-- That is the right outcome — the dump was taken after they ran, so their effects are in the data
+-- already — but it does mean this table is now part of what data.sql restores, and a migration
+-- added after the last dump (today, V6) is the only kind that still runs on a reset.
+CREATE TABLE flyway_schema_history
+(
+    installed_rank INTEGER                NOT NULL,
+    version        VARCHAR(50),
+    description    VARCHAR(200)           NOT NULL,
+    type           VARCHAR(20)            NOT NULL,
+    script         VARCHAR(1000)          NOT NULL,
+    -- Nullable, and the baseline row in data.sql is exactly the case: a baseline marks a position
+    -- rather than a file, so there is nothing to have taken a checksum of.
+    checksum       INTEGER,
+    installed_by   VARCHAR(100)           NOT NULL,
+    installed_on   TIMESTAMP DEFAULT now() NOT NULL,
+    execution_time INTEGER                NOT NULL,
+    success        BOOLEAN                NOT NULL,
+    CONSTRAINT flyway_schema_history_pk PRIMARY KEY (installed_rank)
+);
+
+CREATE INDEX flyway_schema_history_s_idx ON flyway_schema_history (success);

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { GqlVars, GraphqlService } from './graphql.service';
 import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
-import { HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS } from './entities';
+import { HOUR_TYPE_OPTIONS, ONLINE_CLASS_PLATFORM_OPTIONS, SEMESTER_PARITY_OPTIONS, toOptions } from './entities';
 import { compareUk } from './sort';
 import { CourseTagRef, courseLabel } from './course-label';
 
@@ -21,6 +21,15 @@ const hourTypeRank = (t: string): number => {
 interface GroupRef { id: string; name: string; }
 interface RoomRef { id: string; number: string; name?: string | null; }
 interface RoomGroupRef { id: string; name: string; }
+interface AbstractRoomRef { id: string; name: string; capacity?: number | null; building?: { id: string } | null; }
+interface OnlineClassRef { platform?: string | null; meetingUrl?: string | null; note?: string | null; }
+
+/**
+ * The three ways a class can be held, and they are alternatives: in one of a named set of rooms, in
+ * an abstract room (a place several classes share at the same hour), or nowhere at all — online.
+ * Choosing one is what clears the other two, both on screen and on save.
+ */
+type PlaceMode = 'ROOMS' | 'ABSTRACT' | 'ONLINE';
 
 interface LecturerRef {
   id: string;
@@ -37,6 +46,11 @@ interface RawWorkload {
   combinedGroups: { id: string; name: string; academicGroups: GroupRef[] }[];
   rooms: RoomRef[];
   roomGroups: RoomGroupRef[];
+  /** A list in GraphQL, at most one element in the database — `lecturer_workload_abstract_rooms`
+   *  is keyed on the workload alone, so a second id would be a duplicate key, not a second place. */
+  abstractRooms: AbstractRoomRef[];
+  /** Present exactly when the class is online; its columns only say how to attend. */
+  onlineClass?: OnlineClassRef | null;
 }
 
 interface RawCurriculumItemHours {
@@ -95,24 +109,54 @@ interface ClassCard {
   /** Assigned as stored — what the card's colour and the counter read. */
   roomIds: string[];
   roomGroupIds: string[];
+  /** '' when no abstract room is named. Never more than one — see `RawWorkload.abstractRooms`. */
+  abstractRoomId: string;
+  /** Whether an online row exists, which *is* the fact that the class is online. */
+  online: boolean;
+  onlinePlatform: string;
+  onlineMeetingUrl: string;
+  onlineNote: string;
+  /** Which of the three the stored state amounts to — what the form opens on. */
+  mode: PlaceMode;
 }
 
-/** The editable draft behind one card. */
+/**
+ * The editable draft behind one card. Every mode's fields are held at once rather than one union of
+ * them: switching mode and switching back must not lose what was typed before the trip, and only
+ * `mode` decides which of them a save actually sends.
+ */
 interface CardForm {
+  mode: PlaceMode;
   roomIds: string[];
   roomGroupIds: string[];
+  abstractRoomId: string;
+  onlinePlatform: string;
+  onlineMeetingUrl: string;
+  onlineNote: string;
   /** What the card looked like when this draft was seeded — see `form()`. */
   stamp: string;
 }
 
 /**
- * «Призначення аудиторій» — where each class of a faculty may be held.
+ * «Призначення аудиторій» — where each class of a faculty is held.
  *
- * The eligible rooms of a class are the **union** of the rooms named directly and the rooms of the
- * room groups named (`schema.sql:487-499`); naming nothing means no restriction, and the timetable
- * solver may then put the class in any room of the faculty. That is exactly why a class with
- * nothing assigned is worth seeing at a glance rather than discovering when the generator produces
- * a schedule holding a lecture in a 12-seat lab — so those cards are tinted red.
+ * A class is held in exactly one of three ways, and the card offers them as a choice rather than as
+ * three independent fields, because that is what they are:
+ *
+ *  - **в аудиторії** — the eligible rooms are the **union** of the rooms named directly and the
+ *    rooms of the room groups named (`schema.sql:487-499`); naming nothing means no restriction,
+ *    and the timetable solver may then put the class in any room of the faculty;
+ *  - **абстрактна аудиторія** — one place several classes legitimately occupy at the same hour
+ *    (спортивні зали, «дистанційно з кафедри»). A list in GraphQL and at most one row in the
+ *    database, so the card offers a single choice and sends a 0- or 1-element array;
+ *  - **онлайн** — no place at all. The `lecturer_workload_online_classes` row's *presence* is the
+ *    fact; платформа, посилання and нотатка only say how to attend, and all three may be empty.
+ *
+ * Picking one clears the other two on save, which is why a save is up to two requests rather than
+ * one — see `save`.
+ *
+ * A class assigned none of the three is worth seeing at a glance rather than discovering when the
+ * generator produces a schedule holding a lecture in a 12-seat lab, so those cards are tinted red.
  *
  * ## Why this is a faculty page and not part of «Навантаження викладачів»
  *
@@ -122,10 +166,10 @@ interface CardForm {
  * every other department. Rooms belong to the faculty (`rooms.faculty_id`), the timetable that has
  * to fit in them is built at faculty level, and so is this.
  *
- * Nothing about the storage changed — this page writes the same two join tables through the same
- * `updateLecturerWorkload` mutation. The department modal simply stopped sending `roomIds` /
- * `roomGroupIds`, and a many-to-many field absent from a mutation input leaves its rows untouched,
- * so editing a workload there cannot clear what was assigned here.
+ * Nothing about the storage of the room half changed — this page writes the same two join tables
+ * through the same `updateLecturerWorkload` mutation. The department modal simply stopped sending
+ * `roomIds` / `roomGroupIds`, and a many-to-many field absent from a mutation input leaves its rows
+ * untouched, so editing a workload there cannot clear what was assigned here.
  *
  * There is one other writer: a discipline's own page (`course-page.ts`) edits the same two lists on
  * its «Навантаження викладачів» tab, so a кафедра correcting one discipline does not have to come
@@ -145,6 +189,8 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   @Input() facultyId!: string;
 
   readonly SEMESTER_PARITY_OPTIONS = SEMESTER_PARITY_OPTIONS;
+  /** The платформа dropdown. Adapted to app-search-select's `{ id, label }` shape once, here. */
+  readonly PLATFORM_OPTIONS = toOptions(ONLINE_CLASS_PLATFORM_OPTIONS);
 
   /** Which half-year to show. Server-side (`semesterParity` on both working-item connections). */
   selectedSemesterParity = signal('ODD');
@@ -163,6 +209,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   /** What this faculty may pick from — see `loadRoomOptions`. */
   private baseRoomOptions = signal<Option[]>([]);
   private baseRoomGroupOptions = signal<Option[]>([]);
+  private baseAbstractRoomOptions = signal<Option[]>([]);
 
   private wciItems = signal<RawWorkingItem[]>([]);
   private combinedItems = signal<RawCombinedItem[]>([]);
@@ -255,21 +302,26 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   }
 
   /**
-   * Rooms and room groups this faculty may assign.
+   * Rooms, room groups and abstract rooms this faculty may assign.
    *
    * Rooms: this faculty's, plus those belonging to no faculty at all (shared sports halls and the
-   * like). Groups: university-wide, this faculty's, and those of any of its departments. Both are
-   * fetched unfiltered and narrowed here rather than through the `facultyId` filter, because an
-   * equality filter would drop exactly the unscoped rows that are most often wanted.
+   * like). Groups: university-wide, this faculty's, and those of any of its departments. Abstract
+   * rooms: the same rule as rooms — this faculty's plus the university-wide ones, which for an
+   * abstract room is the *usual* case rather than the exception. All three are fetched unfiltered
+   * and narrowed here rather than through the `facultyId` filter, because an equality filter would
+   * drop exactly the unscoped rows that are most often wanted.
    */
   private loadRoomOptions() {
-    const q = `query($roomLimit: Int!, $offset: Int!, $roomGroupLimit: Int!) {
+    const q = `query($roomLimit: Int!, $offset: Int!, $roomGroupLimit: Int!, $abstractRoomLimit: Int!) {
       rooms { roomConnection(limit: $roomLimit, offset: $offset) { nodes { id number name faculty { id } } } }
       roomGroups { roomGroupConnection(limit: $roomGroupLimit, offset: $offset) { nodes {
         id name faculty { id } department { id faculty { id } }
       } } }
+      abstractRooms { abstractRoomConnection(limit: $abstractRoomLimit, offset: $offset) { nodes {
+        id name capacity faculty { id } building { id name }
+      } } }
     }`;
-    this.gql.request(q, { roomLimit: 1000, offset: 0, roomGroupLimit: 500 }).subscribe({
+    this.gql.request(q, { roomLimit: 1000, offset: 0, roomGroupLimit: 500, abstractRoomLimit: 500 }).subscribe({
       next: (d: any) => {
         this.baseRoomOptions.set((d.rooms.roomConnection.nodes ?? [])
           .filter((r: any) => !r.faculty || r.faculty.id === this.facultyId)
@@ -280,9 +332,18 @@ export class RoomAssignmentList implements OnInit, OnChanges {
             || g.faculty?.id === this.facultyId
             || g.department?.faculty?.id === this.facultyId)
           .map((g: any) => ({ id: g.id, label: g.name })));
+
+        this.baseAbstractRoomOptions.set((d.abstractRooms.abstractRoomConnection.nodes ?? [])
+          .filter((r: any) => !r.faculty || r.faculty.id === this.facultyId)
+          .map((r: any) => ({ id: r.id, label: this.abstractRoomLabel(r) })));
       },
       error: () => {}
     });
+  }
+
+  /** «Спортивні зали (Головний корпус)» — the корпус is what tells two same-named places apart. */
+  private abstractRoomLabel(r: { name: string; building?: { name?: string | null } | null }): string {
+    return r.building?.name ? `${r.name} (${r.building.name})` : r.name;
   }
 
   /**
@@ -309,6 +370,17 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     for (const w of this.allWorkloads()) {
       for (const g of w.roomGroups ?? []) {
         if (!byId.has(g.id)) byId.set(g.id, { id: g.id, label: g.name });
+      }
+    }
+    return [...byId.values()].sort((a, b) => compareUk(a.label, b.label));
+  });
+
+  /** The same merge again: a place assigned by another faculty must still be nameable here. */
+  abstractRoomOptions = computed<Option[]>(() => {
+    const byId = new Map(this.baseAbstractRoomOptions().map((o) => [o.id, o]));
+    for (const w of this.allWorkloads()) {
+      for (const r of w.abstractRooms ?? []) {
+        if (!byId.has(r.id)) byId.set(r.id, { id: r.id, label: r.name });
       }
     }
     return [...byId.values()].sort((a, b) => compareUk(a.label, b.label));
@@ -404,6 +476,8 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     combinedGroups { id name academicGroups { id name } }
     rooms { id number name }
     roomGroups { id name }
+    abstractRooms { id name capacity building { id } }
+    onlineClass { platform meetingUrl note }
   `;
 
   /** The кафедра sub-filter, when one is chosen — absent from the document when it is not. */
@@ -581,6 +655,15 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       lecturerNames: (w.lecturers ?? []).map((l) => this.lecturerName(l)).sort(compareUk).join(', '),
       roomIds: (w.rooms ?? []).map((r) => r.id),
       roomGroupIds: (w.roomGroups ?? []).map((g) => g.id),
+      // At most one, whatever the list says — the join table's primary key is the workload.
+      abstractRoomId: (w.abstractRooms ?? [])[0]?.id ?? '',
+      online: !!w.onlineClass,
+      onlinePlatform: w.onlineClass?.platform ?? '',
+      onlineMeetingUrl: w.onlineClass?.meetingUrl ?? '',
+      onlineNote: w.onlineClass?.note ?? '',
+      // The three are alternatives, so the stored state is read as one of them, most specific
+      // first: an online row means online whatever else was left behind beside it.
+      mode: w.onlineClass ? 'ONLINE' : (w.abstractRooms ?? []).length > 0 ? 'ABSTRACT' : 'ROOMS',
       ...rest
     };
   }
@@ -588,9 +671,14 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   /** How many classes still have nowhere in particular to be — the number the red cards count. */
   unassignedCount = computed(() => this.cards().filter((c) => this.isUnassigned(c)).length);
 
-  /** Neither a room nor a room group named: the solver may use any room of the faculty. */
+  /**
+   * None of the three ways of holding a class has been chosen: no room, no room group, no abstract
+   * room, and not online. The solver may then use any room of the faculty — which schedules
+   * perfectly well and is almost never what anybody decided.
+   */
   isUnassigned(card: ClassCard): boolean {
-    return card.roomIds.length === 0 && card.roomGroupIds.length === 0;
+    return card.roomIds.length === 0 && card.roomGroupIds.length === 0
+      && card.abstractRoomId === '' && !card.online;
   }
 
   hourTypeLabel(v: string): string {
@@ -602,14 +690,26 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   /**
    * The draft behind a card, created on first access and kept across reloads so that saving one
    * card does not discard the selections in progress on every other. The stamp is what the card
-   * was last loaded with: when it changes the draft is reseeded, so a card whose stored assignment
-   * really did change picks the new value up.
+   * was last loaded with — now all three placements, not just the two room lists: when it changes
+   * the draft is reseeded, so a card whose stored placement really did change picks the new value
+   * up, including a switch of mode made on another screen.
    */
   form(card: ClassCard): CardForm {
-    const stamp = [...card.roomIds].sort().join(',') + '|' + [...card.roomGroupIds].sort().join(',');
+    const stamp = [
+      [...card.roomIds].sort().join(','),
+      [...card.roomGroupIds].sort().join(','),
+      card.abstractRoomId,
+      card.online ? '1' : '0',
+      card.onlinePlatform, card.onlineMeetingUrl, card.onlineNote
+    ].join('|');
     const seed = (): CardForm => ({
+      mode: card.mode,
       roomIds: [...card.roomIds],
       roomGroupIds: [...card.roomGroupIds],
+      abstractRoomId: card.abstractRoomId,
+      onlinePlatform: card.onlinePlatform,
+      onlineMeetingUrl: card.onlineMeetingUrl,
+      onlineNote: card.onlineNote,
       stamp
     });
     const existing = this.formState[card.workloadId];
@@ -618,25 +718,77 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     return existing;
   }
 
-  /** Whether a card's draft differs from what is stored — what enables its «Зберегти». */
-  isDirty(card: ClassCard): boolean {
-    const f = this.form(card);
-    const same = (a: string[], b: string[]) =>
-      a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
-    return !(same(f.roomIds, card.roomIds) && same(f.roomGroupIds, card.roomGroupIds));
-  }
-
-  /** Restores a card's draft to what is stored. */
-  revert(card: ClassCard) {
-    const f = this.form(card);
-    f.roomIds = [...card.roomIds];
-    f.roomGroupIds = [...card.roomGroupIds];
+  /** The three-way choice itself. Nothing is cleared here — only a save clears, and only on the
+   *  server; a trip through «Онлайн» and back must not lose the rooms that were already picked. */
+  setMode(card: ClassCard, mode: PlaceMode) {
+    this.form(card).mode = mode;
   }
 
   /**
-   * Writes one card's assignment. Both lists are always sent in full: an empty array is a
-   * meaningful value here ("no restriction"), and a many-to-many field omitted from the input
-   * would leave the stored rows untouched instead of clearing them.
+   * Whether a card's draft differs from what is stored — what enables its «Зберегти».
+   *
+   * A different mode is a difference in itself; within one mode only that mode's own fields count,
+   * because they are the only ones a save would send. Without that, a card that had been carried to
+   * «Онлайн» and back would read as edited forever over a нотатка nobody is going to store.
+   */
+  isDirty(card: ClassCard): boolean {
+    const f = this.form(card);
+    if (f.mode !== card.mode) return true;
+    const same = (a: string[], b: string[]) =>
+      a.length === b.length && [...a].sort().join(',') === [...b].sort().join(',');
+    switch (f.mode) {
+      case 'ROOMS':
+        return !(same(f.roomIds, card.roomIds) && same(f.roomGroupIds, card.roomGroupIds));
+      case 'ABSTRACT':
+        return f.abstractRoomId !== card.abstractRoomId;
+      default:
+        return f.onlinePlatform !== card.onlinePlatform
+          || f.onlineMeetingUrl.trim() !== card.onlineMeetingUrl
+          || f.onlineNote.trim() !== card.onlineNote;
+    }
+  }
+
+  /**
+   * Whether «Зберегти» is offered. «Абстрактна аудиторія» with nothing chosen is the one draft that
+   * is dirty and still not saveable: it would write the same emptiness as «В аудиторії» with nothing
+   * chosen, so the mode a reader would then see on the card is not the mode they left it in. Saying
+   * "no restriction" is what «В аудиторії» is for.
+   */
+  canSave(card: ClassCard): boolean {
+    const f = this.form(card);
+    if (f.mode === 'ABSTRACT' && !f.abstractRoomId) return false;
+    return this.isDirty(card) && !this.saving().has(card.workloadId);
+  }
+
+  /** Restores a card's draft to what is stored, mode included. */
+  revert(card: ClassCard) {
+    const f = this.form(card);
+    f.mode = card.mode;
+    f.roomIds = [...card.roomIds];
+    f.roomGroupIds = [...card.roomGroupIds];
+    f.abstractRoomId = card.abstractRoomId;
+    f.onlinePlatform = card.onlinePlatform;
+    f.onlineMeetingUrl = card.onlineMeetingUrl;
+    f.onlineNote = card.onlineNote;
+  }
+
+  // ── Saving ────────────────────────────────────────────────────────────────
+
+  /**
+   * Writes one card's placement.
+   *
+   * The three placements are alternatives, so a save is as much about clearing the two not chosen
+   * as about writing the one that was. All three id lists are always sent in full, including empty:
+   * an empty array is the meaningful value here ("no restriction", or "not there any more"), and a
+   * many-to-many field omitted from the input would leave the stored rows untouched instead.
+   *
+   * That makes a save up to **two** requests, and their order is deliberate: the workload first,
+   * then the online row. Nothing makes the pair atomic — there is no transaction spanning two
+   * mutations — so what matters is which half-done state is the less wrong one. Clearing the rooms
+   * and failing to write the online row leaves a class with nowhere to be, which the board tints red
+   * and somebody will fix; writing the online row and failing to clear the rooms leaves a class that
+   * claims to be in two places at once, which nothing on this page would show. The card stays in
+   * «Збереження…» until both have settled, and only then is the board reloaded.
    */
   save(card: ClassCard) {
     // The duration has to be echoed back (see the input below) and the column is
@@ -647,7 +799,9 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       this.error.set('Не вдалося визначити тривалість заняття — оновіть сторінку.');
       return;
     }
+    if (!this.canSave(card)) return;
     const f = this.form(card);
+    const mode = f.mode;
     this.saving.update((ids) => new Set(ids).add(card.workloadId));
     // Deliberately not clearing `error` here: a load may be in flight and this would erase its
     // failure. A successful save reloads, and `loadAll` clears it there.
@@ -667,17 +821,83 @@ export class RoomAssignmentList implements OnInit, OnChanges {
         // therefore required by the generated input type, so the operation is rejected outright
         // without it. It is echoed back exactly as loaded; this page does not edit it.
         durationHours: card.durationHours,
-        roomIds: f.roomIds,
-        roomGroupIds: f.roomGroupIds
+        roomIds: mode === 'ROOMS' ? f.roomIds : [],
+        roomGroupIds: mode === 'ROOMS' ? f.roomGroupIds : [],
+        // A list of at most one: `lecturer_workload_abstract_rooms` is keyed on the workload alone.
+        abstractRoomIds: mode === 'ABSTRACT' && f.abstractRoomId ? [f.abstractRoomId] : []
       }
     }).subscribe({
       next: (d: any) => {
-        done();
         const res = d.lecturerWorkloads.updateLecturerWorkload;
-        if (!res.isSuccess) { this.error.set(res.errorStatus || 'Помилка операції'); return; }
-        this.loadAll();
+        if (!res.isSuccess) { done(); this.error.set(res.errorStatus || 'Помилка операції'); return; }
+        this.saveOnline(card, f, mode, done);
       },
       error: (e) => { done(); this.error.set(e.message); }
+    });
+  }
+
+  /**
+   * The second half of a save: the online row, whose *presence* is what marks the class online, so
+   * the three cases are create, update and delete rather than three values of one field.
+   *
+   * The namespace is `lecturerWorkloadOnlineClasss` with three s's: the schema builder pluralises a
+   * type name by appending `s` (`DynamicGraphQLSchemaBuilder#pluralize`), and this type's name
+   * already ends in one. The `id` argument of update and delete is the **workload's** id — this
+   * entity is keyed on `lecturer_workload_id`, projected as `id`.
+   */
+  private saveOnline(card: ClassCard, f: CardForm, mode: PlaceMode, done: () => void) {
+    // A failure here has already had the workload half applied, so the board on screen is stale
+    // whatever we say about it. `loadAll` clears `error` synchronously, hence the order: reload
+    // first, then state what went wrong, and let a failing load overwrite the message with its own.
+    const fail = (m: string) => { done(); this.loadAll(); this.error.set(m); };
+    const finish = () => { done(); this.loadAll(); };
+
+    // The mode as it was when the first request went out, not as the draft reads now: a reload
+    // triggered by another card in the meantime may have reseeded this draft.
+    const wantsOnline = mode === 'ONLINE';
+    if (!wantsOnline && !card.online) { finish(); return; }
+
+    if (!wantsOnline) {
+      const q = `mutation($id: ID!) {
+        lecturerWorkloadOnlineClasss { deleteLecturerWorkloadOnlineClass(id: $id) { isSuccess errorStatus } }
+      }`;
+      this.runOnline(q, { id: card.workloadId }, 'deleteLecturerWorkloadOnlineClass', finish, fail);
+      return;
+    }
+
+    // Empty is stored as NULL rather than as an empty string: «платформу не вказано» is an absence,
+    // and for `platform` an empty string is not even a value the enum has.
+    const text = (v: string): string | null => (v.trim() === '' ? null : v.trim());
+    const payload = {
+      lecturerWorkloadId: card.workloadId,
+      platform: text(f.onlinePlatform),
+      meetingUrl: text(f.onlineMeetingUrl),
+      note: text(f.onlineNote)
+    };
+
+    if (card.online) {
+      const q = `mutation($id: ID!, $input: LecturerWorkloadOnlineClassInputPayload!) {
+        lecturerWorkloadOnlineClasss { updateLecturerWorkloadOnlineClass(id: $id, lecturerWorkloadOnlineClass: $input) { isSuccess errorStatus } }
+      }`;
+      this.runOnline(q, { id: card.workloadId, input: payload }, 'updateLecturerWorkloadOnlineClass', finish, fail);
+    } else {
+      const q = `mutation($input: LecturerWorkloadOnlineClassInputPayload!) {
+        lecturerWorkloadOnlineClasss { createLecturerWorkloadOnlineClass(lecturerWorkloadOnlineClass: $input) { isSuccess errorStatus } }
+      }`;
+      this.runOnline(q, { input: payload }, 'createLecturerWorkloadOnlineClass', finish, fail);
+    }
+  }
+
+  /** One shape for the three online mutations: same namespace, same `{ isSuccess errorStatus }`. */
+  private runOnline(q: string, vars: Record<string, unknown>, field: string,
+                    ok: () => void, fail: (message: string) => void) {
+    this.gql.request(q, vars).subscribe({
+      next: (d: any) => {
+        const res = d.lecturerWorkloadOnlineClasss?.[field];
+        if (!res?.isSuccess) { fail(res?.errorStatus || 'Помилка операції'); return; }
+        ok();
+      },
+      error: (e) => fail(e.message)
     });
   }
 }

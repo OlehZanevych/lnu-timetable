@@ -51,6 +51,16 @@ const PROPERTY_META: Record<string, PropertyMeta> = {
     label: 'Тривалість заняття за замовчуванням, акад. год.', min: 1,
     hint: 'Значення, з яким створюється нова позиція навантаження.'
   },
+  abstract_room_travel_time_minutes: {
+    label: 'Час дороги до абстрактної аудиторії, хв', min: 0,
+    hint: 'Скільки триває дорога до абстрактної аудиторії, яка не належить жодному корпусу: адреси, ' +
+          'від якої її можна виміряти, така аудиторія не має, тож дорогу до неї вважають однаковою звідусіль.'
+  },
+  university_commute_time_minutes: {
+    label: 'Час дороги між домом і університетом, хв', min: 0,
+    hint: 'Скільки часу студентові потрібно, щоб без поспіху дістатися з дому до університету або ' +
+          'повернутися додому. Враховується, коли в один день є і онлайн-заняття, і заняття в аудиторії.'
+  },
   default_max_hours_per_year: {
     label: 'Максимум годин на рік за замовчуванням, акад. год.', min: 0, optional: true,
     hint: 'Стеля навантаження викладача, який не має власного обмеження.'
@@ -97,9 +107,11 @@ const PROPERTY_META: Record<string, PropertyMeta> = {
 const PROPERTY_GROUPS: PropertyGroup[] = [
   {
     title: 'Освітній процес',
-    description: 'Як влаштований навчальний рік і з чого складається заняття.',
+    description: 'Як влаштований навчальний рік, з чого складається заняття і скільки часу треба ' +
+                 'на дорогу до нього.',
     names: ['academic_hour_duration_minutes', 'semester_duration_weeks', 'current_semester_parity',
-            'default_class_duration_hours']
+            'default_class_duration_hours', 'abstract_room_travel_time_minutes',
+            'university_commute_time_minutes']
   },
   {
     title: 'Навчальне навантаження',

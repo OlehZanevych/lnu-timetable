@@ -7,9 +7,9 @@
       } @else {
         {{ cards().length }} занять
         @if (unassignedCount()) {
-          &middot; без призначених аудиторій: {{ unassignedCount() }}
+          &middot; без призначеного місця: {{ unassignedCount() }}
         } @else if (cards().length) {
-          &middot; усім заняттям призначено аудиторії
+          &middot; усім заняттям призначено місце проведення
         }
       }
     </p>
@@ -37,9 +37,11 @@
 </div>
 
 <p class="muted ra-hint">
-  Дозволені аудиторії заняття &mdash; це обрані аудиторії разом з аудиторіями обраних груп аудиторій.
-  Якщо не обрано нічого, заняття можна поставити в будь-яку аудиторію факультету, і картку позначено
-  червоним.
+  Заняття проводять в одному з трьох місць, і це взаємовиключні варіанти: в аудиторії, в абстрактній
+  аудиторії (спільному місці на кшталт спортивних залів, яке кілька занять законно займають водночас)
+  або онлайн. Дозволені аудиторії заняття &mdash; це обрані аудиторії разом з аудиторіями обраних
+  груп аудиторій. Якщо не обрано жодного з трьох варіантів, заняття можна поставити в будь-яку
+  аудиторію факультету, і картку позначено червоним.
 </p>
 
 @for (c of cards(); track c.workloadId) {
@@ -64,22 +66,71 @@
     </div>
 
     @if (form(c); as f) {
+      <div class="ra-mode">
+        <span>Де проходить заняття:</span>
+        <label class="gen-mode">
+          <input type="radio" [name]="'raMode_' + c.workloadId" [checked]="f.mode === 'ROOMS'"
+                 (change)="setMode(c, 'ROOMS')" />
+          В аудиторії
+        </label>
+        <label class="gen-mode">
+          <input type="radio" [name]="'raMode_' + c.workloadId" [checked]="f.mode === 'ABSTRACT'"
+                 (change)="setMode(c, 'ABSTRACT')" />
+          Абстрактна аудиторія
+        </label>
+        <label class="gen-mode">
+          <input type="radio" [name]="'raMode_' + c.workloadId" [checked]="f.mode === 'ONLINE'"
+                 (change)="setMode(c, 'ONLINE')" />
+          Онлайн
+        </label>
+      </div>
+
       <div class="tt-block-form">
-        <label>
-          <span>Аудиторії</span>
-          <app-multi-select [options]="roomOptions()" [(ngModel)]="f.roomIds"
-                            [name]="'raRooms_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
-        </label>
-        <label>
-          <span>Групи аудиторій</span>
-          <app-multi-select [options]="roomGroupOptions()" [(ngModel)]="f.roomGroupIds"
-                            [name]="'raRoomGroups_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
-        </label>
+        @switch (f.mode) {
+          @case ('ROOMS') {
+            <label>
+              <span>Аудиторії</span>
+              <app-multi-select [options]="roomOptions()" [(ngModel)]="f.roomIds"
+                                [name]="'raRooms_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+            </label>
+            <label>
+              <span>Групи аудиторій</span>
+              <app-multi-select [options]="roomGroupOptions()" [(ngModel)]="f.roomGroupIds"
+                                [name]="'raRoomGroups_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          }
+          @case ('ABSTRACT') {
+            <label class="ra-field-wide">
+              <span>Абстрактна аудиторія</span>
+              <app-search-select [options]="abstractRoomOptions()" [(ngModel)]="f.abstractRoomId"
+                                 placeholder="&mdash; оберіть місце &mdash;"
+                                 [name]="'raAbstractRoom_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          }
+          @case ('ONLINE') {
+            <label>
+              <span>Платформа</span>
+              <app-search-select [options]="PLATFORM_OPTIONS" [(ngModel)]="f.onlinePlatform"
+                                 placeholder="&mdash; не вказано &mdash;"
+                                 [name]="'raPlatform_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+            </label>
+            <label class="ra-field-wide">
+              <span>Посилання</span>
+              <input type="text" [(ngModel)]="f.onlineMeetingUrl" placeholder="https://…"
+                     [name]="'raMeetingUrl_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+            </label>
+            <label class="ra-field-wide">
+              <span>Нотатка</span>
+              <input type="text" [(ngModel)]="f.onlineNote"
+                     [name]="'raOnlineNote_' + c.workloadId" [ngModelOptions]="{ standalone: true }" />
+            </label>
+          }
+        }
         <div class="actions">
           @if (isDirty(c)) {
             <button type="button" class="ghost" (click)="revert(c)">Скасувати</button>
           }
-          <button type="button" [disabled]="!isDirty(c) || saving().has(c.workloadId)" (click)="save(c)">
+          <button type="button" [disabled]="!canSave(c)" (click)="save(c)">
             {{ saving().has(c.workloadId) ? 'Збереження…' : 'Зберегти' }}
           </button>
         </div>

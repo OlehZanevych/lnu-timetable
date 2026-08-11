@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for scheduling entities:
- * LecturerWorkload, ClassStartTimeSet, ClassStartTime, TimetableEntry.
+ * LecturerWorkload, LecturerWorkloadOnlineClass, ClassStartTimeSet, ClassStartTime, TimetableEntry.
  */
 @Component
 public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
@@ -15,6 +15,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     @Override
     public void configure(SchemaDefinition s) {
         configureLecturerWorkload(s);
+        configureLecturerWorkloadOnlineClass(s);
         configureLecturerWorkloadStudent(s);
         configureLecturerWorkloadCandidate(s);
         configureLecturerWorkloadCandidateConstraint(s);
@@ -33,6 +34,8 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .relation("classStartTimeSet")
             .relation("rooms")
             .relation("roomGroups")
+            .relation("abstractRooms")
+            .nullableRelation("onlineClass")
             .relation("lecturers")
             .relation("academicGroups")
             .relation("combinedGroups")
@@ -57,6 +60,10 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
             .manyToMany("roomIds", "lecturer_workload_rooms", "lecturer_workload_id", "room_id")
             .manyToMany("roomGroupIds", "lecturer_workload_room_groups", "lecturer_workload_id", "room_group_id")
+            // A list like the two above, and at most one element: lecturer_workload_abstract_rooms
+            // is keyed on the workload alone, so a second id in this list is a duplicate key rather
+            // than a second place.
+            .manyToMany("abstractRoomIds", "lecturer_workload_abstract_rooms", "lecturer_workload_id", "abstract_room_id")
             .nestedList("studentAssignments", LecturerWorkloadStudent.class, "lecturerWorkloadId", "lecturerId", "studentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -70,6 +77,9 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
             .manyToMany("combinedGroupIds", "lecturer_workload_combined_groups", "lecturer_workload_id", "combined_group_id")
             .manyToMany("roomIds", "lecturer_workload_rooms", "lecturer_workload_id", "room_id")
             .manyToMany("roomGroupIds", "lecturer_workload_room_groups", "lecturer_workload_id", "room_group_id")
+            // See the create mutation: a list of at most one, because the join table's primary key
+            // says so.
+            .manyToMany("abstractRoomIds", "lecturer_workload_abstract_rooms", "lecturer_workload_id", "abstract_room_id")
             .nestedList("studentAssignments", LecturerWorkloadStudent.class, "lecturerWorkloadId", "lecturerId", "studentId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("LECTURERWORKLOAD_NOT_FOUND", "LecturerWorkload not found")
@@ -78,6 +88,44 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("deleteLecturerWorkload").entity(LecturerWorkload.class).delete()
             .errorStatus("LECTURERWORKLOAD_NOT_FOUND", "LecturerWorkload not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // LecturerWorkloadOnlineClass
+    // -------------------------------------------------------------------------
+
+    /**
+     * A workload held online. Read through LecturerWorkload.onlineClass and written through three
+     * mutations of its own — the LecturerWorkloadCandidate arrangement, and for the same kind of
+     * reason: the row's presence is what marks the class as online, so creating and deleting it are
+     * acts in their own right rather than a field on the workload's payload, which would have to
+     * express "leave it alone" and "remove it" as two different absences.
+     *
+     * Its key is the workload's id (see LecturerWorkloadOnlineClass), so `lecturerWorkloadId` is a
+     * create input field like any other, and the `id` argument of update and delete carries the
+     * *workload* id. No connection and no findById: there is no question to ask of this table that
+     * is not a question about a workload.
+     */
+    private void configureLecturerWorkloadOnlineClass(SchemaDefinition s) {
+        s.type(LecturerWorkloadOnlineClass.class)
+            .fields("platform", "meetingUrl", "note");
+
+        s.mutation("createLecturerWorkloadOnlineClass").entity(LecturerWorkloadOnlineClass.class).create()
+            .inputFields("lecturerWorkloadId", "platform", "meetingUrl", "note")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("updateLecturerWorkloadOnlineClass").entity(LecturerWorkloadOnlineClass.class).update()
+            .inputFields("lecturerWorkloadId", "platform", "meetingUrl", "note")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("LECTURERWORKLOADONLINECLASS_NOT_FOUND", "LecturerWorkloadOnlineClass not found")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("deleteLecturerWorkloadOnlineClass").entity(LecturerWorkloadOnlineClass.class).delete()
+            .errorStatus("LECTURERWORKLOADONLINECLASS_NOT_FOUND", "LecturerWorkloadOnlineClass not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 
@@ -232,7 +280,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
     private void configureTimetableEntry(SchemaDefinition s) {
         s.type(TimetableEntry.class)
             .fields("dayOfWeek", "weekParity")
-            .relation("workload").relation("classStartTime").relation("room");
+            .relation("workload").relation("classStartTime").nullableRelation("room");
 
         // timetable_entries carries no semester and no room/lecturer/group of its own - those live
         // on the workload behind it - so everything a scheduler needs to read the *current* state of

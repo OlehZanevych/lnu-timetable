@@ -5,7 +5,7 @@ description: Get oriented in the lnu-timetable project by reading its Markdown d
 
 # Orientation (lnu-timetable)
 
-The project's documentation is ~10,000 lines across nine Markdown files. Reading it end to end is
+The project's documentation is ~9,500 lines across fourteen Markdown files. Reading it end to end is
 both slow and unnecessary: most of it is depth on subsystems a given task never touches. Read the
 **map** in full, then only the **sections your task lands in**.
 
@@ -58,7 +58,7 @@ work actually happens. Know which half you are in before changing anything.
 
 ## How to read
 
-**Always, in full:** the root `README.md` (~290 lines). It is the map — what the system does, how
+**Always, in full:** the root `README.md` (~320 lines). It is the map — what the system does, how
 the halves divide, the repository layout, and a table pointing at every other document.
 
 **Then, selectively.** Get a heading map first and read only what you need:
@@ -75,14 +75,15 @@ grep -n "^## \|^### " timetable-ui/README.md
 | Login, permissions, delegation | `timetable/README.md` → *Authentication & authorization*; then `timetable-ui/README.md` → *Authentication* |
 | A client page or widget | `timetable-ui/README.md` → *Two architectures, side by side* (find the page's own `####` subsection) |
 | Routing, tabs, URLs | `timetable-ui/README.md` → *Routes*, *The open tab is part of the URL* |
-| The timetable solver | `timetable-ui/TIMETABLE-GENERATION.md` |
+| The timetable solver | `timetable-ui/TIMETABLE-GENERATION.md`, and `timetable-ui/SOLVER-OPTIMISATION.md` + `scripts/timetable-bench/README.md` for the measurements |
 | Workload generation | `timetable-ui/WORKLOAD-GENERATION.md`, and `scripts/workload-bench/README.md` for the measurements |
 | A printable form | the matching `timetable-ui/*-PDF.md` |
 | Performance, batching, N+1 | `timetable/README.md` → *Avoiding N+1 queries* |
 | Deploying it, keeping it running, the update job | `scripts/deploy/README.md` |
 
-**Do not bulk-read the topic files** (`TIMETABLE-GENERATION.md`, `WORKLOAD-GENERATION.md`, the four
-`*-PDF.md`) unless the task is that topic. Between them they are ~2,900 lines of depth that no
+**Do not bulk-read the topic files** (`TIMETABLE-GENERATION.md`, `SOLVER-OPTIMISATION.md`,
+`WORKLOAD-GENERATION.md`, the four
+`*-PDF.md`) unless the task is that topic. Between them they are ~3,900 lines of depth that no
 unrelated change needs.
 
 **Read the *Known limitations* section** of whichever README you are working in before proposing a

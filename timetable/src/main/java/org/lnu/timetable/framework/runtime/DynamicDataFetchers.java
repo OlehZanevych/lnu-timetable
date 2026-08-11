@@ -60,7 +60,9 @@ public class DynamicDataFetchers implements DataFetcherProvider {
         return env -> {
             Object id = coerce(env.getArgument("id"), Long.class);
             List<Col> cols = resolveCols(md, env.getSelectionSet());
-            return engine.selectOne(md.tableName(), cols, "id", id).toFuture();
+            // The GraphQL argument stays "id" — it is an opaque ID scalar and the caller need not
+            // know what it names — while the WHERE column is whatever actually keys the table.
+            return engine.selectOne(md.tableName(), cols, md.keyColumn(), id).toFuture();
         };
     }
 
@@ -205,7 +207,8 @@ public class DynamicDataFetchers implements DataFetcherProvider {
             List<Col> cols = resolveCols(targetMd, env.getSelectionSet());
             DataLoader<Object, Object> loader = env.getDataLoader(loaderName);
 
-            if (rel.type() == RelationType.ONE_TO_MANY || rel.type() == RelationType.MANY_TO_MANY) {
+            if (rel.type() == RelationType.ONE_TO_MANY || rel.type() == RelationType.MANY_TO_MANY
+                || isInverseOneToOne(rel)) {
                 Object parentId = parent.get("id");
                 return loader.load(parentId, cols);
             }
@@ -231,19 +234,36 @@ public class DynamicDataFetchers implements DataFetcherProvider {
 
         if (rel.type() == RelationType.ONE_TO_MANY) {
             batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
-                engine.selectWhereIn(targetMd.tableName(), colsFromContext(env, targetMd), rel.mappedBy(), keys)
+                engine.selectWhereIn(targetMd.tableName(), colsFromContext(env, targetMd), rel.mappedBy(), keys,
+                        targetMd.keyColumn())
                     .collectList()
                     .map(rows -> groupByKey(keys, rows)));
         } else if (rel.type() == RelationType.MANY_TO_MANY) {
             batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
                 engine.selectViaJoinTableBatch(targetMd.tableName(), colsFromContext(env, targetMd),
-                        rel.joinTable(), rel.joinColumn(), rel.inverseJoinColumn(), keys)
+                        rel.joinTable(), rel.joinColumn(), rel.inverseJoinColumn(), keys, targetMd.keyColumn())
                     .collectList()
                     .map(rows -> groupByKey(keys, rows)));
+        } else if (isInverseOneToOne(rel)) {
+            // The inverse side reads like a one-to-many — the foreign key is on the child table, so
+            // the batch is the same selectWhereIn — but yields one row per parent instead of a list,
+            // which is exactly what the child's key (that same FK, as its PRIMARY KEY) guarantees.
+            // A parent with no child is simply absent from the map, which the loader reports as null.
+            batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
+                engine.selectWhereIn(targetMd.tableName(), colsFromContext(env, targetMd), rel.mappedBy(), keys,
+                        targetMd.keyColumn())
+                    .collectList()
+                    .map(rows -> {
+                        Map<Object, Object> byParent = new HashMap<>();
+                        for (KeyedRow kr : rows) {
+                            byParent.putIfAbsent(kr.key(), kr.row());
+                        }
+                        return byParent;
+                    }));
         } else {
             // MANY_TO_ONE / owning ONE_TO_ONE
             batchLoaderRegistry.forName(loaderName).registerMappedBatchLoader((Set<Object> keys, BatchLoaderEnvironment env) ->
-                engine.selectByIds(targetMd.tableName(), colsFromContext(env, targetMd), keys)
+                engine.selectByIds(targetMd.tableName(), colsFromContext(env, targetMd), keys, targetMd.keyColumn())
                     .collectList()
                     .map(rows -> {
                         Map<Object, Object> byId = new HashMap<>();
@@ -253,6 +273,15 @@ public class DynamicDataFetchers implements DataFetcherProvider {
                         return byId;
                     }));
         }
+    }
+
+    /**
+     * The inverse (non-owning) side of a one-to-one: the foreign key lives on the target table, so
+     * the relation is loaded from the parent's own key rather than from a column on the parent row.
+     * That is what a {@code null} join column means — see {@code EntityMetadataRegistry}.
+     */
+    private boolean isInverseOneToOne(RelationMetadata rel) {
+        return rel.type() == RelationType.ONE_TO_ONE && rel.joinColumn() == null;
     }
 
     /**
@@ -284,7 +313,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
             if (ctx instanceof List<?> list) return (List<Col>) list;
         }
         List<Col> cols = new ArrayList<>();
-        cols.add(new Col("id", "id"));
+        cols.add(new Col(fallbackMd.keyColumn(), "id"));
         for (String field : fallbackMd.selectableColumns()) {
             EntityFieldMetadata fm = fallbackMd.getField(field);
             if (fm != null) cols.add(new Col(fm.columnName(), field));
@@ -299,7 +328,9 @@ public class DynamicDataFetchers implements DataFetcherProvider {
         Map<String, Object> data = new LinkedHashMap<>();
         bindFields(md, def.getInputFields(), input, columnValues, data, false);
 
-        return engine.insert(md.tableName(), columnValues)
+        // RETURNING the key column hands back the generated id for the usual entity and the id the
+        // caller supplied for one keyed by its parent; either way the response carries it as "id".
+        return engine.insert(md.tableName(), columnValues, md.keyColumn())
             .flatMap(id -> {
                 data.put("id", id);
                 return Mono.when(createNestedLists(def, input, id), createManyToManyLists(def, input, id))
@@ -312,7 +343,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
         LinkedHashMap<String, Object> columnValues = new LinkedHashMap<>();
         bindFields(md, def.getInputFields(), input, columnValues, null, true);
 
-        return engine.update(md.tableName(), columnValues, id)
+        return engine.update(md.tableName(), columnValues, id, md.keyColumn())
             .flatMap(rows -> rows > 0
                 ? Mono.when(reconcileNestedLists(def, input, id), reconcileManyToManyLists(def, input, id)).thenReturn(success(null))
                 : Mono.just(error(def, notFoundStatus(def, md))))
@@ -320,7 +351,7 @@ public class DynamicDataFetchers implements DataFetcherProvider {
     }
 
     private Mono<Map<String, Object>> deleteHandler(MutationDefinition def, EntityMetadata md, Object id) {
-        return engine.delete(md.tableName(), id)
+        return engine.delete(md.tableName(), id, md.keyColumn())
             .map(rows -> rows > 0 ? success(null) : error(def, notFoundStatus(def, md)))
             .onErrorResume(e -> Mono.just(error(def, e)));
     }
@@ -560,7 +591,10 @@ public class DynamicDataFetchers implements DataFetcherProvider {
 
     private List<Col> resolveCols(EntityMetadata md, DataFetchingFieldSelectionSet selectionSet) {
         Map<String, Col> byAlias = new LinkedHashMap<>();
-        byAlias.put("id", new Col("id", "id"));
+        // Always project the key aliased as "id". Every row therefore arrives with an "id" whatever
+        // column it really came from, which is what keeps relation batching, the create response and
+        // the generated `id: ID!` field working without knowing about key columns at all.
+        byAlias.put("id", new Col(md.keyColumn(), "id"));
 
         for (SelectedField field : selectionSet.getImmediateFields()) {
             String name = field.getName();
@@ -586,7 +620,10 @@ public class DynamicDataFetchers implements DataFetcherProvider {
 
     private String columnOf(EntityMetadata md, String field) {
         EntityFieldMetadata fm = md.getField(field);
-        return fm != null ? fm.columnName() : field;
+        if (fm != null) return fm.columnName();
+        // A connection that declares no .orderBy falls back to "id", which for an entity keyed by
+        // something else names no column at all — order by whatever the key really is.
+        return "id".equals(field) ? md.keyColumn() : field;
     }
 
     // --- conversion utils ---

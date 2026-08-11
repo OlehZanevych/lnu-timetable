@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for the core organizational entities:
- * Building, BuildingTravelTime, Faculty, Department, Specialty, Room, RoomGroup.
+ * Building, BuildingTravelTime, Faculty, Department, Specialty, Room, RoomGroup, AbstractRoom.
  */
 @Component
 public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
@@ -22,6 +22,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         configureRoom(s);
         configureRoomTimetableConstraint(s);
         configureRoomGroup(s);
+        configureAbstractRoom(s);
     }
 
     // -------------------------------------------------------------------------
@@ -277,6 +278,50 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("deleteRoomGroup").entity(RoomGroup.class).delete()
             .errorStatus("ROOMGROUP_NOT_FOUND", "RoomGroup not found")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // AbstractRoom
+    // -------------------------------------------------------------------------
+
+    /**
+     * A place that is not a room — «Спортивні зали» and the like, which several classes share in
+     * one slot without that being a clash. Declared beside Room and shaped like it, and separate
+     * from it for exactly the reason {@link AbstractRoom} gives: everything that reasons about room
+     * exclusivity reads `rooms` and must not see these.
+     *
+     * `facultyId` scopes the entry the way it scopes a room group, and matches the column exactly —
+     * so, as there, it returns that faculty's entries and not the university-wide ones a caller
+     * usually wants as well.
+     */
+    private void configureAbstractRoom(SchemaDefinition s) {
+        s.type(AbstractRoom.class)
+            .fields("name", "purpose", "capacity")
+            .nullableRelation("building")
+            .nullableRelation("faculty")
+            .relation("workloads");
+
+        s.query("abstractRoomConnection").entity(AbstractRoom.class).connection().orderBy("name")
+            .filter("facultyId", "faculty_id")
+            .filter("buildingId", "building_id");
+        s.query("abstractRoom").entity(AbstractRoom.class).findById();
+
+        s.mutation("createAbstractRoom").entity(AbstractRoom.class).create()
+            .inputFields("name", "purpose", "capacity", "facultyId", "buildingId")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("updateAbstractRoom").entity(AbstractRoom.class).update()
+            .inputFields("name", "purpose", "capacity", "facultyId", "buildingId")
+            .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
+            .errorStatus("ABSTRACTROOM_NOT_FOUND", "AbstractRoom not found")
+            .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
+            .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+
+        s.mutation("deleteAbstractRoom").entity(AbstractRoom.class).delete()
+            .errorStatus("ABSTRACTROOM_NOT_FOUND", "AbstractRoom not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 }

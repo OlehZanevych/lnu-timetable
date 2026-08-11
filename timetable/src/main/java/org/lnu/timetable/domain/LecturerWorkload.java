@@ -7,6 +7,7 @@ import org.lnu.timetable.framework.annotation.ManyToMany;
 import org.lnu.timetable.framework.annotation.ManyToOne;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.OneToOne;
 import org.lnu.timetable.framework.annotation.PermissionJoinParent;
 import org.lnu.timetable.framework.annotation.PermissionParent;
 
@@ -66,6 +67,27 @@ public class LecturerWorkload {
     @ManyToMany(joinTable = "lecturer_workload_room_groups",
         joinColumn = "lecturer_workload_id", inverseJoinColumn = "room_group_id")
     private List<RoomGroup> roomGroups;
+
+    /**
+     * The one place that is not a room this workload may be held in — «Спортивні зали» and the
+     * like, shared with the other classes sitting in it that hour (see {@link AbstractRoom}).
+     *
+     * A list in GraphQL because the framework reads a join table as a many-to-many, but
+     * lecturer_workload_abstract_rooms is keyed on the workload alone, so the database guarantees
+     * at most one element. Setting it is the alternative to naming rooms, not an addition to them.
+     */
+    @ManyToMany(joinTable = "lecturer_workload_abstract_rooms",
+        joinColumn = "lecturer_workload_id", inverseJoinColumn = "abstract_room_id")
+    private List<AbstractRoom> abstractRooms;
+
+    /**
+     * Present when this workload is held online and absent when it is not — the row *is* the fact
+     * (see {@link LecturerWorkloadOnlineClass}). The inverse side of the one-to-one: the foreign
+     * key is the child's own primary key, which is what limits it to one row per workload.
+     */
+    @Nullable
+    @OneToOne(mappedBy = "lecturer_workload_id")
+    private LecturerWorkloadOnlineClass onlineClass;
 
     // Exactly one of workingCurriculumItem / combinedWorkingCurriculumItem is set (enforced by
     // the lecturer_workloads_target_check DB constraint).
