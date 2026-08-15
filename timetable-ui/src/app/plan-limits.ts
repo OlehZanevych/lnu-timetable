@@ -52,7 +52,7 @@ export interface PlanLimits {
   creditsByDegree: Record<string, DegreeCreditRange>;
 }
 
-/** `specialties.degree` → the property-name suffix its credit range is stored under. */
+/** `degreePrograms.degree` → the property-name suffix its credit range is stored under. */
 export const DEGREE_PROPERTY_SUFFIX: Record<string, string> = {
   JUNIOR_BACHELOR: 'junior_bachelor',
   BACHELOR: 'bachelor',

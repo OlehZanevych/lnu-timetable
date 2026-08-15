@@ -8,7 +8,7 @@
  * database sorts: schema.sql declares the same alphabet on the text columns via COLLATE ukrainian.
  *
  * A shared Intl.Collator is also markedly faster than calling localeCompare per comparison, which
- * matters on the larger lists (a specialty can have 200+ courses).
+ * matters on the larger lists (a degreeProgram can have 200+ courses).
  */
 const collator = new Intl.Collator('uk');
 

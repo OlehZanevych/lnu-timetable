@@ -30,10 +30,10 @@
                       (ngModelChange)="onDepartmentChange($event)" placeholder="Усі кафедри"
                       name="raDepartment" [ngModelOptions]="{ standalone: true }" />
 
-  <label>Спеціальність</label>
-  <app-search-select [options]="specialtyOptions()" [ngModel]="selectedSpecialtyId()"
-                      (ngModelChange)="onSpecialtyChange($event)" placeholder="Усі спеціальності"
-                      name="raSpecialty" [ngModelOptions]="{ standalone: true }" />
+  <label>Освітня програма</label>
+  <app-search-select [options]="degreeProgramOptions()" [ngModel]="selectedDegreeProgramId()"
+                      (ngModelChange)="onDegreeProgramChange($event)" placeholder="Усі освітні програми"
+                      name="raDegreeProgram" [ngModelOptions]="{ standalone: true }" />
 </div>
 
 <p class="muted ra-hint">
@@ -57,7 +57,7 @@
     <div class="lw-record">
       <div class="lw-record-header">
         <span>Кафедра: {{ c.departmentName }}</span>
-        <span>Спеціальність: {{ c.specialtyNames }}</span>
+        <span>Освітня програма: {{ c.degreeProgramNames }}</span>
       </div>
       <div class="lw-record-header">
         <span>Групи: {{ c.groupNames || '—' }}</span>

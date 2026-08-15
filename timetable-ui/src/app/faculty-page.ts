@@ -11,7 +11,7 @@ import { GlobalPropertiesService } from './global-properties.service';
 import { compareUk } from './sort';
 import { sectionNav } from './section-route';
 import { DepartmentList } from './department-list';
-import { SpecialtyList } from './specialty-list';
+import { DegreeProgramList } from './degree-program-list';
 import { AcademicGroupList } from './academic-group-list';
 import { FacultyTimetableList } from './faculty-timetable-list';
 import { RoomAssignmentList } from './room-assignment-list';
@@ -24,13 +24,13 @@ interface FacultyGroup {
   id: string;
   name: string;
   courseYear: number;
-  specialtyId: string;
-  specialtyName: string;
+  degreeProgramId: string;
+  degreeProgramName: string;
 }
 
 export type FacultySection =
   | 'info'
-  | 'departments' | 'specialties' | 'rooms' | 'roomGroups'
+  | 'departments' | 'degreePrograms' | 'rooms' | 'roomGroups'
   | 'courses' | 'roomAssignment' | 'timetable' | 'facultyTimetable' | 'academicGroups' | 'combinedGroups'
   | 'groupConstraints' | 'roomConstraints'
   | 'access';
@@ -50,7 +50,7 @@ interface Faculty {
 const SECTIONS: SectionDef[] = [
   { key: 'info',                   label: 'Інформація',           group: 'Факультет' },
   { key: 'departments',            label: 'Кафедри',              group: 'Структура' },
-  { key: 'specialties',            label: 'Спеціальності',        group: 'Структура' },
+  { key: 'degreePrograms',            label: 'Освітні програми',        group: 'Структура' },
   { key: 'rooms',                  label: 'Аудиторії',            group: 'Структура' },
   { key: 'roomGroups',             label: 'Групи аудиторій',      group: 'Структура' },
   { key: 'academicGroups',         label: 'Академічні групи',     group: 'Люди та групи' },
@@ -77,7 +77,7 @@ const SECTION_KEYS: FacultySection[] = SECTIONS.map((s) => s.key);
   templateUrl: './faculty-page.html',
   imports: [
     RouterLink, FormsModule, SearchSelect,
-    DepartmentList, SpecialtyList, AcademicGroupList, RoomAssignmentList, FacultyTimetableList,
+    DepartmentList, DegreeProgramList, AcademicGroupList, RoomAssignmentList, FacultyTimetableList,
     TimetableConstraintList, TimetableView, RoomPage, RoomGroupPage, CoursePage, CombinedGroupPage,
     ResourceAccessPanel
   ]
@@ -107,7 +107,7 @@ export class FacultyPage implements OnInit {
 
   /**
    * The open tab, and the last segment of the URL — see `section-route.ts`. Read from the route
-   * rather than written here, so «Кафедри», «Спеціальності» and «Аудиторії» are addresses of their
+   * rather than written here, so «Кафедри», «Освітні програми» and «Аудиторії» are addresses of their
    * own that can be bookmarked and reloaded, and Back moves between them.
    */
   private nav = sectionNav<FacultySection>(
@@ -139,9 +139,9 @@ export class FacultyPage implements OnInit {
    */
   courseSearch = signal('');
 
-  /** The tab's filters. `''` means "all" in each. They combine: курс ∧ спеціальність ∧ група. */
+  /** The tab's filters. `''` means "all" in each. They combine: курс ∧ освітня програма ∧ група. */
   ttCourseYear = signal('');
-  ttSpecialtyId = signal('');
+  ttDegreeProgramId = signal('');
   ttGroupId = signal('');
 
   /**
@@ -152,11 +152,11 @@ export class FacultyPage implements OnInit {
    */
   groupIds = computed(() => {
     const year = this.ttCourseYear();
-    const spec = this.ttSpecialtyId();
+    const prog = this.ttDegreeProgramId();
     const group = this.ttGroupId();
     return this.allGroups()
       .filter((g) => (!year || String(g.courseYear) === year)
-                  && (!spec || g.specialtyId === spec)
+                  && (!prog || g.degreeProgramId === prog)
                   && (!group || g.id === group))
       .map((g) => g.id);
   });
@@ -167,27 +167,27 @@ export class FacultyPage implements OnInit {
       .sort((a, b) => a - b)
       .map((y) => ({ id: String(y), label: `${y} курс` })));
 
-  /** Only specialties that have groups — an option that could only ever produce an empty grid is
+  /** Only degreePrograms that have groups — an option that could only ever produce an empty grid is
    *  not a filter, it is a trap. */
-  ttSpecialtyOptions = computed<Option[]>(() => {
+  ttDegreeProgramOptions = computed<Option[]>(() => {
     const byId = new Map<string, string>();
-    for (const g of this.allGroups()) if (g.specialtyId) byId.set(g.specialtyId, g.specialtyName);
+    for (const g of this.allGroups()) if (g.degreeProgramId) byId.set(g.degreeProgramId, g.degreeProgramName);
     return [...byId].map(([id, label]) => ({ id, label }))
       .sort((a, b) => compareUk(a.label, b.label));
   });
 
-  /** Cascaded: the groups left once курс and спеціальність have been applied. */
+  /** Cascaded: the groups left once курс and освітня програма have been applied. */
   ttGroupOptions = computed<Option[]>(() => {
     const year = this.ttCourseYear();
-    const spec = this.ttSpecialtyId();
+    const prog = this.ttDegreeProgramId();
     return this.allGroups()
-      .filter((g) => (!year || String(g.courseYear) === year) && (!spec || g.specialtyId === spec))
+      .filter((g) => (!year || String(g.courseYear) === year) && (!prog || g.degreeProgramId === prog))
       .map((g) => ({ id: g.id, label: g.name }))
       .sort((a, b) => compareUk(a.label, b.label));
   });
 
   /**
-   * Changing курс or спеціальність drops a chosen група that no longer belongs to them. Leaving it
+   * Changing курс or освітня програма drops a chosen група that no longer belongs to them. Leaving it
    * selected would filter the grid down to nothing while the група picker showed a name the курс
    * picker contradicts — two controls disagreeing about what is on screen.
    */
@@ -196,7 +196,7 @@ export class FacultyPage implements OnInit {
   ttNoGroupsMatch = computed(() => this.allGroups().length > 0 && this.groupIds().length === 0);
 
   /**
-   * What the sheet is of, in words: the faculty, then whichever of курс / спеціальність / група has
+   * What the sheet is of, in words: the faculty, then whichever of курс / освітня програма / група has
    * been chosen. An exported subset that still called itself the faculty's timetable would be a
    * signed document making a claim about classes it does not contain.
    */
@@ -205,8 +205,8 @@ export class FacultyPage implements OnInit {
     const parts = [faculty];
     const year = this.ttCourseYear();
     if (year) parts.push(`${year} курс`);
-    const spec = this.ttSpecialtyOptions().find((o) => o.id === this.ttSpecialtyId());
-    if (spec) parts.push(spec.label);
+    const prog = this.ttDegreeProgramOptions().find((o) => o.id === this.ttDegreeProgramId());
+    if (prog) parts.push(prog.label);
     const group = this.ttGroupOptions().find((o) => o.id === this.ttGroupId());
     if (group) parts.push(`група ${group.label}`);
     return parts.filter(Boolean).join(' · ');
@@ -225,8 +225,8 @@ export class FacultyPage implements OnInit {
     if (group && !this.ttGroupOptions().some((o) => o.id === group)) this.ttGroupId.set('');
   }
 
-  specs = signal<Option[]>([]);
-  selectedSpecId = '';
+  progs = signal<Option[]>([]);
+  selectedProgId = '';
   depts = signal<Option[]>([]);
   selectedDeptId = '';
 
@@ -255,10 +255,10 @@ export class FacultyPage implements OnInit {
     effect(() => {
       this.activeSection();
       this.selectedDeptId = '';
-      this.selectedSpecId = '';
+      this.selectedProgId = '';
       this.courseSearch.set('');
       this.ttCourseYear.set('');
-      this.ttSpecialtyId.set('');
+      this.ttDegreeProgramId.set('');
       this.ttGroupId.set('');
     });
 
@@ -282,7 +282,7 @@ export class FacultyPage implements OnInit {
     this.settings.ensureLoaded();
     this.loadFaculty();
     this.loadDepts();
-    this.loadSpecs();
+    this.loadProgs();
     this.loadBuildings();
     this.loadGroupIds();
     this.auth.accessLevel('FACULTY', this.facultyId).subscribe((level) => this.facultyLevel.set(level));
@@ -305,9 +305,9 @@ export class FacultyPage implements OnInit {
   get coursePreset(): Record<string, string> {
     return { facultyId: this.facultyId, ...this.deptPreset };
   }
-  get specFilterValue(): string | null { return this.selectedSpecId || null; }
-  get specPreset(): Record<string, string> {
-    return this.selectedSpecId ? { specialtyId: this.selectedSpecId } : {};
+  get progFilterValue(): string | null { return this.selectedProgId || null; }
+  get progPreset(): Record<string, string> {
+    return this.selectedProgId ? { degreeProgramId: this.selectedProgId } : {};
   }
 
   private loadFaculty() {
@@ -328,12 +328,12 @@ export class FacultyPage implements OnInit {
     });
   }
 
-  private loadSpecs() {
-    const q = `query($facultyId: ID, $limit: Int!) { specialties { specialtyConnection(limit: $limit, facultyId: $facultyId) { nodes { id name } } } }`;
+  private loadProgs() {
+    const q = `query($facultyId: ID, $limit: Int!) { degreePrograms { degreeProgramConnection(limit: $limit, facultyId: $facultyId) { nodes { id name } } } }`;
     this.gql.request(q, { facultyId: this.facultyId, limit: 200 }).subscribe({
       next: (d: any) => {
-        const opts: Option[] = d.specialties.specialtyConnection.nodes.map((sp: any) => ({ id: sp.id, label: sp.name }));
-        this.specs.set(opts);
+        const opts: Option[] = d.degreePrograms.degreeProgramConnection.nodes.map((sp: any) => ({ id: sp.id, label: sp.name }));
+        this.progs.set(opts);
       }
     });
   }
@@ -344,7 +344,7 @@ export class FacultyPage implements OnInit {
    */
   private loadGroupIds() {
     const q = `query($facultyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes {
-      id name courseYear specialty { id name }
+      id name courseYear degreeProgram { id name }
     } } } }`;
     this.gql.request(q, { facultyId: this.facultyId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.allGroups.set(
@@ -352,8 +352,8 @@ export class FacultyPage implements OnInit {
           id: String(g.id),
           name: g.name,
           courseYear: g.courseYear,
-          specialtyId: g.specialty?.id ? String(g.specialty.id) : '',
-          specialtyName: g.specialty?.name ?? ''
+          degreeProgramId: g.degreeProgram?.id ? String(g.degreeProgram.id) : '',
+          degreeProgramName: g.degreeProgram?.name ?? ''
         }))),
       error: () => this.allGroups.set([])
     });

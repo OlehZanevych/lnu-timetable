@@ -51,7 +51,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
         // Exactly one of workingCurriculumItemId / combinedWorkingCurriculumItemId must be given
         // (enforced by the lecturer_workloads_target_check DB constraint) — the latter is for
         // lecturers who simultaneously teach several working curriculum items at once (e.g. a
-        // shared lecture across specialties).
+        // shared lecture across degree programmes).
         s.mutation("createLecturerWorkload").entity(LecturerWorkload.class).create()
             .inputFields("workingCurriculumItemId", "combinedWorkingCurriculumItemId", "durationHours",
                          "classStartTimeSetId")
@@ -287,7 +287,7 @@ public class SchedulingSchemaConfig implements GraphQLSchemaConfig {
         // the timetable around a faculty is an EXISTS subquery (see QueryDefinition.RelationFilter).
         //
         // The three id-list filters exist because a faculty never schedules in isolation: its rooms
-        // also host other faculties' classes, its lecturers also teach other faculties' specialties,
+        // also host other faculties' classes, its lecturers also teach other faculties' degree programmes,
         // and its groups are also taught by other faculties' departments. A generator has to see
         // those entries to avoid clashing with them, and must not move them. They are declared
         // separately (rather than as one OR-ed filter) because filters compose with AND: a caller

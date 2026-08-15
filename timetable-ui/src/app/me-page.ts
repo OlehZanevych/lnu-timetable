@@ -39,9 +39,9 @@ interface StudentProfile {
   groupName: string;
   courseYear: number;
   studyForm: string;
-  specialtyId: string;
-  specialtyName: string;
-  specialtyCode: string;
+  degreeProgramId: string;
+  degreeProgramName: string;
+  degreeProgramCode: string;
   facultyName: string;
 }
 
@@ -443,7 +443,7 @@ export class MyDeskPage implements OnInit {
   }
 
   /**
-   * The student's plan is their *specialty's* plan — `curriculum_items` hang off a specialty, not
+   * The student's plan is their *degreeProgram's* plan — `curriculum_items` hang off a degreeProgram, not
    * off a cohort — narrowed to the semesters their course year and the picker name. There is no
    * per-student curriculum in the model and there should not be one: what a student is entitled to
    * see is the programme they are enrolled in.
@@ -457,7 +457,7 @@ export class MyDeskPage implements OnInit {
       id firstName middleName lastName recordBookNumber
       academicGroup {
         id name courseYear studyForm
-        specialty { id name code degree faculty { name } }
+        degreeProgram { id name code degree faculty { name } }
       }
     } } }`;
 
@@ -471,7 +471,7 @@ export class MyDeskPage implements OnInit {
           return;
         }
         const g = s.academicGroup;
-        const specialtyId = g?.specialty?.id ?? '';
+        const degreeProgramId = g?.degreeProgram?.id ?? '';
         this.student.set({
           id: s.id,
           fullName: [s.lastName, s.firstName, s.middleName].filter(Boolean).join(' '),
@@ -480,30 +480,30 @@ export class MyDeskPage implements OnInit {
           groupName: g?.name ?? '',
           courseYear: g?.courseYear ?? 0,
           studyForm: g?.studyForm ?? '',
-          specialtyId,
-          specialtyName: g?.specialty?.name ?? '',
-          specialtyCode: g?.specialty?.code ?? '',
-          facultyName: g?.specialty?.faculty?.name ?? ''
+          degreeProgramId,
+          degreeProgramName: g?.degreeProgram?.name ?? '',
+          degreeProgramCode: g?.degreeProgram?.code ?? '',
+          facultyName: g?.degreeProgram?.faculty?.name ?? ''
         });
 
-        if (!specialtyId) { this.loading.set(false); return; }
-        this.loadCurriculum(specialtyId);
+        if (!degreeProgramId) { this.loading.set(false); return; }
+        this.loadCurriculum(degreeProgramId);
       },
       error: (e) => { this.error.set(e.message); this.loading.set(false); }
     });
   }
 
-  private loadCurriculum(specialtyId: string) {
+  private loadCurriculum(degreeProgramId: string) {
     // The whole plan is fetched and narrowed here rather than per semester: the picker moves
     // between two semesters of the same programme, and re-querying on every switch would cost a
-    // round trip to show rows already in hand. A specialty's plan is ~60 rows.
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
+    // round trip to show rows already in hand. A degreeProgram's plan is ~60 rows.
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType semester tags { tag } }
       hours { hourType hours }
     } } } }`;
 
-    this.gql.request(q, { specialtyId, limit: 1000, offset: 0 }).subscribe({
+    this.gql.request(q, { degreeProgramId, limit: 1000, offset: 0 }).subscribe({
       next: (d: any) => {
         const nodes = d.curriculumItems.curriculumItemConnection.nodes ?? [];
         this.curriculum.set(nodes.map((n: any) => {

@@ -11,16 +11,16 @@ import org.lnu.timetable.framework.annotation.PgEnum;
 import java.util.List;
 
 @Data
-@GraphQLEntity(table = "specialties")
+@GraphQLEntity(table = "degree_programs")
 @PermissionParent(value = Faculty.class, joinColumn = "faculty_id")
-public class Specialty {
+public class DegreeProgram {
 
     private Long id;
 
-    @Description("Specialty code, e.g. 122")
+    @Description("Code of the specialty the programme belongs to, e.g. 122")
     private String code;
 
-    @Description("Specialty name, e.g. Computer Science")
+    @Description("Degree programme name, e.g. Computer Science")
     private String name;
 
     @PgEnum("degree")
@@ -30,6 +30,6 @@ public class Specialty {
     @ManyToOne(joinColumn = "faculty_id")
     private Faculty faculty;
 
-    @OneToMany(mappedBy = "specialty_id")
+    @OneToMany(mappedBy = "degree_program_id")
     private List<AcademicGroup> groups;
 }

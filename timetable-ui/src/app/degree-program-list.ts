@@ -7,7 +7,7 @@ import { AccessLevel, allows, maxLevel } from './access-level';
 import { SearchSelect } from './search-select';
 import { DEGREE_OPTIONS, toOptions } from './entities';
 
-interface Specialty {
+interface DegreeProgram {
   id: string;
   code: string;
   name: string;
@@ -15,11 +15,11 @@ interface Specialty {
 }
 
 @Component({
-  selector: 'app-specialty-list',
-  templateUrl: './specialty-list.html',
+  selector: 'app-degree-program-list',
+  templateUrl: './degree-program-list.html',
   imports: [FormsModule, RouterLink, SearchSelect]
 })
-export class SpecialtyList implements OnInit, OnChanges {
+export class DegreeProgramList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
   private auth = inject(AuthService);
 
@@ -27,7 +27,7 @@ export class SpecialtyList implements OnInit, OnChanges {
 
   readonly degreeOptions = toOptions(DEGREE_OPTIONS);
 
-  specialties = signal<Specialty[]>([]);
+  degreePrograms = signal<DegreeProgram[]>([]);
   error = signal('');
 
   canCreate = signal(false);
@@ -38,14 +38,14 @@ export class SpecialtyList implements OnInit, OnChanges {
   createError = signal('');
   createForm: Record<string, any> = {};
 
-  editingSpec = signal<Specialty | null>(null);
+  editingProg = signal<DegreeProgram | null>(null);
   editError = signal('');
   editForm: Record<string, any> = {};
 
   ngOnInit() { this.load(); this.loadPermissions(); }
   ngOnChanges() { this.load(); this.loadPermissions(); }
 
-  canEdit(s: Specialty): boolean {
+  canEdit(s: DegreeProgram): boolean {
     return allows(maxLevel(this.auth.globalLevel(), this.accessById().get(String(s.id))), 'EDIT');
   }
 
@@ -62,13 +62,13 @@ export class SpecialtyList implements OnInit, OnChanges {
 
   load() {
     if (!this.facultyId) return;
-    const q = `query($facultyId: ID, $limit: Int!) { specialties { specialtyConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } } } }`;
+    const q = `query($facultyId: ID, $limit: Int!) { degreePrograms { degreeProgramConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } } } }`;
     this.gql.request(q, { facultyId: this.facultyId, limit: 200 }).subscribe({
       next: (d: any) => {
-        const nodes = d.specialties.specialtyConnection.nodes;
-        this.specialties.set(nodes);
+        const nodes = d.degreePrograms.degreeProgramConnection.nodes;
+        this.degreePrograms.set(nodes);
         if (this.auth.globalLevel() !== 'MANAGE' && nodes.length) {
-          this.auth.accessLevels('SPECIALTY', nodes.map((n: Specialty) => String(n.id)))
+          this.auth.accessLevels('DEGREE_PROGRAM', nodes.map((n: DegreeProgram) => String(n.id)))
             .subscribe((levels) => this.accessById.set(levels));
         }
       },
@@ -90,10 +90,10 @@ export class SpecialtyList implements OnInit, OnChanges {
     for (const f of ['code', 'name', 'degree']) {
       if (this.createForm[f]) input[f] = this.createForm[f];
     }
-    const q = `mutation($input: SpecialtyInputPayload!) { specialties { createSpecialty(specialty: $input) { isSuccess errorStatus } } }`;
+    const q = `mutation($input: DegreeProgramInputPayload!) { degreePrograms { createDegreeProgram(degreeProgram: $input) { isSuccess errorStatus } } }`;
     this.gql.request(q, { input }).subscribe({
       next: (d: any) => {
-        const res = d.specialties.createSpecialty;
+        const res = d.degreePrograms.createDegreeProgram;
         if (res.isSuccess) { this.closeCreate(); this.load(); }
         else this.createError.set(res.errorStatus || 'Помилка операції');
       },
@@ -103,29 +103,29 @@ export class SpecialtyList implements OnInit, OnChanges {
 
   // ── Edit ─────────────────────────────────────────────────────────────────
 
-  openEdit(spec: Specialty) {
+  openEdit(prog: DegreeProgram) {
     this.editForm = {
-      code: spec.code ?? '',
-      name: spec.name ?? '',
-      degree: spec.degree ?? '',
+      code: prog.code ?? '',
+      name: prog.name ?? '',
+      degree: prog.degree ?? '',
     };
     this.editError.set('');
-    this.editingSpec.set(spec);
+    this.editingProg.set(prog);
   }
 
-  closeEdit() { this.editingSpec.set(null); this.editError.set(''); }
+  closeEdit() { this.editingProg.set(null); this.editError.set(''); }
 
   saveEdit() {
-    const spec = this.editingSpec();
-    if (!spec) return;
+    const prog = this.editingProg();
+    if (!prog) return;
     const input: Record<string, any> = { facultyId: this.facultyId };
     for (const f of ['code', 'name', 'degree']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
-    const q = `mutation($id: ID!, $input: SpecialtyInputPayload!) { specialties { updateSpecialty(id: $id, specialty: $input) { isSuccess errorStatus } } }`;
-    this.gql.request(q, { id: spec.id, input }).subscribe({
+    const q = `mutation($id: ID!, $input: DegreeProgramInputPayload!) { degreePrograms { updateDegreeProgram(id: $id, degreeProgram: $input) { isSuccess errorStatus } } }`;
+    this.gql.request(q, { id: prog.id, input }).subscribe({
       next: (d: any) => {
-        const res = d.specialties.updateSpecialty;
+        const res = d.degreePrograms.updateDegreeProgram;
         if (res.isSuccess) { this.closeEdit(); this.load(); }
         else this.editError.set(res.errorStatus || 'Помилка операції');
       },

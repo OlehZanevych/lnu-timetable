@@ -41,7 +41,7 @@ public class Faculty {
     private List<Department> departments;
 
     @OneToMany(mappedBy = "faculty_id")
-    private List<Specialty> specialties;
+    private List<DegreeProgram> degreePrograms;
 
     @OneToMany(mappedBy = "faculty_id")
     private List<Room> rooms;

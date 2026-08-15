@@ -43,7 +43,7 @@ interface ClassRow {
   hourType: string;
   hours: number;
   semester: number;
-  specialtyName: string;
+  degreeProgramName: string;
   departmentName: string;
   teachingFormat: string;
   lecturerCount: number;
@@ -179,14 +179,14 @@ export class LecturerDetailPage implements OnInit {
           lecturerCount teachingFormat
           course { id name semester tags { tag } }
           department { id name }
-          curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
+          curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType semester tags { tag } } degreeProgram { id name } } }
         }
         combinedWorkingCurriculumItem {
           workingCurriculumItems {
             lecturerCount teachingFormat
             course { id name semester tags { tag } }
             department { id name }
-            curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
+            curriculumItemHours { hourType hours curriculumItem { semester course { id name courseType semester tags { tag } } degreeProgram { id name } } }
           }
         }
       }
@@ -238,7 +238,7 @@ export class LecturerDetailPage implements OnInit {
         hourType: ref?.curriculumItemHours?.hourType ?? '',
         hours: ref?.curriculumItemHours?.hours ?? 0,
         semester: ci?.semester ?? 0,
-        specialtyName: ci?.specialty?.name ?? '',
+        degreeProgramName: ci?.degreeProgram?.name ?? '',
         departmentName: ref?.department?.name ?? '',
         teachingFormat: ref?.teachingFormat ?? '',
         lecturerCount: ref?.lecturerCount ?? 1,

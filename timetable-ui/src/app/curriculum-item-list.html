@@ -7,7 +7,7 @@
     <button type="button" class="ghost cp-export"
             [disabled]="!items().length || exporting()"
             (click)="downloadPlan()"
-            title="Навчальний план спеціальності у форматі PDF">
+            title="Навчальний план освітньої програми у форматі PDF">
       @if (exporting()) { Формування&hellip; } @else { &#x1F4C4; Завантажити PDF }
     </button>
     <button type="button" (click)="openCreate()">+ Додати</button>

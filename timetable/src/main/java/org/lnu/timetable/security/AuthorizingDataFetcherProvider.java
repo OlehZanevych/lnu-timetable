@@ -30,7 +30,7 @@ import java.util.concurrent.CompletableFuture;
  * </ol>
  * The split between update and delete is the point of the level system, and it lives here, in one
  * {@code switch}, rather than being spread across the entities: deletion cascades in this schema —
- * removing a Specialty removes its academic groups, curriculum items and workloads — so it is a
+ * removing a DegreeProgram removes its academic groups, curriculum items and workloads — so it is a
  * different act from editing a field, and a методист who maintains плани all day should not be one
  * mis-click away from it.
  * <p>
@@ -153,7 +153,7 @@ public class AuthorizingDataFetcherProvider implements DataFetcherProvider {
     }
 
     /**
-     * Says which level was missing, not just that something was. "Deleting this Specialty requires
+     * Says which level was missing, not just that something was. "Deleting this DegreeProgram requires
      * FULL access; EDIT does not include deletion" tells a user holding EDIT what to ask their
      * deanery for; "you don't have permission" leaves them guessing whether they are in the wrong
      * place entirely.

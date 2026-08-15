@@ -20,7 +20,7 @@ const ITEMS_QUERY = `query($departmentId: ID, $limit: Int!, $offset: Int!) {
     combinedWorkingCurriculumItems { id }
     curriculumItemHours {
       hourType hours
-      curriculumItem { semester specialty { id name } course { id name courseType semester tags { tag } } }
+      curriculumItem { semester degreeProgram { id name } course { id name courseType semester tags { tag } } }
     }
     workloads {
       id
@@ -37,7 +37,7 @@ const COMBINED_QUERY = `query($departmentIds: [ID!], $limit: Int!, $offset: Int!
       academicGroups { id name }
       curriculumItemHours {
         hourType hours
-        curriculumItem { semester specialty { id name } course { id name courseType semester tags { tag } } }
+        curriculumItem { semester degreeProgram { id name } course { id name courseType semester tags { tag } } }
       }
     }
     workloads { id lecturers { id } }
@@ -77,7 +77,7 @@ export function loadDepartmentWorkloads(gql: GraphqlService, departmentId: strin
           courseLabel: courseLabel(course.name, course.tags, course.semester),
           courseType: course.courseType ?? ci.course.courseType,
           semester: ci.semester,
-          specialtyName: ci.specialty?.name ?? '',
+          degreeProgramName: ci.degreeProgram?.name ?? '',
           teachingFormat: wci.teachingFormat,
           lecturerIds: (w.lecturers ?? []).map((l: any) => l.id),
           studentsByLecturer,
@@ -105,8 +105,8 @@ export function loadDepartmentWorkloads(gql: GraphqlService, departmentId: strin
           courseLabel: courseLabel(ci.course.name, ci.course.tags, ci.course.semester),
           courseType: ci.course.courseType,
           semester: ci.semester,
-          specialtyName: (c.workingCurriculumItems ?? [])
-            .map((m: any) => m.curriculumItemHours.curriculumItem.specialty?.name)
+          degreeProgramName: (c.workingCurriculumItems ?? [])
+            .map((m: any) => m.curriculumItemHours.curriculumItem.degreeProgram?.name)
             .filter(Boolean).join(', '),
           teachingFormat: 'TOGETHER',
           lecturerIds: (w.lecturers ?? []).map((l: any) => l.id),

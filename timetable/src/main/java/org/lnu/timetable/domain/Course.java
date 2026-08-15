@@ -49,9 +49,9 @@ public class Course {
     @OneToMany(mappedBy = "parent_course_id")
     private List<Course> childCourses;
 
-    @Description("Specialties this course may be added to a curriculum for")
-    @ManyToMany(joinTable = "course_specialties", joinColumn = "course_id", inverseJoinColumn = "specialty_id")
-    private List<Specialty> specialties;
+    @Description("Degree programmes this course may be added to a curriculum for")
+    @ManyToMany(joinTable = "course_degree_programs", joinColumn = "course_id", inverseJoinColumn = "degree_program_id")
+    private List<DegreeProgram> degreePrograms;
 
     @Description("Free-form labels shown after the course's name, e.g. \"англійською\"")
     @OneToMany(mappedBy = "course_id")

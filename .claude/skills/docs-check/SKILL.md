@@ -73,7 +73,8 @@ English prose. A bare Ukrainian domain noun inside an English sentence is house 
 for vocabulary already used that way before this change:
 
 > кафедра, факультет, викладач, студент, розклад, навантаження, навчальний план, корпус, пара,
-> аудиторія, гарант, завідувач, семестр, курс, спеціальність, група, лекція, РНП, примітки
+> аудиторія, гарант, завідувач, семестр, курс, освітня програма, спеціальність, група, лекція,
+> РНП, примітки
 
 Do not introduce new Ukrainian vocabulary — use English instead (*deanery*, not деканат). UI labels,
 report names, document captions and database values stay Ukrainian inside « ». If a file contained no

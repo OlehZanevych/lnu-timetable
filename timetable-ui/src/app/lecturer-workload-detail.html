@@ -138,7 +138,7 @@
                   <th>Курс</th>
                   <th>Дисципліна</th>
                   <th>Тип</th>
-                  <th>Спеціальність</th>
+                  <th>Освітня програма</th>
                   <th>Вид роботи</th>
                   <th>Формат</th>
                   <th>Групи / студенти</th>
@@ -156,7 +156,7 @@
                       @if (item.combined) { <em class="wd-flag">об'єднана</em> }
                     </td>
                     <td>{{ courseTypeLabel(item.courseType) }}</td>
-                    <td class="cell-info" [title]="item.specialtyName">{{ item.specialtyName }}</td>
+                    <td class="cell-info" [title]="item.degreeProgramName">{{ item.degreeProgramName }}</td>
                     <td>{{ hourTypeLabel(item.hourType) }}</td>
                     <td>{{ teachingFormatLabel(item.teachingFormat) }}</td>
                     <td>

@@ -14,7 +14,7 @@ import java.util.List;
 
 @Data
 @GraphQLEntity(table = "academic_groups")
-@PermissionParent(value = Specialty.class, joinColumn = "specialty_id")
+@PermissionParent(value = DegreeProgram.class, joinColumn = "degree_program_id")
 public class AcademicGroup {
 
     private Long id;
@@ -32,8 +32,8 @@ public class AcademicGroup {
     @Nullable
     private Integer studentsCount;
 
-    @ManyToOne(joinColumn = "specialty_id")
-    private Specialty specialty;
+    @ManyToOne(joinColumn = "degree_program_id")
+    private DegreeProgram degreeProgram;
 
     @OneToMany(mappedBy = "academic_group_id")
     private List<Student> students;

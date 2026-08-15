@@ -1,8 +1,8 @@
 # The printable curriculum (PDF)
 
-The **«Завантажити PDF»** button on the "Навчальні плани" tab (`/specialty/{id}`) produces the
+The **«Завантажити PDF»** button on the "Навчальні плани" tab (`/degree-program/{id}`) produces the
 document *«НАВЧАЛЬНИЙ ПЛАН підготовки здобувачів вищої освіти»* — the curriculum of the selected
-specialty.
+degree programme.
 
 The document is built **entirely on the client**: not one byte goes to the server, and the file is
 handed to the browser as a `Blob`. The code is `pdf-writer.ts` (the engine), `curriculum-plan.ts`
@@ -74,7 +74,7 @@ additional regulation.
 
 > The 10 % threshold is **not implemented**: the system does not store a flag for a regulated
 > specialty. The check always measures against 25 %, and for a regulated specialty its verdict
-> should be read as "the stricter lower bound was applied". That is a field on `specialties` plus a
+> should be read as "the stricter lower bound was applied". That is a field on `degree_programs` plus a
 > column in `schema.sql`, not a redesign of the document.
 
 ### The approval block: why «ЗАТВЕРДЖЕНО» and not «ЗАТВЕРДЖУЮ»
@@ -135,7 +135,7 @@ two forms from one system should not look like they come from different eras.
 
   ┌──────────────────────┬───────────────────┬─────────────────┬───────┐
   │ Галузь знань         │ <шифр>            │ Рівень НРК      │ 6     │
-  │ Спеціальність        │ <код> <назва>     │ Семестрів       │ 8     │
+  │ Освітня програма     │ <код> <назва>     │ Семестрів       │ 8     │
   │ Освітній ступінь     │ <ступінь>         │ Курсів          │ 4     │
   │ Рівень вищої освіти  │ перший (бакалавр…)│ Кредитів ЄКТС   │ 240   │
   │ Факультет            │ <факультет>       │ Годин           │ 7200  │
@@ -223,15 +223,17 @@ boundary.
   ПКМУ № 266/2015 and, for intakes from 2025, in the new list under ПКМУ № 1021 від 30.08.2024; the
   system stores neither, and a hard-coded table would go stale with the next revision of the list.
 - **The name and ЄДЕБО identifier of the educational programme**, the **educational and professional
-  qualifications**, and the **year of intake** — there are no such fields: `Specialty` stores `code`,
-  `name`, `degree` and a faculty, and nothing else. The model does not distinguish an educational
-  programme from a specialty, although наказ МОН № 1734 від 31.12.2025 insists they are different
-  things.
+  qualifications**, and the **year of intake** — there are no such fields: `DegreeProgram` stores
+  `code`, `name`, `degree` and a faculty, and nothing else. Since the rename in
+  [`V8`](../timetable/README.md#v8__rename_specialties_to_degree_programssql) the row *is* the
+  освітня програма and `code` records the спеціальність it sits under, which is the distinction наказ
+  МОН № 1734 від 31.12.2025 draws — but only in name: one спеціальність running two programmes is
+  still two rows repeating one code, not one specialty owning two children.
 - **The competence / programme learning outcome matrix** — part of the educational programme, not of
   the curriculum.
 - **The 10 % elective threshold** for regulated professions — see above.
 
-Each of these is a field on `Specialty` (or a new table) plus a column in `schema.sql`, not a
+Each of these is a field on `DegreeProgram` (or a new table) plus a column in `schema.sql`, not a
 redesign of the document.
 
 ## 5. Technical decisions

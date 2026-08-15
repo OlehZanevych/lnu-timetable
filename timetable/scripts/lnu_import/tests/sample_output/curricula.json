@@ -2,9 +2,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-education",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "014.09",
-  "specialty_name": "Середня освіта (Інформатика)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "014.09",
+  "degree_program_name": "Середня освіта (Інформатика)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -71,9 +71,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-applied-mathematics",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "113",
-  "specialty_name": "Прикладна математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "113",
+  "degree_program_name": "Прикладна математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -140,9 +140,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "014",
-  "specialty_name": "Середня освіта (інформатика)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "014",
+  "degree_program_name": "Середня освіта (інформатика)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -181,9 +181,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-mathematics",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "111",
-  "specialty_name": "Математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "111",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {

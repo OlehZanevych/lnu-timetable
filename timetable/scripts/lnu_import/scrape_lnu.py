@@ -9,7 +9,7 @@ Walks, for every faculty listed on https://lnu.edu.ua/structure/faculties:
       /department/<slug>      -> department name / abbreviation / contacts
       /about/staff            -> lecturer links grouped per department
       /employee/<slug>        -> lecturer name, position, academic degree, e-mail
-      /academics/bachelor     -> specialty links (code + name + curriculum page)
+      /academics/bachelor     -> degree_program links (code + name + curriculum page)
       /academics/master       -> ditto
       /academics/<deg>/<plan> -> curriculum: per-semester course rows + hours
       /course/<slug>          -> course type, owning department, lectures /
@@ -25,7 +25,7 @@ Output: a directory of JSON files (``--out``, default ``data/``) consumed by
     faculties.json    buildings + faculties
     departments.json  departments (with a normalised match key)
     lecturers.json    lecturers (with their department match key)
-    specialties.json  specialties + their curriculum page URLs
+    degree_programs.json  degree programmes + their curriculum page URLs
     curricula.json    curriculum rows per semester (incl. elective groups)
     courses.json      course pages: type, department, lectures/practicals/labs
     manifest.json     run metadata + per-faculty statistics
@@ -157,7 +157,7 @@ ELECTIVE_ROW_MARKERS = (
 )
 
 GROUP_RE = re.compile(r"\b[А-ЯІЇЄҐA-Z][А-Яа-яІіЇїЄєҐґA-Za-z’'`]{0,7}-\d{2,3}[а-яa-zА-ЯA-Z]?\b")
-SPECIALTY_CODE_RE = re.compile(r"^\s*([A-ZА-Я]?\d{1,3}(?:\.\d{1,2})?)[\s.–—-]+(.+)$")
+DEGREE_PROGRAM_CODE_RE = re.compile(r"^\s*([A-ZА-Я]?\d{1,3}(?:\.\d{1,2})?)[\s.–—-]+(.+)$")
 STOPWORDS = {"та", "і", "й", "з", "із", "на", "у", "в", "для", "the", "of", "and", "a"}
 
 
@@ -753,9 +753,9 @@ def parse_employee_page(soup: BeautifulSoup, base_url: str) -> dict:
 
 
 def parse_academics_page(soup: BeautifulSoup, base_url: str, degree: str) -> list[dict]:
-    """/academics/bachelor|master -> specialty entries with curriculum page URLs.
+    """/academics/bachelor|master -> degree programme entries with curriculum page URLs.
 
-    Specialties are rendered as headings like
+    Degree programmes are rendered as headings like
     "### [014 Середня освіта (інформатика)](.../curriculum-education-master)".
     """
     content = main_content(soup)
@@ -770,7 +770,7 @@ def parse_academics_page(soup: BeautifulSoup, base_url: str, degree: str) -> lis
         text = norm_ws(a.get_text(" ", strip=True))
         if not text or url in seen:
             continue
-        m = SPECIALTY_CODE_RE.match(text)
+        m = DEGREE_PROGRAM_CODE_RE.match(text)
         if not m:
             continue
         seen.add(url)
@@ -1007,7 +1007,7 @@ class Crawler:
         self.departments: list[dict] = []
         self.department_index: dict[str, dict] = {}   # url -> record
         self.lecturers: dict[str, dict] = {}          # url -> record
-        self.specialties: list[dict] = []
+        self.degree_programs: list[dict] = []
         self.curricula: list[dict] = []
         self.courses: dict[str, dict] = {}            # url -> record
         self.warnings: list[str] = []
@@ -1068,14 +1068,14 @@ class Crawler:
 
         departments = self.crawl_departments(faculty)
         self.crawl_lecturers(faculty, departments)
-        specialties = self.crawl_specialties(faculty)
-        self.crawl_curricula(faculty, specialties)
+        degree_programs = self.crawl_degree_programs(faculty)
+        self.crawl_curricula(faculty, degree_programs)
 
         record["stats"] = {
             "departments": len(departments),
             "lecturers": sum(1 for l in self.lecturers.values()
                              if l["faculty_host"] == faculty.host),
-            "specialties": len(specialties),
+            "degree_programs": len(degree_programs),
             "courses": sum(1 for c in self.courses.values()
                            if c["faculty_host"] == faculty.host),
         }
@@ -1201,7 +1201,7 @@ class Crawler:
         LOG.info("  lecturers: %d imported, %d skipped (non-teaching / unnamed)",
                  imported, skipped)
 
-    def crawl_specialties(self, faculty: Faculty) -> list[dict]:
+    def crawl_degree_programs(self, faculty: Faculty) -> list[dict]:
         found: list[dict] = []
         for level, degree in (("bachelor", "BACHELOR"), ("master", "MASTER")):
             url = f"{faculty.website}/academics/{level}"
@@ -1210,7 +1210,7 @@ class Crawler:
                 LOG.info("  no /academics/%s page", level)
                 continue
             entries = parse_academics_page(soup, url, degree)
-            LOG.info("  /academics/%s: %d specialty entries", level, len(entries))
+            LOG.info("  /academics/%s: %d degree programme entries", level, len(entries))
             found.extend(entries)
 
         merged: dict[tuple[str, str], dict] = {}
@@ -1226,21 +1226,21 @@ class Crawler:
                     "curricula": [],
                 }
                 merged[key] = record
-                self.specialties.append(record)
+                self.degree_programs.append(record)
             record["curricula"].append({
                 "url": entry["curriculum_url"],
                 "title": entry["curriculum_title"],
                 "study_form": entry["study_form"],
             })
-        LOG.info("  specialties after merge: %d", len(merged))
+        LOG.info("  degree_programs after merge: %d", len(merged))
         return list(merged.values())
 
-    def crawl_curricula(self, faculty: Faculty, specialties: list[dict]) -> None:
-        for specialty in specialties:
-            for curriculum in specialty["curricula"]:
+    def crawl_curricula(self, faculty: Faculty, degree_programs: list[dict]) -> None:
+        for degree_program in degree_programs:
+            for curriculum in degree_program["curricula"]:
                 url = curriculum["url"]
-                LOG.info("  curriculum %s %s -> %s", specialty["code"],
-                         specialty["degree"], url)
+                LOG.info("  curriculum %s %s -> %s", degree_program["code"],
+                         degree_program["degree"], url)
                 soup = self.f.soup(url)
                 if soup is None:
                     self.warn(f"{faculty.host}: curriculum page unreachable {url}")
@@ -1253,9 +1253,9 @@ class Crawler:
                 self.curricula.append({
                     "url": url,
                     "faculty_host": faculty.host,
-                    "specialty_code": specialty["code"],
-                    "specialty_name": specialty["name"],
-                    "specialty_degree": specialty["degree"],
+                    "degree_program_code": degree_program["code"],
+                    "degree_program_name": degree_program["name"],
+                    "degree_program_degree": degree_program["degree"],
                     "study_form": curriculum["study_form"],
                     "semesters": semesters,
                 })
@@ -1309,7 +1309,7 @@ class Crawler:
         })
         dump("departments.json", self.departments)
         dump("lecturers.json", list(self.lecturers.values()))
-        dump("specialties.json", self.specialties)
+        dump("degree_programs.json", self.degree_programs)
         dump("curricula.json", self.curricula)
         dump("courses.json", list(self.courses.values()))
         dump("manifest.json", {
@@ -1320,7 +1320,7 @@ class Crawler:
                 "faculties": len(self.faculties),
                 "departments": len(self.departments),
                 "lecturers": len(self.lecturers),
-                "specialties": len(self.specialties),
+                "degree_programs": len(self.degree_programs),
                 "curricula": len(self.curricula),
                 "courses": len(self.courses),
             },
@@ -1428,10 +1428,10 @@ def main(argv: list[str] | None = None) -> int:
     crawler.write(args.out)
     LOG.info("-" * 78)
     LOG.info("Done in %.1fs | http: %s", time.time() - started, fetcher.stats)
-    LOG.info("buildings=%d faculties=%d departments=%d lecturers=%d specialties=%d "
+    LOG.info("buildings=%d faculties=%d departments=%d lecturers=%d degree_programs=%d "
              "curricula=%d courses=%d warnings=%d",
              len(crawler.buildings), len(crawler.faculties), len(crawler.departments),
-             len(crawler.lecturers), len(crawler.specialties), len(crawler.curricula),
+             len(crawler.lecturers), len(crawler.degree_programs), len(crawler.curricula),
              len(crawler.courses), len(crawler.warnings))
     return 0
 

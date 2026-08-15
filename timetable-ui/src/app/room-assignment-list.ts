@@ -58,7 +58,7 @@ interface RawCurriculumItemHours {
   hours: number;
   curriculumItem: {
     semester: number;
-    specialty?: { id: string; name: string } | null;
+    degreeProgram?: { id: string; name: string } | null;
     course: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null };
   };
 }
@@ -99,9 +99,9 @@ interface ClassCard {
   hours: number;
   durationHours: number;
   semester: number;
-  /** Every specialty this class serves — one for a plain item, possibly several for a combined one. */
-  specialtyIds: string[];
-  specialtyNames: string;
+  /** Every degreeProgram this class serves — one for a plain item, possibly several for a combined one. */
+  degreeProgramIds: string[];
+  degreeProgramNames: string;
   departmentName: string;
   groupNames: string;
   lecturerNames: string;
@@ -197,15 +197,15 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   /** Server-side too: `departmentId` on the working items, `departmentIds` on the combined ones. */
   selectedDepartmentId = signal('');
   /**
-   * Client-side, because neither working-item connection carries a `specialtyId` relation filter —
-   * the specialty is two levels down, on the curriculum item. The rows are already narrowed to one
+   * Client-side, because neither working-item connection carries a `degreeProgramId` relation filter —
+   * the degreeProgram is two levels down, on the curriculum item. The rows are already narrowed to one
    * faculty and one half-year by then, so the list being filtered here is small.
    */
-  selectedSpecialtyId = signal('');
+  selectedDegreeProgramId = signal('');
 
   departmentOptions = signal<Option[]>([]);
-  /** Specialties this faculty owns — the base of the filter list. */
-  private facultySpecialtyOptions = signal<Option[]>([]);
+  /** DegreePrograms this faculty owns — the base of the filter list. */
+  private facultyDegreeProgramOptions = signal<Option[]>([]);
   /** What this faculty may pick from — see `loadRoomOptions`. */
   private baseRoomOptions = signal<Option[]>([]);
   private baseRoomGroupOptions = signal<Option[]>([]);
@@ -260,8 +260,8 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     this.loadAll();
   }
 
-  onSpecialtyChange(v: string) {
-    this.selectedSpecialtyId.set(v);   // client-side: no reload
+  onDegreeProgramChange(v: string) {
+    this.selectedDegreeProgramId.set(v);   // client-side: no reload
   }
 
   // ── Loading ───────────────────────────────────────────────────────────────
@@ -286,16 +286,16 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   private loadFilterOptions() {
     const q = `query($facultyId: ID, $limit: Int!, $offset: Int!) {
       departments { departmentConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes { id name } } }
-      specialties { specialtyConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes { id code name } } }
+      degreePrograms { degreeProgramConnection(limit: $limit, offset: $offset, facultyId: $facultyId) { nodes { id code name } } }
     }`;
     this.gql.request(q, { facultyId: this.facultyId, limit: 200, offset: 0 }).subscribe({
       next: (d: any) => {
         this.departmentOptions.set((d.departments.departmentConnection.nodes ?? [])
           .map((x: any) => ({ id: x.id, label: x.name }))
           .sort((a: Option, b: Option) => compareUk(a.label, b.label)));
-        this.facultySpecialtyOptions.set((d.specialties.specialtyConnection.nodes ?? [])
+        this.facultyDegreeProgramOptions.set((d.degreePrograms.degreeProgramConnection.nodes ?? [])
           .map((x: any) => ({ id: x.id, label: x.code ? `${x.code} ${x.name}` : x.name })));
-        this.rememberSpecialties();
+        this.rememberDegreePrograms();
       },
       error: () => {}
     });
@@ -387,55 +387,55 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   });
 
   /**
-   * The filter's options: the faculty's own specialties, plus every specialty actually appearing in
+   * The filter's options: the faculty's own degreePrograms, plus every degreeProgram actually appearing in
    * the loaded classes.
    *
    * The union matters because the two sets genuinely differ. A department of this faculty teaches
-   * service disciplines to other faculties' specialties — those classes are listed here (they are
-   * this faculty's teaching load) but their specialty is not this faculty's, so a list built from
-   * `specialtyConnection` alone could never isolate them. The converse gap is real but belongs
-   * elsewhere: a specialty of this faculty whose discipline is delivered by another faculty's
+   * service disciplines to other faculties' degreePrograms — those classes are listed here (they are
+   * this faculty's teaching load) but their degreeProgram is not this faculty's, so a list built from
+   * `degreeProgramConnection` alone could never isolate them. The converse gap is real but belongs
+   * elsewhere: a degreeProgram of this faculty whose discipline is delivered by another faculty's
    * department is that faculty's class to place, and is assigned on *its* page.
    */
-  specialtyOptions = computed<Option[]>(() => {
-    const byId = new Map<string, Option>(this.facultySpecialtyOptions().map((o) => [o.id, o]));
+  degreeProgramOptions = computed<Option[]>(() => {
+    const byId = new Map<string, Option>(this.facultyDegreeProgramOptions().map((o) => [o.id, o]));
     const add = (sp?: { id: string; name: string } | null) => {
       if (sp && !byId.has(sp.id)) byId.set(sp.id, { id: sp.id, label: sp.name });
     };
-    for (const i of this.wciItems()) add(i.curriculumItemHours.curriculumItem.specialty);
+    for (const i of this.wciItems()) add(i.curriculumItemHours.curriculumItem.degreeProgram);
     for (const c of this.combinedItems()) {
-      for (const m of c.workingCurriculumItems ?? []) add(m.curriculumItemHours.curriculumItem.specialty);
+      for (const m of c.workingCurriculumItems ?? []) add(m.curriculumItemHours.curriculumItem.degreeProgram);
     }
-    // Narrowing by кафедра can remove the rows a row-derived specialty came from. Dropping it from
+    // Narrowing by кафедра can remove the rows a row-derived degreeProgram came from. Dropping it from
     // the list as well would leave the id still filtering while the control fell back to its
     // placeholder — three filters that look wide open above an empty list. Keep it visible.
-    const selected = this.selectedSpecialtyId();
+    const selected = this.selectedDegreeProgramId();
     if (selected && !byId.has(selected)) {
-      const known = this.knownSpecialties().get(selected);
+      const known = this.knownDegreePrograms().get(selected);
       if (known) byId.set(selected, { id: selected, label: known });
     }
     return [...byId.values()].sort((a, b) => compareUk(a.label, b.label));
   });
 
-  /** Every specialty this page has seen, so a selection filtered out of the rows can still be named. */
-  private knownSpecialties = signal<ReadonlyMap<string, string>>(new Map());
+  /** Every degreeProgram this page has seen, so a selection filtered out of the rows can still be named. */
+  private knownDegreePrograms = signal<ReadonlyMap<string, string>>(new Map());
 
-  private rememberSpecialties() {
-    const next = new Map(this.knownSpecialties());
+  private rememberDegreePrograms() {
+    const next = new Map(this.knownDegreePrograms());
     const add = (sp?: { id: string; name: string } | null) => { if (sp) next.set(sp.id, sp.name); };
-    for (const o of this.facultySpecialtyOptions()) next.set(o.id, o.label);
-    for (const i of this.wciItems()) add(i.curriculumItemHours.curriculumItem.specialty);
+    for (const o of this.facultyDegreeProgramOptions()) next.set(o.id, o.label);
+    for (const i of this.wciItems()) add(i.curriculumItemHours.curriculumItem.degreeProgram);
     for (const c of this.combinedItems()) {
-      for (const m of c.workingCurriculumItems ?? []) add(m.curriculumItemHours.curriculumItem.specialty);
+      for (const m of c.workingCurriculumItems ?? []) add(m.curriculumItemHours.curriculumItem.degreeProgram);
     }
-    const current = this.knownSpecialties();
+    const current = this.knownDegreePrograms();
     let changed = next.size !== current.size;
     if (!changed) {
       for (const [id, label] of next) {
         if (current.get(id) !== label) { changed = true; break; }
       }
     }
-    if (changed) this.knownSpecialties.set(next);
+    if (changed) this.knownDegreePrograms.set(next);
   }
 
   private allWorkloads(): RawWorkload[] {
@@ -498,7 +498,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       course { id name semester tags { tag } }
       curriculumItemHours {
         hourType hours
-        curriculumItem { semester specialty { id name } course { id name courseType semester tags { tag } } }
+        curriculumItem { semester degreeProgram { id name } course { id name courseType semester tags { tag } } }
       }
       workloads { ${this.WORKLOAD_SELECTION} }
     } } } }`;
@@ -506,7 +506,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       next: (d: any) => {
         if (token !== this.loadToken) return;
         this.wciItems.set(d.workingCurriculumItems.workingCurriculumItemConnection.nodes ?? []);
-        this.rememberSpecialties();
+        this.rememberDegreePrograms();
         this.workingLoaded = true;
         this.settleLoading();
       },
@@ -535,7 +535,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
         course { id name semester tags { tag } }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name courseType semester tags { tag } } }
+          curriculumItem { semester degreeProgram { id name } course { id name courseType semester tags { tag } } }
         }
       }
       workloads { ${this.WORKLOAD_SELECTION} }
@@ -544,7 +544,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       next: (d: any) => {
         if (token !== this.loadToken) return;
         this.combinedItems.set(d.combinedWorkingCurriculumItems.combinedWorkingCurriculumItemConnection.nodes ?? []);
-        this.rememberSpecialties();
+        this.rememberDegreePrograms();
         this.combinedLoaded = true;
         this.settleLoading();
       },
@@ -587,7 +587,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     return [...byId.values()].map((g) => g.name).sort(compareUk).join(', ');
   }
 
-  /** Every class of the faculty in the chosen half-year, after the client-side specialty filter. */
+  /** Every class of the faculty in the chosen half-year, after the client-side degreeProgram filter. */
   cards = computed<ClassCard[]>(() => {
     const out: ClassCard[] = [];
 
@@ -599,8 +599,8 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       const course = this.courseOf(item);
       for (const w of item.workloads ?? []) {
         out.push(this.toCard(w, course, item.curriculumItemHours, {
-          specialtyIds: ci.specialty ? [ci.specialty.id] : [],
-          specialtyNames: ci.specialty?.name ?? '—',
+          degreeProgramIds: ci.degreeProgram ? [ci.degreeProgram.id] : [],
+          degreeProgramNames: ci.degreeProgram?.name ?? '—',
           departmentName: item.department?.name ?? '—',
           combined: false
         }));
@@ -611,27 +611,27 @@ export class RoomAssignmentList implements OnInit, OnChanges {
       const first = c.workingCurriculumItems?.[0];
       if (!first) continue;
       const course = this.courseOf(first);
-      // A combined item is one class taught to the members of several specialties at once, so it
-      // matches the specialty filter if *any* of them does.
-      const specialties = new Map<string, string>();
+      // A combined item is one class taught to the members of several degreePrograms at once, so it
+      // matches the degreeProgram filter if *any* of them does.
+      const degreePrograms = new Map<string, string>();
       const departments = new Set<string>();
       for (const m of c.workingCurriculumItems ?? []) {
-        const sp = m.curriculumItemHours.curriculumItem.specialty;
-        if (sp) specialties.set(sp.id, sp.name);
+        const sp = m.curriculumItemHours.curriculumItem.degreeProgram;
+        if (sp) degreePrograms.set(sp.id, sp.name);
         if (m.department?.name) departments.add(m.department.name);
       }
       for (const w of c.workloads ?? []) {
         out.push(this.toCard(w, course, first.curriculumItemHours, {
-          specialtyIds: [...specialties.keys()],
-          specialtyNames: [...specialties.values()].sort(compareUk).join(', ') || '—',
+          degreeProgramIds: [...degreePrograms.keys()],
+          degreeProgramNames: [...degreePrograms.values()].sort(compareUk).join(', ') || '—',
           departmentName: [...departments].sort(compareUk).join(', ') || '—',
           combined: true
         }));
       }
     }
 
-    const specialtyId = this.selectedSpecialtyId();
-    const filtered = specialtyId ? out.filter((c) => c.specialtyIds.includes(specialtyId)) : out;
+    const degreeProgramId = this.selectedDegreeProgramId();
+    const filtered = degreeProgramId ? out.filter((c) => c.degreeProgramIds.includes(degreeProgramId)) : out;
 
     return filtered.sort((a, b) =>
       a.semester - b.semester
@@ -641,7 +641,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   });
 
   private toCard(w: RawWorkload, course: { id: string; name: string; label: string }, cih: RawCurriculumItemHours,
-                 rest: { specialtyIds: string[]; specialtyNames: string; departmentName: string; combined: boolean }): ClassCard {
+                 rest: { degreeProgramIds: string[]; degreeProgramNames: string; departmentName: string; combined: boolean }): ClassCard {
     return {
       workloadId: w.id,
       courseId: course.id,

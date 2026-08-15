@@ -95,7 +95,7 @@ CREATE TABLE departments
 
 CREATE TYPE degree AS ENUM ('JUNIOR_BACHELOR', 'BACHELOR', 'MASTER', 'PHD', 'DOCTOR_OF_SCIENCE');
 
-CREATE TABLE specialties
+CREATE TABLE degree_programs
 (
     id            BIGSERIAL PRIMARY KEY,
     code          VARCHAR(16)  COLLATE ukrainian NOT NULL,
@@ -184,12 +184,12 @@ CREATE TYPE study_form AS ENUM ('FULL_TIME', 'PART_TIME');
 
 CREATE TABLE academic_groups
 (
-    id             BIGSERIAL PRIMARY KEY,
-    name           VARCHAR(32) COLLATE ukrainian NOT NULL UNIQUE,
-    course_year    INTEGER     NOT NULL,
-    study_form     study_form  NOT NULL,
-    students_count INTEGER,
-    specialty_id   BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE
+    id                BIGSERIAL PRIMARY KEY,
+    name              VARCHAR(32) COLLATE ukrainian NOT NULL UNIQUE,
+    course_year       INTEGER     NOT NULL,
+    study_form        study_form  NOT NULL,
+    students_count    INTEGER,
+    degree_program_id BIGINT      NOT NULL REFERENCES degree_programs (id) ON DELETE CASCADE
 );
 
 CREATE TABLE combined_groups
@@ -245,13 +245,13 @@ CREATE TABLE courses
     semester         INTEGER CHECK (semester IS NULL OR semester > 0)
 );
 
--- Specialties a course is allowed to be taught for; scopes which courses can be picked when
--- adding a curriculum item to a specialty's curriculum (see curriculum_items below).
-CREATE TABLE course_specialties
+-- Degree programmes a course is allowed to be taught for; scopes which courses can be picked when
+-- adding a curriculum item to a programme's curriculum (see curriculum_items below).
+CREATE TABLE course_degree_programs
 (
-    course_id    BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
-    specialty_id BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE,
-    PRIMARY KEY (course_id, specialty_id)
+    course_id         BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    degree_program_id BIGINT NOT NULL REFERENCES degree_programs (id) ON DELETE CASCADE,
+    PRIMARY KEY (course_id, degree_program_id)
 );
 
 -- Free-form labels shown after a course's name (e.g. "English-taught"), one row per tag.
@@ -267,13 +267,13 @@ CREATE TYPE control_form AS ENUM ('EXAM', 'CREDIT', 'GRADED_CREDIT');
 
 CREATE TABLE curriculum_items
 (
-    id           BIGSERIAL PRIMARY KEY,
-    semester     INTEGER      NOT NULL,
-    control_form control_form NOT NULL,
-    ects_credits INTEGER      NOT NULL,
-    specialty_id BIGINT NOT NULL REFERENCES specialties (id) ON DELETE CASCADE,
-    course_id    BIGINT NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
-    UNIQUE (course_id, specialty_id, semester)
+    id                BIGSERIAL PRIMARY KEY,
+    semester          INTEGER      NOT NULL,
+    control_form      control_form NOT NULL,
+    ects_credits      INTEGER      NOT NULL,
+    degree_program_id BIGINT       NOT NULL REFERENCES degree_programs (id) ON DELETE CASCADE,
+    course_id         BIGINT       NOT NULL REFERENCES courses (id) ON DELETE CASCADE,
+    UNIQUE (course_id, degree_program_id, semester)
 );
 
 -- Ordered as they should appear in a plan: contact teaching, then the contact work around it
@@ -314,7 +314,7 @@ CREATE TABLE working_curriculum_item_groups
 );
 
 -- A "combined" working curriculum item bundles several working_curriculum_items that relate to
--- the same course, semester, and hour type (e.g. groups from different specialties attending one
+-- the same course, semester, and hour type (e.g. groups from different degree programmes attending one
 -- shared lecture), so a single lecturer_workloads assignment can cover all of them at once.
 CREATE TABLE combined_working_curriculum_items
 (
@@ -527,7 +527,7 @@ CREATE TABLE lecturer_workloads
     id                                   BIGSERIAL PRIMARY KEY,
     -- Exactly one of these two is set: either a single working_curriculum_item, or a
     -- combined_working_curriculum_item for lecturers who simultaneously teach several
-    -- working_curriculum_items (e.g. groups from different specialties) at once.
+    -- working_curriculum_items (e.g. groups from different degree programmes) at once.
     working_curriculum_item_id          BIGINT REFERENCES working_curriculum_items (id) ON DELETE CASCADE,
     combined_working_curriculum_item_id BIGINT REFERENCES combined_working_curriculum_items (id) ON DELETE CASCADE,
     -- Duration of each class for this workload, in academic hours (1 lesson = 1-4 academic hours).
@@ -986,7 +986,7 @@ CREATE INDEX room_timetable_constraints_room_idx
 -- descendants along the edges declared via @PermissionParent/@PermissionJoinParent on the domain
 -- classes (see org.lnu.timetable.security.PermissionService) — this table only stores the grants
 -- themselves, not the cascade rules. The level does not weaken on the way down: EDIT on a
--- факультет is EDIT on every кафедра, спеціальність, група, план, навантаження and заняття under
+-- факультет is EDIT on every кафедра, освітня програма, група, план, навантаження and заняття under
 -- it, which is what makes "give the деканат their faculty and nothing else" a single row.
 --
 -- A grant is made either to a single user or to a group (never both); a user can belong to
@@ -1054,7 +1054,7 @@ CREATE TYPE grantee_type AS ENUM ('USER', 'GROUP');
 --            This is the everyday level: a методист who maintains навчальні плани and навантаження
 --            but must not be able to remove a кафедра or a група by mis-clicking.
 --   FULL   — everything EDIT allows, plus delete. Deletion cascades in this schema (dropping a
---            Specialty takes its groups, curriculum items and workloads with it), which is exactly
+--            DegreeProgram takes its groups, curriculum items and workloads with it), which is exactly
 --            why it is a separate level and not part of "may modify".
 --   MANAGE — everything FULL allows, plus granting and revoking access to this resource and its
 --            descendants, at any level up to MANAGE itself. This is the delegation level: the

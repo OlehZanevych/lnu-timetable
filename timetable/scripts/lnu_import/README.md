@@ -35,7 +35,7 @@ python3 validate_sql.py generated/data.sql
 | `<site>/department/<slug>` | `departments` — full name, abbreviation, e-mail, phone |
 | `<site>/about/staff` | every employee grouped **under their department heading**, with position and e-mail |
 | `<site>/employee/<slug>` | `lecturers` — first/middle/last name, e-mail, position, academic degree |
-| `<site>/academics/bachelor`, `/master` | `specialties` — code, name, degree (from the URL), curriculum page links |
+| `<site>/academics/bachelor`, `/master` | `degree_programs` — code, name, degree (from the URL), curriculum page links |
 | `<site>/academics/<degree>/<plan>` | curriculum rows: semester, hours per type, control form, elective groups |
 | `<site>/course/<slug>` | course type, owning department, and the lecture/practical/lab tables with lecturers and academic groups |
 
@@ -81,7 +81,7 @@ with `Ctrl-C` still writes whatever has been collected.
 ### Output
 
 `faculties.json` (buildings + faculties), `departments.json`, `lecturers.json`,
-`specialties.json`, `curricula.json`, `courses.json`, plus `manifest.json` with
+`degree_programs.json`, `curricula.json`, `courses.json`, plus `manifest.json` with
 counts, HTTP statistics and every warning raised during the run.
 
 Each record carries a `match_key` / `department_key` — the name folded to
@@ -100,7 +100,7 @@ an order that satisfies the foreign keys, followed by the matching `setval`
 calls. Nothing from the existing `data.sql` is read.
 
 **Organisation first, curricula second.** `buildings → faculties → departments
-→ specialties → lecturers` are all generated and indexed by name *before* any
+→ degree_programs → lecturers` are all generated and indexed by name *before* any
 curriculum is walked. That is what lets an AMI course page that says
 "Кафедра: алгебри, топології та основ математики" resolve to a **Mechmat**
 department, and a lecturer link on an AMI course page resolve to a Mechmat
@@ -113,17 +113,17 @@ department, and a lecturer link on an AMI course page resolve to a Mechmat
 | `buildings` | faculty addresses, de-duplicated on a punctuation-insensitive key so "вул. Університетська 1" and "вул. Університетська, 1" are one building |
 | `faculties` | structure page; abbreviations from the known LNU set (ФПМіІ, ММФ, …) |
 | `departments` | department pages; abbreviation = "К" + initials ("Кафедра дискретного аналізу та інтелектуальних систем" → КДАІС) |
-| `specialties` | `/academics/<degree>` headings, e.g. `014.09` + `Середня освіта (Інформатика)` + `BACHELOR` |
+| `degree_programs` | `/academics/<degree>` headings, e.g. `014.09` + `Середня освіта (Інформатика)` + `BACHELOR` |
 | `lecturers` | employee pages; `position` from "Посада:", `academic_degree_id` from "Науковий ступінь:" (кандидат → 1, доктор філософії → 2, доктор наук → 3) |
-| `academic_groups` | group names on course pages; the specialty is the one whose curriculum mentions the group in the most distinct courses, with a master/bachelor tie-break for "…м" groups |
+| `academic_groups` | group names on course pages; the programme is the one whose curriculum mentions the group in the most distinct courses, with a master/bachelor tie-break for "…м" groups |
 | `courses` | one row per course page, plus a `ДВ` parent per elective row |
-| `course_specialties` | every specialty whose curriculum contains the course |
+| `course_degree_programs` | every degree programme whose curriculum contains the course |
 | `course_tags` | the two tags on each `ДВ` group (see below) |
-| `curriculum_items` | one per (specialty, course, semester); ECTS and control form from the course page's "Навчальний план" table when the curriculum row doesn't say |
+| `curriculum_items` | one per (degree programme, course, semester); ECTS and control form from the course page's "Навчальний план" table when the curriculum row doesn't say |
 | `curriculum_item_hours` | the Лекцій / Лаб. / Практ. columns |
 | `working_curriculum_items` | one per hours row; `TOGETHER` when a single class block covers all groups, `SEPARATELY` when the course page lists a row per group; for a `ДВ` item, one per child elective with `course_id` set to it |
-| `working_curriculum_item_groups` | the groups of *that* specialty named on the course page |
-| `combined_working_curriculum_items` (+ members) | working items sharing course + semester + hour type + hours across specialties — the "one shared lecture" case |
+| `working_curriculum_item_groups` | the groups of *that* programme named on the course page |
+| `combined_working_curriculum_items` (+ members) | working items sharing course + semester + hour type + hours across degree programmes — the "one shared lecture" case |
 | `lecturer_workloads` (+ lecturers, + groups) | one per combined item, or per class block for a `SEPARATELY` item; `duration_hours` from `default_class_duration_hours` |
 | `academic_degrees`, `class_start_times`, `global_properties` | fixed seed values |
 
@@ -143,7 +143,7 @@ INSERT INTO public.courses (id, name, course_type, ..., parent_course_id) VALUES
 INSERT INTO public.courses (id, name, course_type, ..., parent_course_id) VALUES (15, 'Моделі статистичного навчання', 'ELECTIVE', ..., 13);
 ```
 
-The two tags are the specialty name (lower-cased) and `семестр <n>`, matching
+The two tags are the programme name (lower-cased) and `семестр <n>`, matching
 the `'прикладна математика'` / `'семестр 7'` convention.
 
 ### Options
@@ -171,8 +171,8 @@ pipeline cannot seed the person link «Мій кабінет» reads. Both are o
 scrape — just re-apply the account decisions afterwards.
 
 The same caveat applies to ids in general: `departments`, `lecturers` and
-`specialties` in the checked-in `data.sql` have been renumbered by hand since
-this pipeline last wrote it (the кафедра/викладачі/спеціальності of прикладна
+`degree_programs` in the checked-in `data.sql` have been renumbered by hand since
+this pipeline last wrote it (the кафедра/викладачі/освітні програми of прикладна
 математика were moved to the low ids), so a regenerated file will not agree with
 it row for row.
 
@@ -208,7 +208,7 @@ PASSED — every INSERT satisfies the schema's columns, types, enums, widths,
 `tests/fixtures/` mirrors the real markup (same headings, same table shapes,
 same `rowspan`s) for AMI and Mechmat, and deliberately includes the awkward
 cases: an AMI course owned by a Mechmat department, a lecturer link crossing
-faculties, a lecture shared by two specialties that must be merged into a
+faculties, a lecture shared by two degree programmes that must be merged into a
 combined working item, an elective row that must become a `ДВ` group, and a
 faculty whose site has no `/about/departments` at all.
 
@@ -234,12 +234,12 @@ python3 build_sql.py -o ../../src/main/resources/db/data.sql
 
 ## Known limitations
 
-- **Group → specialty is inferred, not stated.** Course pages list group names
-  but never say which specialty a group belongs to. The builder votes across
-  curricula and logs every ambiguous case (`group … is claimed by N specialties`);
+- **Group → degree programme is inferred, not stated.** Course pages list group names
+  but never say which programme a group belongs to. The builder votes across
+  curricula and logs every ambiguous case (`group … is claimed by N degree programmes`);
   review those in the UI if they matter.
 - **A shared elective child is duplicated.** `courses.parent_course_id` is
-  single-valued, so an elective offered by two specialties produces one child
+  single-valued, so an elective offered by two degree programmes produces one child
   row per `ДВ` group rather than one shared row.
 - **`rooms`, `students`, `timetable_entries` are not generated** — the faculty
   sites don't publish them. Their sequences are reset to 1.

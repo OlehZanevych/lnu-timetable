@@ -26,7 +26,7 @@
    "stats": {
     "departments": 2,
     "lecturers": 6,
-    "specialties": 3,
+    "degree_programs": 3,
     "courses": 10
    }
   },
@@ -42,7 +42,7 @@
    "stats": {
     "departments": 1,
     "lecturers": 2,
-    "specialties": 1,
+    "degree_programs": 1,
     "courses": 1
    }
   },
@@ -58,7 +58,7 @@
    "stats": {
     "departments": 0,
     "lecturers": 0,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   }

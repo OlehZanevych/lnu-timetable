@@ -23,11 +23,11 @@ algorithms.
 
 The work it supports runs in one direction, and each stage is the input to the next:
 
-1. **Structure** — buildings, faculties, departments, specialties, rooms, academic and combined
-   groups, lecturers, students.
-2. **Curricula** — a `CurriculumItem` per (course, specialty, semester), its hours split by kind
-   (lecture / practical / lab / consultation / …), and the *working* curriculum items that say which
-   department delivers each block of hours, to which groups, in what teaching format.
+1. **Structure** — buildings, faculties, departments, degree programmes, rooms, academic and
+   combined groups, lecturers, students.
+2. **Curricula** — a `CurriculumItem` per (course, degree programme, semester), its hours split by
+   kind (lecture / practical / lab / consultation / …), and the *working* curriculum items that say
+   which department delivers each block of hours, to which groups, in what teaching format.
 3. **Lecturer workloads** — who actually teaches each working curriculum item, how long a class runs,
    on which grid of bells, and in which rooms it may be held. This can be
    [**generated automatically**](./timetable-ui/WORKLOAD-GENERATION.md) from a pool of scored
@@ -50,7 +50,7 @@ lecture for 120 students had been placed in a 12-seat lab.
 
 **A discipline can be corrected from its own page.** `/course/:id` walks the whole chain — curriculum
 items, working curriculum items, workloads, room assignment, timetable entries — and edits every
-level in place, so fixing one discipline no longer means visiting a specialty page, then a
+level in place, so fixing one discipline no longer means visiting a degree programme page, then a
 department page, then a faculty page in turn. An `ELECTIVE_GROUP` also manages its electives there.
 
 Alongside it: JWT sign-in with entity-scoped, cascading permissions, at three ordered levels — edit,
@@ -59,7 +59,7 @@ else, so a deanery delegates a кафедра itself rather than queuing behind 
 **«Мій кабінет»**, where an account linked to a викладач or a студент reads its own навантаження or
 навчальний план and its own розклад, defaulting to the half-year that is running; and four printable
 forms —
-the [**«Навчальний план»**](./timetable-ui/CURRICULUM-PDF.md) of a specialty, the
+the [**«Навчальний план»**](./timetable-ui/CURRICULUM-PDF.md) of a degree programme, the
 [**«Робочий навчальний план»**](./timetable-ui/WORKING-CURRICULUM-PDF.md) of one of its academic
 years, the [**«Розрахунок навчального навантаження»**](./timetable-ui/WORKLOAD-PDF.md) of a
 lecturer, and the [**«Розклад занять»**](./timetable-ui/TIMETABLE-PDF.md) of a faculty, a

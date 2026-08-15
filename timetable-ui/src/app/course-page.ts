@@ -28,7 +28,7 @@ interface CourseInfo {
   department?: { id: string; name: string; faculty?: { id: string; name: string } | null } | null;
   parentCourse?: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
   childCourses?: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null }[];
-  specialties?: { id: string; name: string; code?: string }[];
+  degreePrograms?: { id: string; name: string; code?: string }[];
   tags?: CourseTagRef[];
 }
 
@@ -52,7 +52,7 @@ interface CurriculumRow {
   semester: number;
   controlForm: string;
   ectsCredits?: number;
-  specialty?: { id: string; name: string; code?: string; degree?: string } | null;
+  degreeProgram?: { id: string; name: string; code?: string; degree?: string } | null;
   hours: {
     id: string;
     hourType: string;
@@ -90,7 +90,7 @@ interface ExtraWorkingItem {
       id: string;
       semester: number;
       ectsCredits?: number;
-      specialty?: { id: string; name: string } | null;
+      degreeProgram?: { id: string; name: string } | null;
       course?: { id: string; name: string; courseType?: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
     } | null;
   } | null;
@@ -125,7 +125,7 @@ interface EntryRow {
 interface WorkloadCard {
   id: string;
   workingCurriculumItemId: string;
-  specialtyName: string;
+  degreeProgramName: string;
   semester: number;
   hourType: string;
   departmentId: string;
@@ -162,8 +162,8 @@ interface DeliveryRow {
   id: string;
   /** The `curriculum_item_hours` row this delivers — the FK the editor writes back. */
   hoursId: string;
-  specialtyId: string;
-  specialtyName: string;
+  degreeProgramId: string;
+  degreeProgramName: string;
   semester: number;
   hourType: string;
   hours: number;
@@ -193,12 +193,12 @@ interface DeliveryRow {
  * A `Course` is referenced from four directions — it sits in curricula, those curricula's hour
  * blocks are handed to departments as working curriculum items, those become lecturer workloads,
  * and those become classes in the timetable — and until now the only way to see any of it was to
- * walk the specialty and department pages one at a time. This page walks the chain once, in a
+ * walk the degreeProgram and department pages one at a time. This page walks the chain once, in a
  * single query, and shows what it adds up to: which curricula the discipline appears in, which
  * кафедри deliver it to which groups, and which lecturers actually carry it.
  *
  * The info tab also edits and deletes the discipline, exactly as `FacultyPage` does for a faculty:
- * a modal over the entity's own fields — including the `specialtyIds` many-to-many and the `tags`
+ * a modal over the entity's own fields — including the `degreeProgramIds` many-to-many and the `tags`
  * nested list the generic table offers — and a confirmation before `deleteCourse`, both hidden
  * unless `accessLevels('COURSE', …)` says this account may.
  */
@@ -288,22 +288,22 @@ export class CourseDetailPage implements OnInit {
   canDeleteCourse = computed(() => allows(this.effectiveCourseLevel(), 'FULL'));
 
   /**
-   * Specialties and departments this account may edit, for the plan editors below.
+   * DegreePrograms and departments this account may edit, for the plan editors below.
    *
    * A Course grant authorises all of them — `CurriculumItem` and `WorkingCurriculumItem` both name
    * Course among their `@PermissionParent`s, and the server ORs over the whole ancestor closure —
-   * but it is not the *only* thing that does. A гарант of one specialty may edit that specialty's
+   * but it is not the *only* thing that does. A гарант of one degreeProgram may edit that degreeProgram's
    * plan positions without any right over the discipline itself, and gating the whole page on the
    * course alone would show them nothing to click. These are the other two ancestors, asked for
    * once the rows are known.
    */
-  private specialtyLevels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
+  private degreeProgramLevels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
   private departmentLevels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
 
-  /** The level in force for a plan position: through the discipline, or through its specialty. */
+  /** The level in force for a plan position: through the discipline, or through its degreeProgram. */
   private itemLevel(item: CurriculumRow): AccessLevel | null {
-    const viaSpecialty = item.specialty ? this.specialtyLevels().get(String(item.specialty.id)) : null;
-    return maxLevel(this.effectiveCourseLevel(), viaSpecialty);
+    const viaDegreeProgram = item.degreeProgram ? this.degreeProgramLevels().get(String(item.degreeProgram.id)) : null;
+    return maxLevel(this.effectiveCourseLevel(), viaDegreeProgram);
   }
 
   /** The level in force for a РНП position or a workload: through the discipline, or the кафедра. */
@@ -319,26 +319,26 @@ export class CourseDetailPage implements OnInit {
 
   /** Whether anything at all on the plan tabs is editable — what the "+ add" buttons need. */
   canAddPlans = computed(() =>
-    this.canModifyCourse() || [...this.specialtyLevels().values()].some((l) => allows(l, 'EDIT')));
+    this.canModifyCourse() || [...this.degreeProgramLevels().values()].some((l) => allows(l, 'EDIT')));
   canAddDeliveries = computed(() =>
     this.canModifyCourse() || [...this.departmentLevels().values()].some((l) => allows(l, 'EDIT')));
 
   /**
-   * Asks about the specialties and departments actually on screen, once they are known. Admins
+   * Asks about the degreePrograms and departments actually on screen, once they are known. Admins
    * short-circuit, and a course-wide grant makes the question moot.
    */
   private loadRowPermissions() {
     // A course-wide FULL grant already answers every row here; anything weaker still has to ask,
-    // because a grant on one specialty or кафедра can be stronger than the one on the discipline.
+    // because a grant on one degreeProgram or кафедра can be stronger than the one on the discipline.
     if (allows(this.effectiveCourseLevel(), 'FULL')) return;
 
-    const specialtyIds = [...new Set(this.curricula()
-      .map((i) => i.specialty?.id).filter(Boolean).map(String))];
+    const degreeProgramIds = [...new Set(this.curricula()
+      .map((i) => i.degreeProgram?.id).filter(Boolean).map(String))];
     const departmentIds = [...new Set(this.deliveries().map((d) => d.departmentId).filter(Boolean))];
 
-    if (specialtyIds.length) {
-      this.auth.accessLevels('SPECIALTY', specialtyIds)
-        .subscribe((levels) => this.specialtyLevels.set(levels));
+    if (degreeProgramIds.length) {
+      this.auth.accessLevels('DEGREE_PROGRAM', degreeProgramIds)
+        .subscribe((levels) => this.degreeProgramLevels.set(levels));
     }
     if (departmentIds.length) {
       this.auth.accessLevels('DEPARTMENT', departmentIds)
@@ -355,7 +355,7 @@ export class CourseDetailPage implements OnInit {
 
   facultyOptions = signal<Option[]>([]);
   departmentOptions = signal<Option[]>([]);
-  specialtyOptions = signal<Option[]>([]);
+  degreeProgramOptions = signal<Option[]>([]);
   /** Every course, kept whole so the umbrella picker below can be derived from it. */
   private allCourses = signal<{ id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null }[]>([]);
 
@@ -372,16 +372,16 @@ export class CourseDetailPage implements OnInit {
   });
 
   /**
-   * Which specialties this discipline may be added to: the ones it is offered to
-   * (`course_specialties`), plus any it is already in — a stored value must never vanish from the
-   * picker that edits it. Falls back to every specialty when the course names none, since an empty
+   * Which degreePrograms this discipline may be added to: the ones it is offered to
+   * (`course_degreePrograms`), plus any it is already in — a stored value must never vanish from the
+   * picker that edits it. Falls back to every degreeProgram when the course names none, since an empty
    * picker would block the page entirely.
    */
-  itemSpecialtyOptions = computed<Option[]>(() => {
-    const allowed = new Set((this.course()?.specialties ?? []).map((sp) => String(sp.id)));
-    for (const item of this.curricula()) if (item.specialty) allowed.add(String(item.specialty.id));
-    if (!allowed.size) return this.specialtyOptions();
-    return this.specialtyOptions().filter((o) => allowed.has(o.id));
+  itemDegreeProgramOptions = computed<Option[]>(() => {
+    const allowed = new Set((this.course()?.degreePrograms ?? []).map((sp) => String(sp.id)));
+    for (const item of this.curricula()) if (item.degreeProgram) allowed.add(String(item.degreeProgram.id));
+    if (!allowed.size) return this.degreeProgramOptions();
+    return this.degreeProgramOptions().filter((o) => allowed.has(o.id));
   });
 
   /**
@@ -415,8 +415,8 @@ export class CourseDetailPage implements OnInit {
           rows.push({
             id: wci.id,
             hoursId: block.id,
-            specialtyId: item.specialty?.id ?? '',
-            specialtyName: item.specialty?.name ?? '—',
+            degreeProgramId: item.degreeProgram?.id ?? '',
+            degreeProgramName: item.degreeProgram?.name ?? '—',
             semester: item.semester,
             hourType: block.hourType,
             hours: block.hours,
@@ -454,8 +454,8 @@ export class CourseDetailPage implements OnInit {
       rows.push({
         id: wci.id,
         hoursId: wci.curriculumItemHours?.id ?? '',
-        specialtyId: ci?.specialty?.id ?? '',
-        specialtyName: ci?.specialty?.name ?? '—',
+        degreeProgramId: ci?.degreeProgram?.id ?? '',
+        degreeProgramName: ci?.degreeProgram?.name ?? '—',
         semester: ci?.semester ?? 0,
         hourType: wci.curriculumItemHours?.hourType ?? '',
         hours: wci.curriculumItemHours?.hours ?? 0,
@@ -477,14 +477,14 @@ export class CourseDetailPage implements OnInit {
     }
 
     return rows.sort((a, b) => a.semester - b.semester
-      || compareUk(a.specialtyName, b.specialtyName)
+      || compareUk(a.degreeProgramName, b.degreeProgramName)
       || compareUk(a.departmentName, b.departmentName));
   });
 
   /** The headline the info tab opens with: where this discipline is taught, and how much of it. */
   summary = computed(() => {
     const perCredit = this.settings.numberValue('hours_per_ects_credit') ?? 30;
-    const specialties = new Set<string>();
+    const degreePrograms = new Set<string>();
     const departments = new Set<string>();
     const groups = new Set<string>();
     const lecturers = new Set<string>();
@@ -494,13 +494,13 @@ export class CourseDetailPage implements OnInit {
     // so the blocks its РНП positions point at are gathered from those positions instead. Without
     // that, every tile on an elective's page read zero while its own «Розклад занять» tab listed
     // real lecturers, groups and classes.
-    const planItems = new Map<string, { ectsCredits: number; specialtyId: string }>();
+    const planItems = new Map<string, { ectsCredits: number; degreeProgramId: string }>();
     const blocks = new Map<string, { hourType: string; hours: number }>();
 
     for (const item of this.curricula()) {
       planItems.set(String(item.id), {
         ectsCredits: item.ectsCredits ?? 0,
-        specialtyId: item.specialty?.id ? String(item.specialty.id) : ''
+        degreeProgramId: item.degreeProgram?.id ? String(item.degreeProgram.id) : ''
       });
       for (const block of item.hours ?? []) {
         blocks.set(String(block.id), { hourType: block.hourType, hours: block.hours ?? 0 });
@@ -512,7 +512,7 @@ export class CourseDetailPage implements OnInit {
       if (ci?.id && !planItems.has(String(ci.id))) {
         planItems.set(String(ci.id), {
           ectsCredits: ci.ectsCredits ?? 0,
-          specialtyId: ci.specialty?.id ? String(ci.specialty.id) : ''
+          degreeProgramId: ci.degreeProgram?.id ? String(ci.degreeProgram.id) : ''
         });
       }
       const block = wci.curriculumItemHours;
@@ -524,7 +524,7 @@ export class CourseDetailPage implements OnInit {
     let credits = 0;
     for (const item of planItems.values()) {
       credits += item.ectsCredits;
-      if (item.specialtyId) specialties.add(item.specialtyId);
+      if (item.degreeProgramId) degreePrograms.add(item.degreeProgramId);
     }
 
     let contactHours = 0;
@@ -551,7 +551,7 @@ export class CourseDetailPage implements OnInit {
 
     return {
       curriculumItems: planItems.size,
-      specialties: specialties.size,
+      degreePrograms: degreePrograms.size,
       departments: departments.size,
       groups: groups.size,
       lecturers: lecturers.size,
@@ -626,7 +626,7 @@ export class CourseDetailPage implements OnInit {
     this.error.set('');
 
     this.courseLevel.set(null);
-    this.specialtyLevels.set(new Map());
+    this.degreeProgramLevels.set(new Map());
     this.departmentLevels.set(new Map());
 
     this.showEditForm.set(false);
@@ -690,7 +690,7 @@ export class CourseDetailPage implements OnInit {
       department { id name faculty { id name } }
       parentCourse { id name semester tags { tag } }
       childCourses { id name courseType semester tags { id tag } }
-      specialties { id name code }
+      degreePrograms { id name code }
       tags { id tag }
     } } }`;
 
@@ -698,7 +698,7 @@ export class CourseDetailPage implements OnInit {
     // only way in, since Course carries no `curriculumItems` relation of its own.
     const itemsQuery = `query($courseId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, courseId: $courseId) { nodes {
       id semester controlForm ectsCredits
-      specialty { id name code degree }
+      degreeProgram { id name code degree }
       hours {
         id hourType hours
         workingCurriculumItems {
@@ -753,7 +753,7 @@ export class CourseDetailPage implements OnInit {
       academicGroups { id name }
       curriculumItemHours {
         id hourType hours
-        curriculumItem { id semester ectsCredits specialty { id name } course { id name courseType semester tags { tag } } }
+        curriculumItem { id semester ectsCredits degreeProgram { id name } course { id name courseType semester tags { tag } } }
       }
       workloads {
         id durationHours
@@ -795,7 +795,7 @@ export class CourseDetailPage implements OnInit {
     const q = `query($facultyLimit: Int!, $departmentLimit: Int!) {
       faculties { facultyConnection(limit: $facultyLimit) { nodes { id name } } }
       departments { departmentConnection(limit: $departmentLimit) { nodes { id name } } }
-      specialties { specialtyConnection(limit: $departmentLimit) { nodes { id code name } } }
+      degreePrograms { degreeProgramConnection(limit: $departmentLimit) { nodes { id code name } } }
       courses { courseConnection(limit: $departmentLimit) { nodes { id name courseType semester tags { tag } } } }
     }`;
     this.gql.request(q, { facultyLimit: 200, departmentLimit: 1000 }).subscribe({
@@ -804,8 +804,8 @@ export class CourseDetailPage implements OnInit {
           d.faculties.facultyConnection.nodes.map((f: any) => ({ id: f.id, label: f.name })));
         this.departmentOptions.set(
           d.departments.departmentConnection.nodes.map((x: any) => ({ id: x.id, label: x.name })));
-        this.specialtyOptions.set(
-          d.specialties.specialtyConnection.nodes.map((sp: any) => ({
+        this.degreeProgramOptions.set(
+          d.degreePrograms.degreeProgramConnection.nodes.map((sp: any) => ({
             id: sp.id, label: `${sp.code ?? ''} ${sp.name}`.trim()
           })));
         this.allCourses.set(d.courses.courseConnection.nodes ?? []);
@@ -832,7 +832,7 @@ export class CourseDetailPage implements OnInit {
       departmentId: c.department?.id ?? '',
       parentCourseId: c.parentCourse?.id ?? '',
       semester: c.semester ?? '',
-      specialtyIds: (c.specialties ?? []).map((sp) => String(sp.id)),
+      degreeProgramIds: (c.degreePrograms ?? []).map((sp) => String(sp.id)),
       tags: (c.tags ?? []).map((t) => t.tag).filter(Boolean).join(', '),
     };
     this.editError.set('');
@@ -844,14 +844,14 @@ export class CourseDetailPage implements OnInit {
   /**
    * Follows `BaseEntity#buildInput` on all three counts, because the same backend rules apply:
    * a cleared optional scalar/FK is sent as an explicit `null` so the column is actually cleared;
-   * `specialtyIds` is always sent in full, since omitting a many-to-many field leaves the join
+   * `degreeProgramIds` is always sent in full, since omitting a many-to-many field leaves the join
    * table untouched rather than emptying it; and `tags` — a nested list — is likewise always sent,
    * so a removed tag is deleted by not being in the list.
    */
   saveEdit() {
     const required = new Set(['name', 'courseType']);
     const input: Record<string, any> = {
-      specialtyIds: Array.isArray(this.editForm['specialtyIds']) ? this.editForm['specialtyIds'] : [],
+      degreeProgramIds: Array.isArray(this.editForm['degreeProgramIds']) ? this.editForm['degreeProgramIds'] : [],
       // Each tag carries the id it was loaded with, so an unchanged tag is updated in place. Without
       // it the nested list inserts a duplicate beside the row it is about to delete, and
       // `UNIQUE (course_id, tag)` rejects the save.
@@ -1025,7 +1025,7 @@ export class CourseDetailPage implements OnInit {
 
   openItemCreate() {
     this.itemEditingId.set(null);
-    this.itemForm = { specialtyId: '', semester: '1', controlForm: 'EXAM', ectsCredits: '' };
+    this.itemForm = { degreeProgramId: '', semester: '1', controlForm: 'EXAM', ectsCredits: '' };
     this.itemHourRows.set(HOUR_TYPE_OPTIONS.map((o) => ({ id: '', hourType: o.value, hours: '' })));
     this.itemError.set('');
     this.showItemForm.set(true);
@@ -1034,7 +1034,7 @@ export class CourseDetailPage implements OnInit {
   openItemEdit(item: CurriculumRow) {
     this.itemEditingId.set(item.id);
     this.itemForm = {
-      specialtyId: item.specialty?.id ?? '',
+      degreeProgramId: item.degreeProgram?.id ?? '',
       semester: String(item.semester ?? ''),
       controlForm: item.controlForm ?? '',
       ectsCredits: item.ectsCredits != null ? String(item.ectsCredits) : ''
@@ -1065,8 +1065,8 @@ export class CourseDetailPage implements OnInit {
    * a place this discipline is taught.
    */
   saveItem() {
-    const specialtyId = this.itemForm['specialtyId'];
-    if (!specialtyId) { this.itemError.set('Оберіть спеціальність.'); return; }
+    const degreeProgramId = this.itemForm['degreeProgramId'];
+    if (!degreeProgramId) { this.itemError.set('Оберіть освітню програму.'); return; }
     const semester = Number(this.itemForm['semester']);
     if (!Number.isFinite(semester) || semester < 1) { this.itemError.set('Вкажіть семестр.'); return; }
 
@@ -1097,7 +1097,7 @@ export class CourseDetailPage implements OnInit {
     // other at the database.
     const input: Record<string, any> = {
       courseId: this.courseId,
-      specialtyId,
+      degreeProgramId,
       semester,
       controlForm,
       ectsCredits: ects,
@@ -1175,14 +1175,14 @@ export class CourseDetailPage implements OnInit {
       wci: { id: string; teachingFormat: string;
              department?: { id: string; name: string; faculty?: { id: string } | null } | null;
              academicGroups?: { id: string; name: string }[] },
-      ctx: { specialtyName: string; semester: number; hourType: string; hours: number }
+      ctx: { degreeProgramName: string; semester: number; hourType: string; hours: number }
     ) => {
       if (seen.has(String(w.id))) return;
       seen.add(String(w.id));
       cards.push({
         id: w.id,
         workingCurriculumItemId: wci.id,
-        specialtyName: ctx.specialtyName,
+        degreeProgramName: ctx.degreeProgramName,
         semester: ctx.semester,
         hourType: ctx.hourType,
         departmentId: wci.department?.id ?? '',
@@ -1233,7 +1233,7 @@ export class CourseDetailPage implements OnInit {
     // several members that share one combined item.
     const walk = (
       wci: any,
-      ctx: { specialtyName: string; semester: number; hourType: string; hours: number }
+      ctx: { degreeProgramName: string; semester: number; hourType: string; hours: number }
     ) => {
       for (const w of wci.workloads ?? []) push(w, wci, ctx);
       for (const combined of wci.combinedWorkingCurriculumItems ?? []) {
@@ -1245,7 +1245,7 @@ export class CourseDetailPage implements OnInit {
       for (const block of item.hours ?? []) {
         for (const wci of block.workingCurriculumItems ?? []) {
           walk(wci, {
-            specialtyName: item.specialty?.name ?? '—',
+            degreeProgramName: item.degreeProgram?.name ?? '—',
             semester: item.semester,
             hourType: block.hourType,
             hours: block.hours ?? 0
@@ -1257,7 +1257,7 @@ export class CourseDetailPage implements OnInit {
     for (const wci of this.extraWorkingItems()) {
       const ci = wci.curriculumItemHours?.curriculumItem;
       walk(wci, {
-        specialtyName: ci?.specialty?.name ?? '—',
+        degreeProgramName: ci?.degreeProgram?.name ?? '—',
         semester: ci?.semester ?? 0,
         hourType: wci.curriculumItemHours?.hourType ?? '',
         hours: wci.curriculumItemHours?.hours ?? 0
@@ -1265,7 +1265,7 @@ export class CourseDetailPage implements OnInit {
     }
 
     return cards.sort((a, b) => a.semester - b.semester
-      || compareUk(a.specialtyName, b.specialtyName)
+      || compareUk(a.degreeProgramName, b.degreeProgramName)
       || compareUk(a.departmentName, b.departmentName)
       || compareUk(a.lecturerNames, b.lecturerNames));
   });
@@ -1370,7 +1370,7 @@ export class CourseDetailPage implements OnInit {
       .sort((a, b) => compareUk(a.label, b.label));
   });
 
-  /** Groups this workload may be given — its own РНП position's, never the whole specialty's. */
+  /** Groups this workload may be given — its own РНП position's, never the whole degreeProgram's. */
   workloadGroupOptions = computed<Option[]>(() =>
     this.mergeHeld(this.activeWorkload()?.availableGroups ?? [], this.activeWorkload()?.heldGroups ?? []));
 
@@ -1475,7 +1475,7 @@ export class CourseDetailPage implements OnInit {
     const defaultSet = this.allStartTimeSets().find((n) => n.isDefault)?.id ?? '';
     const card: WorkloadCard = {
       id: '', workingCurriculumItemId: row.id,
-      specialtyName: row.specialtyName, semester: row.semester, hourType: row.hourType,
+      degreeProgramName: row.degreeProgramName, semester: row.semester, hourType: row.hourType,
       departmentId: row.departmentId, departmentName: row.departmentName,
       facultyId: this.facultyOfDelivery(row),
       teachingFormat: row.teachingFormat,
@@ -1968,7 +1968,7 @@ export class CourseDetailPage implements OnInit {
   wciError = signal('');
   wciForm: Record<string, any> = {};
   wciGroupIds: string[] = [];
-  /** Academic groups of the specialty behind the row being edited — loaded when the modal opens. */
+  /** Academic groups of the degreeProgram behind the row being edited — loaded when the modal opens. */
   wciGroupOptions = signal<Option[]>([]);
 
   readonly teachingFormatOptions = toOptions(TEACHING_FORMAT_OPTIONS);
@@ -1976,7 +1976,7 @@ export class CourseDetailPage implements OnInit {
   /**
    * The hour blocks this course offers, as the picker for "what is this position delivering?".
    * A working curriculum item hangs off one `curriculum_item_hours` row, so choosing the block is
-   * choosing the specialty, the semester and the kind of class all at once.
+   * choosing the degreeProgram, the semester and the kind of class all at once.
    */
   hoursBlockOptions = computed<Option[]>(() => {
     const out: Option[] = [];
@@ -1984,7 +1984,7 @@ export class CourseDetailPage implements OnInit {
       for (const block of item.hours ?? []) {
         out.push({
           id: block.id,
-          label: `${item.specialty?.name ?? '—'} · ${item.semester} сем. · `
+          label: `${item.degreeProgram?.name ?? '—'} · ${item.semester} сем. · `
                + `${this.hourTypeLabel(block.hourType)} (${block.hours} год.)`
         });
       }
@@ -2007,7 +2007,7 @@ export class CourseDetailPage implements OnInit {
     };
     this.wciGroupIds = [];
     this.wciError.set('');
-    this.loadWciGroupOptions(this.specialtyOfHoursBlock(this.wciForm['curriculumItemHoursId']));
+    this.loadWciGroupOptions(this.degreeProgramOfHoursBlock(this.wciForm['curriculumItemHoursId']));
     this.showWciForm.set(true);
   }
 
@@ -2022,30 +2022,30 @@ export class CourseDetailPage implements OnInit {
     };
     this.wciGroupIds = [...row.groupIds];
     this.wciError.set('');
-    this.loadWciGroupOptions(row.specialtyId);
+    this.loadWciGroupOptions(row.degreeProgramId);
     this.showWciForm.set(true);
   }
 
   closeWciForm() { this.showWciForm.set(false); this.wciError.set(''); }
 
-  /** Changing the block changes the specialty, and with it which groups may be assigned. */
+  /** Changing the block changes the degreeProgram, and with it which groups may be assigned. */
   onWciBlockChange(hoursId: string) {
     this.wciForm['curriculumItemHoursId'] = hoursId;
     this.wciGroupIds = [];
-    this.loadWciGroupOptions(this.specialtyOfHoursBlock(hoursId));
+    this.loadWciGroupOptions(this.degreeProgramOfHoursBlock(hoursId));
   }
 
-  private specialtyOfHoursBlock(hoursId: string): string {
+  private degreeProgramOfHoursBlock(hoursId: string): string {
     for (const item of this.curricula()) {
-      if ((item.hours ?? []).some((h) => h.id === hoursId)) return item.specialty?.id ?? '';
+      if ((item.hours ?? []).some((h) => h.id === hoursId)) return item.degreeProgram?.id ?? '';
     }
     return '';
   }
 
-  private loadWciGroupOptions(specialtyId: string) {
-    if (!specialtyId) { this.wciGroupOptions.set([]); return; }
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id name } } } }`;
-    this.gql.request(q, { specialtyId, limit: 500, offset: 0 }).subscribe({
+  private loadWciGroupOptions(degreeProgramId: string) {
+    if (!degreeProgramId) { this.wciGroupOptions.set([]); return; }
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes { id name } } } }`;
+    this.gql.request(q, { degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.wciGroupOptions.set(
         (d.academicGroups.academicGroupConnection.nodes ?? [])
           .map((g: any) => ({ id: String(g.id), label: g.name }))

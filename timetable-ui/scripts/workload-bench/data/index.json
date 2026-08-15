@@ -139,7 +139,7 @@
       "bytes": 48967,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 18,
         "coursesPerLecturer": 1.8,
         "positions": 111,
@@ -210,7 +210,7 @@
       "bytes": 129877,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 51,
         "coursesPerLecturer": 2.55,
         "positions": 320,
@@ -283,7 +283,7 @@
       "bytes": 227202,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 83,
         "coursesPerLecturer": 2.08,
         "positions": 542,
@@ -357,7 +357,7 @@
       "bytes": 492723,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 184,
         "coursesPerLecturer": 2.3,
         "positions": 1198,
@@ -431,7 +431,7 @@
       "bytes": 900385,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 316,
         "coursesPerLecturer": 1.98,
         "positions": 2100,
@@ -505,7 +505,7 @@
       "bytes": 1943860,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 712,
         "coursesPerLecturer": 2.23,
         "positions": 4642,
@@ -579,7 +579,7 @@
       "bytes": 52915,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 20,
         "coursesPerLecturer": 2,
         "positions": 142,
@@ -629,7 +629,7 @@
       "bytes": 126307,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 52,
         "coursesPerLecturer": 2.6,
         "positions": 312,
@@ -681,7 +681,7 @@
       "bytes": 261822,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 108,
         "coursesPerLecturer": 2.7,
         "positions": 652,
@@ -733,7 +733,7 @@
       "bytes": 499021,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 201,
         "coursesPerLecturer": 2.51,
         "positions": 1232,
@@ -785,7 +785,7 @@
       "bytes": 973064,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 367,
         "coursesPerLecturer": 2.29,
         "positions": 2370,
@@ -837,7 +837,7 @@
       "bytes": 1918290,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 738,
         "coursesPerLecturer": 2.31,
         "positions": 4602,
@@ -889,7 +889,7 @@
       "bytes": 76202,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 26,
         "coursesPerLecturer": 2.6,
         "positions": 184,
@@ -952,7 +952,7 @@
       "bytes": 125265,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 48,
         "coursesPerLecturer": 2.4,
         "positions": 295,
@@ -1016,7 +1016,7 @@
       "bytes": 282726,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 101,
         "coursesPerLecturer": 2.53,
         "positions": 669,
@@ -1080,7 +1080,7 @@
       "bytes": 597183,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 233,
         "coursesPerLecturer": 2.91,
         "positions": 1422,
@@ -1144,7 +1144,7 @@
       "bytes": 1153643,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 445,
         "coursesPerLecturer": 2.78,
         "positions": 2730,
@@ -1208,7 +1208,7 @@
       "bytes": 2311138,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 859,
         "coursesPerLecturer": 2.68,
         "positions": 5451,
@@ -1272,7 +1272,7 @@
       "bytes": 66909,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 25,
         "coursesPerLecturer": 2.5,
         "positions": 165,
@@ -1338,7 +1338,7 @@
       "bytes": 119428,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 37,
         "coursesPerLecturer": 1.85,
         "positions": 279,
@@ -1408,7 +1408,7 @@
       "bytes": 256030,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 104,
         "coursesPerLecturer": 2.6,
         "positions": 632,
@@ -1481,7 +1481,7 @@
       "bytes": 453206,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 184,
         "coursesPerLecturer": 2.3,
         "positions": 1093,
@@ -1555,7 +1555,7 @@
       "bytes": 1016573,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 377,
         "coursesPerLecturer": 2.36,
         "positions": 2449,
@@ -1629,7 +1629,7 @@
       "bytes": 2005302,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 734,
         "coursesPerLecturer": 2.29,
         "positions": 4759,
@@ -1703,7 +1703,7 @@
       "bytes": 37464,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 17,
         "coursesPerLecturer": 1.7,
         "positions": 105,
@@ -1770,7 +1770,7 @@
       "bytes": 83991,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 35,
         "coursesPerLecturer": 1.75,
         "positions": 249,
@@ -1842,7 +1842,7 @@
       "bytes": 183104,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 89,
         "coursesPerLecturer": 2.23,
         "positions": 550,
@@ -1916,7 +1916,7 @@
       "bytes": 390156,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 190,
         "coursesPerLecturer": 2.38,
         "positions": 1204,
@@ -1990,7 +1990,7 @@
       "bytes": 756411,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 359,
         "coursesPerLecturer": 2.24,
         "positions": 2293,
@@ -2064,7 +2064,7 @@
       "bytes": 1607475,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 771,
         "coursesPerLecturer": 2.41,
         "positions": 4881,
@@ -2138,7 +2138,7 @@
       "bytes": 86315,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 23,
         "coursesPerLecturer": 2.3,
         "positions": 154,
@@ -2206,7 +2206,7 @@
       "bytes": 189104,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 48,
         "coursesPerLecturer": 2.4,
         "positions": 305,
@@ -2280,7 +2280,7 @@
       "bytes": 355984,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 90,
         "coursesPerLecturer": 2.25,
         "positions": 563,
@@ -2353,7 +2353,7 @@
       "bytes": 712117,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 187,
         "coursesPerLecturer": 2.34,
         "positions": 1109,
@@ -2427,7 +2427,7 @@
       "bytes": 1540854,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 385,
         "coursesPerLecturer": 2.41,
         "positions": 2438,
@@ -2501,7 +2501,7 @@
       "bytes": 2842746,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 708,
         "coursesPerLecturer": 2.21,
         "positions": 4421,
@@ -2575,7 +2575,7 @@
       "bytes": 53105,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 17,
         "coursesPerLecturer": 1.7,
         "positions": 110,
@@ -2642,7 +2642,7 @@
       "bytes": 122974,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 50,
         "coursesPerLecturer": 2.5,
         "positions": 307,
@@ -2715,7 +2715,7 @@
       "bytes": 264754,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 113,
         "coursesPerLecturer": 2.83,
         "positions": 638,
@@ -2789,7 +2789,7 @@
       "bytes": 477463,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 171,
         "coursesPerLecturer": 2.14,
         "positions": 1101,
@@ -2863,7 +2863,7 @@
       "bytes": 1057847,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 404,
         "coursesPerLecturer": 2.53,
         "positions": 2507,
@@ -2937,7 +2937,7 @@
       "bytes": 2088205,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 777,
         "coursesPerLecturer": 2.43,
         "positions": 4851,
@@ -3011,7 +3011,7 @@
       "bytes": 96429,
       "stats": {
         "lecturers": 10,
-        "specialties": 2,
+        "degreePrograms": 2,
         "courses": 42,
         "coursesPerLecturer": 4.2,
         "positions": 235,
@@ -3084,7 +3084,7 @@
       "bytes": 213755,
       "stats": {
         "lecturers": 20,
-        "specialties": 3,
+        "degreePrograms": 3,
         "courses": 84,
         "coursesPerLecturer": 4.2,
         "positions": 518,
@@ -3158,7 +3158,7 @@
       "bytes": 384742,
       "stats": {
         "lecturers": 40,
-        "specialties": 4,
+        "degreePrograms": 4,
         "courses": 151,
         "coursesPerLecturer": 3.78,
         "positions": 934,
@@ -3232,7 +3232,7 @@
       "bytes": 797928,
       "stats": {
         "lecturers": 80,
-        "specialties": 8,
+        "degreePrograms": 8,
         "courses": 300,
         "coursesPerLecturer": 3.75,
         "positions": 1939,
@@ -3306,7 +3306,7 @@
       "bytes": 1635367,
       "stats": {
         "lecturers": 160,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 626,
         "coursesPerLecturer": 3.91,
         "positions": 3909,
@@ -3380,7 +3380,7 @@
       "bytes": 3320447,
       "stats": {
         "lecturers": 320,
-        "specialties": 12,
+        "degreePrograms": 12,
         "courses": 1235,
         "coursesPerLecturer": 3.86,
         "positions": 7901,

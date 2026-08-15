@@ -92,7 +92,7 @@ const toWorkingPlanItem = (item: CurriculumItemNode): WorkingPlanItemInput => ({
 });
 
 /**
- * Shows, for a specialty, every curriculum item block (semester / discipline / control form / ECTS),
+ * Shows, for a degreeProgram, every curriculum item block (semester / discipline / control form / ECTS),
  * each containing its curriculum_item_hours sub-blocks, and under each hours sub-block the working
  * curriculum items (робочий навчальний план) assigned to it, with create/edit/delete support.
  */
@@ -105,9 +105,9 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
   private settings = inject(GlobalPropertiesService);
 
-  @Input() specialtyId!: string;
-  /** The specialty's own faculty; pre-selected as the department faculty filter when opening the modal. */
-  @Input() specialtyFacultyId: string | null = null;
+  @Input() degreeProgramId!: string;
+  /** The degreeProgram's own faculty; pre-selected as the department faculty filter when opening the modal. */
+  @Input() degreeProgramFacultyId: string | null = null;
 
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
@@ -126,7 +126,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
 
   /**
    * The same plan the reading tab and the printed «Робочий навчальний план» are built from, over
-   * every курс of the specialty. Shown above the editor so the coverage figure moves as кафедри are
+   * every курс of the degreeProgram. Shown above the editor so the coverage figure moves as кафедри are
    * assigned: it is otherwise impossible to tell, from a page of nested blocks, whether the last
    * block of hours has found an owner.
    */
@@ -175,19 +175,19 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
     this.loadGroupOptions();
-    if (this.specialtyId) this.loadItems();
+    if (this.degreeProgramId) this.loadItems();
   }
 
   ngOnChanges() {
-    if (this.initialized && this.specialtyId) {
+    if (this.initialized && this.degreeProgramId) {
       this.loadItems();
       this.loadGroupOptions();
     }
   }
 
   private loadItems() {
-    if (!this.specialtyId) return;
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
+    if (!this.degreeProgramId) return;
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType semester tags { tag } childCourses { id name courseType semester tags { tag } } }
       hours { id hourType hours
@@ -199,7 +199,7 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
         }
       }
     } } } }`;
-    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
+    this.gql.request(q, { degreeProgramId: this.degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.items.set(d.curriculumItems.curriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
@@ -235,9 +235,9 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   }
 
   private loadGroupOptions() {
-    if (!this.specialtyId) return;
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id name courseYear } } } }`;
-    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
+    if (!this.degreeProgramId) return;
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes { id name courseYear } } } }`;
+    this.gql.request(q, { degreeProgramId: this.degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         const opts: GroupOption[] = d.academicGroups.academicGroupConnection.nodes.map((g: any) => ({ id: g.id, label: g.name, courseYear: g.courseYear }));
         this.groupOptions.set(opts);
@@ -296,9 +296,9 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     this.activeSemester.set(item.semester);
     this.form = { departmentId: '', lecturerCount: '1', teachingFormat: 'TOGETHER', courseId: '' };
     this.formGroupIds = [];
-    // Default to the specialty's own faculty, since departments delivering this item most often
+    // Default to the degreeProgram's own faculty, since departments delivering this item most often
     // belong to it; the user can still clear/change it to browse other faculties.
-    this.departmentFacultyFilter.set(this.specialtyFacultyId ?? '');
+    this.departmentFacultyFilter.set(this.degreeProgramFacultyId ?? '');
     this.setElectiveContext(item);
     this.formError.set('');
     this.showForm.set(true);
@@ -316,8 +316,8 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     };
     this.formGroupIds = (wci.academicGroups ?? []).map((g) => g.id);
     // Pre-fill the faculty filter from the item's current department, so its own faculty is
-    // already visible/selected rather than starting blank. Falls back to the specialty's faculty.
-    this.departmentFacultyFilter.set(wci.department?.faculty?.id || (this.specialtyFacultyId ?? ''));
+    // already visible/selected rather than starting blank. Falls back to the degreeProgram's faculty.
+    this.departmentFacultyFilter.set(wci.department?.faculty?.id || (this.degreeProgramFacultyId ?? ''));
     this.setElectiveContext(item);
     this.formError.set('');
     this.showForm.set(true);

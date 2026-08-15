@@ -70,7 +70,7 @@ export interface RawCourseRef {
     curriculumItem?: {
       semester?: number;
       course?: { id: string; name: string; courseType?: string; semester?: number | null; tags?: CourseTagRef[] | null } | null;
-      specialty?: { id: string; name: string } | null;
+      degreeProgram?: { id: string; name: string } | null;
     } | null;
   } | null;
   department?: { id: string; name: string } | null;
@@ -129,7 +129,7 @@ export interface GridEntry {
   lecturers: GridLecturer[];
   groups: { id: string; name: string }[];
   groupNames: string;
-  specialtyName: string;
+  degreeProgramName: string;
   semester: number | null;
   departmentId: string;
   departmentName: string;
@@ -190,7 +190,7 @@ const addMinutes = (startTime: string, minutes: number): string => {
 const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: string; label: string;
                                                            hourType: string;
                                                            semester: number | null;
-                                                           specialtyName: string;
+                                                           degreeProgramName: string;
                                                            departmentId: string;
                                                            departmentName: string } => {
   const ci = ref?.curriculumItemHours?.curriculumItem;
@@ -211,7 +211,7 @@ const courseOf = (ref: RawCourseRef | null | undefined): { id: string; name: str
     label: name ? courseLabel(name, tags, courseSemester) : '',
     hourType: ref?.curriculumItemHours?.hourType ?? '',
     semester: ci?.semester ?? null,
-    specialtyName: ci?.specialty?.name ?? '',
+    degreeProgramName: ci?.degreeProgram?.name ?? '',
     departmentId: ref?.department?.id ?? '',
     departmentName: ref?.department?.name ?? ''
   };
@@ -258,7 +258,7 @@ export function toGridEntry(entry: RawEntry, academicHourMinutes: number): GridE
     }),
     groups,
     groupNames: groups.map((g) => g.name).join(', '),
-    specialtyName: course.specialtyName,
+    degreeProgramName: course.degreeProgramName,
     semester: course.semester,
     departmentId: course.departmentId,
     departmentName: course.departmentName

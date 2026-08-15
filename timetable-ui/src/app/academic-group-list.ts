@@ -26,12 +26,12 @@ export class AcademicGroupList implements OnInit, OnChanges {
 
   readonly studyFormOptions = toOptions(STUDY_FORM_OPTIONS);
 
-  /** When provided, list is scoped to this specialty and new groups are pre-assigned to it. */
-  @Input() specialtyId: string | null = null;
+  /** When provided, list is scoped to this degreeProgram and new groups are pre-assigned to it. */
+  @Input() degreeProgramId: string | null = null;
 
   /**
-   * When provided, list is scoped to the groups of this faculty's specialties. Combines with
-   * specialtyId: the faculty page passes both, so clearing its specialty sub-filter narrows to
+   * When provided, list is scoped to the groups of this faculty's degreePrograms. Combines with
+   * degreeProgramId: the faculty page passes both, so clearing its degreeProgram sub-filter narrows to
    * "every group of this faculty" rather than widening to every group in the university.
    */
   @Input() facultyId: string | null = null;
@@ -67,13 +67,13 @@ export class AcademicGroupList implements OnInit, OnChanges {
       this.canCreate.set(true);
       return;
     }
-    if (this.specialtyId) {
+    if (this.degreeProgramId) {
       // Creating a child needs EDIT on the parent it is attached to — the same rule the server applies.
-      this.auth.accessLevel('SPECIALTY', this.specialtyId!)
+      this.auth.accessLevel('DEGREE_PROGRAM', this.degreeProgramId!)
         .subscribe((level) => this.canCreate.set(allows(maxLevel(this.auth.globalLevel(), level), 'EDIT')));
     } else if (this.facultyId) {
-      // No specialty picked, so a new group has nothing to attach to — creating is only offered
-      // once the sub-filter narrows to one specialty (see the specialtyId branch above).
+      // No degreeProgram picked, so a new group has nothing to attach to — creating is only offered
+      // once the sub-filter narrows to one degreeProgram (see the degreeProgramId branch above).
       this.canCreate.set(false);
     } else {
       this.canCreate.set((this.auth.currentUser()?.permissions?.length ?? 0) > 0);
@@ -84,7 +84,7 @@ export class AcademicGroupList implements OnInit, OnChanges {
     const v = new GqlVars();
     const args = [
       v.arg('limit', 'Int!', 500),
-      v.optionalArg('specialtyId', 'ID', this.specialtyId),
+      v.optionalArg('degreeProgramId', 'ID', this.degreeProgramId),
       v.optionalArg('facultyId', 'ID', this.facultyId)
     ].filter(Boolean).join(', ');
     const q = `${v.declaration()}{ academicGroups { academicGroupConnection(${args}) { nodes { id name courseYear studyForm studentsCount } } } }`;
@@ -108,7 +108,7 @@ export class AcademicGroupList implements OnInit, OnChanges {
 
   saveCreate() {
     const input: Record<string, any> = {};
-    if (this.specialtyId) input['specialtyId'] = this.specialtyId;
+    if (this.degreeProgramId) input['degreeProgramId'] = this.degreeProgramId;
     for (const f of ['name', 'studyForm']) {
       if (this.createForm[f]) input[f] = this.createForm[f];
     }
@@ -145,7 +145,7 @@ export class AcademicGroupList implements OnInit, OnChanges {
     const g = this.editingGroup();
     if (!g) return;
     const input: Record<string, any> = {};
-    if (this.specialtyId) input['specialtyId'] = this.specialtyId;
+    if (this.degreeProgramId) input['degreeProgramId'] = this.degreeProgramId;
     for (const f of ['name', 'studyForm']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }

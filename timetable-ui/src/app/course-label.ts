@@ -69,7 +69,7 @@ function semesterPart(semester?: number | string | null): string {
  * A course restricted to one semester (`courses.semester`) names it **first**, before the tags:
  * `"Вибіркова дисципліна 5 (семестр 5, англійською)"`. It goes inside the same parentheses rather
  * than beside them because it answers the same question the tags answer — *which* «Вибіркова
- * дисципліна 5» is this, out of the several a specialty may carry — and because a second bracketed
+ * дисципліна 5» is this, out of the several a degreeProgram may carry — and because a second bracketed
  * group after the first reads as a footnote rather than as part of the name.
  *
  * The argument is optional and separate from the tags, so a caller that has not selected

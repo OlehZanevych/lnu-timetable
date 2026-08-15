@@ -12,7 +12,7 @@ the interesting cross-faculty cases are exercised:
     математики") lives on the Mechmat site,
   * a lecturer page reached from AMI whose employee record belongs to Mechmat,
   * an elective row that must become a ДВ elective group,
-  * a shared lecture taught to groups of two specialties, which must be merged
+  * a shared lecture taught to groups of two degree_programs, which must be merged
     into a combined working curriculum item.
 
     python3 tests/make_fixtures.py            # writes tests/fixtures/
@@ -303,7 +303,7 @@ def ami() -> None:
         (1, [
             (link.format(slug="alhebra-ta-heometriia-2", name="Алгебра та геометрія"),
              32, "–", 32, "Іспит"),
-            # Exclusive to this specialty: it is what tells the builder that
+            # Exclusive to this degree programme: it is what tells the builder that
             # ПМі-11/ПМі-12/ПМі-41 are Прикладна математика groups.
             (link.format(slug="chyselni-metody", name="Чисельні методи"), 32, 32, "–", "Іспит"),
         ]),

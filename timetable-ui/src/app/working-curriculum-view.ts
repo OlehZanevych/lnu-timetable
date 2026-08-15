@@ -10,13 +10,13 @@ import { fmtNumber, fmtOrDash } from './curriculum-plan';
 import {
   WorkingPlanItemInput, buildWorkingCurriculumPlan
 } from './working-curriculum-plan';
-import type { CurriculumSpecialty } from './curriculum-item-list';
+import type { CurriculumDegreeProgram } from './curriculum-item-list';
 import { courseTagNames } from './course-label';
 // `working-curriculum-report`, `pdf-fonts` and `workload-report` are imported dynamically in
 // downloadPlan(): see the comment there for why the PDF engine is kept out of the main bundle.
 
 /**
- * The read-only counterpart of {@link WorkingCurriculumList}: a specialty's робочий навчальний план
+ * The read-only counterpart of {@link WorkingCurriculumList}: a degreeProgram's робочий навчальний план
  * as a document rather than as a set of editable rows — one line per discipline with the кафедра
  * behind it, the same plan broken down per кафедра, and the printable «Робочий навчальний план».
  *
@@ -39,9 +39,9 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
   private settings = inject(GlobalPropertiesService);
 
-  @Input() specialtyId!: string;
-  /** The specialty itself, passed down from the page that already loaded it. */
-  @Input() set specialty(value: CurriculumSpecialty | null) { this.specialtySignal.set(value); }
+  @Input() degreeProgramId!: string;
+  /** The degreeProgram itself, passed down from the page that already loaded it. */
+  @Input() set degreeProgram(value: CurriculumDegreeProgram | null) { this.degreeProgramSignal.set(value); }
 
   readonly fmtNumber = fmtNumber;
   readonly fmtOrDash = fmtOrDash;
@@ -50,7 +50,7 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
   error = signal('');
   loading = signal(false);
 
-  private specialtySignal = signal<CurriculumSpecialty | null>(null);
+  private degreeProgramSignal = signal<CurriculumDegreeProgram | null>(null);
   private studyForms = signal<string[]>([]);
 
   /** '' means «усі курси»; otherwise the course year the plan is scoped to. */
@@ -70,7 +70,7 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
       this.items(), Number.isFinite(year!) ? year : null, this.settings.limits());
   });
 
-  /** «усі курси» plus every course year the specialty's curriculum actually reaches. */
+  /** «усі курси» plus every course year the degreeProgram's curriculum actually reaches. */
   courseYearOptions = computed<Option[]>(() => [
     { id: '', label: 'усі курси' },
     ...this.plan().courseYears.map((y) => ({ id: String(y), label: `${y} курс` }))
@@ -81,11 +81,11 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
   ngOnInit() {
     this.initialized = true;
     this.settings.ensureLoaded();
-    if (this.specialtyId) { this.load(); this.loadStudyForms(); }
+    if (this.degreeProgramId) { this.load(); this.loadStudyForms(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.specialtyId) { this.load(); this.loadStudyForms(); }
+    if (this.initialized && this.degreeProgramId) { this.load(); this.loadStudyForms(); }
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -96,9 +96,9 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
    * student, so the department-hours projection cannot be made without it.
    */
   private load() {
-    if (!this.specialtyId) return;
+    if (!this.degreeProgramId) return;
     this.loading.set(true);
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType semester tags { tag } }
       hours { id hourType hours
@@ -110,7 +110,7 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
         }
       }
     } } } }`;
-    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
+    this.gql.request(q, { degreeProgramId: this.degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => {
         this.items.set(d.curriculumItems.curriculumItemConnection.nodes.map(toPlanItem));
         this.error.set('');
@@ -121,9 +121,9 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
   }
 
   private loadStudyForms() {
-    if (!this.specialtyId) return;
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id studyForm } } } }`;
-    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
+    if (!this.degreeProgramId) return;
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes { id studyForm } } } }`;
+    this.gql.request(q, { degreeProgramId: this.degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.studyForms.set(
         d.academicGroups.academicGroupConnection.nodes.map((g: any) => g.studyForm).filter(Boolean)),
       error: () => this.studyForms.set([])
@@ -169,8 +169,8 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
    * the main bundle — a user who never exports pays nothing for the ability to.
    */
   async downloadPlan() {
-    const specialty = this.specialtySignal();
-    if (!specialty || this.exporting() || !this.plan().rows.length) return;
+    const degreeProgram = this.degreeProgramSignal();
+    if (!degreeProgram || this.exporting() || !this.plan().rows.length) return;
 
     this.exporting.set(true);
     this.exportError.set('');
@@ -186,16 +186,16 @@ export class WorkingCurriculumView implements OnInit, OnChanges {
       const fonts = await loadReportFonts();
       const bytes = buildWorkingCurriculumReport({
         plan,
-        specialtyCode: specialty.code ?? '',
-        specialtyName: specialty.name ?? '',
-        degree: specialty.degree ?? '',
-        facultyName: specialty.faculty?.name ?? '',
+        degreeProgramCode: degreeProgram.code ?? '',
+        degreeProgramName: degreeProgram.name ?? '',
+        degree: degreeProgram.degree ?? '',
+        facultyName: degreeProgram.faculty?.name ?? '',
         studyForms: this.studyForms(),
         generatedAt,
         fonts
       });
       downloadPdf(bytes, workingCurriculumReportFileName(
-        specialty.code ?? '', plan.courseYear, academicYearLabel(generatedAt)));
+        degreeProgram.code ?? '', plan.courseYear, academicYearLabel(generatedAt)));
     } catch (e: unknown) {
       this.exportError.set(e instanceof Error ? e.message : 'Не вдалося сформувати PDF');
     } finally {

@@ -1,5 +1,5 @@
 /**
- * The arithmetic of a specialty's навчальний план: what the plan adds up to, how it splits between
+ * The arithmetic of a degreeProgram's навчальний план: what the plan adds up to, how it splits between
  * the parts a Ukrainian plan is read in, and where it departs from what the law and the usual
  * practice of a ЗВО require.
  *
@@ -310,7 +310,7 @@ const buildRow = (item: PlanItemInput, code: string, hoursPerCredit: number): Pl
 };
 
 /**
- * Folds a specialty's curriculum items into the plan a document can be printed from.
+ * Folds a degreeProgram's curriculum items into the plan a document can be printed from.
  *
  * Rows are ordered the way a plan is read: by semester, then by name in the Ukrainian alphabet
  * (`compareUk`, never a raw `localeCompare` — see `sort.ts`), and numbered within their section, so

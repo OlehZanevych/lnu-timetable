@@ -24,7 +24,7 @@ export interface TimetableReportContext {
  * the page is comparing — groups, lecturers, rooms — across the top.
  *
  * Five documents. The faculty page passes its academic groups and gets the розклад it publishes
- * (narrowed, on that tab, by семестр / курс / спеціальність / група — see `restrictColumnsToScope`);
+ * (narrowed, on that tab, by семестр / курс / освітня програма / група — see `restrictColumnsToScope`);
  * the department page passes its lecturers and gets the викладацький розклад a кафедра works from;
  * the lecturer and room pages pass one id each and get a single column; «Мій кабінет» shows the
  * signed-in reader their own, mounting this twice — once for a lecturer, once for a student — for
@@ -222,13 +222,13 @@ export class TimetableView implements OnInit, OnChanges {
         workingCurriculumItem {
           course { id name semester tags { tag } }
           department { id name }
-          curriculumItemHours { hourType curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
+          curriculumItemHours { hourType curriculumItem { semester course { id name courseType semester tags { tag } } degreeProgram { id name } } }
         }
         combinedWorkingCurriculumItem {
           workingCurriculumItems {
             course { id name semester tags { tag } }
             department { id name }
-            curriculumItemHours { hourType curriculumItem { semester course { id name courseType semester tags { tag } } specialty { id name } } }
+            curriculumItemHours { hourType curriculumItem { semester course { id name courseType semester tags { tag } } degreeProgram { id name } } }
           }
         }
       }

@@ -1,5 +1,5 @@
 /**
- * The arithmetic of a specialty's **робочий навчальний план**: which department delivers which
+ * The arithmetic of a degreeProgram's **робочий навчальний план**: which department delivers which
  * block of hours, to which groups, in what format — and what that adds up to for each кафедра.
  *
  * Framework-free, like `curriculum-plan.ts` and `workload-stats.ts`: plain objects in, plain
@@ -184,7 +184,7 @@ export interface WorkingPlanCoverage {
 export interface WorkingCurriculumPlan {
   /** Course years present in the source data, ascending — what the курс filter offers. */
   courseYears: number[];
-  /** The course year this plan is scoped to, or null for the whole specialty. */
+  /** The course year this plan is scoped to, or null for the whole degreeProgram. */
   courseYear: number | null;
   rows: WorkingPlanRow[];
   positions: WorkingPosition[];
@@ -228,7 +228,7 @@ const courseYearOf = (semester: number): number => Math.ceil(semester / 2);
  *
  * `courseYear` scopes it to one курс, because a робочий навчальний план is drawn up **for one
  * academic year** — that is the one thing every ЗВО положення agrees on. Pass null to take the
- * whole specialty, which is useful on screen and honest in print as long as the sheet says so.
+ * whole degreeProgram, which is useful on screen and honest in print as long as the sheet says so.
  */
 export function buildWorkingCurriculumPlan(
   items: WorkingPlanItemInput[], courseYear: number | null,

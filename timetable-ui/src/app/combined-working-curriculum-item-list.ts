@@ -21,7 +21,7 @@ interface RawItem {
     curriculumItem: {
       id: string;
       semester: number;
-      specialty: { id: string; name: string };
+      degreeProgram: { id: string; name: string };
       course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
@@ -29,7 +29,7 @@ interface RawItem {
 
 interface CandidateItem {
   id: string;
-  specialty: { id: string; name: string };
+  degreeProgram: { id: string; name: string };
   academicGroups: GroupRef[];
 }
 
@@ -53,7 +53,7 @@ interface CombinedItemMember {
     hours: number;
     curriculumItem: {
       semester: number;
-      specialty: { id: string; name: string };
+      degreeProgram: { id: string; name: string };
       course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
@@ -67,7 +67,7 @@ interface CombinedItem {
 /**
  * Lets a department combine several working curriculum items that relate to the same course,
  * semester, and hour type (typically the same discipline taught to groups from different
- * specialties) into one combined_working_curriculum_item, so a lecturer who teaches them all
+ * degreePrograms) into one combined_working_curriculum_item, so a lecturer who teaches them all
  * simultaneously (e.g. one shared lecture) can be assigned once via lecturer_workloads.
  */
 @Component({
@@ -119,7 +119,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         id hourType hours
         curriculumItem {
           id semester
-          specialty { id name }
+          degreeProgram { id name }
           course { id name semester tags { tag } }
         }
       }
@@ -139,7 +139,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         academicGroups { id name }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name semester tags { tag } } }
+          curriculumItem { semester degreeProgram { id name } course { id name semester tags { tag } } }
         }
       }
     } } } }`;
@@ -161,7 +161,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
         group = { key, course: ci.course, semester: ci.semester, hourType: cih.hourType, hours: cih.hours, items: [], selected: new Set() };
         byKey.set(key, group);
       }
-      group.items.push({ id: it.id, specialty: ci.specialty, academicGroups: it.academicGroups });
+      group.items.push({ id: it.id, degreeProgram: ci.degreeProgram, academicGroups: it.academicGroups });
       group.selected.add(it.id);
     }
 
@@ -218,8 +218,8 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
     });
   }
 
-  memberSpecialtyName(m: CombinedItemMember): string {
-    return m.curriculumItemHours.curriculumItem.specialty.name;
+  memberDegreeProgramName(m: CombinedItemMember): string {
+    return m.curriculumItemHours.curriculumItem.degreeProgram.name;
   }
 
   /** Exposed for the template — the shared rule, see `course-label.ts`. */

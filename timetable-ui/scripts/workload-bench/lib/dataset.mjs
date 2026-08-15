@@ -20,7 +20,7 @@ import { Rng } from './rng.mjs';
 import {
   STATUTORY_MAX_HOURS_PER_YEAR, POSITIONS, POSITION_PROFILE, COURSE_TYPES,
   GROUPS_PER_COURSE, HOUR_ROWS, GROUP_SIZE, TWO_LECTURER_LAB,
-  COURSE_STEMS, SPECIALTY_NAMES, HOUR_TYPE_UK
+  COURSE_STEMS, DEGREE_PROGRAM_NAMES, HOUR_TYPE_UK
 } from './model.mjs';
 
 const AFFINITY_KEY = {
@@ -54,9 +54,9 @@ export function buildDataset({ lecturers: lecturerCount, scenario, seed }) {
     });
   }
 
-  // ── Specialties the department serves ──────────────────────────────────────
-  const specialtyCount = Math.max(1, Math.min(SPECIALTY_NAMES.length, Math.round(lecturerCount / 12) + 1));
-  const specialties = SPECIALTY_NAMES.slice(0, specialtyCount);
+  // ── Degree programmes the department serves ──────────────────────────────────────
+  const degreeProgramCount = Math.max(1, Math.min(DEGREE_PROGRAM_NAMES.length, Math.round(lecturerCount / 12) + 1));
+  const degreePrograms = DEGREE_PROGRAM_NAMES.slice(0, degreeProgramCount);
 
   // ── Courses and delivery positions, until the plan reaches the target ──────
   const workloads = [];
@@ -86,7 +86,7 @@ export function buildDataset({ lecturers: lecturerCount, scenario, seed }) {
 
     const course = {
       id, name: stem + suffix, courseType, semester,
-      specialty: specialties[courseIndex % specialties.length],
+      degreeProgram: degreePrograms[courseIndex % degreePrograms.length],
       groups: groupCount, qualified: qualified.map((l) => l.id),
       hourRows: [], positions: 0, hours: 0
     };
@@ -200,7 +200,7 @@ export function buildDataset({ lecturers: lecturerCount, scenario, seed }) {
 
   const stats = summarise({
     input, courses, staff, capacity, demand, poolSize, preAssignedSlots,
-    constraintsByLecturer, specialtyCount
+    constraintsByLecturer, degreeProgramCount
   });
 
   return {
@@ -378,7 +378,7 @@ function buildConstraints(rng, lecturer, expected, scenario) {
 // ── Statistics ───────────────────────────────────────────────────────────────
 
 function summarise({ input, courses, staff, capacity, demand, poolSize, preAssignedSlots,
-                     constraintsByLecturer, specialtyCount }) {
+                     constraintsByLecturer, degreeProgramCount }) {
   const w = input.workloads;
   const byFormat = tally(w, (x) => x.teachingFormat);
   const byHourType = tally(w, (x) => x.hourType);
@@ -395,7 +395,7 @@ function summarise({ input, courses, staff, capacity, demand, poolSize, preAssig
 
   return {
     lecturers: staff.length,
-    specialties: specialtyCount,
+    degreePrograms: degreeProgramCount,
     courses: courses.length,
     coursesPerLecturer: round2(courses.length / staff.length),
     positions: w.length,

@@ -271,7 +271,7 @@ and treated as **immovable**:
 | Slice | Query | Why |
 |---|---|---|
 | classes in the rooms this faculty may use | `timetableEntryConnection(roomIds:)` | its rooms also host other faculties' classes |
-| classes of this faculty's lecturers | `timetableEntryConnection(lecturerIds:)` | its lecturers also teach other faculties' specialties |
+| classes of this faculty's lecturers | `timetableEntryConnection(lecturerIds:)` | its lecturers also teach other faculties' degree programmes |
 | classes of this faculty's academic groups | `timetableEntryConnection(academicGroupIds:)` | its groups are also taught by other faculties' departments |
 
 An external class is held one of the same three ways, and carries the same figures: its room, or
@@ -300,7 +300,7 @@ Every `lecturer_timetable_constraints`, `academic_group_timetable_constraints` a
 `schema.sql` (a day-specific rule overrides the every-day rule of its type; `UNAVAILABLE` windows
 accumulate). They are read for every lecturer, group and room of the faculty in one request, plus —
 by id — for the handful a workload reaches outside it: a lecturer of another department teaching for
-us, a room belonging to another faculty, a group studying on another faculty's specialty.
+us, a room belonging to another faculty, a group studying on another faculty's degree programme.
 
 ### 2.4 Global properties
 

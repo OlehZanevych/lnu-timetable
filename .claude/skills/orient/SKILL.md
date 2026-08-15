@@ -33,7 +33,7 @@ endpoint, work through the config, never by writing a controller.
 
 **The client has two architectures side by side.** Generic metadata-driven CRUD tables
 (`entities.ts` + `BaseEntity` + `entity-page.html`, one route per entity) *and* hand-written
-drill-down pages (faculty, department, specialty, course, lecturer, room, «Мій кабінет»). Both are
+drill-down pages (faculty, department, degree programme, course, lecturer, room, «Мій кабінет»). Both are
 intentional: the generic half is for reference data, the hand-written half for the screens where the
 work actually happens. Know which half you are in before changing anything.
 

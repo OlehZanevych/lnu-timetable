@@ -219,12 +219,12 @@ data.
 
 ### The faculty sheet can be narrowed, and then it is not the faculty's
 
-«Розклад факультету» filters its grid by семестр, курс, спеціальність and академічна група. All four
+«Розклад факультету» filters its grid by семестр, курс, освітня програма and академічна група. All four
 narrow the academic-group ids the page passes down, which *is* the scope — a faculty timetable is the
 timetable of its groups, `timetableEntryConnection` having no `facultyId` filter of its own. Two
 consequences reach the document.
 
-**The subject names the scope.** An export carries the faculty plus whichever of курс / спеціальність
+**The subject names the scope.** An export carries the faculty plus whichever of курс / освітня програма
 / група is active, so a sheet holding a subset cannot present itself as the whole faculty's. ЛНУ
 prints one sheet per курс in any case; what the filter adds is that the sheet says which.
 
