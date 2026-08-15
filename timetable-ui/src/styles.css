@@ -483,6 +483,18 @@ button.danger:hover { background: #991b1b !important; }
 .login-form label { min-width: 0; }
 .login-form input { width: 100%; }
 .login-hint { margin-top: 16px; }
+.login-hint a { color: var(--blue); }
+
+/* The answer the registration and password-recovery forms give back — an outcome rather than an
+   error, since three of the six things that can happen are neither a success nor a fault. The
+   three tones are the three kinds of answer: a link is on its way, something is true of this
+   address that the reader has to act on, or the send itself failed. */
+.account-outcome { border-radius: 8px; padding: 12px 14px; margin-top: 14px; font-size: 14px; }
+.account-outcome p { margin: 6px 0 0; }
+.account-outcome button { margin-top: 10px; }
+.account-outcome.ok { background: #dcfce7; color: #14532d; }
+.account-outcome.warn { background: #fef3c7; color: #92400e; }
+.account-outcome.bad { background: #fde2e1; color: #9b1c1c; }
 
 /* ── Top bar user menu ── */
 .user-menu { margin-left: auto; display: flex; align-items: center; gap: 12px; color: #fff; font-size: 13px; }

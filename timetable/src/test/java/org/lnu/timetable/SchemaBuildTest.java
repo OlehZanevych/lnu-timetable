@@ -14,6 +14,8 @@ import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
 import org.lnu.timetable.framework.metadata.RelationMetadata;
 import org.lnu.timetable.framework.schema.DataFetcherProvider;
 import org.lnu.timetable.framework.schema.DynamicGraphQLSchemaBuilder;
+import org.lnu.timetable.security.SelfServiceDataFetchers;
+import org.lnu.timetable.security.SelfServiceSchema;
 
 import java.util.List;
 
@@ -41,7 +43,7 @@ class SchemaBuildTest {
                 new PeopleSchemaConfig(),
                 new SchedulingSchemaConfig()
             ),
-            noop, null, null
+            noop, null, null, List.of(selfService())
         );
         String sdl = new SchemaPrinter().print(schema);
         System.out.println(sdl);
@@ -75,5 +77,32 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("departmentConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
         assertTrue(sdl.contains("degreeProgramConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
         assertTrue(sdl.contains("lecturerConnection(departmentId: ID, facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
+
+        // The hand-written self-service area, reached through the HandWrittenApi plug-in point
+        // rather than through anything hardcoded in the builder. Asserting the *printed* shape is
+        // what makes this worth a test: every one of these fields refers to its types by
+        // GraphQLTypeReference, and a reference naming a type nobody registered fails when the
+        // schema is assembled — at application startup, which is where this test exists to avoid
+        // finding out.
+        assertTrue(sdl.contains("registrationLink(token: String!): AccountLinkCheck!"));
+        assertTrue(sdl.contains("passwordResetLink(token: String!): AccountLinkCheck!"));
+        assertTrue(sdl.contains("requestRegistration(email: String!): RegistrationRequestResponse!"));
+        assertTrue(sdl.contains("completeRegistration(password: String!, token: String!): AccountLinkResponse!"));
+        assertTrue(sdl.contains("requestPasswordReset(email: String!): PasswordResetRequestResponse!"));
+        assertTrue(sdl.contains("resetPassword(password: String!, token: String!): AccountLinkResponse!"));
+        assertTrue(sdl.contains("enum RegistrationRequestStatus"));
+        assertTrue(sdl.contains("NOT_ELIGIBLE"));
+        assertTrue(sdl.contains("enum PersonRole"));
+    }
+
+    /**
+     * The self-service area with nothing behind it. Building a schema only ever asks it for types,
+     * field definitions and fetcher <em>lambdas</em> — none of which touch a repository, a mailer or
+     * a signing key — so the collaborators can all be null and the constructor's one real argument
+     * is the base URL it would build links from.
+     */
+    private SelfServiceSchema selfService() {
+        return new SelfServiceSchema(
+            new SelfServiceDataFetchers(null, null, null, null, null, "http://localhost", 30, 60));
     }
 }

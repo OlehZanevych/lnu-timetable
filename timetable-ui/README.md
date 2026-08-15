@@ -147,7 +147,8 @@ src/app/
 ├── course-label.ts           # courseLabel(): a discipline's name with its courses.semester and
 │                             #   course_tags in parentheses — one rule, every screen, no sheet
 ├── auth.service.ts           # AuthService: session state (JWT, CurrentUser), login/logout,
-│                             #   changePassword, accessLevels() permission lookups — see Authentication
+│                             #   changePassword, the four self-service link operations, and
+│                             #   accessLevels() permission lookups — see Authentication
 ├── auth.interceptor.ts       # authInterceptor: attaches "Authorization: Bearer <jwt>" to requests,
 │                             #   and ends the session when a response says that token is dead
 ├── auth.guard.ts             # authGuard (must be signed in + password changed), adminGuard
@@ -157,6 +158,10 @@ src/app/
 │                             #   delegating it — the «Доступ» tab of a faculty and a department
 ├── login-page.ts/.html       # "/login"
 ├── change-password-page.ts/.html  # "/change-password" — forced after signing in with a temporary password
+├── account-request-page.ts/.html  # "/register" and "/forgot-password" — asks for an e-mail address
+│                             #   and reports what the service found; one component, data.mode apart
+├── account-link-page.ts/.html     # "/register/:token" and "/reset-password/:token" — what a link in
+│                             #   an e-mail opens; checks the link, then sets the password
 ├── admin-page.ts/.html       # "/admin" — user/group/access management console (admin-only)
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
 ├── app.css                    # empty — every style in this app is global, in src/styles.css
@@ -1925,7 +1930,9 @@ is noticeable on the larger lists (a degree programme can have 200+ courses).
 
 | Path | Component | Notes |
 |---|---|---|
-| `/login` | `LoginPage` | the only route with no guard |
+| `/login` | `LoginPage` | one of five routes with no guard |
+| `/register`, `/forgot-password` | `AccountRequestPage` | **lazy** — no guard; one component, `data.mode` apart: the form that asks for an address and reports what the service found |
+| `/register/:token`, `/reset-password/:token` | `AccountLinkPage` | **lazy** — no guard; one component again: the form a link from an e-mail opens, which sets the password |
 | `/change-password` | `ChangePasswordPage` | `authGuard` only — reachable while `mustChangePassword` is set |
 | `/admin` | `AdminPage` | **lazy** — `authGuard` + `adminGuard`; user/group/access management and the person link |
 | `/` | `FacultyHome` | faculty tiles, drill-down entry point |
@@ -1942,6 +1949,13 @@ is noticeable on the larger lists (a degree programme can have 200+ courses).
 | `/building-travel-times` | `BuildingTravelTimesPage` | **lazy** — «Час переходу між корпусами»: the directed travel-time matrix |
 | `/building` | `BuildingHome` | building tiles (this entity's table is a page of tiles, not a table) |
 | `/:single` | generic `entity-pages.ts` component | one per remaining entity, at the kebab-case of its `single` — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
+
+The four self-service routes carry no guard, and none may: a викладач with no account and a user who
+has forgotten their password are exactly the two people who cannot sign in first.
+The token is a **path segment** rather than a query parameter so that the service's
+`FrontendController` serves it — that controller matches each segment as `[^.]*`, and a base64url
+token contains no dot, so a reloaded or pasted link reaches this router rather than the
+static-resource handler.
 
 The sidebar (`app.html`) links to the drill-down entry point ("🎓 Факультети") and — only when the
 signed-in account is linked to a lecturer or a student — to «📅 Мій кабінет»,
@@ -1964,21 +1978,22 @@ link either, and that is deliberate: nobody navigates to a discipline or a room 
 arrive from the list they were already reading. Every such list carries an «Відкрити →» link in its
 last column, driven by `EntityMeta.detailRoute` (see [Generic CRUD
 tables](#generic-crud-tables-entitiests--baseentity)), so the route is reachable from wherever the
-entity is mentioned rather than from one place. They are three of the nine `loadComponent` routes
-in the file. Each pulls in `TimetableView`, the grid and — on the Course page — the whole aggregation
+entity is mentioned rather than from one place. They are three of the thirteen `loadComponent`
+routes in the file. Each pulls in `TimetableView`, the grid and — on the Course page — the whole aggregation
 of curricula and workloads, and the cost of deferring them is one extra request the first time a
 user opens one.
 
-The other six are there on the same reasoning, and the list has grown as the application has. «Мій
+The other ten are there on the same reasoning, and the list has grown as the application has. «Мій
 кабінет» mounts `TimetableView` and is opened only by an account that is a person; the
 administration console carries its own queries, including the full lecturer and student lists behind
 the person pickers, and is opened only by an administrator; `/global-properties` and
-`/building-travel-times` are single-purpose editors with stylesheets of their own. `FacultyPage` and
-`DepartmentDetailPage` were the last to move, and they moved the most: `FacultyPage` alone pulls in
+`/building-travel-times` are single-purpose editors with stylesheets of their own; the four
+self-service routes are two components between them, each a whole screen opened once in the lifetime
+of an account. `FacultyPage` and `DepartmentDetailPage` moved the most: `FacultyPage` alone pulls in
 every tab it can show — the department, degree programme and group lists, the room and course pages,
 the constraint editors and the timetable view — and it is not on the path to the one screen most
-people open the application for. Together the nine take the initial chunk from just over the 1.00 MB
-error budget to **684 kB**.
+people open the application for. Together the thirteen take the initial chunk from just over the
+1.00 MB error budget to **706 kB**.
 
 The budget is worth stating plainly, because it is the thing that keeps forcing these decisions: the
 production build *fails* above 1.00 MB and warns above 500 kB. Anything added to a route that is
@@ -2075,8 +2090,12 @@ every hand-written path that shares a first segment with a table carries `/:id` 
 
 ## Authentication
 
-There is no sign-up screen anywhere — accounts are created by an administrator (`/admin`, see
-below) with a temporary password, matching the backend's no-self-registration rule.
+An account arrives one of two ways. An administrator creates one (`/admin`, see below) with a
+temporary password the account has to replace on first sign-in. Or a викладач or a студент whose
+own row carries an e-mail address creates their own, by following a link sent to it — see
+[Registration and password recovery](#registration-and-password-recovery-accountrequestpage--accountlinkpage).
+There is no way to register as somebody the university has never entered: the service checks
+`lecturers` and then `students` for the address before it will send anything.
 
 ### Session state (`AuthService`)
 
@@ -2095,6 +2114,11 @@ A single root-provided service, injected the same way `GraphqlService` is used e
   corresponding mutations. `login` clears any stored token first, because sign-in is an
   unauthenticated operation and a leftover token would only make the service report *its* failure on
   that response.
+- `requestRegistration(email)` / `requestPasswordReset(email)` / `accountLink(kind, token)` /
+  `redeemAccountLink(kind, token, password)` — the four self-service operations, all
+  unauthenticated. The last one adopts the JWT the service hands back, so redeeming a link signs
+  the caller in on the spot; `adoptSession(token)` is that step, and is what `login` does with its
+  own token by another name.
 - `endSession(reason)` / `clearSession(reason)` / `sessionEndReason` (signal) — ending a session
   that stopped working, as opposed to one the user signed out of. The reason is what `LoginPage`
   turns into «Термін дії сеансу минув…» instead of presenting an unexplained empty form.
@@ -2185,6 +2209,52 @@ if the account still has `mustChangePassword` set, it's sent to `/change-passwor
 (`ChangePasswordPage`) regardless of where it was headed; otherwise it lands on the original
 `redirectTo` target or `/`. `ACCOUNT_DISABLED` and invalid-credentials errors from `login` are
 surfaced as distinct messages.
+
+### Registration and password recovery (`AccountRequestPage` / `AccountLinkPage`)
+
+Four routes, two components, and the pairing is the interesting part.
+
+**`AccountRequestPage`** (`/register`, `/forgot-password`) is a field for an e-mail address, a
+button, and a sentence about what the service found. Which of the two forms it is arrives as route
+data, and it is a signal rather than a constant — so the page can switch from one to the other
+**without a navigation**, which is the whole reason the two share a component.
+
+That switch is what makes the registration screen worth having. Somebody who cannot get in does not
+know whether they have an account; «зареєструватися» is what they reach for either way. Answering
+«обліковий запис із такою адресою вже існує» and stopping there would leave them exactly as stuck,
+so the answer carries the next step with it: one button, already holding the address they typed,
+that sends the recovery link instead. The reverse runs in the other direction — `UNKNOWN_EMAIL` on
+the recovery form offers registration.
+
+The six statuses the service can answer with each get their own two sentences, in one of three
+tones: a link is on its way (green), something is true of this address that the reader has to act on
+(amber — already registered, not eligible, already linked, asked too recently), or the send itself
+failed (red). `NOT_ELIGIBLE` is the one worth the longest text, because it is the one where nothing
+the reader does on this screen can help: it says who may register themselves and that an
+administrator is who to ask otherwise.
+
+**`AccountLinkPage`** (`/register/:token`, `/reset-password/:token`) is what a link in an e-mail
+opens. It asks the service what the link is worth **before anything is typed**, and the four answers
+lead to four different places: expired or superseded by a newer mail → «замовте нове»; already
+redeemed → «увійдіть»; not a link at all → «перевірте, чи скопійовано його повністю»; and
+`UNAVAILABLE`, where the link is fine but what it points at has changed under it — the account was
+deactivated, or came into being some other way, inside the thirty minutes — where nothing on this
+screen can help and another link would fail the same way, so none is offered. A refusal that comes
+back from the *submission* and is about the link rather than about the password re-renders the page
+as that same dead-link screen, since there is nothing useful left to do with a form whose second
+attempt cannot work either.
+
+What it asks for is a password and its confirmation, and nothing else. The name above the form —
+read off the викладач or студент row the link belongs to — is displayed rather than edited: it was
+entered by the кафедра that entered the person, and a registration form is not where a surname is
+corrected. On success the service returns a JWT, `redeemAccountLink` adopts it, `refreshMe()` runs,
+and the user lands on `/` already signed in, with «Мій кабінет» in the sidebar if they are a person.
+Asking somebody to sign in with a password they chose ten seconds ago, on the screen they chose it
+on, is a step that exists only because sessions are usually created somewhere else.
+
+Both are `loadComponent` routes. Each is a whole screen opened once in the lifetime of an account,
+and the initial bundle is close to its budget; the cost is one request the first time a link from an
+e-mail is followed.
 
 ### The shell, when there is nothing to navigate
 
@@ -2333,6 +2403,12 @@ administrator, and it is the **only** seeded account. The forced change-password
 `FACULTY`/`DEPARTMENT` grant and the person link behind «Мій кабінет» all have to be set up from
 `/admin` first — creating an account there always sets `mustChangePassword`, so the first of those
 needs nothing more than one «+ Створити користувача».
+
+The other road to a second account needs no administrator but does need working mail: give a
+`Lecturer` or a `Student` an e-mail address you can read, set `MAIL_USERNAME`/`MAIL_PASSWORD` on the
+service, and register at `/register`. Without those two variables the service starts normally and
+answers `MAIL_FAILED`, which the page reports honestly rather than telling you to check an inbox
+nothing was sent to.
 
 ---
 

@@ -56,6 +56,11 @@ department page, then a faculty page in turn. An `ELECTIVE_GROUP` also manages i
 Alongside it: JWT sign-in with entity-scoped, cascading permissions, at three ordered levels — edit,
 full (which adds deletion) and manage (which adds the right to hand the same access to somebody
 else, so a deanery delegates a кафедра itself rather than queuing behind an administrator);
+**self-service accounts** for the people already in the system — a викладач or a студент whose row
+carries an e-mail address creates their own account by following a link sent to it, valid thirty
+minutes, and anybody who has forgotten a password replaces it the same way, while an address
+belonging to nobody the institution has entered is told plainly that self-registration is not open
+to it;
 **«Мій кабінет»**, where an account linked to a викладач or a студент reads its own навантаження or
 навчальний план and its own розклад, defaulting to the half-year that is running; and four printable
 forms —
@@ -125,12 +130,26 @@ Sign in with one of the seeded accounts:
 |---|---|---|
 | `admin@lnu.edu.ua` | `Admin#2026` | full administrator |
 
-That is the **only** seeded account. There is no sign-up screen anywhere — every other account is
-created from «Користувачі та права», by design — so the first thing a fresh database needs is for
-that administrator to create the accounts the institution actually wants, scope them with permission
+That is the **only** seeded account, so the first thing a fresh database needs is for that
+administrator to create the accounts the institution actually wants, scope them with permission
 grants at the level each job actually needs, and (for a lecturer or a student) point them at the
 person they belong to. The two seeded groups survive with no members, «Деканат ФПМіІ» still holding
 its `FACULTY` grant, ready to be populated.
+
+A викладач or a студент need not wait for any of that: if their own row carries an e-mail address
+they register themselves at `/register`, and the account that results is linked to them by
+construction. That needs a mailbox to send from — set `MAIL_USERNAME` and `MAIL_PASSWORD` in the
+environment before starting the service:
+
+```bash
+MAIL_USERNAME=timetable@lnu.edu.ua MAIL_PASSWORD='…' mvn spring-boot:run
+```
+
+Without them the service starts normally and reports «не вдалося надіслати листа» on the first
+attempt, rather than telling somebody to check an inbox nothing was sent to. What the links inside
+those messages point at is `app.base-url` — `http://localhost:4200` under the `loc` profile, where
+the client runs on its own port. See the service README's [Self-service registration and password
+recovery](./timetable/README.md#self-service-registration-and-password-recovery).
 
 ---
 
@@ -171,7 +190,8 @@ java -jar timetable/target/timetable-0.0.1-SNAPSHOT.jar \
     --spring.r2dbc.url=r2dbc:postgresql://HOST:5432/lnu-timetable \
     --spring.r2dbc.username=USER \
     --spring.r2dbc.password=PASSWORD \
-    --app.security.jwt-secret=<a fresh secret of at least 32 bytes>
+    --app.security.jwt-secret=<a fresh secret of at least 32 bytes> \
+    --app.base-url=https://timetable.lnu.edu.ua
 ```
 
 That one property is the whole switch between the two things `/` can be — the Apollo Sandbox
@@ -179,6 +199,13 @@ redirect a developer wants, or the Angular client a deployment wants. `IndexCont
 `FrontendController` are each conditional on it and are never both registered; see the service
 README's [Serving the frontend from this
 service](./timetable/README.md#serving-the-frontend-from-this-service).
+
+`app.base-url` is the one property whose *default* is wrong for a deployment rather than merely
+dev-flavoured: it is what the registration and password-recovery links in outgoing e-mail are built
+from, so leaving it at `localhost` puts a link to the reader's own machine in the reader's inbox.
+The mailbox those messages are sent from is not a property at all — `MAIL_USERNAME` and
+`MAIL_PASSWORD` are read from the environment, and are the two credentials this service needs
+besides the database and the JWT secret.
 
 Two more things worth knowing before deploying this anywhere real. Adding
 `--spring.profiles.active=` drops `application-loc.properties` altogether, so nothing at all is
@@ -204,7 +231,9 @@ That installs a systemd unit which keeps the jar running and starts it again aft
 cron job which checks the tracked branch every ten minutes and rebuilds, redeploys and restarts when
 it moves — putting the previous jar back if the new one will not come up. It also supplies
 `--spring.profiles.active=` and passes the credentials as environment variables rather than
-arguments, which are the two things in this section that are easiest to forget.
+arguments, which are the two things in this section that are easiest to forget. The mailbox and the
+public address go in the same way, as `--mail-username`, `--mail-password` and `--base-url`, so that
+self-service registration works from the first start rather than after an edit to a file in `/etc`.
 
 ---
 
@@ -212,8 +241,8 @@ arguments, which are the two things in this section that are easiest to forget.
 
 | Document | What it covers |
 |---|---|
-| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files), the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, the levelled permission model and how it is evaluated, and the person link that says who an account is |
-| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI down to which button each level opens |
+| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files) and the `HandWrittenApi` plug-in point for the parts of it that cannot be generated, the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, self-service registration and password recovery, the levelled permission model and how it is evaluated, and the person link that says who an account is |
+| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the registration and password-recovery screens, the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI down to which button each level opens |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
 | [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, the worker portfolio, a traced example, complexity, and the code map |
@@ -278,7 +307,9 @@ lnu-timetable/
 │   │   ├── controller/   IndexController / FrontendController — the two owners of "/"
 │   │   ├── domain/       annotated POJOs, one per table
 │   │   ├── framework/    the config-driven engine (metadata → schema → SQL)
-│   │   └── security/     JWT + the entity-scoped, levelled permission model
+│   │   ├── mail/         MailService — the two e-mailed one-time links, over SMTP
+│   │   └── security/     JWT, the entity-scoped levelled permission model, and
+│   │                     self-service registration / password recovery
 │   ├── src/main/resources/
 │   │   ├── application.properties      what is the same in every environment
 │   │   ├── application-loc.properties  what is not: credentials, JWT secret, SQL

@@ -1,0 +1,53 @@
+<div class="login-wrap">
+  <div class="card login-card">
+    <h2>{{ heading() }}</h2>
+    <p class="muted">Львівський національний університет імені Івана Франка</p>
+
+    @if (error()) {
+      <p class="error">{{ error() }}</p>
+    }
+
+    @if (outcome(); as o) {
+      <div class="account-outcome" [class.ok]="o.tone === 'ok'" [class.warn]="o.tone === 'warn'"
+           [class.bad]="o.tone === 'error'">
+        <strong>{{ o.title }}</strong>
+        @if (o.detail) {
+          <p>{{ o.detail }}</p>
+        }
+        @if (o.action === 'reset') {
+          <button type="button" (click)="switchTo('reset')" [disabled]="submitting()">
+            Надіслати посилання для зміни пароля
+          </button>
+        }
+        @if (o.action === 'register') {
+          <button type="button" (click)="switchTo('register')" [disabled]="submitting()">
+            Зареєструватися за цією адресою
+          </button>
+        }
+      </div>
+    }
+
+    <p class="muted">{{ lead() }}</p>
+
+    <form (ngSubmit)="submit()" class="entity-form login-form">
+      <label>
+        <span>Ел. пошта</span>
+        <input type="email" [(ngModel)]="email" name="email" required autocomplete="username" />
+      </label>
+      <div class="actions">
+        <button type="submit" [disabled]="submitting()">
+          {{ submitting() ? 'Надсилання…' : 'Надіслати посилання' }}
+        </button>
+      </div>
+    </form>
+
+    <p class="muted login-hint">
+      <a routerLink="/login">Повернутися до входу</a>
+      @if (mode() === 'register') {
+        · <a routerLink="/forgot-password">Забули пароль?</a>
+      } @else {
+        · <a routerLink="/register">Реєстрація</a>
+      }
+    </p>
+  </div>
+</div>

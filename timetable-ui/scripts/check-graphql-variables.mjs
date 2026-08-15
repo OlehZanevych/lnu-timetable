@@ -73,6 +73,9 @@ const ARG_TYPES = {
   active: 'Boolean!', description: 'String', query: 'String!',
   granteeType: 'String!', permissionId: 'ID!', level: 'AccessLevel!',
   resourceType: 'String!', resourceId: 'ID', resourceIds: '[ID!]!', includeInherited: 'Boolean',
+  // Self-service registration and password recovery (SelfServiceSchema) — the one-time link's
+  // token, which is a value like any other and travels as a variable like any other.
+  token: 'String!',
 };
 
 const NAME = `(${Object.keys(ARG_TYPES).join('|')})`;
