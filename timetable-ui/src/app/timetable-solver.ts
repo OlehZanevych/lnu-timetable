@@ -1993,7 +1993,12 @@ export function solveTimetable(
   // stuck one.
   const hardWeight = opts.hardWeight ?? Math.max(1_000_000, surrogate() * 0.02);
   let acceptedCost = hardNow() * hardWeight + surrogate();
-  const lahcLength = Math.max(50, opts.lahcLength ?? 5000);
+  // The floor exists only to stop a caller passing 0 or a negative, which would make the history
+  // array empty and the acceptance test read undefined. It used to be 50, which silently turned an
+  // L=1 request into L=50 — a request for a greedy descent got a short-history late acceptance
+  // instead, and every parameter sweep we ran reported the range the clamp allowed without giving
+  // any signal that it had done so. The shipped default is L=100 and is unaffected by this change.
+  const lahcLength = Math.max(1, opts.lahcLength ?? 5000);
   const lahcHistory = new Float64Array(lahcLength).fill(acceptedCost);
   let moveCount = 0;
   const swapRate = opts.swapRate ?? 0.3;
