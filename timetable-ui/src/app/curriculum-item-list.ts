@@ -13,8 +13,8 @@ import { CourseTagRef, courseLabel } from './course-label';
 
 type DeptOption = Option & { facultyId: string };
 
-/** The specialty this curriculum belongs to — everything the printed plan names it by. */
-export interface CurriculumSpecialty {
+/** The degreeProgram this curriculum belongs to — everything the printed plan names it by. */
+export interface CurriculumDegreeProgram {
   id: string;
   code: string;
   name: string;
@@ -73,7 +73,7 @@ const toPlanItem = (item: CurriculumItem): PlanItemInput => {
 
 /**
  * Shows the curriculum items (with their per-type hour breakdown) belonging directly
- * to a specialty, with create/edit/delete support for each item, the headline figures of the
+ * to a degreeProgram, with create/edit/delete support for each item, the headline figures of the
  * resulting освітня програма, and the printable «Навчальний план» those figures are signed off on.
  */
 @Component({
@@ -85,14 +85,14 @@ export class CurriculumItemList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
   private settings = inject(GlobalPropertiesService);
 
-  @Input() specialtyId!: string;
-  /** The specialty's own faculty; pre-selected as the faculty filter when opening the modal. */
-  @Input() specialtyFacultyId: string | null = null;
+  @Input() degreeProgramId!: string;
+  /** The degreeProgram's own faculty; pre-selected as the faculty filter when opening the modal. */
+  @Input() degreeProgramFacultyId: string | null = null;
   /**
-   * The specialty itself, passed down from the page that already loaded it. A signal, not a plain
+   * The degreeProgram itself, passed down from the page that already loaded it. A signal, not a plain
    * field, because {@link plan} reads it inside a `computed()` — see the zoneless note in the README.
    */
-  @Input() set specialty(value: CurriculumSpecialty | null) { this.specialtySignal.set(value); }
+  @Input() set degreeProgram(value: CurriculumDegreeProgram | null) { this.degreeProgramSignal.set(value); }
 
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
@@ -118,8 +118,8 @@ export class CurriculumItemList implements OnInit, OnChanges {
    *  faculty/department sub-filter may well be excluding. */
   private courseSemesters = new Map<string, number>();
 
-  private specialtySignal = signal<CurriculumSpecialty | null>(null);
-  /** Raw `academic_groups.study_form` values among the specialty's groups; names the форма навчання. */
+  private degreeProgramSignal = signal<CurriculumDegreeProgram | null>(null);
+  /** Raw `academic_groups.study_form` values among the degreeProgram's groups; names the форма навчання. */
   private studyForms = signal<string[]>([]);
 
   /** True while the PDF is being produced — the fonts are fetched on the first export. */
@@ -132,7 +132,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
    * this one object.
    */
   plan = computed(() => buildCurriculumPlan(
-    this.items().map(toPlanItem), this.specialtySignal()?.degree ?? '', this.settings.limits()));
+    this.items().map(toPlanItem), this.degreeProgramSignal()?.degree ?? '', this.settings.limits()));
 
   showForm = signal(false);
   editingId = signal<string | null>(null);
@@ -168,11 +168,11 @@ export class CurriculumItemList implements OnInit, OnChanges {
     this.settings.ensureLoaded();
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
-    if (this.specialtyId) { this.loadItems(); this.loadStudyForms(); }
+    if (this.degreeProgramId) { this.loadItems(); this.loadStudyForms(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.specialtyId) { this.loadItems(); this.loadStudyForms(); }
+    if (this.initialized && this.degreeProgramId) { this.loadItems(); this.loadStudyForms(); }
   }
 
   private loadFacultyOptions() {
@@ -200,21 +200,21 @@ export class CurriculumItemList implements OnInit, OnChanges {
   }
 
   /**
-   * Reloads the course list, always scoped to the current specialty (via the courseConnection
-   * specialtyId filter, backed by the course_specialties table) — so only courses actually
-   * allowed for this specialty are ever offered, regardless of whether the optional
+   * Reloads the course list, always scoped to the current degreeProgram (via the courseConnection
+   * degreeProgramId filter, backed by the course_degreePrograms table) — so only courses actually
+   * allowed for this degreeProgram are ever offered, regardless of whether the optional
    * faculty/department sub-filter below is also set. Each option's label includes the course's
    * tags in parentheses (see courseLabel).
    */
   private loadCourseOptions() {
-    if (!this.specialtyId) return;
+    if (!this.degreeProgramId) return;
     const deptId = this.courseDepartmentFilter();
     const facultyId = this.courseFacultyFilter();
     const v = new GqlVars();
     const args = [
       v.arg('limit', 'Int!', 1000),
       v.arg('offset', 'Int!', 0),
-      v.arg('specialtyId', 'ID', this.specialtyId),
+      v.arg('degreeProgramId', 'ID', this.degreeProgramId),
       deptId ? v.arg('departmentId', 'ID', deptId) : v.optionalArg('facultyId', 'ID', facultyId)
     ].filter(Boolean).join(', ');
     const q = `${v.declaration()}{ courses { courseConnection(${args}) { nodes { id name courseType semester tags { tag } } } } }`;
@@ -293,16 +293,16 @@ export class CurriculumItemList implements OnInit, OnChanges {
   }
 
   private loadItems() {
-    if (!this.specialtyId) return;
+    if (!this.degreeProgramId) return;
     // courseType is selected for the printed plan: it is what sorts an item into «Обов'язкові» /
     // «Вибіркові компоненти», «Практична підготовка» or «Атестація», and the 25 % share of
     // ст. 62 ч. 1 п. 15 cannot be computed without it.
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes {
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes {
       id semester controlForm ectsCredits
       course { id name courseType semester tags { tag } faculty { id } department { id faculty { id } } }
       hours { id hourType hours }
     } } } }`;
-    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
+    this.gql.request(q, { degreeProgramId: this.degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.items.set(d.curriculumItems.curriculumItemConnection.nodes),
       error: (e) => this.error.set(e.message)
     });
@@ -310,13 +310,13 @@ export class CurriculumItemList implements OnInit, OnChanges {
 
   /**
    * The форма здобуття освіти named on the printed plan. The model records it per academic group
-   * (`academic_groups.study_form`), not per specialty, so it is read off the groups; a specialty
+   * (`academic_groups.study_form`), not per degreeProgram, so it is read off the groups; a degreeProgram
    * with no groups yet simply leaves that line of the form blank.
    */
   private loadStudyForms() {
-    if (!this.specialtyId) return;
-    const q = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) { nodes { id studyForm } } } }`;
-    this.gql.request(q, { specialtyId: this.specialtyId, limit: 500, offset: 0 }).subscribe({
+    if (!this.degreeProgramId) return;
+    const q = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { academicGroups { academicGroupConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) { nodes { id studyForm } } } }`;
+    this.gql.request(q, { degreeProgramId: this.degreeProgramId, limit: 500, offset: 0 }).subscribe({
       next: (d: any) => this.studyForms.set(
         d.academicGroups.academicGroupConnection.nodes.map((g: any) => g.studyForm).filter(Boolean)),
       error: () => this.studyForms.set([])
@@ -338,9 +338,9 @@ export class CurriculumItemList implements OnInit, OnChanges {
     this.form = { semester: '', controlForm: '', ectsCredits: '', courseId: '' };
     this.formHours = {};
     this.existingHourIds = {};
-    // Default to the specialty's own faculty, since courses for this curriculum most often
+    // Default to the degreeProgram's own faculty, since courses for this curriculum most often
     // belong to it; the user can still clear/change it to browse other faculties.
-    this.courseFacultyFilter.set(this.specialtyFacultyId ?? '');
+    this.courseFacultyFilter.set(this.degreeProgramFacultyId ?? '');
     this.courseDepartmentFilter.set('');
     this.fixedSemester.set(null);
     this.loadCourseOptions();
@@ -365,10 +365,10 @@ export class CurriculumItemList implements OnInit, OnChanges {
 
     // Pre-fill the faculty/department filters from the item's current course, so its own
     // department (or direct faculty) is already visible/selected rather than starting blank.
-    // Falls back to the specialty's own faculty if the course has neither.
+    // Falls back to the degreeProgram's own faculty if the course has neither.
     const deptId = item.course?.department?.id ?? '';
     const courseFacultyId = deptId ? (item.course?.department?.faculty?.id ?? '') : (item.course?.faculty?.id ?? '');
-    this.courseFacultyFilter.set(courseFacultyId || (this.specialtyFacultyId ?? ''));
+    this.courseFacultyFilter.set(courseFacultyId || (this.degreeProgramFacultyId ?? ''));
     this.courseDepartmentFilter.set(deptId);
     // Seeded from the row itself rather than waiting for the options: the faculty/department
     // sub-filter above may not offer this course at all, and the stored semester still has to be
@@ -399,7 +399,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
    * are needed here anymore.
    */
   save() {
-    if (!this.specialtyId) return;
+    if (!this.degreeProgramId) return;
     // The field is closed whenever a restriction applies, so this only fires on a position stored
     // before its course was restricted — which is exactly the one that must not be re-saved as it
     // stands.
@@ -407,7 +407,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
       this.formError.set(`Цю дисципліну можна планувати лише на семестр ${this.fixedSemester()}.`);
       return;
     }
-    const input: Record<string, any> = { specialtyId: this.specialtyId, hours: this.buildHoursInput() };
+    const input: Record<string, any> = { degreeProgramId: this.degreeProgramId, hours: this.buildHoursInput() };
     if (this.form['courseId']) input['courseId'] = this.form['courseId'];
     if (this.form['controlForm']) input['controlForm'] = this.form['controlForm'];
     if (this.form['semester'] !== undefined && this.form['semester'] !== '') input['semester'] = Number(this.form['semester']);
@@ -451,7 +451,7 @@ export class CurriculumItemList implements OnInit, OnChanges {
   // ── Printable plan ───────────────────────────────────────────────────────
 
   /**
-   * Builds the printable «Навчальний план» for this specialty and hands it to the browser as a
+   * Builds the printable «Навчальний план» for this degreeProgram and hands it to the browser as a
    * download.
    *
    * Everything happens on the client: the document is assembled from the plan already in memory by
@@ -464,8 +464,8 @@ export class CurriculumItemList implements OnInit, OnChanges {
    * already make: a user who never exports pays nothing for the ability to.
    */
   async downloadPlan() {
-    const specialty = this.specialtySignal();
-    if (!specialty || this.exporting() || !this.items().length) return;
+    const degreeProgram = this.degreeProgramSignal();
+    if (!degreeProgram || this.exporting() || !this.items().length) return;
 
     this.exporting.set(true);
     this.exportError.set('');
@@ -480,16 +480,16 @@ export class CurriculumItemList implements OnInit, OnChanges {
       const fonts = await loadReportFonts();
       const bytes = buildCurriculumReport({
         plan,
-        specialtyCode: specialty.code ?? '',
-        specialtyName: specialty.name ?? '',
-        degree: specialty.degree ?? '',
-        facultyName: specialty.faculty?.name ?? '',
+        degreeProgramCode: degreeProgram.code ?? '',
+        degreeProgramName: degreeProgram.name ?? '',
+        degree: degreeProgram.degree ?? '',
+        facultyName: degreeProgram.faculty?.name ?? '',
         studyForms: this.studyForms(),
         generatedAt,
         fonts
       });
       downloadPdf(bytes, curriculumReportFileName(
-        specialty.code ?? '', specialty.degree ?? '', academicYearLabel(generatedAt)));
+        degreeProgram.code ?? '', degreeProgram.degree ?? '', academicYearLabel(generatedAt)));
     } catch (e: unknown) {
       this.exportError.set(e instanceof Error ? e.message : 'Не вдалося сформувати PDF');
     } finally {

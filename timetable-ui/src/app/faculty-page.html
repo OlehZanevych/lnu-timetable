@@ -102,8 +102,8 @@
         <app-department-list [facultyId]="fid" />
       }
 
-      @case ('specialties') {
-        <app-specialty-list [facultyId]="fid" />
+      @case ('degreePrograms') {
+        <app-degree-program-list [facultyId]="fid" />
       }
 
       @case ('rooms') {
@@ -120,10 +120,10 @@
 
       @case ('academicGroups') {
         <div class="section-filter">
-          <label>Фільтр за спеціальністю</label>
-          <app-search-select [options]="specs()" [(ngModel)]="selectedSpecId" name="specFilter" placeholder="Усі спеціальності" />
+          <label>Фільтр за освітньою програмою</label>
+          <app-search-select [options]="progs()" [(ngModel)]="selectedProgId" name="progFilter" placeholder="Усі освітні програми" />
         </div>
-        <app-academic-group-list [facultyId]="facultyId" [specialtyId]="specFilterValue" />
+        <app-academic-group-list [facultyId]="facultyId" [degreeProgramId]="progFilterValue" />
       }
 
       @case ('combinedGroups') {
@@ -171,10 +171,10 @@
                              name="ttCourseYear" placeholder="Усі курси"
                              [ngModelOptions]="{ standalone: true }" />
 
-          <label>Спеціальність</label>
-          <app-search-select [options]="ttSpecialtyOptions()" [ngModel]="ttSpecialtyId()"
-                             (ngModelChange)="ttSpecialtyId.set($event); onTtScopeChange()"
-                             name="ttSpecialty" placeholder="Усі спеціальності"
+          <label>Освітня програма</label>
+          <app-search-select [options]="ttDegreeProgramOptions()" [ngModel]="ttDegreeProgramId()"
+                             (ngModelChange)="ttDegreeProgramId.set($event); onTtScopeChange()"
+                             name="ttDegreeProgram" placeholder="Усі освітні програми"
                              [ngModelOptions]="{ standalone: true }" />
 
           <label>Академічна група</label>
@@ -188,7 +188,7 @@
           <div class="card">
             <p class="muted">
               Жодна академічна група не відповідає обраним фільтрам. Це не порожній розклад
-              &mdash; таких груп немає. Змініть курс, спеціальність або групу.
+              &mdash; таких груп немає. Змініть курс, освітню програму або групу.
             </p>
           </div>
         } @else {

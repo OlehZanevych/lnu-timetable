@@ -123,7 +123,7 @@
                 <th class="num">Годин</th>
                 <th>Сем.</th>
                 <th>Курс</th>
-                <th>Спеціальність</th>
+                <th>Освітня програма</th>
                 <th>Академічні групи</th>
                 <th class="num">Занять</th>
               </tr>
@@ -141,7 +141,7 @@
                   <td class="num">{{ fmtNumber(row.hours) }}</td>
                   <td>{{ row.semester || '&mdash;' }}</td>
                   <td>{{ row.semester ? termLabelShort(row.semester) : '&mdash;' }}</td>
-                  <td>{{ row.specialtyName || '&mdash;' }}</td>
+                  <td>{{ row.degreeProgramName || '&mdash;' }}</td>
                   <td>{{ row.groupNames || '&mdash;' }}</td>
                   <td class="num">{{ row.scheduledClasses }}</td>
                 </tr>

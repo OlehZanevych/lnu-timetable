@@ -26,7 +26,7 @@ public enum AccessLevel {
 
     /**
      * Everything {@link #EDIT} allows, plus deleting. Separate from EDIT because deletion in this
-     * schema cascades: removing a Specialty takes its academic groups, curriculum items and
+     * schema cascades: removing a DegreeProgram takes its academic groups, curriculum items and
      * workloads with it, so it is a qualitatively different act from editing a field.
      */
     FULL("Повний доступ"),

@@ -6,7 +6,7 @@
   "faculties": 3,
   "departments": 3,
   "lecturers": 8,
-  "specialties": 4,
+  "degree_programs": 4,
   "curricula": 4,
   "courses": 11
  },

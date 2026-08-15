@@ -38,7 +38,7 @@ export interface StatWorkload {
   courseLabel: string;
   courseType: string;
   semester: number;
-  specialtyName: string;
+  degreeProgramName: string;
   teachingFormat: string;
   /** Lecturers assigned; each accrues the full hours. */
   lecturerIds: string[];
@@ -61,7 +61,7 @@ export interface StatItem {
   courseLabel: string;
   courseType: string;
   semester: number;
-  specialtyName: string;
+  degreeProgramName: string;
   hourType: string;
   /** Hours this lecturer accrues from this workload (already multiplied for individual work). */
   hours: number;
@@ -179,7 +179,7 @@ export function computeStats(input: StatsInput): LecturerStats[] {
         courseLabel: w.courseLabel,
         courseType: w.courseType,
         semester: w.semester,
-        specialtyName: w.specialtyName,
+        degreeProgramName: w.degreeProgramName,
         hourType: w.hourType,
         hours,
         teachingFormat: w.teachingFormat,

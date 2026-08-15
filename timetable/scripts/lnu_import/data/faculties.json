@@ -98,7 +98,7 @@
    "stats": {
     "departments": 8,
     "lecturers": 132,
-    "specialties": 10,
+    "degree_programs": 10,
     "courses": 503
    }
   },
@@ -114,7 +114,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 81,
-    "specialties": 7,
+    "degree_programs": 7,
     "courses": 367
    }
   },
@@ -130,7 +130,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 111,
-    "specialties": 7,
+    "degree_programs": 7,
     "courses": 326
    }
   },
@@ -146,7 +146,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 64,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -162,7 +162,7 @@
    "stats": {
     "departments": 13,
     "lecturers": 192,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -178,7 +178,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 71,
-    "specialties": 7,
+    "degree_programs": 7,
     "courses": 66
    }
   },
@@ -194,7 +194,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 106,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -210,7 +210,7 @@
    "stats": {
     "departments": 4,
     "lecturers": 25,
-    "specialties": 1,
+    "degree_programs": 1,
     "courses": 25
    }
   },
@@ -226,7 +226,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 67,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -242,7 +242,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 321,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -258,7 +258,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 75,
-    "specialties": 7,
+    "degree_programs": 7,
     "courses": 284
    }
   },
@@ -274,7 +274,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 152,
-    "specialties": 14,
+    "degree_programs": 14,
     "courses": 409
    }
   },
@@ -290,7 +290,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 133,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -316,7 +316,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 67,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -332,7 +332,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 151,
-    "specialties": 10,
+    "degree_programs": 10,
     "courses": 780
    }
   },
@@ -348,7 +348,7 @@
    "stats": {
     "departments": 6,
     "lecturers": 116,
-    "specialties": 8,
+    "degree_programs": 8,
     "courses": 198
    }
   },
@@ -364,7 +364,7 @@
    "stats": {
     "departments": 5,
     "lecturers": 55,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   },
@@ -380,7 +380,7 @@
    "stats": {
     "departments": 9,
     "lecturers": 175,
-    "specialties": 0,
+    "degree_programs": 0,
     "courses": 0
    }
   }

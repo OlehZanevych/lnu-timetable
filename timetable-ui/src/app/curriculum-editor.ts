@@ -16,7 +16,7 @@ import { courseLabel } from './course-label';
 const MAX_SEMESTER = 12;
 
 /**
- * Whether a course of the specialty is a component of its навчальний план in its own right.
+ * Whether a course of the degreeProgram is a component of its навчальний план in its own right.
  *
  * An `ELECTIVE` is not. It is one of the choices inside a `ELECTIVE_GROUP`, and the group is what
  * the plan reserves a slot for; which child fills that slot is decided a level down, on
@@ -74,7 +74,7 @@ interface ItemDraft {
   error: WritableSignal<string>;
 }
 
-/** A course of this specialty, with every curriculum item the specialty has for it. */
+/** A course of this degreeProgram, with every curriculum item the degreeProgram has for it. */
 interface CourseBlock {
   courseId: string;
   /** Raw course name, used for sorting. */
@@ -97,11 +97,11 @@ interface CourseBlock {
 }
 
 /**
- * Curriculum editor for a specialty: one block per course allowed for the specialty (via the
- * course_specialties join table), each holding its curriculum items as inline-editable semester
+ * Curriculum editor for a degreeProgram: one block per course allowed for the degreeProgram (via the
+ * course_degreePrograms join table), each holding its curriculum items as inline-editable semester
  * blocks, each of those holding a row per hour type.
  *
- * Sibling relationship to the other specialty subpages:
+ * Sibling relationship to the other degreeProgram subpages:
  *   - "Навчальні плани" (CurriculumItemList) is a flat table of the same curriculum_items, edited
  *     through a modal — good for scanning a whole plan, tedious for filling one course out. It
  *     carries the printable «Навчальний план»; this page carries only the summary strip they share.
@@ -109,7 +109,7 @@ interface CourseBlock {
  *     working_curriculum_items off each hours row. Its block markup is the visual model reused here.
  *   - "Робочі навчальні плани" (WorkingCurriculumView) reads those back as a document, per курс.
  *
- * Unlike both, this page is course-first: every course of the specialty is listed even when it has
+ * Unlike both, this page is course-first: every course of the degreeProgram is listed even when it has
  * no curriculum items yet, so gaps in the plan are visible rather than merely absent.
  *
  * No backend work is needed — createCurriculumItem/updateCurriculumItem already write the nested
@@ -124,9 +124,9 @@ export class CurriculumEditor implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
   private settings = inject(GlobalPropertiesService);
 
-  @Input() specialtyId!: string;
+  @Input() degreeProgramId!: string;
   /**
-   * Raw `specialties.degree`. A signal, not a plain field, because {@link plan} reads it inside a
+   * Raw `degreePrograms.degree`. A signal, not a plain field, because {@link plan} reads it inside a
    * `computed()` — see the zoneless note in the README.
    */
   @Input() set degree(value: string | null) { this.degreeSignal.set(value ?? ''); }
@@ -139,7 +139,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
   error = signal('');
   loading = signal(false);
 
-  /** Free-text course-name filter — a specialty can have 200+ courses. */
+  /** Free-text course-name filter — a degreeProgram can have 200+ courses. */
   courseFilter = signal('');
 
   /** Hides courses that have no curriculum items yet. */
@@ -202,11 +202,11 @@ export class CurriculumEditor implements OnInit, OnChanges {
   ngOnInit() {
     this.initialized = true;
     this.settings.ensureLoaded();
-    if (this.specialtyId) this.load();
+    if (this.degreeProgramId) this.load();
   }
 
   ngOnChanges() {
-    if (this.initialized && this.specialtyId) this.load();
+    if (this.initialized && this.degreeProgramId) this.load();
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -217,22 +217,22 @@ export class CurriculumEditor implements OnInit, OnChanges {
    * discard work in progress elsewhere on the page.
    */
   private load(keepCourseId: string | null = null) {
-    if (!this.specialtyId) return;
+    if (!this.degreeProgramId) return;
     this.loading.set(true);
 
     // courseType comes along for the summary above the page: it is what tells обов'язкові from
     // вибіркові, and so what the 25 % of ст. 62 ч. 1 п. 15 is measured on.
-    const coursesQuery = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { courses { courseConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) {
+    const coursesQuery = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { courses { courseConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) {
       nodes { id name courseType semester tags { tag } }
     } } }`;
     // ELECTIVE courses are deliberately not among them — see `isPlannable`.
-    const itemsQuery = `query($specialtyId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, specialtyId: $specialtyId) {
+    const itemsQuery = `query($degreeProgramId: ID, $limit: Int!, $offset: Int!) { curriculumItems { curriculumItemConnection(limit: $limit, offset: $offset, degreeProgramId: $degreeProgramId) {
       nodes { id semester controlForm ectsCredits course { id } hours { id hourType hours } }
     } } }`;
 
     forkJoin({
-      courses: this.gql.request(coursesQuery, { specialtyId: this.specialtyId, limit: 1000, offset: 0 }),
-      items: this.gql.request(itemsQuery, { specialtyId: this.specialtyId, limit: 1000, offset: 0 })
+      courses: this.gql.request(coursesQuery, { degreeProgramId: this.degreeProgramId, limit: 1000, offset: 0 }),
+      items: this.gql.request(itemsQuery, { degreeProgramId: this.degreeProgramId, limit: 1000, offset: 0 })
     }).subscribe({
       next: ({ courses, items }: any) => {
         const dirtyBefore = new Map<string, CourseBlock>();
@@ -483,7 +483,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
     if (problem) { item.error.set(problem); return; }
 
     const input: Record<string, any> = {
-      specialtyId: this.specialtyId,
+      degreeProgramId: this.degreeProgramId,
       courseId: block.courseId,
       semester: Number(item.semester()),
       controlForm: item.controlForm(),
@@ -548,7 +548,7 @@ export class CurriculumEditor implements OnInit, OnChanges {
   /**
    * Duplicate semesters are already unreachable through the dropdown, but two *new* blocks can be
    * added before either is saved — so the check is repeated here rather than trusted. The database
-   * backs it up with UNIQUE (course_id, specialty_id, semester).
+   * backs it up with UNIQUE (course_id, degreeProgram_id, semester).
    */
   private validate(block: CourseBlock, item: ItemDraft): string {
     if (!item.semester()) return 'Оберіть семестр.';

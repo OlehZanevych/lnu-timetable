@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * Assignment of one or more lecturers to deliver a working-curriculum-item (or a
  * combined-working-curriculum-item, for lecturers who simultaneously teach several working
- * curriculum items at once, e.g. groups from different specialties attending one shared lecture)
+ * curriculum items at once, e.g. groups from different degree programmes attending one shared lecture)
  * to one or more academic groups and/or combined groups.
  */
 @Data

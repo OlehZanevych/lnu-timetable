@@ -112,7 +112,7 @@ interface WorkingItem {
       semester: number;
       controlForm: string;
       ectsCredits?: number;
-      specialty: { id: string; name: string };
+      degreeProgram: { id: string; name: string };
       course: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
@@ -127,7 +127,7 @@ interface CombinedMember {
     hours: number;
     curriculumItem: {
       semester: number;
-      specialty: { id: string; name: string };
+      degreeProgram: { id: string; name: string };
       course: { id: string; name: string; semester?: number | null; tags?: CourseTagRef[] | null };
     };
   };
@@ -148,13 +148,13 @@ interface HoursGroup {
   items: WorkingItem[];
 }
 
-/** A curriculum item block (semester / specialty / discipline / control form / ECTS), grouping its hours sub-blocks. */
+/** A curriculum item block (semester / degreeProgram / discipline / control form / ECTS), grouping its hours sub-blocks. */
 interface CurriculumItemGroup {
   id: string;
   semester: number;
   controlForm: string;
   ectsCredits?: number;
-  specialty: { id: string; name: string };
+  degreeProgram: { id: string; name: string };
   course: { id: string; name: string; courseType: string; semester?: number | null; tags?: CourseTagRef[] | null };
   hoursGroups: HoursGroup[];
 }
@@ -178,7 +178,7 @@ const HOUR_TYPE_ORDER = ['LECTURE', 'PRACTICAL', 'LAB', 'CONSULTATION', 'ASSESSM
  * Working curriculum items that have been merged into a combined_working_curriculum_item (see the
  * "Об'єднані позиції РНП" subpage) are handled separately, in a dedicated section above the tree,
  * and excluded from the tree itself to avoid showing the same assignment twice: their workload is
- * assigned once against the combined item, covering every merged specialty at once.
+ * assigned once against the combined item, covering every merged degreeProgram at once.
  */
 @Component({
   selector: 'app-lecturer-workload-list',
@@ -345,7 +345,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         id hourType hours
         curriculumItem {
           id semester controlForm ectsCredits
-          specialty { id name }
+          degreeProgram { id name }
           course { id name courseType semester tags { tag } }
         }
       }
@@ -379,7 +379,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
         academicGroups { id name }
         curriculumItemHours {
           hourType hours
-          curriculumItem { semester specialty { id name } course { id name semester tags { tag } } }
+          curriculumItem { semester degreeProgram { id name } course { id name semester tags { tag } } }
         }
       }
       workloads {
@@ -410,7 +410,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
       if (!group) {
         group = {
           id: ci.id, semester: ci.semester, controlForm: ci.controlForm, ectsCredits: ci.ectsCredits,
-          specialty: ci.specialty, course: ci.course, hoursGroups: []
+          degreeProgram: ci.degreeProgram, course: ci.course, hoursGroups: []
         };
         byItem.set(ci.id, group);
       }
@@ -423,7 +423,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     }
 
     const groups = Array.from(byItem.values());
-    groups.sort((a, b) => a.semester - b.semester || compareUk(a.specialty.name, b.specialty.name) || compareUk(a.course.name, b.course.name));
+    groups.sort((a, b) => a.semester - b.semester || compareUk(a.degreeProgram.name, b.degreeProgram.name) || compareUk(a.course.name, b.course.name));
     for (const g of groups) {
       g.hoursGroups.sort((a, b) => HOUR_TYPE_ORDER.indexOf(a.hourType) - HOUR_TYPE_ORDER.indexOf(b.hourType));
     }
@@ -714,7 +714,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   combinedMemberLabel(m: CombinedMember): string {
-    return `${m.curriculumItemHours.curriculumItem.specialty.name} (${this.academicGroupNames(m.academicGroups)})`;
+    return `${m.curriculumItemHours.curriculumItem.degreeProgram.name} (${this.academicGroupNames(m.academicGroups)})`;
   }
 
   combinedMembersLabel(c: CombinedItem): string {
@@ -767,7 +767,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   /**
-   * Same modal, but for a combined item: the assignment covers every merged specialty at once, so
+   * Same modal, but for a combined item: the assignment covers every merged degreeProgram at once, so
    * the available academic groups are the union across all its members, and "Об'єднані групи"
    * doesn't apply (it's a per-item SEPARATELY-teaching concept — see canUseCombinedGroups).
    */

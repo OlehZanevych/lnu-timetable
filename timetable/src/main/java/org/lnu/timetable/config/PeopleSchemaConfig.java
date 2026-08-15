@@ -165,22 +165,22 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
     private void configureAcademicGroup(SchemaDefinition s) {
         s.type(AcademicGroup.class)
             .fields("name", "courseYear", "studyForm", "studentsCount")
-            .relation("specialty").relation("students").relation("combinedGroups")
+            .relation("degreeProgram").relation("students").relation("combinedGroups")
             .relation("timetableConstraints");
 
         // academic_groups has no faculty_id of its own — a group's faculty is only known through
-        // its specialty — so facultyId is an EXISTS subquery rather than a plain column filter
+        // its degree programme — so facultyId is an EXISTS subquery rather than a plain column filter
         // (see QueryDefinition.RelationFilter; same approach as workingCurriculumItemConnection's
         // facultyId, which reaches its faculty through departments).
         s.query("academicGroupConnection").entity(AcademicGroup.class).connection().orderBy("name")
-            .filter("specialtyId", "specialty_id")
+            .filter("degreeProgramId", "degree_program_id")
             .relationFilter("facultyId",
-                "EXISTS (SELECT 1 FROM specialties sp " +
-                "WHERE sp.id = academic_groups.specialty_id AND sp.faculty_id = :facultyId)");
+                "EXISTS (SELECT 1 FROM degree_programs dp " +
+                "WHERE dp.id = academic_groups.degree_program_id AND dp.faculty_id = :facultyId)");
         s.query("academicGroup").entity(AcademicGroup.class).findById();
 
         s.mutation("createAcademicGroup").entity(AcademicGroup.class).create()
-            .inputFields("name", "courseYear", "studyForm", "studentsCount", "specialtyId")
+            .inputFields("name", "courseYear", "studyForm", "studentsCount", "degreeProgramId")
             .nestedList("timetableConstraints", AcademicGroupTimetableConstraint.class, "academicGroupId",
                 "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
@@ -188,7 +188,7 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateAcademicGroup").entity(AcademicGroup.class).update()
-            .inputFields("name", "courseYear", "studyForm", "studentsCount", "specialtyId")
+            .inputFields("name", "courseYear", "studyForm", "studentsCount", "degreeProgramId")
             .nestedList("timetableConstraints", AcademicGroupTimetableConstraint.class, "academicGroupId",
                 "constraintType", "dayOfWeek", "constraintValue")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
@@ -221,14 +221,14 @@ public class PeopleSchemaConfig implements GraphQLSchemaConfig {
             .relation("academicGroups").relation("workloads");
 
         // A combined group has no faculty of its own — its faculty is whatever its member academic
-        // groups' specialties belong to. EXISTS gives "any member belongs to this faculty", so a
+        // groups' degree programmes belong to. EXISTS gives "any member belongs to this faculty", so a
         // group spanning two faculties shows up under both, which is the point of combining them.
         s.query("combinedGroupConnection").entity(CombinedGroup.class).connection().orderBy("name")
             .relationFilter("facultyId",
                 "EXISTS (SELECT 1 FROM combined_group_academic_groups cga " +
                 "JOIN academic_groups ag ON ag.id = cga.academic_group_id " +
-                "JOIN specialties sp ON sp.id = ag.specialty_id " +
-                "WHERE cga.combined_group_id = combined_groups.id AND sp.faculty_id = :facultyId)");
+                "JOIN degree_programs dp ON dp.id = ag.degree_program_id " +
+                "WHERE cga.combined_group_id = combined_groups.id AND dp.faculty_id = :facultyId)");
         s.query("combinedGroup").entity(CombinedGroup.class).findById();
 
         s.mutation("createCombinedGroup").entity(CombinedGroup.class).create()

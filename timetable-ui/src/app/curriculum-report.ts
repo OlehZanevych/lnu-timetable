@@ -1,5 +1,5 @@
 /**
- * The printable «НАВЧАЛЬНИЙ ПЛАН» of a specialty — the sheet a вчена рада approves and a
+ * The printable «НАВЧАЛЬНИЙ ПЛАН» of a degreeProgram — the sheet a вчена рада approves and a
  * навчальний відділ files, built from exactly the rows the «Навчальні плани» tab shows.
  *
  * Framework-free, like `workload-report.ts`: it takes the plan `curriculum-plan.ts` computed plus a
@@ -90,15 +90,15 @@ const studyFormLabel = (v: string): string =>
 export interface CurriculumReportInput {
   /** The plan as computed by `buildCurriculumPlan` — the same object the tab renders its summary from. */
   plan: CurriculumPlan;
-  specialtyCode: string;
-  specialtyName: string;
-  /** Raw `specialties.degree` enum value. */
+  degreeProgramCode: string;
+  degreeProgramName: string;
+  /** Raw `degreePrograms.degree` enum value. */
   degree: string;
   facultyName: string;
   /**
-   * Raw `academic_groups.study_form` values found among the specialty's groups. One value names the
+   * Raw `academic_groups.study_form` values found among the degreeProgram's groups. One value names the
    * form of study; several are listed; none leaves the row for a hand to fill in, since the model
-   * records the form per group rather than per specialty.
+   * records the form per group rather than per degreeProgram.
    */
   studyForms: string[];
   /** Passed in rather than read, so the same input always yields the same bytes. */
@@ -109,7 +109,7 @@ export interface CurriculumReportInput {
 /** «Навчальний_план_126_бакалавр_2026-2027.pdf» — code first, so a folder of these sorts usefully. */
 export function curriculumReportFileName(code: string, degree: string, academicYear: string): string {
   const safe = (text: string) => text.trim().replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-|-$/g, '');
-  const parts = [safe(code) || 'спеціальність', safe(degreeLabel(degree).toLowerCase()),
+  const parts = [safe(code) || 'освітня-програма', safe(degreeLabel(degree).toLowerCase()),
                  academicYear.replace('/', '-')];
   return `Навчальний_план_${parts.join('_')}.pdf`;
 }
@@ -141,7 +141,7 @@ export function buildCurriculumReport(input: CurriculumReportInput): Uint8Array 
     fonts: { regular: fonts.regular, bold: fonts.bold },
     defaultFont: 'regular',
     defaultSize: 11,
-    title: `Навчальний план — ${input.specialtyCode} ${input.specialtyName} — ${academicYear}`,
+    title: `Навчальний план — ${input.degreeProgramCode} ${input.degreeProgramName} — ${academicYear}`,
     author: UNIVERSITY_NAME,
     subject: `${degreeLabel(input.degree)}, ${input.facultyName}`,
     createdAt: input.generatedAt
@@ -250,9 +250,9 @@ function drawIdentity(doc: PdfDocument, input: CurriculumReportInput, academicYe
     padY: 1.6,
     keepTogether: true,
     rows: [
-      { cells: [label('Галузь знань'), value(fieldOfStudyLabel(input.specialtyCode)),
+      { cells: [label('Галузь знань'), value(fieldOfStudyLabel(input.degreeProgramCode)),
                 label('Рівень НРК'), value(NQF_LEVEL[input.degree] ?? '')] },
-      { cells: [label('Спеціальність'), value(`${input.specialtyCode} ${input.specialtyName}`.trim()),
+      { cells: [label('Освітня програма'), value(`${input.degreeProgramCode} ${input.degreeProgramName}`.trim()),
                 label('Семестрів'), value(plan.lastSemester ? String(plan.lastSemester) : '')] },
       { cells: [label('Освітній ступінь'), value(degreeLabel(input.degree)),
                 label('Курсів'), value(plan.years ? String(plan.years) : '')] },
@@ -270,15 +270,15 @@ function drawIdentity(doc: PdfDocument, input: CurriculumReportInput, academicYe
 }
 
 /**
- * A specialty code carries its галузь знань in its own prefix — «126» sits under «12», and a code
+ * A degreeProgram code carries its галузь знань in its own prefix — «126» sits under «12», and a code
  * from the new list of ПКМУ № 1021 від 30.08.2024 under a letter («І7.01» under «І»). The branch
  * *names*, though, live in that постанова and in ПКМУ № 266/2015 before it, and this system stores
  * neither. Printing the prefix is honest; inventing a name from a table that goes stale the next
  * time the Cabinet amends the list is not, so the row is left for a hand to complete when the code
  * says nothing.
  */
-function fieldOfStudyLabel(specialtyCode: string): string {
-  const code = (specialtyCode ?? '').trim();
+function fieldOfStudyLabel(degreeProgramCode: string): string {
+  const code = (degreeProgramCode ?? '').trim();
   return (code.match(/^\d{2}/) ?? code.match(/^[А-ЯҐЄІЇA-Z]\d?/) ?? [''])[0];
 }
 
@@ -773,7 +773,7 @@ function drawSignatures(doc: PdfDocument): void {
  */
 function drawPageFurniture(doc: PdfDocument, input: CurriculumReportInput, academicYear: string): void {
   const stamp = `Сформовано автоматично ${fmtDate(input.generatedAt)} · ${SYSTEM_NAME}`;
-  const trail = `${input.specialtyCode} ${input.specialtyName} · ` +
+  const trail = `${input.degreeProgramCode} ${input.degreeProgramName} · ` +
                 `${degreeLabel(input.degree).toLowerCase()} · ${academicYear} н. р.`;
   for (let page = 0; page < doc.pageCount; page++) {
     doc.onPage(page, () => {

@@ -137,15 +137,16 @@ what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF 
 `pg_type` and `ADD COLUMN IF NOT EXISTS`, V6 by both — `ADD COLUMN IF NOT EXISTS` for the column and
 `pg_constraint` for the `CHECK`, since there is no `ADD CONSTRAINT IF NOT EXISTS` — and V7 by
 `IF NOT EXISTS` on every object it creates, a `pg_type` guard around its `CREATE TYPE`, and
-`ON CONFLICT (name) DO NOTHING` on the `global_properties` rows it seeds.
+`ON CONFLICT (name) DO NOTHING` on the `global_properties` rows it seeds, and V8 by guarding every
+rename on the old name still being there.
 
 ### `V1__delete_curriculum_items_on_elective_courses.sql`
 
 An `ELECTIVE_GROUP` is the slot a навчальний план reserves; which of its children fills that slot is
 decided a level down, on `working_curriculum_items.course_id`. A `curriculum_items` row whose own
 course is an `ELECTIVE` is therefore a position the model has no place for — and `data.sql` carries
-28 of them, across 6 specialties. They put the elective on the plan as a top-level component beside
-its own група, and where the група carried the same hours they were counted twice: toward the
+28 of them, across 6 degree programmes. They put the elective on the plan as a top-level component
+beside its own група, and where the група carried the same hours they were counted twice: toward the
 programme's volume and toward the 25 % elective share alike.
 
 The delete is **not** cheap, and the migration says so in a `NOTICE` before it runs. None of the 28
@@ -153,9 +154,9 @@ is an empty leftover: every one is delivered, so `ON DELETE CASCADE` carries the
 `curriculum_items` → `curriculum_item_hours` → `working_curriculum_items` → `lecturer_workloads` →
 `timetable_entries` — 41, 43, 43 and 47 rows against `data.sql`. That teaching is real and has to be
 re-entered under the група's own position by hand; the migration cannot move it, because 19 of the
-28 have no група position in their specialty at all and one has a position lacking the hour types
-the child carries. Only 8 of 28 could have been re-pointed, and a migration that fixed 8 and left 20
-would be harder to reason about than one that removes all 28 and reports what it removed.
+28 have no група position in their degree programme at all and one has a position lacking the hour
+types the child carries. Only 8 of 28 could have been re-pointed, and a migration that fixed 8 and
+left 20 would be harder to reason about than one that removes all 28 and reports what it removed.
 
 `data.sql` has since been re-exported from a database this migration had already cleaned, so it now
 carries none of those rows and V1 matches nothing on a fresh install: its `NOTICE` reports 0 and the
@@ -289,6 +290,42 @@ already carries all of it: `IF NOT EXISTS` on every object, a `pg_type` guard ar
 (Postgres has no `CREATE TYPE IF NOT EXISTS`), `ON CONFLICT (name) DO NOTHING` on the property rows,
 and `DROP NOT NULL`, which is naturally idempotent.
 
+### `V8__rename_specialties_to_degree_programs.sql`
+
+Renames `specialties` to `degree_programs`, and with it `academic_groups.specialty_id`,
+`curriculum_items.specialty_id` and the whole `course_specialties` join table.
+
+The entity was misnamed, and the misnaming was load-bearing in the one place it is read most. A
+**спеціальність** is the broader thing — a code and a name in the national classifier, 122
+«Комп'ютерні науки» — and an institution may run several **освітні програми** under one of them.
+What this table holds, and what every `curriculum_items` row is written against, is the освітня
+програма: `code` still records the specialty the programme sits under, but the row is the
+programme. Everything downstream — the групи enrolled in it, its навчальний план, the
+навантаження and the розклад derived from that plan — hangs off the programme, so the join every
+screen walks was saying the wrong word.
+
+It also rewrites `permissions.resource_type` from `SPECIALTY` to `DEGREE_PROGRAM`. That value is
+the entity's simple name in UPPER_SNAKE_CASE, derived from the class at startup by
+`EntityMetadataRegistry` (see [The permission model](#the-permission-model)) — so renaming the Java
+class changes what the service looks for, and a grant still saying `SPECIALTY` would match nothing.
+It would not error; a deanery would simply find its programmes read-only one morning, which is the
+kind of failure worth a `UPDATE` in a migration rather than a note in a release.
+
+What it renames beyond the table and the columns is the reason it is longer than it looks:
+constraints, their backing indexes and the sequence. Postgres carries none of those along with a
+`RENAME`, so without it a database carried forward would keep `specialties_pkey` and
+`curriculum_items_specialty_id_fkey` while a database freshly built from `schema.sql` would call
+them `degree_programs_pkey` and `curriculum_items_degree_program_id_fkey` — two schemas that are
+the same shape and do not compare equal, which is exactly the drift Flyway exists to prevent.
+Renaming a `PRIMARY KEY` or `UNIQUE` constraint renames its index with it, so the indexes need no
+statement of their own.
+
+Idempotent by guarding every step on the old name still being present — `ALTER TABLE IF EXISTS` and
+`ALTER SEQUENCE IF EXISTS` where Postgres offers them, an `information_schema.columns` test around
+each `RENAME COLUMN` and a `pg_constraint` test around each `RENAME CONSTRAINT` where it does not.
+After `reset_db.sh`, `schema.sql` has already created everything under the new names and this
+migration finds nothing to do.
+
 ---
 
 ## Run
@@ -388,15 +425,15 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 |---|---|---|
 | `Building` | `buildings` | → faculties, rooms, travel times |
 | `BuildingTravelTime` | `building_travel_times` | whole minutes (`CHECK (minutes >= 0)`); → fromBuilding, toBuilding, both `ON DELETE CASCADE`, so removing a building takes its journeys with it. Directed: (from, to) and (to, from) may differ, and `CHECK` forbids a row from a building to itself. Both ends are `@PermissionParent`s, so a grant over either building covers the journey between them |
-| `Faculty` | `faculties` | → building?, departments, specialties, rooms |
+| `Faculty` | `faculties` | → building?, departments, degreePrograms, rooms |
 | `Department` (кафедра) | `departments` | → faculty, lecturers, courses |
-| `Specialty` (спеціальність) | `specialties` | code, degree; → faculty, groups, curriculum items |
-| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`), optional `semester` — when set, the only semester the discipline may be planned for, enforced by the client on both curriculum screens and printed before its tags wherever it is named (see [`V6`](#v6__course_semestersql)); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N specialties this course may be added to a curriculum for (`course_specialties`), 1-N tags |
+| `DegreeProgram` (освітня програма) | `degree_programs` | code, degree; → faculty, groups, curriculum items |
+| `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`), optional `semester` — when set, the only semester the discipline may be planned for, enforced by the client on both curriculum screens and printed before its tags wherever it is named (see [`V6`](#v6__course_semestersql)); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N degree programmes this course may be added to a curriculum for (`course_degree_programs`), 1-N tags |
 | `CourseTag` | `course_tags` | free-form label shown after the course's name (e.g. "англійською"); → course |
-| `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **specialty directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
+| `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **degree programme directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
 | `CurriculumItemHours` | `curriculum_item_hours` | hour type (LECTURE/PRACTICAL/LAB/CONSULTATION/ASSESSMENT/INDEPENDENT_WORK) + count; → curriculum item, working curriculum items |
 | `WorkingCurriculumItem` (робочий навчальний план) | `working_curriculum_items` | lecturer count, teaching format; → curriculum item hours, department, optional elective course, M-N academic groups, M-N combined working curriculum items |
-| `CombinedWorkingCurriculumItem` | `combined_working_curriculum_items` | pure M-N hub, no scalar fields of its own; bundles several `WorkingCurriculumItem`s that share course/semester/hour-type (e.g. one shared lecture across specialties) so one `LecturerWorkload` can cover all of them at once; → M-N working curriculum items, workloads |
+| `CombinedWorkingCurriculumItem` | `combined_working_curriculum_items` | pure M-N hub, no scalar fields of its own; bundles several `WorkingCurriculumItem`s that share course/semester/hour-type (e.g. one shared lecture across degree programmes) so one `LecturerWorkload` can cover all of them at once; → M-N working curriculum items, workloads |
 | `Lecturer` (викладач) | `lecturers` | position, degree; → department, workloads, workloadConstraints, timetableConstraints |
 | `LecturerWorkloadConstraint` | `lecturer_workload_constraints` | one (type, value) workload restriction; no standalone queries/mutations — written through `Lecturer`'s `workloadConstraints` nested list; → lecturer |
 | `LecturerTimetableConstraint` | `lecturer_timetable_constraints` | one *scheduling* restriction — when this lecturer may be given classes; no standalone queries/mutations — written through `Lecturer`'s `timetableConstraints` nested list; → lecturer. See [Scheduling constraints](#scheduling-constraints) |
@@ -405,7 +442,7 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `LecturerWorkloadCandidateConstraint` | `lecturer_workload_candidate_constraints` | `MIN_STUDENTS` (desired) / `MAX_STUDENTS` (ceiling) for one candidate, used only by `INDIVIDUALLY`-taught items; no standalone queries/mutations — written through `LecturerWorkloadCandidate`'s `constraints` nested list; → candidate |
 | `LecturerWorkloadStudent` | `lecturer_workload_students` | one lecturer↔student pairing of an `INDIVIDUALLY`-taught workload; no standalone queries/mutations — written through `LecturerWorkload`'s `studentAssignments` nested list; → workload, lecturer, student |
 | `Student` | `students` | first/middle/last name (по батькові optional), record book number; → academic group |
-| `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → specialty, students, M-N combined groups, timetableConstraints |
+| `AcademicGroup` (ПМі-31) | `academic_groups` | year, study form; → degreeProgram, students, M-N combined groups, timetableConstraints |
 | `AcademicGroupTimetableConstraint` | `academic_group_timetable_constraints` | as `LecturerTimetableConstraint`, for a group; written through `AcademicGroup`'s `timetableConstraints` nested list |
 | `CombinedGroup` (об'єднана група) | `combined_groups` | M-N academic groups (electives) |
 | `Room` (аудиторія) | `rooms` | capacity, kind; → faculty?, building?, timetableConstraints |
@@ -418,10 +455,10 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 
 Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all supported.
 Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbreviation`,
-`departments.abbreviation`, `specialties(name, degree)`, `academic_groups.name`,
+`departments.abbreviation`, `degree_programs(name, degree)`, `academic_groups.name`,
 `lecturers.email`, `building_travel_times(from_building_id, to_building_id)` (one figure per
 ordered pair; the pair was this table's primary key until V3 gave it a surrogate `id`),
-`curriculum_items(course_id, specialty_id, semester)`,
+`curriculum_items(course_id, degree_program_id, semester)`,
 `curriculum_item_hours(curriculum_item_id, hour_type)`, `course_tags(course_id, tag)`,
 `lecturer_workload_students(lecturer_workload_id, student_id)` (within one workload a student has
 exactly one supervising lecturer), `lecturer_workload_constraints(lecturer_id, constraint_type)`
@@ -448,9 +485,9 @@ the predicate only narrows what is stored, it does not change what collides.)
 > the newer indexes follow, so all of them read the same way.
 
 > **History note**: earlier versions of this service modeled a *curriculum* as its own
-> entity (`Curriculum` / `curricula`, one per specialty) with `CurriculumItem` pointing at
-> it. Since a specialty only ever has one curriculum, that indirection was removed —
-> `CurriculumItem` now references `Specialty` directly via `specialty_id`.
+> entity (`Curriculum` / `curricula`, one per degree programme) with `CurriculumItem` pointing at
+> it. Since a degree programme only ever has one curriculum, that indirection was removed —
+> `CurriculumItem` now references `DegreeProgram` directly via `degree_program_id`.
 
 ### Enumerated columns
 
@@ -504,7 +541,7 @@ last_name  VARCHAR(64) COLLATE ukrainian NOT NULL,
 Because the collation lives on the *column*, a plain `ORDER BY last_name` — which is all the
 generated SQL ever emits — sorts correctly, and any future `.orderBy(...)` on one of those columns
 is right by default with no framework changes. It is applied to the name-like columns of
-`buildings`, `faculties`, `departments`, `specialties`, `academic_degrees`, `lecturers`,
+`buildings`, `faculties`, `departments`, `degree_programs`, `academic_degrees`, `lecturers`,
 `academic_groups`, `combined_groups`, `students`, `courses`, `course_tags` and `rooms`, and
 deliberately **not** to e-mail/phone/website/postal codes, record book numbers or the auth tables.
 
@@ -572,7 +609,7 @@ there is nothing to query or mutate directly:
 
 | Join table | Links | Exposed as |
 |---|---|---|
-| `course_specialties` | `Course` ↔ `Specialty` | `Course.specialties`, `specialtyIds` input |
+| `course_degree_programs` | `Course` ↔ `DegreeProgram` | `Course.degreePrograms`, `degreeProgramIds` input |
 | `course_tags` *(has an entity)* | `Course` → `CourseTag` | nested list, see `CourseTag` |
 | `combined_group_academic_groups` | `CombinedGroup` ↔ `AcademicGroup` | `CombinedGroup.academicGroups` |
 | `working_curriculum_item_groups` | `WorkingCurriculumItem` ↔ `AcademicGroup` | `academicGroupIds` input |
@@ -877,7 +914,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 | Entity | Cascades down from (any one path is sufficient) |
 |---|---|
 | `Faculty` | `Building`? |
-| `Department`, `Specialty` | `Faculty` |
+| `Department`, `DegreeProgram` | `Faculty` |
 | `Room` | `Faculty`?, `Building`? |
 | `RoomTimetableConstraint` | `Room` |
 | `RoomGroup` | `Faculty`?, `Department`? |
@@ -887,11 +924,11 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `CourseTag` | `Course` |
 | `Lecturer` | `Department` |
 | `LecturerWorkloadConstraint`, `LecturerTimetableConstraint` | `Lecturer` |
-| `AcademicGroup` | `Specialty` |
+| `AcademicGroup` | `DegreeProgram` |
 | `AcademicGroupTimetableConstraint` | `AcademicGroup` |
 | `CombinedGroup` | any member `AcademicGroup` (via `combined_group_academic_groups`) |
 | `Student` | `AcademicGroup` |
-| `CurriculumItem` | `Specialty`, `Course` |
+| `CurriculumItem` | `DegreeProgram`, `Course` |
 | `CurriculumItemHours` | `CurriculumItem` |
 | `WorkingCurriculumItem` | `Department`, `CurriculumItemHours`, elective `Course`? |
 | `CombinedWorkingCurriculumItem` | any member `WorkingCurriculumItem` (via `combined_working_curriculum_item_members`) |
@@ -910,7 +947,7 @@ reason.
 
 `?` marks a `nullable = true` edge (the FK may be unset, in which case that path just doesn't
 apply). Following these edges upward from any row yields the full set of resources whose grant
-would cover it — e.g. a grant on a `Faculty` covers its `Department`s, `Specialty`s, `Room`s,
+would cover it — e.g. a grant on a `Faculty` covers its `Department`s, `DegreeProgram`s, `Room`s,
 `Course`s, and — by walking further — every `Lecturer`, `AcademicGroup`, `CurriculumItem`,
 `WorkingCurriculumItem`, `LecturerWorkload` and `TimetableEntry` beneath them, exactly matching the
 cascade the product spec asked for.
@@ -984,14 +1021,14 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     public void configure(SchemaDefinition s) {
         s.type(CurriculumItem.class)
             .fields("semester", "controlForm", "ectsCredits")
-            .relation("specialty").relation("course").relation("hours");
+            .relation("degreeProgram").relation("course").relation("hours");
 
         s.query("curriculumItemConnection").entity(CurriculumItem.class).connection()
-            .orderBy("semester").filter("specialtyId", "specialty_id");
+            .orderBy("semester").filter("degreeProgramId", "degree_program_id");
         s.query("curriculumItem").entity(CurriculumItem.class).findById();
 
         s.mutation("createCurriculumItem").entity(CurriculumItem.class).create()
-            .inputFields("semester", "controlForm", "ectsCredits", "specialtyId", "courseId")
+            .inputFields("semester", "controlForm", "ectsCredits", "degreeProgramId", "courseId")
             .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -1068,8 +1105,8 @@ The same mechanism scopes the two "people" connections to a faculty, neither of 
 
 | Connection | Argument | Reached through |
 |---|---|---|
-| `academicGroupConnection` | `facultyId` | `academic_groups.specialty_id → specialties.faculty_id` |
-| `combinedGroupConnection` | `facultyId` | `combined_group_academic_groups → academic_groups → specialties.faculty_id` |
+| `academicGroupConnection` | `facultyId` | `academic_groups.degree_program_id → degree_programs.faculty_id` |
+| `combinedGroupConnection` | `facultyId` | `combined_group_academic_groups → academic_groups → degree_programs.faculty_id` |
 | `workingCurriculumItemConnection` | `facultyId`, `semesterParity`, `courseId` | `working_curriculum_items.department_id → departments.faculty_id`; `curriculum_item_hours → curriculum_items.semester`; `courseId` ORs the item's own `course_id` (the elective chosen) with `curriculum_item_hours → curriculum_items.course_id` (the discipline delivered) |
 | `combinedWorkingCurriculumItemConnection` | `facultyId`, `departmentIds`, `semesterParity` | member `working_curriculum_items` |
 | `lecturerConnection` | `facultyId` | `lecturers.department_id → departments.faculty_id` |
@@ -1089,8 +1126,8 @@ combining them. `EXISTS` (rather than a join in the filter) is also what keeps a
 matching members from being returned more than once.
 
 Filter arguments compose: the frontend's faculty page passes `facultyId` *and* an optional
-`specialtyId`, so clearing its specialty sub-filter narrows to "every group of this faculty"
-instead of widening to every group in the university.
+`degreeProgramId`, so clearing its degree programme sub-filter narrows to "every group of this
+faculty" instead of widening to every group in the university.
 
 ### Where each entity is declared
 
@@ -1099,7 +1136,7 @@ method each, split by subject area:
 
 | Config class | Entities declared |
 |---|---|
-| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `Specialty`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup`, `AbstractRoom` |
+| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `DegreeProgram`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup`, `AbstractRoom` |
 | `CurriculumSchemaConfig` | `Course`, `CourseTag`\*, `CurriculumItem`, `CurriculumItemHours`, `WorkingCurriculumItem`, `CombinedWorkingCurriculumItem` |
 | `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `LecturerTimetableConstraint`\*, `Student`, `AcademicGroup`, `AcademicGroupTimetableConstraint`\*, `CombinedGroup` |
 | `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTimeSet`, `ClassStartTime`, `TimetableEntry`, `LecturerWorkloadOnlineClass`\*\*\* |
@@ -1155,17 +1192,17 @@ single-row `<entity>(id:)` query.
 | `buildingConnection` | `name` | — |
 | `facultyConnection` | `name` | — |
 | `departmentConnection` | `name` | `facultyId` |
-| `specialtyConnection` | `code` | `facultyId` |
+| `degreeProgramConnection` | `code` | `facultyId` |
 | `roomConnection` | `number` | `facultyId`, `buildingId` |
 | `buildingTravelTimeConnection` | `from_building_id` | `fromBuildingId`, `toBuildingId` |
 | `roomGroupConnection` | `name` | `facultyId`, `departmentId` |
 | `academicDegreeConnection` | `level` | — |
 | `lecturerConnection` | `lastName` | `departmentId`, `facultyId` (r) |
 | `studentConnection` | `lastName` | `academicGroupId` |
-| `academicGroupConnection` | `name` | `specialtyId`, `facultyId` (r) |
+| `academicGroupConnection` | `name` | `degreeProgramId`, `facultyId` (r) |
 | `combinedGroupConnection` | `name` | `facultyId` (r) |
-| `courseConnection` | `name` | `departmentId`, `facultyId`, `parentCourseId`, `specialtyId` (r) |
-| `curriculumItemConnection` | `semester` | `specialtyId`, `courseId` |
+| `courseConnection` | `name` | `departmentId`, `facultyId`, `parentCourseId`, `degreeProgramId` (r) |
+| `curriculumItemConnection` | `semester` | `degreeProgramId`, `courseId` |
 | `curriculumItemHoursConnection` | `hourType` | `curriculumItemId` |
 | `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r) |
 | `combinedWorkingCurriculumItemConnection` | `id` | `facultyId` (r), `departmentIds` (r), `semesterParity` (r) |
@@ -1354,9 +1391,10 @@ their own grants and those of every group they belong to.
 (`EntityMetadata#resourceType()` on the backend via Guava's `CaseFormat`, `toResourceType()` in the
 frontend) — plus a `resource_id`, or the special `resource_type = 'GLOBAL'` (`resource_id` `NULL`)
 for a university-wide scope. The scope **cascades downward**: a grant on a `Faculty` also covers its
-`Department`s, `Specialty`s, `AcademicGroup`s, `Room`s, `Course`s, curriculum and working-curriculum
-items, lecturer workloads and timetable entries; a grant on a single `Department` covers that
-department, its lecturers and their workloads, and nothing belonging to a sibling department.
+`Department`s, `DegreeProgram`s, `AcademicGroup`s, `Room`s, `Course`s, curriculum and
+working-curriculum items, lecturer workloads and timetable entries; a grant on a single `Department`
+covers that department, its lecturers and their workloads, and nothing belonging to a sibling
+department.
 
 **How much** is an `AccessLevel` — three ordered values, and the level does not weaken on the way
 down:
@@ -1374,11 +1412,11 @@ consequence is that every authorization question in the service reduces to one c
 `level >= required`, in SQL as much as in Java — `access_level` is a PostgreSQL enum and declaration
 order is comparison order there too.
 
-`EDIT` exists because deletion in this schema cascades: removing a `Specialty` takes its academic
-groups, curriculum items and workloads with it. Somebody who maintains навчальні плани every day
-should be able to do that job without being one mis-click away from erasing a group. `MANAGE` exists
-because delegation is a real act at a university: a deanery should be able to hand a кафедра to its
-завідувач without an administrator being the bottleneck.
+`EDIT` exists because deletion in this schema cascades: removing a `DegreeProgram` takes its
+academic groups, curriculum items and workloads with it. Somebody who maintains навчальні плани
+every day should be able to do that job without being one mis-click away from erasing a group.
+`MANAGE` exists because delegation is a real act at a university: a deanery should be able to hand a
+кафедра to its завідувач without an administrator being the bottleneck.
 
 `isAdmin` is not a column on `users`; it is `GLOBAL` at `MANAGE`. `GLOBAL` at `EDIT` is a coherent
 and useful thing to hold — somebody trusted with the whole university's data who cannot delete any

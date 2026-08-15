@@ -10,9 +10,9 @@ import java.util.List;
 
 /**
  * Bundles several working curriculum items that relate to the same course, semester, and hour
- * type (typically the same discipline taught to groups from different specialties) into one
+ * type (typically the same discipline taught to groups from different degree programmes) into one
  * whole, so a single lecturer_workloads assignment can cover all of them at once (e.g. lecturers
- * who deliver one shared lecture to several specialties simultaneously).
+ * who deliver one shared lecture to several degree programmes simultaneously).
  */
 @Data
 @GraphQLEntity(table = "combined_working_curriculum_items")

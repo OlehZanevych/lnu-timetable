@@ -18,7 +18,7 @@ const TPL = './entity-page.html';
 @Component({ selector: 'app-building', templateUrl: TPL, imports: IMPORTS }) export class BuildingPage extends BaseEntity { meta = meta('Building'); }
 @Component({ selector: 'app-faculty', templateUrl: TPL, imports: IMPORTS }) export class FacultyPage extends BaseEntity { meta = meta('Faculty'); }
 @Component({ selector: 'app-department', templateUrl: TPL, imports: IMPORTS }) export class DepartmentPage extends BaseEntity { meta = meta('Department'); }
-@Component({ selector: 'app-specialty', templateUrl: TPL, imports: IMPORTS }) export class SpecialtyPage extends BaseEntity { meta = meta('Specialty'); }
+@Component({ selector: 'app-degree-program', templateUrl: TPL, imports: IMPORTS }) export class DegreeProgramPage extends BaseEntity { meta = meta('DegreeProgram'); }
 @Component({ selector: 'app-course', templateUrl: TPL, imports: IMPORTS }) export class CoursePage extends BaseEntity { meta = meta('Course'); }
 @Component({ selector: 'app-lecturer', templateUrl: TPL, imports: IMPORTS }) export class LecturerPage extends BaseEntity { meta = meta('Lecturer'); }
 @Component({ selector: 'app-student', templateUrl: TPL, imports: IMPORTS }) export class StudentPage extends BaseEntity { meta = meta('Student'); }
@@ -36,7 +36,7 @@ export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
   { single: 'academicDegree', component: AcademicDegreePage },
   { single: 'faculty', component: FacultyPage },
   { single: 'department', component: DepartmentPage },
-  { single: 'specialty', component: SpecialtyPage },
+  { single: 'degreeProgram', component: DegreeProgramPage },
   { single: 'course', component: CoursePage },
   { single: 'lecturer', component: LecturerPage },
   { single: 'student', component: StudentPage },

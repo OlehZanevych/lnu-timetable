@@ -9,7 +9,7 @@ the file ends with the matching ``setval`` calls.
 
 Order of work (this is what makes cross-faculty references resolve):
 
-  1. buildings, faculties, departments, specialties, lecturers are generated
+  1. buildings, faculties, departments, degree_programs, lecturers are generated
      *first*, and indexed by normalised name;
   2. only then are the curricula walked, so a course whose page says
      "Кафедра: алгебри, топології та основ математики" (a Mechmat department on
@@ -18,7 +18,7 @@ Order of work (this is what makes cross-faculty references resolve):
 
 Elective handling: a curriculum row like
 "Дисципліна на вибір 1: <A> <B>" becomes a parent course named **ДВ** with
-``course_type = 'ELECTIVE_GROUP'`` and two ``course_tags`` — the specialty name
+``course_type = 'ELECTIVE_GROUP'`` and two ``course_tags`` — the degree_program name
 and ``семестр <n>`` — while A and B become ``ELECTIVE`` child courses pointing at
 it via ``parent_course_id``.
 
@@ -196,20 +196,20 @@ class Builder:
                                                "phone", "building_id"])
         self.t_departments = Table("departments", ["name", "abbreviation", "faculty_id",
                                                    "email", "phone"])
-        self.t_specialties = Table("specialties", ["code", "name", "degree", "faculty_id"])
+        self.t_degree_programs = Table("degree_programs", ["code", "name", "degree", "faculty_id"])
         self.t_lecturers = Table("lecturers", ["first_name", "middle_name", "last_name",
                                                "email", "position", "academic_degree_id",
                                                "min_hours_per_week", "max_hours_per_week",
                                                "department_id"])
         self.t_groups = Table("academic_groups", ["name", "course_year", "study_form",
-                                                  "students_count", "specialty_id"])
+                                                  "students_count", "degree_program_id"])
         self.t_courses = Table("courses", ["name", "course_type", "faculty_id",
                                            "department_id", "parent_course_id"])
-        self.t_course_specialties = Table("course_specialties",
-                                          ["course_id", "specialty_id"], has_id=False)
+        self.t_course_degree_programs = Table("course_degree_programs",
+                                          ["course_id", "degree_program_id"], has_id=False)
         self.t_course_tags = Table("course_tags", ["course_id", "tag"])
         self.t_curriculum_items = Table("curriculum_items", ["semester", "control_form",
-                                                             "ects_credits", "specialty_id",
+                                                             "ects_credits", "degree_program_id",
                                                              "course_id"])
         self.t_hours = Table("curriculum_item_hours", ["curriculum_item_id", "hour_type", "hours"])
         self.t_wci = Table("working_curriculum_items", ["curriculum_item_hours_id",
@@ -239,9 +239,9 @@ class Builder:
         self.department_by_url: dict[str, int] = {}
         self.department_by_key: dict[str, int] = {}
         self.department_faculty: dict[int, int] = {}
-        self.specialty_by_key: dict[tuple[str, str, str], int] = {}
-        self.specialty_name: dict[int, str] = {}
-        self.specialty_faculty: dict[int, int] = {}
+        self.degree_program_by_key: dict[tuple[str, str, str], int] = {}
+        self.degree_program_name: dict[int, str] = {}
+        self.degree_program_faculty: dict[int, int] = {}
         self.lecturer_by_url: dict[str, int] = {}
         self.lecturer_by_name: dict[str, int] = {}
         self.lecturer_by_short: dict[str, list[int]] = defaultdict(list)
@@ -258,9 +258,9 @@ class Builder:
         self.u_group = Unique("academic_groups.name", 32)
         self.u_lecturer_email = Unique("lecturers.email", 64)
 
-        self.seen_specialty_names: set[tuple[str, str]] = set()
+        self.seen_degree_program_names: set[tuple[str, str]] = set()
         self.seen_curriculum_items: set[tuple[int, int, int]] = set()
-        self.seen_course_specialties: set[tuple[int, int]] = set()
+        self.seen_course_degree_programs: set[tuple[int, int]] = set()
         self.seen_tags: set[tuple[int, str]] = set()
         self.seen_hours: set[tuple[int, str]] = set()
 
@@ -321,26 +321,26 @@ class Builder:
         LOG.info("departments: %d (%d duplicates merged)", len(self.t_departments),
                  self.notes["department_deduplicated"])
 
-        LOG.info("--- specialties ---")
-        for specialty in self.data["specialties"]:
-            faculty_id = self.faculty_by_host.get(specialty["faculty_host"])
+        LOG.info("--- degree_programs ---")
+        for degree_program in self.data["degree_programs"]:
+            faculty_id = self.faculty_by_host.get(degree_program["faculty_host"])
             if faculty_id is None:
-                self.problem(f"specialty {specialty['code']}: unknown faculty host")
+                self.problem(f"degree_program {degree_program['code']}: unknown faculty host")
                 continue
-            key = (specialty["faculty_host"], specialty["code"], specialty["degree"])
-            if key in self.specialty_by_key:
+            key = (degree_program["faculty_host"], degree_program["code"], degree_program["degree"])
+            if key in self.degree_program_by_key:
                 continue
-            name = norm_ws(specialty["name"])
-            if (name.lower(), specialty["degree"]) in self.seen_specialty_names:
+            name = norm_ws(degree_program["name"])
+            if (name.lower(), degree_program["degree"]) in self.seen_degree_program_names:
                 name = f"{name} ({self.faculty_abbrev[faculty_id]})"[:160]
-                self.notes["specialty_name_disambiguated"] += 1
-            self.seen_specialty_names.add((name.lower(), specialty["degree"]))
-            sid = self.t_specialties.add(truncate(specialty["code"], 16), name,
-                                         specialty["degree"], faculty_id)
-            self.specialty_by_key[key] = sid
-            self.specialty_name[sid] = name
-            self.specialty_faculty[sid] = faculty_id
-        LOG.info("specialties: %d", len(self.t_specialties))
+                self.notes["degree_program_name_disambiguated"] += 1
+            self.seen_degree_program_names.add((name.lower(), degree_program["degree"]))
+            sid = self.t_degree_programs.add(truncate(degree_program["code"], 16), name,
+                                         degree_program["degree"], faculty_id)
+            self.degree_program_by_key[key] = sid
+            self.degree_program_name[sid] = name
+            self.degree_program_faculty[sid] = faculty_id
+        LOG.info("degree_programs: %d", len(self.t_degree_programs))
 
         LOG.info("--- lecturers ---")
         by_email: dict[str, int] = {}
@@ -464,14 +464,14 @@ class Builder:
         self.course_pages = {c["url"]: c for c in self.data["courses"]}
         group_votes: dict[str, Counter] = defaultdict(Counter)
 
-        # Pass 1: work out which specialty each academic group belongs to.
-        # A course page names its groups but not their specialty, so the group
-        # is assigned to whichever specialty's curriculum mentions it in the
+        # Pass 1: work out which degree programme each academic group belongs to.
+        # A course page names its groups but not their programme, so the group
+        # is assigned to whichever programme's curriculum mentions it in the
         # most *distinct* courses (counting per course, not per lecture/lab row,
         # so a course with many practical rows does not outvote the rest).
         seen_group_course: set[tuple[str, int, str]] = set()
         for curriculum in self.data["curricula"]:
-            sid = self._specialty_id(curriculum)
+            sid = self._degree_program_id(curriculum)
             if sid is None:
                 continue
             for semester in curriculum["semesters"]:
@@ -490,35 +490,35 @@ class Builder:
             sid = ranked[0][0]
             tied = [s for s, count in ranked if count == ranked[0][1]]
             if len(tied) > 1:
-                # A master group ("ПМом-11") belongs to a master specialty.
+                # A master group ("ПМом-11") belongs to a master programme.
                 wanted = "MASTER" if self._looks_like_master(group) else "BACHELOR"
-                preferred = [s for s in tied if self.t_specialties.rows[s - 1][3] == wanted]
+                preferred = [s for s in tied if self.t_degree_programs.rows[s - 1][3] == wanted]
                 sid = preferred[0] if preferred else tied[0]
             if len(votes) > 1:
-                self.notes["group_specialty_ambiguous"] += 1
-                LOG.info("  group %s is claimed by %d specialties %s; assigned to #%d (%s)",
+                self.notes["group_degree_program_ambiguous"] += 1
+                LOG.info("  group %s is claimed by %d degree programmes %s; assigned to #%d (%s)",
                          group, len(votes), [s for s, _ in ranked], sid,
-                         self.specialty_name.get(sid, "?"))
+                         self.degree_program_name.get(sid, "?"))
             gid = self.t_groups.add(self.u_group.take(group), self._group_year(group),
                                     self._group_study_form(group), None, sid)
             self.group_ids[group] = gid
         LOG.info("academic groups: %d (%d ambiguous)", len(self.t_groups),
-                 self.notes["group_specialty_ambiguous"])
+                 self.notes["group_degree_program_ambiguous"])
 
         # Pass 2: courses, curriculum items, hours, working curriculum items.
         wci_signature: dict[tuple, list[int]] = defaultdict(list)
         wci_context: dict[int, dict] = {}
 
         for curriculum in self.data["curricula"]:
-            sid = self._specialty_id(curriculum)
+            sid = self._degree_program_id(curriculum)
             if sid is None:
-                self.problem(f"curriculum {curriculum['url']}: specialty "
-                             f"{curriculum['specialty_code']}/{curriculum['specialty_degree']} "
+                self.problem(f"curriculum {curriculum['url']}: degree_program "
+                             f"{curriculum['degree_program_code']}/{curriculum['degree_program_degree']} "
                              f"not generated")
                 continue
-            faculty_id = self.specialty_faculty[sid]
-            LOG.info("  %s %s (%s)", curriculum["specialty_code"],
-                     curriculum["specialty_degree"], curriculum["url"])
+            faculty_id = self.degree_program_faculty[sid]
+            LOG.info("  %s %s (%s)", curriculum["degree_program_code"],
+                     curriculum["degree_program_degree"], curriculum["url"])
             for semester_block in curriculum["semesters"]:
                 semester = int(semester_block["semester"])
                 for row in semester_block["rows"]:
@@ -536,10 +536,10 @@ class Builder:
         self._combine_working_items(wci_signature, wci_context)
         self._build_workloads(wci_context)
 
-    def _specialty_id(self, curriculum: dict) -> int | None:
-        return self.specialty_by_key.get((curriculum["faculty_host"],
-                                          curriculum["specialty_code"],
-                                          curriculum["specialty_degree"]))
+    def _degree_program_id(self, curriculum: dict) -> int | None:
+        return self.degree_program_by_key.get((curriculum["faculty_host"],
+                                          curriculum["degree_program_code"],
+                                          curriculum["degree_program_degree"]))
 
     @staticmethod
     def _row_course_urls(row: dict) -> list[str]:
@@ -562,12 +562,12 @@ class Builder:
         low = norm_ws(name).lower()
         return bool(re.search(r"м-\d", low) or re.search(r"-\d+м$", low))
 
-    def _link_course_specialty(self, course_id: int, specialty_id: int) -> None:
-        key = (course_id, specialty_id)
-        if key in self.seen_course_specialties:
+    def _link_course_degree_program(self, course_id: int, degree_program_id: int) -> None:
+        key = (course_id, degree_program_id)
+        if key in self.seen_course_degree_programs:
             return
-        self.seen_course_specialties.add(key)
-        self.t_course_specialties.add(course_id, specialty_id)
+        self.seen_course_degree_programs.add(key)
+        self.t_course_degree_programs.add(course_id, degree_program_id)
 
     def _add_tag(self, course_id: int, tag: str) -> None:
         tag = truncate(tag, 64)
@@ -576,9 +576,9 @@ class Builder:
         self.seen_tags.add((course_id, tag))
         self.t_course_tags.add(course_id, tag)
 
-    def _curriculum_item(self, specialty_id: int, course_id: int, semester: int,
+    def _curriculum_item(self, degree_program_id: int, course_id: int, semester: int,
                          row: dict, course_url: str | None) -> int | None:
-        key = (course_id, specialty_id, semester)
+        key = (course_id, degree_program_id, semester)
         if key in self.seen_curriculum_items:
             self.notes["curriculum_item_duplicate"] += 1
             return None
@@ -594,7 +594,7 @@ class Builder:
         if control is None:
             control = CONTROL_FORM_DEFAULT
             self.notes["control_form_defaulted"] += 1
-        return self.t_curriculum_items.add(semester, control, ects, specialty_id, course_id)
+        return self.t_curriculum_items.add(semester, control, ects, degree_program_id, course_id)
 
     def _hours_rows(self, curriculum_item_id: int, hours: dict[str, int]) -> dict[str, int]:
         out: dict[str, int] = {}
@@ -609,7 +609,7 @@ class Builder:
             out[hour_type] = self.t_hours.add(curriculum_item_id, hour_type, value)
         return out
 
-    def _plain_course_row(self, curriculum, specialty_id, faculty_id, semester, row,
+    def _plain_course_row(self, curriculum, degree_program_id, faculty_id, semester, row,
                           wci_signature, wci_context) -> None:
         url = row.get("course_url")
         if url and url in self.course_by_url:
@@ -618,32 +618,32 @@ class Builder:
             course_id = self.course_row(url, row.get("name", ""), faculty_id, "MANDATORY")
             if url:
                 self.course_by_url[url] = course_id
-        self._link_course_specialty(course_id, specialty_id)
-        item_id = self._curriculum_item(specialty_id, course_id, semester, row, url)
+        self._link_course_degree_program(course_id, degree_program_id)
+        item_id = self._curriculum_item(degree_program_id, course_id, semester, row, url)
         if item_id is None:
             return
         hour_ids = self._hours_rows(item_id, row.get("hours") or {})
         for hour_type, hours_id in hour_ids.items():
             if hour_type not in SCHEDULED_HOUR_TYPES:
                 continue
-            self._working_item(hours_id, hour_type, semester, specialty_id,
+            self._working_item(hours_id, hour_type, semester, degree_program_id,
                                course_url=url, course_key=url or f"name:{row.get('name')}",
                                hours=int((row.get("hours") or {})[hour_type]),
                                department_id=self.course_department.get(course_id),
                                faculty_id=faculty_id, elective_course_id=None,
                                wci_signature=wci_signature, wci_context=wci_context)
 
-    def _elective_group_row(self, curriculum, specialty_id, faculty_id, semester, row,
+    def _elective_group_row(self, curriculum, degree_program_id, faculty_id, semester, row,
                             wci_signature, wci_context) -> None:
         """Create the ДВ parent course, its tags, and one child per option."""
         parent_id = self.t_courses.add("ДВ", "ELECTIVE_GROUP", faculty_id, None, None)
         self.course_department[parent_id] = None
-        self._add_tag(parent_id, self.specialty_name[specialty_id].lower())
+        self._add_tag(parent_id, self.degree_program_name[degree_program_id].lower())
         self._add_tag(parent_id, f"семестр {semester}")
-        self._link_course_specialty(parent_id, specialty_id)
+        self._link_course_degree_program(parent_id, degree_program_id)
         self.notes["elective_group"] += 1
 
-        item_id = self._curriculum_item(specialty_id, parent_id, semester, row, None)
+        item_id = self._curriculum_item(degree_program_id, parent_id, semester, row, None)
         if item_id is None:
             return
         hour_ids = self._hours_rows(item_id, row.get("hours") or {})
@@ -654,13 +654,13 @@ class Builder:
             child_id = self.course_row(url, option.get("name", ""), faculty_id,
                                        "ELECTIVE", parent_id)
             children.append((child_id, url))
-            self._link_course_specialty(child_id, specialty_id)
+            self._link_course_degree_program(child_id, degree_program_id)
 
         for hour_type, hours_id in hour_ids.items():
             if hour_type not in SCHEDULED_HOUR_TYPES:
                 continue
             for child_id, url in children:
-                self._working_item(hours_id, hour_type, semester, specialty_id,
+                self._working_item(hours_id, hour_type, semester, degree_program_id,
                                    course_url=url,
                                    course_key=url or f"child:{child_id}",
                                    hours=int((row.get("hours") or {})[hour_type]),
@@ -720,20 +720,20 @@ class Builder:
             out[index] = ids
         return out
 
-    def _working_item(self, hours_id: int, hour_type: str, semester: int, specialty_id: int,
+    def _working_item(self, hours_id: int, hour_type: str, semester: int, degree_program_id: int,
                       course_url: str | None, course_key: str, hours: int,
                       department_id: int | None, faculty_id: int,
                       elective_course_id: int | None,
                       wci_signature, wci_context) -> None:
         blocks = self._class_blocks(course_url, hour_type, semester)
-        specialty_groups = {name for name, gid in self.group_ids.items()
-                            if self.t_groups.rows[gid - 1][-1] == specialty_id}
-        # Groups mentioned on the course page that belong to this specialty.
+        degree_program_groups = {name for name, gid in self.group_ids.items()
+                            if self.t_groups.rows[gid - 1][-1] == degree_program_id}
+        # Groups mentioned on the course page that belong to this degree programme.
         group_names: list[str] = []
         for block in blocks:
             for name in block.get("groups", []):
                 name = norm_ws(name)
-                if name in specialty_groups and name not in group_names:
+                if name in degree_program_groups and name not in group_names:
                     group_names.append(name)
         if department_id is None:
             department_id = self._fallback_department(faculty_id)
@@ -765,7 +765,7 @@ class Builder:
                 {
                     "lecturers": lecturers_by_block.get(i, []),
                     "groups": [self.group_ids[norm_ws(g)] for g in block.get("groups", [])
-                               if norm_ws(g) in specialty_groups],
+                               if norm_ws(g) in degree_program_groups],
                 }
                 for i, block in enumerate(blocks)
             ],
@@ -860,7 +860,7 @@ class Builder:
             return {row[0] for row in table.rows}
 
         faculty_ids, building_ids = ids(self.t_faculties), ids(self.t_buildings)
-        department_ids, specialty_ids = ids(self.t_departments), ids(self.t_specialties)
+        department_ids, degree_program_ids = ids(self.t_departments), ids(self.t_degree_programs)
         lecturer_ids, group_ids = ids(self.t_lecturers), ids(self.t_groups)
         course_ids, item_ids = ids(self.t_courses), ids(self.t_curriculum_items)
         hour_ids, wci_ids = ids(self.t_hours), ids(self.t_wci)
@@ -878,17 +878,17 @@ class Builder:
 
         check_fk(self.t_faculties, "building_id", building_ids, True)
         check_fk(self.t_departments, "faculty_id", faculty_ids, False)
-        check_fk(self.t_specialties, "faculty_id", faculty_ids, False)
+        check_fk(self.t_degree_programs, "faculty_id", faculty_ids, False)
         check_fk(self.t_lecturers, "department_id", department_ids, False)
         check_fk(self.t_lecturers, "academic_degree_id", {1, 2, 3}, True)
-        check_fk(self.t_groups, "specialty_id", specialty_ids, False)
+        check_fk(self.t_groups, "degree_program_id", degree_program_ids, False)
         check_fk(self.t_courses, "faculty_id", faculty_ids, True)
         check_fk(self.t_courses, "department_id", department_ids, True)
         check_fk(self.t_courses, "parent_course_id", course_ids, True)
-        check_fk(self.t_course_specialties, "course_id", course_ids, False)
-        check_fk(self.t_course_specialties, "specialty_id", specialty_ids, False)
+        check_fk(self.t_course_degree_programs, "course_id", course_ids, False)
+        check_fk(self.t_course_degree_programs, "degree_program_id", degree_program_ids, False)
         check_fk(self.t_course_tags, "course_id", course_ids, False)
-        check_fk(self.t_curriculum_items, "specialty_id", specialty_ids, False)
+        check_fk(self.t_curriculum_items, "degree_program_id", degree_program_ids, False)
         check_fk(self.t_curriculum_items, "course_id", course_ids, False)
         check_fk(self.t_hours, "curriculum_item_id", item_ids, False)
         check_fk(self.t_wci, "curriculum_item_hours_id", hour_ids, False)
@@ -934,14 +934,14 @@ class Builder:
         check_unique(self.t_faculties, ["abbreviation"], skip_null=True)
         check_unique(self.t_departments, ["name"])
         check_unique(self.t_departments, ["abbreviation"], skip_null=True)
-        check_unique(self.t_specialties, ["code", "degree"])
-        check_unique(self.t_specialties, ["name", "degree"])
+        check_unique(self.t_degree_programs, ["code", "degree"])
+        check_unique(self.t_degree_programs, ["name", "degree"])
         check_unique(self.t_groups, ["name"])
         check_unique(self.t_lecturers, ["email"], skip_null=True)
         check_unique(self.t_course_tags, ["course_id", "tag"])
-        check_unique(self.t_curriculum_items, ["course_id", "specialty_id", "semester"])
+        check_unique(self.t_curriculum_items, ["course_id", "degree_program_id", "semester"])
         check_unique(self.t_hours, ["curriculum_item_id", "hour_type"])
-        check_unique(self.t_course_specialties, ["course_id", "specialty_id"])
+        check_unique(self.t_course_degree_programs, ["course_id", "degree_program_id"])
         check_unique(self.t_wci_groups, ["working_curriculum_item_id", "academic_group_id"])
         check_unique(self.t_cwci_members, ["combined_working_curriculum_item_id",
                                            "working_curriculum_item_id"])
@@ -949,7 +949,7 @@ class Builder:
         check_unique(self.t_workload_groups, ["lecturer_workload_id", "academic_group_id"])
 
         enums = {
-            (self.t_specialties, "degree"): {"JUNIOR_BACHELOR", "BACHELOR", "MASTER",
+            (self.t_degree_programs, "degree"): {"JUNIOR_BACHELOR", "BACHELOR", "MASTER",
                                              "PHD", "DOCTOR_OF_SCIENCE"},
             (self.t_lecturers, "position"): {"ASSISTANT", "TEACHER", "SENIOR_LECTURER",
                                              "DOCENT", "PROFESSOR", "HEAD_OF_DEPARTMENT"},
@@ -973,7 +973,7 @@ class Builder:
             (self.t_faculties, "email"): 64, (self.t_faculties, "phone"): 128,
             (self.t_departments, "name"): 160, (self.t_departments, "abbreviation"): 32,
             (self.t_departments, "email"): 64, (self.t_departments, "phone"): 64,
-            (self.t_specialties, "code"): 16, (self.t_specialties, "name"): 160,
+            (self.t_degree_programs, "code"): 16, (self.t_degree_programs, "name"): 160,
             (self.t_lecturers, "first_name"): 64, (self.t_lecturers, "middle_name"): 64,
             (self.t_lecturers, "last_name"): 64, (self.t_lecturers, "email"): 64,
             (self.t_groups, "name"): 32, (self.t_courses, "name"): 200,
@@ -1012,8 +1012,8 @@ class Builder:
         out.append("\n")
 
         for table in (self.t_buildings, self.t_faculties, self.t_departments,
-                      self.t_specialties, self.t_lecturers, self.t_groups,
-                      self.t_courses, self.t_course_specialties, self.t_course_tags,
+                      self.t_degree_programs, self.t_lecturers, self.t_groups,
+                      self.t_courses, self.t_course_degree_programs, self.t_course_tags,
                       self.t_curriculum_items, self.t_hours, self.t_wci,
                       self.t_wci_groups, self.t_cwci, self.t_cwci_members,
                       self.t_workloads, self.t_workload_lecturers,
@@ -1029,7 +1029,7 @@ class Builder:
             ("buildings_id_seq", len(self.t_buildings)),
             ("faculties_id_seq", len(self.t_faculties)),
             ("departments_id_seq", len(self.t_departments)),
-            ("specialties_id_seq", len(self.t_specialties)),
+            ("degree_programs_id_seq", len(self.t_degree_programs)),
             ("lecturers_id_seq", len(self.t_lecturers)),
             ("academic_groups_id_seq", len(self.t_groups)),
             ("combined_groups_id_seq", 0),
@@ -1094,11 +1094,11 @@ class Builder:
             ("buildings", len(self.t_buildings)),
             ("faculties", len(self.t_faculties)),
             ("departments", len(self.t_departments)),
-            ("specialties", len(self.t_specialties)),
+            ("degree_programs", len(self.t_degree_programs)),
             ("lecturers", len(self.t_lecturers)),
             ("academic_groups", len(self.t_groups)),
             ("courses", len(self.t_courses)),
-            ("course_specialties", len(self.t_course_specialties)),
+            ("course_degree_programs", len(self.t_course_degree_programs)),
             ("course_tags", len(self.t_course_tags)),
             ("curriculum_items", len(self.t_curriculum_items)),
             ("curriculum_item_hours", len(self.t_hours)),
@@ -1121,7 +1121,7 @@ class Builder:
 
 def load(indir: str) -> dict[str, Any]:
     data: dict[str, Any] = {}
-    for name in ("faculties", "departments", "lecturers", "specialties",
+    for name in ("faculties", "departments", "lecturers", "degree_programs",
                  "curricula", "courses"):
         path = os.path.join(indir, f"{name}.json")
         if not os.path.exists(path):

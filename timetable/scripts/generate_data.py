@@ -50,19 +50,19 @@ out.append("INSERT INTO departments (id, name, abbreviation, faculty_id) VALUES"
 out.append(vals([(str(i + 1), q(f"Department {i + 1}"), q(f"К{i + 1}"), str(i % FACS + 1)) for i in range(DEPTS)]))
 out.append(f"SELECT setval('departments_id_seq', {DEPTS});\n")
 
-# Specialties
+# Degree programmes
 specs = [("122", "Computer Science"), ("124", "System Analysis"), ("113", "Applied Mathematics"), ("121", "Software Engineering")]
-out.append("INSERT INTO specialties (id, code, name, degree, faculty_id) VALUES")
+out.append("INSERT INTO degree_programs (id, code, name, degree, faculty_id) VALUES")
 out.append(vals([(str(i + 1), q(specs[i][0]), q(specs[i][1]), q("BACHELOR"), str(i % FACS + 1)) for i in range(SPECS)]))
-out.append(f"SELECT setval('specialties_id_seq', {SPECS});\n")
+out.append(f"SELECT setval('degree_programs_id_seq', {SPECS});\n")
 
 # Courses (discipline pool)
 out.append("INSERT INTO courses (id, code, name, ects_credits, department_id) VALUES")
 out.append(vals([(str(i + 1), q(f"D-{i + 1:02d}"), q(f"Discipline {i + 1:02d}"), str(3 + i % 4), str(i % DEPTS + 1)) for i in range(COURSES)]))
 out.append(f"SELECT setval('courses_id_seq', {COURSES});\n")
 
-# Curricula + items + working curricula + items (one chain per specialty)
-out.append("INSERT INTO curricula (id, name, admission_year, degree, specialty_id) VALUES")
+# Curricula + items + working curricula + items (one chain per degree programme)
+out.append("INSERT INTO curricula (id, name, admission_year, degree, degree_program_id) VALUES")
 out.append(vals([(str(i + 1), q(f"{specs[i][1]} (Bachelor) 2023"), "2023", q("BACHELOR"), str(i + 1)) for i in range(SPECS)]))
 out.append(f"SELECT setval('curricula_id_seq', {SPECS});\n")
 
@@ -88,7 +88,7 @@ out.append(vals([(str(i + 1), q(FIRST[i % len(FIRST)]), q(f"{SURNAMES[i % len(SU
 out.append(f"SELECT setval('lecturers_id_seq', {L});\n")
 
 # Academic groups (40)
-out.append("INSERT INTO academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES")
+out.append("INSERT INTO academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES")
 out.append(vals([(str(i + 1), q(f"Grp-{i + 1:02d}"), str(i % 4 + 1), q("FULL_TIME"), str(20 + i % 11), str(i % SPECS + 1)) for i in range(G)]))
 out.append(f"SELECT setval('academic_groups_id_seq', {G});\n")
 

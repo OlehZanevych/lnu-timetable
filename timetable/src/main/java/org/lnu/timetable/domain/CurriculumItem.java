@@ -13,7 +13,7 @@ import java.util.List;
 
 @Data
 @GraphQLEntity(table = "curriculum_items")
-@PermissionParent(value = Specialty.class, joinColumn = "specialty_id")
+@PermissionParent(value = DegreeProgram.class, joinColumn = "degree_program_id")
 @PermissionParent(value = Course.class, joinColumn = "course_id")
 public class CurriculumItem {
 
@@ -29,8 +29,8 @@ public class CurriculumItem {
     @Nullable
     private Integer ectsCredits;
 
-    @ManyToOne(joinColumn = "specialty_id")
-    private Specialty specialty;
+    @ManyToOne(joinColumn = "degree_program_id")
+    private DegreeProgram degreeProgram;
 
     @ManyToOne(joinColumn = "course_id")
     private Course course;

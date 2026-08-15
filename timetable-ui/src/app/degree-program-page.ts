@@ -14,7 +14,7 @@ import { sectionNav } from './section-route';
 type SpecSection = 'info' | 'curriculaEditor' | 'curricula'
                  | 'workingCurriculaEditor' | 'workingCurricula' | 'academicGroups';
 
-interface Specialty {
+interface DegreeProgram {
   id: string;
   code: string;
   name: string;
@@ -45,29 +45,29 @@ const SECTIONS: { key: SpecSection; label: string }[] = [
   { key: 'academicGroups',         label: '&#x1F393; Академічні групи' },
 ];
 
-/** Which slugs `/specialty/:id/:section` recognises — see `section-route.ts`. */
+/** Which slugs `/degree-program/:id/:section` recognises — see `section-route.ts`. */
 const SECTION_KEYS: SpecSection[] = SECTIONS.map((s) => s.key);
 
 @Component({
-  selector: 'app-specialty-page',
-  templateUrl: './specialty-page.html',
+  selector: 'app-degree-program-page',
+  templateUrl: './degree-program-page.html',
   imports: [RouterLink, FormsModule, CurriculumEditor, CurriculumItemList, WorkingCurriculumList,
             WorkingCurriculumView, AcademicGroupList, SearchSelect]
 })
-export class SpecialtyDetailPage implements OnInit {
+export class DegreeProgramDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
   private gql = inject(GraphqlService);
 
-  readonly specialtyId: string = this.route.snapshot.paramMap.get('id')!;
+  readonly degreeProgramId: string = this.route.snapshot.paramMap.get('id')!;
   readonly sections = SECTIONS;
   readonly degreeLabels = DEGREE_LABELS;
 
-  specialty = signal<Specialty | null>(null);
+  degreeProgram = signal<DegreeProgram | null>(null);
   error = signal('');
 
   /** The open tab, and the last segment of the URL — see `section-route.ts`. */
   private nav = sectionNav<SpecSection>(
-    () => ['/specialty', this.specialtyId], () => SECTION_KEYS, () => 'info');
+    () => ['/degree-program', this.degreeProgramId], () => SECTION_KEYS, () => 'info');
   readonly activeSection = this.nav.active;
 
   showEditForm = signal(false);
@@ -86,9 +86,9 @@ export class SpecialtyDetailPage implements OnInit {
   ngOnInit() { this.load(); }
 
   private load() {
-    const q = `query($id: ID!) { specialties { specialty(id: $id) { id code name degree faculty { id name } } } }`;
-    this.gql.request(q, { id: this.specialtyId }).subscribe({
-      next: (d: any) => this.specialty.set(d.specialties.specialty),
+    const q = `query($id: ID!) { degreePrograms { degreeProgram(id: $id) { id code name degree faculty { id name } } } }`;
+    this.gql.request(q, { id: this.degreeProgramId }).subscribe({
+      next: (d: any) => this.degreeProgram.set(d.degreePrograms.degreeProgram),
       error: (e) => this.error.set(e.message)
     });
   }
@@ -96,7 +96,7 @@ export class SpecialtyDetailPage implements OnInit {
   selectSection(key: SpecSection) { this.nav.select(key); }
 
   openEdit() {
-    const s = this.specialty();
+    const s = this.degreeProgram();
     if (!s) return;
     this.editForm = {
       code: s.code ?? '',
@@ -110,16 +110,16 @@ export class SpecialtyDetailPage implements OnInit {
   closeEdit() { this.showEditForm.set(false); this.editError.set(''); }
 
   saveEdit() {
-    const s = this.specialty();
+    const s = this.degreeProgram();
     if (!s) return;
     const input: Record<string, any> = { facultyId: s.faculty.id };
     for (const f of ['code', 'name', 'degree']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
-    const q = `mutation($id: ID!, $input: SpecialtyInputPayload!) { specialties { updateSpecialty(id: $id, specialty: $input) { isSuccess errorStatus } } }`;
-    this.gql.request(q, { id: this.specialtyId, input }).subscribe({
+    const q = `mutation($id: ID!, $input: DegreeProgramInputPayload!) { degreePrograms { updateDegreeProgram(id: $id, degreeProgram: $input) { isSuccess errorStatus } } }`;
+    this.gql.request(q, { id: this.degreeProgramId, input }).subscribe({
       next: (d: any) => {
-        const res = d.specialties.updateSpecialty;
+        const res = d.degreePrograms.updateDegreeProgram;
         if (res.isSuccess) { this.closeEdit(); this.load(); }
         else this.editError.set(res.errorStatus || 'Помилка операції');
       },

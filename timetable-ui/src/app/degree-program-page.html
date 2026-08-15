@@ -1,4 +1,4 @@
-@let s = specialty();
+@let s = degreeProgram();
 
 <div class="faculty-header">
   @if (s?.faculty) {
@@ -18,7 +18,7 @@
 
   <!-- Nav -->
   <nav class="faculty-nav">
-    <p class="faculty-nav-group">Спеціальність</p>
+    <p class="faculty-nav-group">Освітня програма</p>
     @for (sec of sections; track sec.key) {
       <button type="button" class="faculty-nav-item"
               [class.active]="activeSection() === sec.key"
@@ -37,7 +37,7 @@
       @case ('info') {
         @if (s) {
           <div class="page-header">
-            <h2>Інформація про спеціальність</h2>
+            <h2>Інформація про освітню програму</h2>
             <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
           </div>
           <div class="card info-card">
@@ -55,28 +55,28 @@
 
       <!-- ── Curriculum editor ── -->
       @case ('curriculaEditor') {
-        <app-curriculum-editor [specialtyId]="specialtyId" [degree]="s?.degree ?? ''" />
+        <app-curriculum-editor [degreeProgramId]="degreeProgramId" [degree]="s?.degree ?? ''" />
       }
 
       <!-- ── Curricula ── -->
       @case ('curricula') {
-        <app-curriculum-item-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null"
-                                  [specialty]="s" />
+        <app-curriculum-item-list [degreeProgramId]="degreeProgramId" [degreeProgramFacultyId]="s?.faculty?.id ?? null"
+                                  [degreeProgram]="s" />
       }
 
       <!-- ── Working curriculum editor ── -->
       @case ('workingCurriculaEditor') {
-        <app-working-curriculum-list [specialtyId]="specialtyId" [specialtyFacultyId]="s?.faculty?.id ?? null" />
+        <app-working-curriculum-list [degreeProgramId]="degreeProgramId" [degreeProgramFacultyId]="s?.faculty?.id ?? null" />
       }
 
       <!-- ── Working curricula (read-only, with the printable РНП) ── -->
       @case ('workingCurricula') {
-        <app-working-curriculum-view [specialtyId]="specialtyId" [specialty]="s" />
+        <app-working-curriculum-view [degreeProgramId]="degreeProgramId" [degreeProgram]="s" />
       }
 
       <!-- ── Academic Groups ── -->
       @case ('academicGroups') {
-        <app-academic-group-list [specialtyId]="specialtyId" />
+        <app-academic-group-list [degreeProgramId]="degreeProgramId" />
       }
 
     }
@@ -89,7 +89,7 @@
   <div class="modal-backdrop" (click)="closeEdit()">
     <div class="modal modal-narrow" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3>Редагування спеціальності</h3>
+        <h3>Редагування освітньої програми</h3>
         <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
       </div>
       @if (editError()) { <p class="error">{{ editError() }}</p> }

@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for the core organizational entities:
- * Building, BuildingTravelTime, Faculty, Department, Specialty, Room, RoomGroup, AbstractRoom.
+ * Building, BuildingTravelTime, Faculty, Department, DegreeProgram, Room, RoomGroup, AbstractRoom.
  */
 @Component
 public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
@@ -18,7 +18,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         configureBuildingTravelTime(s);
         configureFaculty(s);
         configureDepartment(s);
-        configureSpecialty(s);
+        configureDegreeProgram(s);
         configureRoom(s);
         configureRoomTimetableConstraint(s);
         configureRoomGroup(s);
@@ -102,7 +102,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         s.type(Faculty.class)
             .fields("name", "abbreviation", "website", "email", "phone")
             .nullableRelation("building")
-            .relation("departments").relation("specialties").relation("rooms");
+            .relation("departments").relation("degreePrograms").relation("rooms");
 
         s.query("facultyConnection").entity(Faculty.class).connection().orderBy("name");
         s.query("faculty").entity(Faculty.class).findById();
@@ -156,32 +156,32 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
     }
 
     // -------------------------------------------------------------------------
-    // Specialty
+    // DegreeProgram
     // -------------------------------------------------------------------------
 
-    private void configureSpecialty(SchemaDefinition s) {
-        s.type(Specialty.class)
+    private void configureDegreeProgram(SchemaDefinition s) {
+        s.type(DegreeProgram.class)
             .fields("code", "name", "degree")
             .relation("faculty").relation("groups");
 
-        s.query("specialtyConnection").entity(Specialty.class).connection().orderBy("code").filter("facultyId", "faculty_id");
-        s.query("specialty").entity(Specialty.class).findById();
+        s.query("degreeProgramConnection").entity(DegreeProgram.class).connection().orderBy("code").filter("facultyId", "faculty_id");
+        s.query("degreeProgram").entity(DegreeProgram.class).findById();
 
-        s.mutation("createSpecialty").entity(Specialty.class).create()
+        s.mutation("createDegreeProgram").entity(DegreeProgram.class).create()
             .inputFields("code", "name", "degree", "facultyId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
-        s.mutation("updateSpecialty").entity(Specialty.class).update()
+        s.mutation("updateDegreeProgram").entity(DegreeProgram.class).update()
             .inputFields("code", "name", "degree", "facultyId")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
-            .errorStatus("SPECIALTY_NOT_FOUND", "Specialty not found")
+            .errorStatus("DEGREE_PROGRAM_NOT_FOUND", "Degree programme not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
-        s.mutation("deleteSpecialty").entity(Specialty.class).delete()
-            .errorStatus("SPECIALTY_NOT_FOUND", "Specialty not found")
+        s.mutation("deleteDegreeProgram").entity(DegreeProgram.class).delete()
+            .errorStatus("DEGREE_PROGRAM_NOT_FOUND", "Degree programme not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
     }
 

@@ -23,7 +23,7 @@ export interface FieldMeta {
   enumOptions?: { value: string; label: string }[];
   // ref/multiref-only:
   ref?: string;            // referenced entity key (single name), used to load options
-  relation?: string;       // relation field name in GraphQL (e.g. "faculty"/"specialties"/"tags")
+  relation?: string;       // relation field name in GraphQL (e.g. "faculty"/"degreePrograms"/"tags")
   refLabel?: string;       // scalar field on the referenced entity used as a label
   // optional parent filter (e.g. filter departments by faculty when selecting for lecturer)
   parentFilter?: { namespace: string; list: string; label: string };
@@ -270,7 +270,7 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'Specialty', label: 'Спеціальності', single: 'specialty', namespace: 'specialties', list: 'specialtyConnection', filterParam: 'facultyId', detailRoute: 'specialty',
+    name: 'DegreeProgram', label: 'Освітні програми', single: 'degreeProgram', namespace: 'degreePrograms', list: 'degreeProgramConnection', filterParam: 'facultyId', detailRoute: 'degree-program',
     fields: [
       { name: 'code', label: 'Код', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text', required: true },
@@ -291,7 +291,7 @@ export const ENTITIES: EntityMeta[] = [
       // two curriculum screens then offer that semester and nothing else, and every list that names
       // the course prints it before the tags. `min` mirrors `courses_semester_check`.
       { name: 'semester', label: 'Семестр', type: 'number', min: 1 },
-      multiref('specialtyIds', 'Спеціальності', 'specialty', 'specialties', 'name'),
+      multiref('degreeProgramIds', 'Освітні програми', 'degreeProgram', 'degreePrograms', 'name'),
       tags('tags', 'Теги', 'tags', 'tag')
     ]
   },
@@ -330,13 +330,13 @@ export const ENTITIES: EntityMeta[] = [
     ]
   },
   {
-    name: 'AcademicGroup', label: 'Академічні групи', single: 'academicGroup', namespace: 'academicGroups', list: 'academicGroupConnection', filterParam: 'specialtyId', detailRoute: 'academic-group',
+    name: 'AcademicGroup', label: 'Академічні групи', single: 'academicGroup', namespace: 'academicGroups', list: 'academicGroupConnection', filterParam: 'degreeProgramId', detailRoute: 'academic-group',
     fields: [
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'courseYear', label: 'Курс', type: 'number', required: true },
       { name: 'studyForm', label: 'Форма навчання', type: 'enum', required: true, enumOptions: STUDY_FORM_OPTIONS },
       { name: 'studentsCount', label: 'Студентів', type: 'number' },
-      ref('specialtyId', 'Спеціальність', 'specialty', 'specialty', 'name', true)
+      ref('degreeProgramId', 'Освітня програма', 'degreeProgram', 'degreeProgram', 'name', true)
     ]
   },
   {

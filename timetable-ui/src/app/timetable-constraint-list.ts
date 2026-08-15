@@ -76,15 +76,15 @@ const SUBJECTS: Record<ConstraintSubject, SubjectMeta> = {
     filterArg: 'facultyId',
     entity: 'AcademicGroup',
     single: 'academicGroup',
-    selection: 'name courseYear studyForm specialty { id name }',
+    selection: 'name courseYear studyForm degreeProgram { id name }',
     required: (n) => ({
       name: n.name,
       courseYear: n.courseYear,
       studyForm: n.studyForm,
-      specialtyId: n.specialty?.id
+      degreeProgramId: n.degreeProgram?.id
     }),
     label: (n) => n.name,
-    sub: (n) => [n.courseYear ? `${n.courseYear} курс` : '', n.specialty?.name].filter(Boolean).join(' · '),
+    sub: (n) => [n.courseYear ? `${n.courseYear} курс` : '', n.degreeProgram?.name].filter(Boolean).join(' · '),
     title: 'Обмеження розкладу академічних груп',
     hint: 'Коли групі можна ставити пари.',
     emptyText: 'На цьому факультеті ще немає академічних груп.',

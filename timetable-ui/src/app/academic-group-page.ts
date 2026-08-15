@@ -18,7 +18,7 @@ interface AcademicGroup {
   courseYear: number;
   studyForm: string;
   studentsCount?: number;
-  specialty: { id: string; name: string; faculty: { id: string; name: string } };
+  degreeProgram: { id: string; name: string; faculty: { id: string; name: string } };
 }
 
 @Component({
@@ -48,7 +48,7 @@ export class AcademicGroupDetailPage implements OnInit {
 
   /**
    * Scopes the academicGroup options when editing a student to only groups
-   * within the same specialty. Set once the group data loads.
+   * within the same degreeProgram. Set once the group data loads.
    */
   studentRefFilters: Record<string, string> = {};
 
@@ -67,13 +67,13 @@ export class AcademicGroupDetailPage implements OnInit {
   }
 
   private load() {
-    const q = `query($id: ID!) { academicGroups { academicGroup(id: $id) { id name courseYear studyForm studentsCount specialty { id name faculty { id name } } } } }`;
+    const q = `query($id: ID!) { academicGroups { academicGroup(id: $id) { id name courseYear studyForm studentsCount degreeProgram { id name faculty { id name } } } } }`;
     this.gql.request(q, { id: this.groupId }).subscribe({
       next: (d: any) => {
         const g = d.academicGroups.academicGroup;
         this.group.set(g);
-        if (g?.specialty?.id) {
-          this.studentRefFilters = { academicGroupId: g.specialty.id };
+        if (g?.degreeProgram?.id) {
+          this.studentRefFilters = { academicGroupId: g.degreeProgram.id };
         }
       },
       error: (e) => this.error.set(e.message)
@@ -98,7 +98,7 @@ export class AcademicGroupDetailPage implements OnInit {
   saveEdit() {
     const g = this.group();
     if (!g) return;
-    const input: Record<string, any> = { specialtyId: g.specialty.id };
+    const input: Record<string, any> = { degreeProgramId: g.degreeProgram.id };
     for (const f of ['name', 'studyForm']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }

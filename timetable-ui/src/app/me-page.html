@@ -150,7 +150,7 @@
                 <th>Вид роботи</th>
                 <th class="num">Годин</th>
                 <th>Семестр</th>
-                <th>Спеціальність</th>
+                <th>Освітня програма</th>
                 <th>Академічні групи</th>
               </tr>
             </thead>
@@ -169,7 +169,7 @@
                     @if (row.students) { <span class="muted">({{ row.students }} студ.)</span> }
                   </td>
                   <td>{{ row.semester ? termLabel(row.semester) : '&mdash;' }}</td>
-                  <td>{{ row.specialtyName || '&mdash;' }}</td>
+                  <td>{{ row.degreeProgramName || '&mdash;' }}</td>
                   <td>{{ row.groupNames.length ? row.groupNames.join(', ') : '&mdash;' }}</td>
                 </tr>
               } @empty {
@@ -201,7 +201,7 @@
             <h2>Мій навчальний план</h2>
             <p class="muted">
               @if (stud) {
-                {{ stud.specialtyCode ? stud.specialtyCode + ' ' : '' }}{{ stud.specialtyName }}
+                {{ stud.degreeProgramCode ? stud.degreeProgramCode + ' ' : '' }}{{ stud.degreeProgramName }}
                 @if (stud.studyForm) { &middot; {{ studyFormLabel(stud.studyForm) }} форма }
                 &middot; {{ stud.courseYear }} курс
               }
@@ -271,7 +271,7 @@
                 <tr>
                   <td colspan="9" class="muted">
                     @if (loading()) { Завантаження&hellip; }
-                    @else { На обраний період навчальний план спеціальності не містить дисциплін. }
+                    @else { На обраний період навчальний план освітньої програми не містить дисциплін. }
                   </td>
                 </tr>
               }
@@ -279,11 +279,11 @@
           </table>
         </div>
 
-        @if (stud?.specialtyId) {
+        @if (stud?.degreeProgramId) {
           <p class="muted" style="margin-top: 10px;">
-            Повний план спеціальності, разом із перевіркою на відповідність Закону України «Про вищу
+            Повний план освітньої програми, разом із перевіркою на відповідність Закону України «Про вищу
             освіту» та друкованою формою, —
-            на сторінці <a [routerLink]="['/specialty', stud!.specialtyId]">{{ stud!.specialtyName }}</a>.
+            на сторінці <a [routerLink]="['/degree-program', stud!.degreeProgramId]">{{ stud!.degreeProgramName }}</a>.
           </p>
         }
       }

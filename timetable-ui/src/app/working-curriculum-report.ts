@@ -1,5 +1,5 @@
 /**
- * The printable «РОБОЧИЙ НАВЧАЛЬНИЙ ПЛАН» of a specialty for one academic year — the sheet a
+ * The printable «РОБОЧИЙ НАВЧАЛЬНИЙ ПЛАН» of a degreeProgram for one academic year — the sheet a
  * навчальний відділ files and a кафедра plans its load from, built from exactly the rows the
  * «Робочі навчальні плани» tab shows.
  *
@@ -89,12 +89,12 @@ const studyFormLabel = (v: string): string => label(STUDY_FORM_OPTIONS, v);
 export interface WorkingCurriculumReportInput {
   /** The plan as computed by `buildWorkingCurriculumPlan` — the same object the tab renders. */
   plan: WorkingCurriculumPlan;
-  specialtyCode: string;
-  specialtyName: string;
-  /** Raw `specialties.degree` enum value. */
+  degreeProgramCode: string;
+  degreeProgramName: string;
+  /** Raw `degreePrograms.degree` enum value. */
   degree: string;
   facultyName: string;
-  /** Raw `academic_groups.study_form` values found among the specialty's groups. */
+  /** Raw `academic_groups.study_form` values found among the degreeProgram's groups. */
   studyForms: string[];
   /** Passed in rather than read, so the same input always yields the same bytes. */
   generatedAt: Date;
@@ -106,7 +106,7 @@ export function workingCurriculumReportFileName(
   code: string, courseYear: number | null, academicYear: string): string {
   const safe = (text: string) => text.trim().replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-|-$/g, '');
   const scope = courseYear === null ? 'усі-курси' : `курс-${courseYear}`;
-  return `Робочий_навчальний_план_${safe(code) || 'спеціальність'}_${scope}_${academicYear.replace('/', '-')}.pdf`;
+  return `Робочий_навчальний_план_${safe(code) || 'освітня-програма'}_${scope}_${academicYear.replace('/', '-')}.pdf`;
 }
 
 const fmtDate = (d: Date): string =>
@@ -123,7 +123,7 @@ export function buildWorkingCurriculumReport(input: WorkingCurriculumReportInput
     fonts: { regular: fonts.regular, bold: fonts.bold },
     defaultFont: 'regular',
     defaultSize: 11,
-    title: `Робочий навчальний план — ${input.specialtyCode} ${input.specialtyName} — ` +
+    title: `Робочий навчальний план — ${input.degreeProgramCode} ${input.degreeProgramName} — ` +
            `${scope} — ${academicYear}`,
     author: UNIVERSITY_NAME,
     subject: `${degreeLabel(input.degree)}, ${input.facultyName}`,
@@ -235,7 +235,7 @@ function drawIdentity(doc: PdfDocument, input: WorkingCurriculumReportInput,
     padY: 1.6,
     keepTogether: true,
     rows: [
-      { cells: [key('Спеціальність'), value(`${input.specialtyCode} ${input.specialtyName}`.trim()),
+      { cells: [key('Освітня програма'), value(`${input.degreeProgramCode} ${input.degreeProgramName}`.trim()),
                 key('Навчальний рік'), value(academicYear)] },
       { cells: [key('Освітній ступінь'), value(degreeLabel(input.degree)),
                 key('Позицій'), value(String(plan.totals.items))] },
@@ -698,7 +698,7 @@ function drawNotes(doc: PdfDocument, plan: WorkingCurriculumPlan): void {
   ];
   if (plan.courseYear === null) {
     notes.push(
-      'План сформовано за всіма курсами спеціальності, а не за одним навчальним роком: розділи 1, ' +
+      'План сформовано за всіма курсами освітньої програми, а не за одним навчальним роком: розділи 1, ' +
       '2 і 4 підсумовують усі курси разом.');
   }
   if (derived) {
@@ -769,7 +769,7 @@ function drawSignatures(doc: PdfDocument): void {
 function drawPageFurniture(doc: PdfDocument, input: WorkingCurriculumReportInput,
                            academicYear: string, scope: string): void {
   const stamp = `Сформовано автоматично ${fmtDate(input.generatedAt)} · ${SYSTEM_NAME}`;
-  const trail = `${input.specialtyCode} ${input.specialtyName} · ${scope} · ${academicYear} н. р.`;
+  const trail = `${input.degreeProgramCode} ${input.degreeProgramName} · ${scope} · ${academicYear} н. р.`;
   for (let page = 0; page < doc.pageCount; page++) {
     doc.onPage(page, () => {
       if (page > 0) {

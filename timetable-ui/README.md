@@ -108,7 +108,7 @@ different purposes:
    modal create/edit form for it. Adding an entity here is a metadata edit, not new markup.
 2. **Dedicated hierarchical drill-down pages** — hand-written components with their own
    GraphQL queries/mutations for the main "browse the university" flow: faculties → buildings
-   → departments → specialties → academic groups, each with an information page and
+   → departments → degree programmes → academic groups, each with an information page and
    purpose-built child-list widgets (e.g. curriculum items with nested hour blocks, working
    curriculum items with faculty/department/group pickers).
 
@@ -171,14 +171,15 @@ src/app/
 ├── building-page.ts/.html        # "/building/:id/:section" — building detail (rooms)
 ├── department-page.ts/.html      # "/department/:id/:section" — department detail (lecturers, combined
 │                                 #   working curriculum items, lecturer workloads)
-├── specialty-page.ts/.html       # "/specialty/:id/:section" — specialty detail (curricula, groups)
+├── degree-program-page.ts/.html  # "/degree-program/:id/:section" — degree programme detail
+│                                 #   (curricula, groups)
 ├── academic-group-page.ts/.html  # "/academic-group/:id/:section" — group detail (students)
 ├── department-list.ts/.html          # child-list widget: departments within a faculty
-├── specialty-list.ts/.html           # child-list widget: specialties within a faculty
-├── academic-group-list.ts/.html      # child-list widget: academic groups within a specialty
-├── curriculum-editor.ts/.html        # specialty tab: course-first inline curriculum editor —
+├── degree-program-list.ts/.html      # child-list widget: degree programmes within a faculty
+├── academic-group-list.ts/.html      # child-list widget: academic groups within a programme
+├── curriculum-editor.ts/.html        # programme tab: course-first inline curriculum editor —
 │                                     #   "Редагування планів" (see below)
-├── curriculum-item-list.ts/.html     # specialty tab: curriculum items (semester/course/ECTS/hours)
+├── curriculum-item-list.ts/.html     # programme tab: curriculum items (semester/course/ECTS/hours)
 │                                     #   and the printable «Навчальний план» — "Навчальні плани"
 ├── curriculum-summary.ts/.html       # the programme's headline figures, shown on both curriculum
 │                                     #   tabs — presentational, renders a CurriculumPlan
@@ -187,9 +188,9 @@ src/app/
 ├── plan-limits.ts                    # those limits, read from global_properties — pure
 ├── global-properties.service.ts      # GlobalPropertiesService: the settings table, loaded once
 ├── curriculum-report.ts              # the printable «НАВЧАЛЬНИЙ ПЛАН» sheet — pure, returns bytes
-├── working-curriculum-list.ts/.html  # specialty tab: assign a department to each hours block —
+├── working-curriculum-list.ts/.html  # programme tab: assign a department to each hours block —
 │                                     #   "Редагування робочих планів"
-├── working-curriculum-view.ts/.html  # specialty tab: the same plan read as a document, by course year,
+├── working-curriculum-view.ts/.html  # programme tab: the same plan read as a document, by course year,
 │                                     #   with the printable working curriculum — "Робочі навчальні плани"
 ├── working-curriculum-summary.ts/.html # the working curriculum's headline figures, shown on both
 │                                     #   curriculum tabs — presentational
@@ -267,14 +268,14 @@ the name of a `global_properties` row. Every argument names a variable, and the 
 the document:
 
 ```ts
-const q = `query($facultyId: ID, $limit: Int!) { specialties {
-  specialtyConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } }
+const q = `query($facultyId: ID, $limit: Int!) { degreePrograms {
+  degreeProgramConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } }
 } }`;
 this.gql.request(q, { facultyId: this.facultyId, limit: 200 });
 ```
 
 The client used to interpolate them —
-``` `specialtyConnection(limit: 200, facultyId: "${this.facultyId}")` ``` — which worked because
+``` `degreeProgramConnection(limit: 200, facultyId: "${this.facultyId}")` ``` — which worked because
 every value it ever interpolated happened to be a database id. That is not a property of the code,
 it is a property of the data it has been given so far: the same template with a name in it produces
 a broken document the moment the name contains a quote, and a query built by concatenation cannot be
@@ -294,9 +295,9 @@ Those types are the ones `QueryDefinition` declares: `filter(…)`/`relationFilt
 
 Most queries are fixed text with a fixed set of variables and say so inline. A handful are not:
 *which* filters apply, or *how many* aliased sub-queries there are, is decided in the browser.
-«Академічні групи» filters by спеціальність, by факультет, by both or by neither; the student loader
-asks for one aliased `studentConnection` per group; `BaseEntity` names its filter arguments from
-entity metadata, so even the argument *names* are assembled. Those documents are built by
+«Академічні групи» filters by освітня програма, by факультет, by both or by neither; the student
+loader asks for one aliased `studentConnection` per group; `BaseEntity` names its filter arguments
+from entity metadata, so even the argument *names* are assembled. Those documents are built by
 concatenation — and concatenating a value in with them is exactly what the rule above forbids.
 
 `GqlVars` is the answer, and it is small enough to read in one sitting. `arg(name, type, value)`
@@ -310,7 +311,7 @@ to `request`:
 const v = new GqlVars();
 const args = [
   v.arg('limit', 'Int!', 500),
-  v.optionalArg('specialtyId', 'ID', this.specialtyId),
+  v.optionalArg('degreeProgramId', 'ID', this.degreeProgramId),
   v.optionalArg('facultyId', 'ID', this.facultyId)
 ].filter(Boolean).join(', ');
 const q = `${v.declaration()}{ academicGroups { academicGroupConnection(${args}) { … } } }`;
@@ -341,7 +342,7 @@ allowed to reach for a service.
 | `timetable-solver.ts` | day / start time / room / week parity for every class session | [TIMETABLE-GENERATION.md](./TIMETABLE-GENERATION.md) |
 | `workload-stats.ts` | per-lecturer hour totals and deviation from the constraints | *Workload statistics*, below |
 | `plan-limits.ts` | the limits a plan is measured against, read from `global_properties` | *Curriculum limits are settings*, below |
-| `curriculum-plan.ts` | what a specialty's curriculum adds up to, and its compliance with those limits | [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) |
+| `curriculum-plan.ts` | what a programme's curriculum adds up to, and its compliance with those limits | [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) |
 | `curriculum-report.ts` | the printable «Навчальний план» sheet | [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) |
 | `working-curriculum-plan.ts` | which department delivers what, and the hours that projects onto each | [WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) |
 | `working-curriculum-report.ts` | the printable «Робочий навчальний план» sheet | [WORKING-CURRICULUM-PDF.md](./WORKING-CURRICULUM-PDF.md) |
@@ -395,7 +396,7 @@ A course may also be restricted to **one semester** (`courses.semester`, [`V6`](
 and that value is written **first inside the same parentheses**:
 `Вибіркова дисципліна 5 (семестр 5, англійською)`. It goes there rather than beside them because it
 answers the same question the tags answer — which «Вибіркова дисципліна 5» is this, out of the
-several a specialty may carry — and
+several a degree programme may carry — and
 because a second bracketed group after the first reads as a footnote rather than as part of the
 name. `courseLabel(name, tags, semester)`; the third argument is optional, so a caller that has not
 selected the column renders exactly what it rendered before rather than a wrong label, and the flip
@@ -469,8 +470,8 @@ foreign keys are `ref(...)` fields pointing at another entity for the dropdown:
 
 Two more field-builder helpers cover relations `ref(...)` can't express, both used by the
 `Course` entity: `multiref(name, label, ref, relation, refLabel)` renders an
-`app-multi-select` bound to a many-to-many id-list input field (`Course.specialtyIds`, which
-specialties the course may be added to a curriculum for — see the backend's
+`app-multi-select` bound to a many-to-many id-list input field (`Course.degreeProgramIds`, which
+degree programmes the course may be added to a curriculum for — see the backend's
 `.manyToMany(...)`), replacing the join-table membership wholesale on save; `tags(name, label,
 relation, tagField)` renders a plain comma-separated text input that's split/joined against a
 nested-list mutation field (`Course.tags` — see the backend's `.nestedList(...)`) — an empty
@@ -505,9 +506,9 @@ An entity may also declare `detailRoute` — the path of its own drill-down page
 generic table of that entity grows an **«Відкрити →»** link in its actions column: not only the
 standalone table page but every embedding of it, so the faculty page's «Дисципліни» and «Аудиторії»
 tabs and the department page's «Викладачі» tab all lead somewhere without a line of their own.
-`Course`, `Lecturer`, `Room`, `Specialty`, `AcademicGroup`, `Faculty`, `Department` and `Building`
-carry one. That the link is metadata rather than markup is the point: the alternative was the same
-anchor pasted into four call sites and forgotten in the fifth.
+`Course`, `Lecturer`, `Room`, `DegreeProgram`, `AcademicGroup`, `Faculty`, `Department` and
+`Building` carry one. That the link is metadata rather than markup is the point: the alternative was
+the same anchor pasted into four call sites and forgotten in the fifth.
 
 `detailRoute` does a second job: **a `ref` column renders as a link to the row it points at.** The
 cell used to print the referenced row's database id beside its name — «Дискретна математика (#42)»,
@@ -534,15 +535,15 @@ reorders the other — `Student` is listed Прізвище → Ім'я → По
 
 The enum option lists (`DEGREE_OPTIONS`, `POSITION_OPTIONS`, `COURSE_TYPE_OPTIONS`,
 `CONTROL_FORM_OPTIONS`, `HOUR_TYPE_OPTIONS`, `TEACHING_FORMAT_OPTIONS`, …) are exported, and the
-hand-written pages read them too rather than keeping their own copies — `courseTypeLabel(value)`
-and `positionLabel(value)` are the shared value → Ukrainian label lookups for `courses.course_type`
-and `lecturers.position`. `POSITION_OPTIONS` was inline in the `Lecturer` metadata until the PDF
-report needed the same labels; anything that renders a stored enum should reach for the exported
-list rather than repeat it. A page that hand-rolls its own map is a
-bug waiting to happen: the one that existed showed raw `INTERNSHIP` / `COURSE_WORK` in a column
-because its private map only covered three of the eight values. One exception is still in the tree:
-`specialty-page.ts` declares its own `DEGREE_OPTIONS` literal rather than importing the shared one
-(its sibling `specialty-list.ts` imports it). The two agree today, which is exactly what makes the
+hand-written pages read them too rather than keeping their own copies — `courseTypeLabel(value)` and
+`positionLabel(value)` are the shared value → Ukrainian label lookups for `courses.course_type` and
+`lecturers.position`. `POSITION_OPTIONS` was inline in the `Lecturer` metadata until the PDF report
+needed the same labels; anything that renders a stored enum should reach for the exported list
+rather than repeat it. A page that hand-rolls its own map is a bug waiting to happen: the one that
+existed showed raw `INTERNSHIP` / `COURSE_WORK` in a column because its private map only covered
+three of the eight values. One exception is still in the tree: `degree-program-page.ts` declares its
+own `DEGREE_OPTIONS` literal rather than importing the shared one (its sibling
+`degree-program-list.ts` imports it). The two agree today, which is exactly what makes the
 duplication easy to miss.
 
 `BaseEntity` (an abstract `@Directive`) builds the queries/mutations from this metadata —
@@ -574,7 +575,7 @@ otherwise looks like an empty database. The faculty page's «Дисциплін�
 server-side кафедра filter.
 
 `entity-pages.ts` currently registers 14 such pages (`academicDegree`, `faculty`,
-`department`, `specialty`, `course`, `lecturer`, `student`, `academicGroup`,
+`department`, `degreeProgram`, `course`, `lecturer`, `student`, `academicGroup`,
 `room`, `roomGroup`, `abstractRoom`, `classStartTimeSet`, `classStartTime`, `timetableEntry`), each routed at the
 **kebab-case of its `single`** — `roomGroup` becomes `/room-group`, `classStartTimeSet` becomes
 `/class-start-time-set` — by the same `kebabCase` that turns a section key into a section slug. These
@@ -584,40 +585,40 @@ without a dedicated drill-down page (`Room`, `RoomGroup`, `AbstractRoom`, `Class
 `RoomGroup` uses `multiref` for its rooms and offers both a faculty and a department picker even
 though the two are mutually exclusive — the database rejects a row that sets both
 (`room_groups_scope_check`), so a form that does fails on save rather than being prevented here;
-`ClassStartTime` carries a `filterParam: 'classStartTimeSetId'` — ten of the fifteen entities carry
+`ClassStartTime` carries a `filterParam: 'classStartTimeSetId'` — eleven of the sixteen entities carry
 a `filterParam`, but this is the one where it is not merely convenient: `ordinal` only numbers
 periods *within* a set, so an unfiltered list interleaves every set's and two rows both read "2.". `CombinedGroupPage`
 (the same `BaseEntity` table) is also registered as a component but not routed standalone — it's
 embedded directly as the Faculty page's "Об'єднані групи" tab instead. `CurriculumItem`,
 `CurriculumItemHours`, `WorkingCurriculumItem` and `LecturerWorkload` have no generic page at all;
 they're managed exclusively through the hand-written drill-down pages below
-(`SpecialtyDetailPage`'s working-curriculum-items tab and the department's "Навантаження
+(`DegreeProgramDetailPage`'s working-curriculum-items tab and the department's "Навантаження
 викладачів" tab, via `LecturerWorkloadList`).
 
 ### Hierarchical drill-down pages
 
-The main browsing flow is a set of hand-written pages, each fetching its own GraphQL query
-and composing purpose-built child-list components rather than going through `BaseEntity`.
-Every one of them is tabbed, and **each tab is an address of its own** —
-`/faculty/:id/room-assignment`, `/specialty/:id/working-curricula`, `/me/timetable` — so any of them
-can be bookmarked, sent to a colleague and reloaded; see [The open tab is part of the
-URL](#the-open-tab-is-part-of-the-url-section-routets). The paths below name the pages; their default
-tab is `info`, which the bare path redirects to.
+The main browsing flow is a set of hand-written pages, each fetching its own GraphQL query and
+composing purpose-built child-list components rather than going through `BaseEntity`. Every one of
+them is tabbed, and **each tab is an address of its own** — `/faculty/:id/room-assignment`,
+`/degree-program/:id/working-curricula`, `/me/timetable` — so any of them can be bookmarked, sent to
+a colleague and reloaded; see [The open tab is part of the
+URL](#the-open-tab-is-part-of-the-url-section-routets). The paths below name the pages; their
+default tab is `info`, which the bare path redirects to.
 
-- **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`),
-  tabbed into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections:
-  info, departments (`DepartmentList`), specialties (`SpecialtyList`), rooms, academic groups,
-  combined groups (`CombinedGroupPage`), courses, room assignment (`RoomAssignmentList`, see
-  below), "Обмеження груп" and "Обмеження аудиторій" (two instances of `TimetableConstraintList`,
-  see below), and schedule building (`FacultyTimetableList`, see below). The "Розклад" group is
-  ordered by the order the work happens in: state where each class may be held and when its groups
-  and rooms are unavailable, then generate a timetable that obeys all three, then read it. Every list on this page is scoped to the
-  faculty, including the two that have no
-  `faculty_id` of their own: "Академічні групи" passes `[facultyId]` alongside its optional
-  specialty sub-filter (so clearing that sub-filter means "all specialties *of this faculty*",
-  not "every group in the university"), and "Об'єднані групи" passes the same scope to the
-  generic table through `extraFilterParam`/`extraFilterValue` — both backed by the
-  `facultyId` relation filters described in the backend README.
+- **`FacultyHome`** (`/`) → tiles for all faculties → **`FacultyPage`** (`/faculty/:id`), tabbed
+  into "Факультет / Структура / Люди та групи / Навчальні плани / Розклад" sections: info,
+  departments (`DepartmentList`), degree programmes (`DegreeProgramList`), rooms, academic groups,
+  combined groups (`CombinedGroupPage`), courses, room assignment (`RoomAssignmentList`, see below),
+  "Обмеження груп" and "Обмеження аудиторій" (two instances of `TimetableConstraintList`, see
+  below), and schedule building (`FacultyTimetableList`, see below). The "Розклад" group is ordered
+  by the order the work happens in: state where each class may be held and when its groups and rooms
+  are unavailable, then generate a timetable that obeys all three, then read it. Every list on this
+  page is scoped to the faculty, including the two that have no `faculty_id` of their own:
+  "Академічні групи" passes `[facultyId]` alongside its optional degree programme sub-filter (so
+  clearing that sub-filter means "all degree programmes *of this faculty*", not "every group in the
+  university"), and "Об'єднані групи" passes the same scope to the generic table through
+  `extraFilterParam`/`extraFilterValue` — both backed by the `facultyId` relation filters described
+  in the backend README.
 - **`BuildingHome`** (`/building`) → **`BuildingPage`** (`/building/:id`): info + rooms
   (each room shows/edits its own faculty; there's no separate "faculties in this building" tab).
 - **`DepartmentDetailPage`** (`/department/:id`): info, lecturers, combined working curriculum
@@ -627,15 +628,14 @@ tab is `info`, which the bare path redirects to.
   below), lecturer workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below), the
   department-wide summary (`DepartmentWorkloadSummary` — "Зведене навантаження") and the
   per-lecturer assessment (`LecturerWorkloadDetail` — "Оцінка навантаження", see below).
-- **`SpecialtyDetailPage`** (`/specialty/:id`): info, then **each plan twice — once to edit, once to
-  read** — plus academic groups (`AcademicGroupList`). The curriculum is entered course-first
-  (`CurriculumEditor`, "Редагування планів") and read as a table with its printable «Навчальний
-  план» (`CurriculumItemList`, "Навчальні плани"); the working curriculum is entered by hanging a
-  department off each hours block (`WorkingCurriculumList`, "Редагування робочих планів") and read as
-  a document with its own printable sheet (`WorkingCurriculumView`, "Робочі навчальні плани"). All
-  four see
-  below. The editors are shaped for *entering* data and the readers for *checking* it, which is why
-  neither shape serves both.
+- **`DegreeProgramDetailPage`** (`/degree-program/:id`): info, then **each plan twice — once to
+  edit, once to read** — plus academic groups (`AcademicGroupList`). The curriculum is entered
+  course-first (`CurriculumEditor`, "Редагування планів") and read as a table with its printable
+  «Навчальний план» (`CurriculumItemList`, "Навчальні плани"); the working curriculum is entered by
+  hanging a department off each hours block (`WorkingCurriculumList`, "Редагування робочих планів")
+  and read as a document with its own printable sheet (`WorkingCurriculumView`, "Робочі навчальні
+  плани"). All four see below. The editors are shaped for *entering* data and the readers for
+  *checking* it, which is why neither shape serves both.
 - **`AcademicGroupDetailPage`** (`/academic-group/:id`): info, students. (No workload tab here —
   workloads are managed per-department, not per-group.)
 - **`CourseDetailPage`** (`/course/:id`), **`LecturerDetailPage`** (`/lecturer/:id`) and
@@ -656,14 +656,14 @@ host. See [Delegating access](#delegating-access-resourceaccesspanel). The depar
 «✎ Редагувати» became conditional in the same round — it used to render for everybody and rely on
 the server to refuse, which it did, after the form had been filled in.
 
-#### Editing a curriculum course-first (`CurriculumEditor`, specialty "Редагування планів" tab)
+#### Editing a curriculum course-first (`CurriculumEditor`, degree programme "Редагування планів" tab)
 
-The same `curriculum_items` rows as the tab below it, inverted: one block per **course** the
-specialty is allowed to teach (`courseConnection(specialtyId:)`, backed by `course_specialties`),
-each holding its semester blocks, each of those holding a row per hour type. Courses with no
-curriculum items yet are listed too — sorted to the top alphabetically — so gaps in the plan are
-visible rather than merely absent, which a table of existing rows cannot show. Everything is edited
-inline, one save per semester block, rather than through a modal.
+The same `curriculum_items` rows as the tab below it, inverted: one block per **course** the degree
+programme is allowed to teach (`courseConnection(degreeProgramId:)`, backed by
+`course_degree_programs`), each holding its semester blocks, each of those holding a row per hour
+type. Courses with no curriculum items yet are listed too — sorted to the top alphabetically — so
+gaps in the plan are visible rather than merely absent, which a table of existing rows cannot show.
+Everything is edited inline, one save per semester block, rather than through a modal.
 
 **An `ELECTIVE` is not one of those courses.** It is a choice inside an `ELECTIVE_GROUP`, and the
 group is what the plan reserves a slot for; which child fills it is decided a level down, on
@@ -683,7 +683,7 @@ two readings coincide exactly: all 664 electives have a parent, and nothing else
   sort by semester. Unplanned courses come first.
 - **No duplicate semesters** — the semester dropdown only offers values no sibling block already
   uses, and `save()` re-checks (two new blocks can both be unsaved at once), with
-  `UNIQUE (course_id, specialty_id, semester)` as the backstop.
+  `UNIQUE (course_id, degree_program_id, semester)` as the backstop.
 - **A course restricted to one semester offers that semester and nothing else.** `courses.semester`
   (see the service README's [`V6`](../timetable/README.md#v6__course_semestersql)) says a discipline
   is a component of one semester and of no other — normally an `ELECTIVE_GROUP`, whose whole purpose
@@ -697,24 +697,24 @@ two readings coincide exactly: all 664 electives have a parent, and nothing else
   flagged "буде вилучено" before you save, since clearing a box is otherwise a silent deletion.
 - **Concurrent edits** — saving one course reloads only that block, preserving unsaved edits
   elsewhere on the page.
-- A course-name filter and a "лише заплановані" toggle keep the page usable: a specialty can have
-  200+ courses.
+- A course-name filter and a "лише заплановані" toggle keep the page usable: a degree programme can
+  have 200+ courses.
 
 Editable state is a signal per field (see the zoneless note above), which is also what makes
 sibling blocks re-render when a neighbour changes — a block reading `sibling.semester()` while
 computing its own dropdown options registers as a consumer of that signal.
 
-#### Curriculum items and working curriculum items (`SpecialtyDetailPage`)
+#### Curriculum items and working curriculum items (`DegreeProgramDetailPage`)
 
-The "Навчальні плани" tab (`CurriculumItemList`) lists the specialty's `CurriculumItem`s
-(semester, course, control form, ECTS, per-hour-type breakdown) with an add/edit modal whose
-**course** dropdown is always scoped to courses allowed for the current specialty — the
-`courseConnection(specialtyId: ...)` filter, backed by the `course_specialties` join table (see
-the backend README) — regardless of whether the modal's optional faculty/department sub-filter
-(`DeptFacultySelect` pattern, defaulting to the specialty's own faculty) is also set. Both this
+The "Навчальні плани" tab (`CurriculumItemList`) lists the programme's `CurriculumItem`s (semester,
+course, control form, ECTS, per-hour-type breakdown) with an add/edit modal whose **course**
+dropdown is always scoped to courses allowed for the current degree programme — the
+`courseConnection(degreeProgramId: ...)` filter, backed by the `course_degree_programs` join table
+(see the backend README) — regardless of whether the modal's optional faculty/department sub-filter
+(`DeptFacultySelect` pattern, defaulting to the programme's own faculty) is also set. Both this
 dropdown and the resulting curriculum table display a course's tags (`Course.tags`, set on the
-`Course` entity page — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity)
-above) after its name in parentheses, e.g. "Database Systems (англійською)"
+`Course` entity page — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) above)
+after its name in parentheses, e.g. "Database Systems (англійською)"
 (`CurriculumItemList.courseLabel`).
 
 Picking a discipline that carries `courses.semester` **fills the «Семестр» field in and closes it**:
@@ -744,10 +744,10 @@ plain fields would memoise the first value it ever read (see the zoneless note a
 #### The printable curriculum (`curriculum-plan.ts`, `curriculum-report.ts`)
 
 The "Навчальні плани" tab carries a **«Завантажити PDF»** button producing the sheet an academic
-council approves — «НАВЧАЛЬНИЙ ПЛАН підготовки здобувачів вищої освіти» — for the specialty being
-looked at.
-Written **entirely on the client**, like the workload sheet: nothing is sent to the server and the
-file downloads straight from a `Blob`, with the embedded font fetched once per session.
+council approves — «НАВЧАЛЬНИЙ ПЛАН підготовки здобувачів вищої освіти» — for the degree programme
+being looked at. Written **entirely on the client**, like the workload sheet: nothing is sent to the
+server and the file downloads straight from a `Blob`, with the embedded font fetched once per
+session.
 
 - **`curriculum-plan.ts`** — the arithmetic and the norms. It folds the curriculum items into the
   parts a Ukrainian plan is read in (mandatory and elective components, course works, practical
@@ -771,12 +771,12 @@ article, which parts are the common practice of Ukrainian institutions, and what
 cannot yet fill in (the academic-year calendar, the name of the field of knowledge, the programme's
 ЄДЕБО identifier).
 
-The "Редагування робочих планів" tab of the specialty page renders, for every `CurriculumItem`:
-a header block ("Семестр 1, Дисципліна: …, Форма контролю: …, ECTS: …"), then one child block
-per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours block a table of
-`WorkingCurriculumItem` rows with an add/edit modal (`WorkingCurriculumList`) offering:
+The "Редагування робочих планів" tab of the degree programme page renders, for every
+`CurriculumItem`: a header block ("Семестр 1, Дисципліна: …, Форма контролю: …, ECTS: …"), then one
+child block per `CurriculumItemHours` row ("Лекції: 32", etc.), and inside each hours block a table
+of `WorkingCurriculumItem` rows with an add/edit modal (`WorkingCurriculumList`) offering:
 
-- an optional **faculty filter** (defaults to the specialty's own faculty) that narrows the
+- an optional **faculty filter** (defaults to the programme's own faculty) that narrows the
   **department** dropdown (`DeptFacultySelect` pattern, reused from `CurriculumItemList`'s
   own faculty→department cascade),
   - lecturer count, teaching format (`TEACHING_FORMAT_OPTIONS`: Разом / Окремо / Індивідуально з
@@ -833,7 +833,7 @@ including the trap that two legislation aggregators print the repealed order's s
 A `Course` is referenced from four directions — it sits in curricula, those curricula's hour blocks
 are handed to departments as working curriculum items, those become lecturer workloads, and those
 become classes in the timetable. Until this page existed, seeing any of it meant walking the
-specialty and department pages one at a time and holding the result in your head.
+degree programme and department pages one at a time and holding the result in your head.
 
 The page walks the chain once and opens with what it adds up to: how many curricula the discipline
 appears in and for how many credits, its contact hours against its normative volume, how many
@@ -845,19 +845,18 @@ groups) and
 without one tinted).
 
 It now edits, too. «Навчальні плани» creates, edits and deletes the discipline's `curriculum_items`
-rows (their `hours` block included, as a nested list); «Робочі навчальні плани» does the same for the
-`working_curriculum_items` that hand those hours to a кафедра, including the academic groups and —
-when the discipline is an umbrella — the elective actually chosen. «Навантаження викладачів» edits
-the `lecturer_workloads` themselves: lecturers, groups, combined groups, duration, the grid of bells,
-and where the class may be held. An `ELECTIVE_GROUP` also gains a
-«Вибіркові дисципліни» section that lists, adds, renames and detaches its children. The «Семестр»
-field of the edit form is where a discipline is pinned to one semester — `courses.semester`, which
-both curriculum screens then enforce (see
-[`V6`](../timetable/README.md#v6__course_semestersql)); it is offered on the child form too, but a
-new elective deliberately does *not* inherit its group's value, since the group's semester belongs
-to the slot the plan reserves and the child is never a plan position in its own right. The point is to
-correct a discipline's whole chain from one page rather than walking specialty and department pages
-one at a time.
+rows (their `hours` block included, as a nested list); «Робочі навчальні плани» does the same for
+the `working_curriculum_items` that hand those hours to a кафедра, including the academic groups and
+— when the discipline is an umbrella — the elective actually chosen. «Навантаження викладачів» edits
+the `lecturer_workloads` themselves: lecturers, groups, combined groups, duration, the grid of
+bells, and where the class may be held. An `ELECTIVE_GROUP` also gains a «Вибіркові дисципліни»
+section that lists, adds, renames and detaches its children. The «Семестр» field of the edit form is
+where a discipline is pinned to one semester — `courses.semester`, which both curriculum screens
+then enforce (see [`V6`](../timetable/README.md#v6__course_semestersql)); it is offered on the child
+form too, but a new elective deliberately does *not* inherit its group's value, since the group's
+semester belongs to the slot the plan reserves and the child is never a plan position in its own
+right. The point is to correct a discipline's whole chain from one page rather than walking degree
+programme and department pages one at a time.
 
 Three details there are load-bearing. A nested-list row is sent **with the id it was loaded with**,
 because the framework reconciles by id — a row without one is an insert, and inserting a second
@@ -873,9 +872,9 @@ at coercion. Both destructive buttons state what they cascade to before doing it
 Permissions are asked per row, not per page. A Course grant authorises everything here — both
 `CurriculumItem` and `WorkingCurriculumItem` name Course among their `@PermissionParent`s and the
 server ORs over the ancestor closure — but it is not the only thing that does: a гарант of one
-specialty may edit that specialty's plan positions without any right over the discipline itself, so
-the page also asks `accessLevels` for the specialties and departments actually on screen and takes
-the highest level any of the three scopes yields.
+degree programme may edit that programme's plan positions without any right over the discipline
+itself, so the page also asks `accessLevels` for the degree programmes and departments actually on
+screen and takes the highest level any of the three scopes yields.
 
 «Розклад занять» places this discipline's classes by hand: day, пара, week parity and room, per
 workload, through the same `createTimetableEntry` / `updateTimetableEntry` mutations «Формування
@@ -933,11 +932,11 @@ and on only the second, every ordinary discipline's.
 
 Its «Інформація» tab also **edits and deletes the discipline**, on the pattern set out under
 [Editing and deleting from a drill-down page](#editing-and-deleting-from-a-drill-down-page) below.
-The modal covers every `Course` field the generic table offers, `specialtyIds` and `tags` included —
-so a discipline no longer has to be opened twice, once here to read it and once at `/course` to
-change it. The one departure is the **«Група вибіркових»** picker: it lists the `ELECTIVE_GROUP`
-courses rather than all several thousand, plus whatever is currently stored even if it is not one,
-because an edit form must never silently drop a value the database holds.
+The modal covers every `Course` field the generic table offers, `degreeProgramIds` and `tags`
+included — so a discipline no longer has to be opened twice, once here to read it and once at
+`/course` to change it. The one departure is the **«Група вибіркових»** picker: it lists the
+`ELECTIVE_GROUP` courses rather than all several thousand, plus whatever is currently stored even if
+it is not one, because an edit form must never silently drop a value the database holds.
 
 #### Lecturer and room pages (`LecturerDetailPage`, `RoomDetailPage`)
 
@@ -971,9 +970,9 @@ rather than preferences:
 - **A cleared optional field is sent as an explicit `null`**, following `BaseEntity#buildInput`
   rather than the older `FacultyPage`/`BuildingPage` habit of omitting empty values — a field the
   update omits is left as it was, so on those two pages emptying a box still does nothing.
-- **`specialtyIds` and `tags` are always sent in full.** Omitting a many-to-many field leaves the
-  join table untouched and omitting a nested list leaves its rows untouched, so "I removed the last
-  one" has to travel as an empty array.
+- **`degreeProgramIds` and `tags` are always sent in full.** Omitting a many-to-many field leaves
+  the join table untouched and omitting a nested list leaves its rows untouched, so "I removed the
+  last one" has to travel as an empty array.
 - **Nothing else nested is sent at all**, and that is the point. `updateLecturer`'s payload also
   accepts `workloadConstraints` and `timetableConstraints`, and `updateRoom`'s accepts
   `timetableConstraints` — a *present* list reconciles, which would delete every rule not repeated
@@ -1035,10 +1034,10 @@ named:
 
 | Screen | Links |
 |---|---|
-| specialty → «Навчальні плани» (`CurriculumItemList`) | discipline |
-| specialty → «Редагування планів» (`CurriculumEditor`) | discipline, on each course block's heading |
-| specialty → «Робочі навчальні плани» (`WorkingCurriculumView`) | discipline |
-| specialty → «Редагування робочих планів» (`WorkingCurriculumList`) | discipline, and the elective actually taught |
+| degree programme → «Навчальні плани» (`CurriculumItemList`) | discipline |
+| degree programme → «Редагування планів» (`CurriculumEditor`) | discipline, on each course block's heading |
+| degree programme → «Робочі навчальні плани» (`WorkingCurriculumView`) | discipline |
+| degree programme → «Редагування робочих планів» (`WorkingCurriculumList`) | discipline, and the elective actually taught |
 | department → «Навантаження викладачів» (`LecturerWorkloadList`) | discipline (plain, elective and combined), every lecturer |
 | department → «Зведене навантаження» (`DepartmentWorkloadSummary`) | lecturer |
 | department → «Оцінка навантаження» (`LecturerWorkloadDetail`) | lecturer, and the discipline on every line |
@@ -1144,11 +1143,11 @@ The two halves resolve their data differently, and both differences are forced b
   totals for the same person — the third view of the same numbers described under *Workload
   statistics*. The annual total and the min/max band are always the **whole year**, whatever the
   picker says, because a ceiling is annual and measuring half a load against it would lie.
-- **The student's plan is their specialty's plan.** `curriculum_items` hang off a specialty, not off
-  a cohort, and there should be no per-student curriculum: what a student is entitled to see is the
-  programme they are enrolled in. Which semesters that means is derived —
-  `semester = (academic_groups.course_year − 1) × 2 + half`, the inverse of `courseYearOf` /
-  `halfYearOf` in `entities.ts` — so the page needs no field the model does not have.
+- **The student's plan is their programme's plan.** `curriculum_items` hang off a degree programme,
+  not off a cohort, and there should be no per-student curriculum: what a student is entitled to see
+  is the programme they are enrolled in. Which semesters that means is derived — `semester =
+  (academic_groups.course_year − 1) × 2 + half`, the inverse of `courseYearOf` / `halfYearOf` in
+  `entities.ts` — so the page needs no field the model does not have.
 
 The timetable tab mounts `TimetableView` in `columnMode: 'single'` for both roles, including the
 student. `'group'` would be the obvious choice and is the wrong one: the grid builds a column per
@@ -1164,7 +1163,7 @@ the day and the class slot down the side and whatever is being compared across t
 
 | Where | `columnMode` | Scope passed | What it is |
 |---|---|---|---|
-| faculty → «Розклад факультету» | `group` | the faculty's academic groups, narrowed by семестр / курс / спеціальність / група | the timetable a faculty publishes |
+| faculty → «Розклад факультету» | `group` | the faculty's academic groups, narrowed by семестр / курс / освітня програма / група | the timetable a faculty publishes |
 | department → «Розклад кафедри» | `lecturer` | the department's lecturers | the lecturer timetable a department works from |
 | `/lecturer/:id` → «Розклад» | `single` | that lecturer | one person's classes |
 | `/room/:id` → «Розклад» | `single` | that room | the room timetable |
@@ -1201,14 +1200,14 @@ fetches the right half-year once instead of the wrong one twice. The read-only
 `/timetable` page, which had no such filter and no scope of any kind, has been removed rather than
 fixed — `TimetableView` was already the better version of it.
 
-**The faculty tab's bar is семестр, курс, спеціальність, група.** A faculty timetable is the timetable
-of its academic groups — `timetableEntryConnection` has no `facultyId` filter — so the group ids the
-page passes *are* the scope, and the three filters are a `computed()` over the loaded group list
-(`courseYear` is a stored column on `academic_groups`; the connection already filters by
-`specialtyId` and `facultyId`, so no backend change was needed). Two consequences are handled
-explicitly. Filters that between them match no group render their own message rather than the
-grid's «Занять у розкладі ще немає» — no groups and no classes look identical and are not the same
-thing. And `restrictColumnsToScope` passes `buildTimetableGrid`'s `columnFilter`, because the server
+**The faculty tab's bar is семестр, курс, освітня програма, група.** A faculty timetable is the
+timetable of its academic groups — `timetableEntryConnection` has no `facultyId` filter — so the
+group ids the page passes *are* the scope, and the three filters are a `computed()` over the loaded
+group list (`courseYear` is a stored column on `academic_groups`; the connection already filters by
+`degreeProgramId` and `facultyId`, so no backend change was needed). Two consequences are handled
+explicitly. Filters that between them match no group render their own message rather than the grid's
+«Занять у розкладі ще немає» — no groups and no classes look identical and are not the same thing.
+And `restrictColumnsToScope` passes `buildTimetableGrid`'s `columnFilter`, because the server
 matches an entry if *any* of its groups is in scope and a cell names every group taught together, so
 a lecture shared across years would otherwise raise a column for a group the filter excluded. That
 filter runs against the scope the entries on screen were **fetched** with, not the current input:
@@ -1378,11 +1377,11 @@ contradictions only visible across rules.
 Saving is one `update<Entity>` mutation per card, the rules riding along as the
 `timetableConstraints` nested list, so a subject's whole set is replaced atomically and a removed
 rule is deleted by not being sent. Because the mutation's input payload is the *whole* entity, the
-component sends the subject's required scalars back unchanged alongside the list (`meta.required(node)`
-— a lecturer's first and last name, a group's name/year/study form/specialty, a room's number);
-omitting them would blank them. "Очистити" only empties the card and marks it dirty — the empty list
-reaches the server on the next "Зберегти", like any other edit, so a mis-click is undone by
-"Скасувати" rather than by re-entering the rules.
+component sends the subject's required scalars back unchanged alongside the list
+(`meta.required(node)` — a lecturer's first and last name, a group's name/year/study form/degree
+programme, a room's number); omitting them would blank them. "Очистити" only empties the card and
+marks it dirty — the empty list reaches the server on the next "Зберегти", like any other edit, so a
+mis-click is undone by "Скасувати" rather than by re-entering the rules.
 
 #### Lecturer workloads (`LecturerWorkloadList`, department "Навантаження викладачів" tab)
 
@@ -1414,7 +1413,7 @@ per-department form: a кафедра editing its own teaching load was also, in
 claim to rooms shared with every other department, and there was nowhere to see which classes had
 been given no room at all. Rooms belong to the faculty (`rooms.faculty_id`), the timetable that has
 to fit in them is built at faculty level, and so is the assignment — see [«Призначення
-аудиторій»](#where-each-class-may-be-held-roomassignmentlist-faculty-призначення-аудиторій-tab) below. Saving a workload
+аудиторій»](#where-each-class-is-held-roomassignmentlist-faculty-призначення-аудиторій-tab) below. Saving a workload
 here cannot disturb it: `roomIds`/`roomGroupIds` are simply absent from this mutation's input, and a
 many-to-many field left out is left untouched.
 
@@ -1626,7 +1625,7 @@ don't fit anywhere are reported.
 Finds every `WorkingCurriculumItem` belonging to the department that **isn't** already merged
 into a `CombinedWorkingCurriculumItem`, groups the candidates that share course + semester +
 hour type + hours (these are the ones a single lecturer could plausibly teach together as one
-shared class, e.g. the same lecture required by two specialties), and proposes merging each
+shared class, e.g. the same lecture required by two degree programmes), and proposes merging each
 group into a new combined item via the `workingCurriculumItemIds` many-to-many mutation field —
 after which it shows up in `LecturerWorkloadList`'s "Об'єднані позиції" section instead of the
 plain tree.
@@ -1674,15 +1673,16 @@ Three filters, combinable, and each is server-side where the backend can express
 |---|---|
 | Семестр (parity) | server — `semesterParity` on both working-item connections; defaults to `current_semester_parity` |
 | Кафедра | server — `departmentId` on `workingCurriculumItemConnection`, `departmentIds` on the combined one |
-| Спеціальність | **client** — neither connection carries a `specialtyId` relation filter, the specialty being two levels down on the curriculum item |
+| Освітня програма | **client** — neither connection carries a `degreeProgramId` relation filter, the degree programme being two levels down on the curriculum item |
 
-The specialty options are the faculty's own specialties **union every specialty actually on screen**,
-because the two sets differ in a way that matters: a department of this faculty teaching a service
-discipline to another faculty's specialty produces a class listed here — it is this faculty's
-teaching load — whose specialty `specialtyConnection(facultyId:)` would never return, leaving that
-class unfilterable. The converse gap is real and deliberate: a specialty of this faculty whose
-discipline is delivered by another faculty's department is that faculty's class to place, and is
-assigned on its page.
+The degree programme options are the faculty's own degree programmes **union every degree programme
+actually on screen**, because the two sets differ in a way that matters: a department of this
+faculty teaching a service discipline to another faculty's degree programme produces a class listed
+here — it is this faculty's teaching load — whose degree programme
+`degreeProgramConnection(facultyId:)` would never return, leaving that class unfilterable. The
+converse gap is real and deliberate: a degree programme of this faculty whose discipline is
+delivered by another faculty's department is that faculty's class to place, and is assigned on its
+page.
 
 The room half still writes the same two join tables through the same `updateLecturerWorkload`
 mutation the department modal always used. Two details are load-bearing. All three id lists are sent
@@ -1851,7 +1851,7 @@ All are standalone `ControlValueAccessor` components usable with `[(ngModel)]`:
 - **`SearchSelect`** — select2-like single-value searchable dropdown (used for every to-one FK).
 - **`MultiSelect`** — checkbox-list dropdown with tag display, for many-to-many fields (both
   hand-written pages, e.g. `academicGroupIds`, and the generic CRUD tables' `multiref` field
-  type, e.g. `Course.specialtyIds`).
+  type, e.g. `Course.degreeProgramIds`).
 - **`TimeSelect`** — an hour dropdown (6–21 by default) and a minute dropdown (00–55, step 5)
   bound to a single `"HH:mm"` string, so only valid slot times can be entered. It emits a value
   only once both halves are chosen, and keeps an already-stored off-grid value (an imported
@@ -1919,7 +1919,7 @@ declares the same alphabet on its text columns via `COLLATE ukrainian` (see the 
 disagreed, a client-side sort would visibly reshuffle a list the server had already ordered.
 
 A shared `Intl.Collator` is also markedly faster than a `localeCompare` call per comparison, which
-is noticeable on the larger lists (a specialty can have 200+ courses).
+is noticeable on the larger lists (a degree programme can have 200+ courses).
 
 ### Routes (`app.routes.ts`)
 
@@ -1932,7 +1932,7 @@ is noticeable on the larger lists (a specialty can have 200+ courses).
 | `/faculty/:id/:section` | `FacultyPage` | **lazy** — tabbed faculty detail, incl. the «Доступ» tab |
 | `/building/:id/:section` | `BuildingPage` | building detail |
 | `/department/:id/:section` | `DepartmentDetailPage` | **lazy** — department detail, incl. the «Доступ» tab |
-| `/specialty/:id/:section` | `SpecialtyDetailPage` | specialty detail incl. working curricula |
+| `/degree-program/:id/:section` | `DegreeProgramDetailPage` | degree programme detail incl. working curricula |
 | `/academic-group/:id/:section` | `AcademicGroupDetailPage` | group detail |
 | `/course/:id/:section` | `CourseDetailPage` | **lazy** (`loadComponent`) — one discipline across curricula, working curricula and workloads; edits/deletes it |
 | `/lecturer/:id/:section` | `LecturerDetailPage` | **lazy** — one lecturer: workloads, classes taught, personal timetable; edits/deletes them |
@@ -1969,16 +1969,16 @@ in the file. Each pulls in `TimetableView`, the grid and — on the Course page 
 of curricula and workloads, and the cost of deferring them is one extra request the first time a
 user opens one.
 
-The other six are there on the same reasoning, and the list has grown as the application has.
-«Мій кабінет» mounts `TimetableView` and is opened only by an account that is a person; the
+The other six are there on the same reasoning, and the list has grown as the application has. «Мій
+кабінет» mounts `TimetableView` and is opened only by an account that is a person; the
 administration console carries its own queries, including the full lecturer and student lists behind
 the person pickers, and is opened only by an administrator; `/global-properties` and
 `/building-travel-times` are single-purpose editors with stylesheets of their own. `FacultyPage` and
 `DepartmentDetailPage` were the last to move, and they moved the most: `FacultyPage` alone pulls in
-every tab it can show — the department, specialty and group lists, the room and course pages, the
-constraint editors and the timetable view — and it is not on the path to the one screen most people
-open the application for. Together the nine take the initial chunk from just over the 1.00 MB error
-budget to **684 kB**.
+every tab it can show — the department, degree programme and group lists, the room and course pages,
+the constraint editors and the timetable view — and it is not on the path to the one screen most
+people open the application for. Together the nine take the initial chunk from just over the 1.00 MB
+error budget to **684 kB**.
 
 The budget is worth stating plainly, because it is the thing that keeps forcing these decisions: the
 production build *fails* above 1.00 MB and warns above 500 kB. Anything added to a route that is
@@ -1994,11 +1994,11 @@ Each of the nine tabbed pages above is **two** route entries, not one:
   loadComponent: () => import('./faculty-page').then((m) => m.FacultyPage) },
 ```
 
-The tab used to live in a component signal, which meant «Кафедри», «Спеціальності» and «Аудиторії»
-were all the same address as «Інформація» — `/faculty/3`. That address could not be bookmarked, sent
-to a colleague, reloaded, or reached with the browser's Back button; every one of those led back to
-the first tab. Now the tab *is* the last path segment, so what is on screen and what is in the
-address bar are the same thing.
+The tab used to live in a component signal, which meant «Кафедри», «Освітні програми» and
+«Аудиторії» were all the same address as «Інформація» — `/faculty/3`. That address could not be
+bookmarked, sent to a colleague, reloaded, or reached with the browser's Back button; every one of
+those led back to the first tab. Now the tab *is* the last path segment, so what is on screen and
+what is in the address bar are the same thing.
 
 The redirect is what keeps that from being a half-measure: a bare `/faculty/3` — an old bookmark, a
 link written before this change, a `routerLink` in a list — resolves to `/faculty/3/info`, so every
@@ -2218,7 +2218,8 @@ only place the ordering, the Ukrainian labels and the one-line explanations live
 | `MANAGE` | Керування доступом | the above, plus the «Доступ» tab |
 
 Every list/table in the app — both the generic `BaseEntity` tables and the hand-written drill-down
-widgets (`DepartmentList`, `SpecialtyList`, `AcademicGroupList`, etc.) — follows the same pattern:
+widgets (`DepartmentList`, `DegreeProgramList`, `AcademicGroupList`, etc.) — follows the same
+pattern:
 
 1. After loading a page of rows, batch-call `auth.accessLevels(resourceType, ids)` and store the
    resulting `id -> level` map. Rows the caller cannot reach at all are simply absent from it.
@@ -2235,11 +2236,11 @@ widgets (`DepartmentList`, `SpecialtyList`, `AcademicGroupList`, etc.) — follo
    `PermissionEvaluator#levelForNew` walks on the backend.
 
 A **detail page** does the same for a batch of one: `FacultyPage`, `DepartmentDetailPage`,
-`CourseDetailPage`, `LecturerDetailPage` and `RoomDetailPage` each call
-`auth.accessLevel(<TYPE>, routeId)` in `ngOnInit` and derive `canModifyX` / `canDeleteX` /
-`canManageAccess` from it as computed signals. `CoursePage` composes three scopes, since a plan
-position can be reachable through the discipline *or* through its specialty, and a workload through
-the discipline *or* through the кафедра holding it: the level in force is the highest of them.
+`CourseDetailPage`, `LecturerDetailPage` and `RoomDetailPage` each call `auth.accessLevel(<TYPE>,
+routeId)` in `ngOnInit` and derive `canModifyX` / `canDeleteX` / `canManageAccess` from it as
+computed signals. `CoursePage` composes three scopes, since a plan position can be reachable through
+the discipline *or* through its degree programme, and a workload through the discipline *or* through
+the кафедра holding it: the level in force is the highest of them.
 
 The «Час переходу між корпусами» matrix applies the same split per cell — a корпус you hold at
 `EDIT` lets you correct a walk, and emptying the cell (which deletes the row) needs `FULL`. That is
@@ -2381,9 +2382,9 @@ needs nothing more than one «+ Створити користувача».
   subject's own scalar fields on every save (the mutation payload is the whole entity), so a card
   saved from a stale page would overwrite a name someone changed in the meantime.
 - **«Мій кабінет» reads the *current* plan, not the one the student was admitted under.** The
-  curriculum tab shows the specialty's plan as it stands today, narrowed to the semesters the
-  student's course year names. `Specialty` stores no year of intake and `curriculum_items` are not
-  versioned, so a plan revised mid-programme is shown to every cohort alike — the same gap
+  curriculum tab shows the programme's plan as it stands today, narrowed to the semesters the
+  student's course year names. `DegreeProgram` stores no year of intake and `curriculum_items` are
+  not versioned, so a plan revised mid-programme is shown to every cohort alike — the same gap
   [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) lists for the printed plan, surfacing here for the first
   time in front of the person it concerns. It also means the page cannot show a student what they
   have already passed: there is no enrolment or grade in the model at all.
@@ -2404,23 +2405,23 @@ needs nothing more than one «+ Створити користувача».
   substitute for unit tests of the constraint families, and it says nothing about the GraphQL-tree →
   `GenInput` mapping in `lecturer-workload-list.ts`, which remains untested code. The backend, by
   contrast, has `SchemaBuildTest`.
-- **`entity-pages.ts` declares fifteen components but routes thirteen.** `CombinedGroupPage` is
+- **`entity-pages.ts` declares sixteen components but routes fourteen.** `CombinedGroupPage` is
   deliberately unrouted (it is embedded in the Faculty page's "Об'єднані групи" tab). The other,
   `BuildingPage`, is dead code: `/building` is claimed by `BuildingHome`, and the `BuildingPage`
   that `app.routes.ts` imports is the unrelated drill-down component from `building-page.ts`. Two
   different classes share the name, and the generic one has no importer.
-- **The printed curriculum measures every specialty against the 25 % elective share of
-  ст. 62 ч. 1 п. 15, including those it should measure against 10 %.** The Закон № 3642-IX revision
-  of that clause lowers the floor to 10 % for specialties giving access to professions under
-  additional regulation (medicine, law, teacher training, …), but `specialties` carries no such flag,
-  so the check always applies the stricter bound. Its verdict on a regulated specialty is therefore a
-  lower bound, not a finding. The same section of [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) lists what
-  else the model cannot fill in — the academic-year calendar, the name of the field of knowledge, the
-  programme's ЄДЕБО identifier, the year of intake — each a field in `Specialty` rather than a change
-  to the document.
+- **The printed curriculum measures every degree programme against the 25 % elective share of ст. 62
+  ч. 1 п. 15, including those it should measure against 10 %.** The Закон № 3642-IX revision of that
+  clause lowers the floor to 10 % for specialties giving access to professions under additional
+  regulation (medicine, law, teacher training, …), but `degree_programs` carries no such flag, so
+  the check always applies the stricter bound. Its verdict on a programme under a regulated
+  specialty is therefore a lower bound, not a finding. The same section of
+  [CURRICULUM-PDF.md](./CURRICULUM-PDF.md) lists what else the model cannot fill in — the
+  academic-year calendar, the name of the field of knowledge, the programme's ЄДЕБО identifier, the
+  year of intake — each a field in `DegreeProgram` rather than a change to the document.
 - **The working curriculum has no year of its own.** It belongs to one academic year and one intake,
-  but `Specialty` stores neither, so the course year is picked with a filter and the academic year
-  comes from the date the file is generated. Two consequences: a sheet printed in July and one
+  but `DegreeProgram` stores neither, so the course year is picked with a filter and the academic
+  year comes from the date the file is generated. Two consequences: a sheet printed in July and one
   printed in September of the same planning round carry different years in their titles (the cutover
   is 1 August, matching `academicYearLabel`), and «усі курси» produces a document that is not a
   working curriculum in the usual sense — which is why the page says so and the sheet repeats it in
@@ -2440,8 +2441,8 @@ needs nothing more than one «+ Створити користувача».
   right default, since a faculty-level group is the common case, but it means "this faculty has no
   room groups" should be read as "no faculty-scoped ones".
 - Lists are fetched with `limit: 1000` (no pagination UI); connections are offset-based only.
-  `CurriculumEditor` renders a block per course of the specialty, which can be 240 of them on the
-  largest — hence its name filter and "лише заплановані" toggle rather than pagination.
+  `CurriculumEditor` renders a block per course of the degree programme, which can be 240 of them on
+  the largest — hence its name filter and "лише заплановані" toggle rather than pagination.
 - **`students` is empty in the checked-in `data.sql`** apart from one seeded group, so anything
   keyed on students looks broken when it isn't: the `INDIVIDUALLY` workload UI shows an empty
   student dropdown, and the academic-group "Студенти" tab shows an empty table, for every group

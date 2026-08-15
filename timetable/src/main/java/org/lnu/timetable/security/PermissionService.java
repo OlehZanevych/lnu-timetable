@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
  * (also delete), {@link AccessLevel#MANAGE} (also grant and revoke access to this scope and
  * anything under it). The scope cascades downward along the {@code @PermissionParent} /
  * {@code @PermissionJoinParent} edges declared on the domain classes: a grant on a Faculty covers
- * its departments, specialties, academic groups, curricula, working curricula, lecturer workloads
+ * its departments, degree programmes, academic groups, curricula, working curricula, lecturer workloads
  * and timetable entries, while a grant on a single Department covers that department, its lecturers
  * and their workloads and nothing belonging to a sibling department. The level does not weaken on
  * the way down. A caller's effective level on a row is the highest level among all their grants

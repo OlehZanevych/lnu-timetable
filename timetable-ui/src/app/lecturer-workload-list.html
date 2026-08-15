@@ -121,7 +121,7 @@
       </div>
       <div class="wci-hours-block">
         <div class="wci-hours-header">
-          <span>Спеціальності: {{ combinedMembersLabel(c) }}</span>
+          <span>Освітні програми: {{ combinedMembersLabel(c) }}</span>
         </div>
 
         <div class="lw-record">
@@ -180,7 +180,7 @@
   <div class="card wci-item-card">
     <div class="wci-item-header">
       <strong>Семестр {{ group.semester }}</strong>
-      <span>Спеціальність: {{ group.specialty.name }}</span>
+      <span>Освітня програма: {{ group.degreeProgram.name }}</span>
       <span>Дисципліна: <a class="ent-link" [routerLink]="['/course', group.course.id]">{{ courseLabel(group.course.name, group.course.tags, group.course.semester) }}</a></span>
       <span>Форма контролю: {{ controlFormLabel(group.controlForm) }}</span>
       <span>ECTS: {{ group.ectsCredits ?? '&mdash;' }}</span>

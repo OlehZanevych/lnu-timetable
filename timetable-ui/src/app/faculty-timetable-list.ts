@@ -978,7 +978,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
    *  4. (already in memory) the blocks, bells and global properties the page is built on.
    *
    * Step 3 is what makes cross-faculty scheduling correct: a room of ours also hosts other
-   * faculties' classes, our lecturers also teach their specialties, and our groups are also taught
+   * faculties' classes, our lecturers also teach their degreePrograms, and our groups are also taught
    * by their departments. Those entries are loaded as *immovable* — the generator schedules around
    * them and never rewrites them.
    */
@@ -1060,7 +1060,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     this.mergeRoomOptions(scopedRooms);
 
     // A workload may reach outside this faculty — its lecturer may sit in another department, its
-    // room may belong to another faculty, its groups may study on another one's specialty. Those
+    // room may belong to another faculty, its groups may study on another one's degreeProgram. Those
     // few are fetched by id rather than by widening the connections above to the whole university.
     const extraLecturers = [...lecturerIds].filter((id) => !known.lecturer.has(id));
     const extraGroups = [...groupIds].filter((id) => !known.group.has(id));

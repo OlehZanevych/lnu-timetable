@@ -1,7 +1,7 @@
 <div class="page-header">
   <div>
     <h2>Об'єднані позиції РНП</h2>
-    <p class="muted">Позиції робочого навчального плану, які кілька спеціальностей відвідують одночасно (напр. спільна лекція)</p>
+    <p class="muted">Позиції робочого навчального плану, які кілька освітніх програм відвідують одночасно (напр. спільна лекція)</p>
   </div>
 </div>
 
@@ -26,7 +26,7 @@
       <thead>
         <tr>
           <th></th>
-          <th>Спеціальність</th>
+          <th>Освітня програма</th>
           <th>Академічні групи</th>
         </tr>
       </thead>
@@ -34,7 +34,7 @@
         @for (item of g.items; track item.id) {
           <tr>
             <td><input type="checkbox" [checked]="isChecked(g, item.id)" (change)="toggle(g, item.id)" /></td>
-            <td>{{ item.specialty.name }}</td>
+            <td>{{ item.degreeProgram.name }}</td>
             <td>{{ academicGroupNames(item.academicGroups) }}</td>
           </tr>
         }
@@ -63,7 +63,7 @@
     <table class="wci-table">
       <thead>
         <tr>
-          <th>Спеціальність</th>
+          <th>Освітня програма</th>
           <th>Дисципліна</th>
           <th>Семестр</th>
           <th>Тип годин</th>
@@ -73,7 +73,7 @@
       <tbody>
         @for (m of c.workingCurriculumItems; track m.id) {
           <tr>
-            <td>{{ memberSpecialtyName(m) }}</td>
+            <td>{{ memberDegreeProgramName(m) }}</td>
             <td>
               <a class="ent-link" [routerLink]="['/course', m.curriculumItemHours.curriculumItem.course.id]">{{ memberCourseName(m) }}</a>
             </td>

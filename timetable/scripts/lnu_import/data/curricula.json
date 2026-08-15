@@ -2,9 +2,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-education",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "014.09",
-  "specialty_name": "Середня освіта (Інформатика)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "014.09",
+  "degree_program_name": "Середня освіта (Інформатика)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -701,9 +701,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-applied-mathematics",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "113",
-  "specialty_name": "Прикладна математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "113",
+  "degree_program_name": "Прикладна математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -1390,9 +1390,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-computer-sciences",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "F3",
-  "specialty_name": "(122) Комп`ютерні науки ОПП Інформатика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F3",
+  "degree_program_name": "(122) Комп`ютерні науки ОПП Інформатика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -2514,9 +2514,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-system-analysis",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "F4",
-  "specialty_name": "(124) Системний аналіз",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F4",
+  "degree_program_name": "(124) Системний аналіз",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -3484,9 +3484,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/bachelor/curriculum-cybersecurity",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "F5",
-  "specialty_name": "(125) Кібербезпека та захист інформації",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F5",
+  "degree_program_name": "(125) Кібербезпека та захист інформації",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -4388,9 +4388,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "014",
-  "specialty_name": "Середня освіта (інформатика)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "014",
+  "degree_program_name": "Середня освіта (інформатика)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -4623,9 +4623,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-education-master-z",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "014",
-  "specialty_name": "Середня освіта (інформатика)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "014",
+  "degree_program_name": "Середня освіта (інформатика)",
+  "degree_program_degree": "MASTER",
   "study_form": "PART_TIME",
   "semesters": [
    {
@@ -4844,9 +4844,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-applied-mathematics-master",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "F1",
-  "specialty_name": "Прикладна математика (1,4)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "F1",
+  "degree_program_name": "Прикладна математика (1,4)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -5161,9 +5161,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-applied-mathematics-master2",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "F1",
-  "specialty_name": "Прикладна математика (1,4)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "F1",
+  "degree_program_name": "Прикладна математика (1,4)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -5554,9 +5554,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-computer-science-master",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "122",
-  "specialty_name": "Комп'ютерні науки",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "122",
+  "degree_program_name": "Комп'ютерні науки",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -5887,9 +5887,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-system-analysis-master",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "124",
-  "specialty_name": "Системний аналіз",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "124",
+  "degree_program_name": "Системний аналіз",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -6288,9 +6288,9 @@
  {
   "url": "https://ami.lnu.edu.ua/academics/master/curriculum-cybersecurity-master",
   "faculty_host": "ami.lnu.edu.ua",
-  "specialty_code": "125",
-  "specialty_name": "Кібербезпека та захист інформації",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "125",
+  "degree_program_name": "Кібербезпека та захист інформації",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -6710,18 +6710,18 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/math",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-computer-algebra",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -7332,9 +7332,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-math-economics",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -7816,9 +7816,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-comp-analysis",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -8730,9 +8730,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-fin-math",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -8800,9 +8800,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-statistics-analysis",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E8",
-  "specialty_name": "Статистичний аналіз даних (Statistics and Data Science)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "E8",
+  "degree_program_name": "Статистичний аналіз даних (Statistics and Data Science)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -9856,18 +9856,18 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-education",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "A4",
-  "specialty_name": "Середня освіта (Математика)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "A4",
+  "degree_program_name": "Середня освіта (Математика)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/bachelor/curriculum-math-simulation",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "F1",
-  "specialty_name": "Математичне моделювання та комп'ютерна механіка",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F1",
+  "degree_program_name": "Математичне моделювання та комп'ютерна механіка",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -10882,9 +10882,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-datascience",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E8",
-  "specialty_name": "Статистика. Статистичний аналіз даних",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "E8",
+  "degree_program_name": "Статистика. Статистичний аналіз даних",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -11230,9 +11230,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/master/e7-matematyka",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -11598,9 +11598,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-financial-math",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -11879,9 +11879,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-math-economics",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "E7",
-  "specialty_name": "Математика",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "E7",
+  "degree_program_name": "Математика",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -12149,9 +12149,9 @@
  {
   "url": "https://new.mmf.lnu.edu.ua/academics/master/curriculum-theoretical-mechanics",
   "faculty_host": "new.mmf.lnu.edu.ua",
-  "specialty_code": "F1",
-  "specialty_name": "Прикладна математика. Інформаційні технології моделювання механічних процесів і систем",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "F1",
+  "degree_program_name": "Прикладна математика. Інформаційні технології моделювання механічних процесів і систем",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -12252,9 +12252,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-software-engineering",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "F2",
-  "specialty_name": "ОПП Інженерія програмного забезпечення",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F2",
+  "degree_program_name": "ОПП Інженерія програмного забезпечення",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -13036,9 +13036,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-computer-technologies-2018",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "F3",
-  "specialty_name": "ОПП Комп'ютерні науки",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F3",
+  "degree_program_name": "ОПП Комп'ютерні науки",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -13749,9 +13749,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-it-technologies",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "F6",
-  "specialty_name": "ОПП Інформаційні системи і технології",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "F6",
+  "degree_program_name": "ОПП Інформаційні системи і технології",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -14255,9 +14255,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/bachelor/navchalnyy-plan-elektronika-ta-komp-iuterni-systemy",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "G5",
-  "specialty_name": "ОПП Електроніка та комп'ютерні системи",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "G5",
+  "degree_program_name": "ОПП Електроніка та комп'ютерні системи",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -14978,9 +14978,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/bachelor/curriculum-micro-and-nanotechnics",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "G7",
-  "specialty_name": "ОПП Сенсорні і діагностичні електронні системи",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "G7",
+  "degree_program_name": "ОПП Сенсорні і діагностичні електронні системи",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -15647,9 +15647,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/master/curriculum-computer-technologies-2017",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "122",
-  "specialty_name": "( F3) ОП Комп'ютерні науки",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "122",
+  "degree_program_name": "( F3) ОП Комп'ютерні науки",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -15926,9 +15926,9 @@
  {
   "url": "https://electronics.lnu.edu.ua/academics/master/curriculum-micro-and-nanotechnics",
   "faculty_host": "electronics.lnu.edu.ua",
-  "specialty_code": "176",
-  "specialty_name": "( G5) ОП Пристрої та матеріали сенсорної електроніки",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "176",
+  "degree_program_name": "( G5) ОП Пристрої та матеріали сенсорної електроніки",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -16117,9 +16117,9 @@
  {
   "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biology",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "Е1",
-  "specialty_name": "Біологія та біохімія",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "Е1",
+  "degree_program_name": "Біологія та біохімія",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -16141,18 +16141,18 @@
  {
   "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biotehnology",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "G21",
-  "specialty_name": "Біотехнології та біоінженерія",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "G21",
+  "degree_program_name": "Біотехнології та біоінженерія",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-ecology",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "Е2",
-  "specialty_name": "Екологія",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "Е2",
+  "degree_program_name": "Екологія",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -16629,18 +16629,18 @@
  {
   "url": "https://bioweb.lnu.edu.ua/academics/bachelor/curriculum-biology-education",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "014.05",
-  "specialty_name": "Середня освіта/Біологія та здоров'я людини",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "014.05",
+  "degree_program_name": "Середня освіта/Біологія та здоров'я людини",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://bioweb.lnu.edu.ua/academics/master/curriculum-biology-biochemistry",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "Е1",
-  "specialty_name": "Біологія та біохімія",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "Е1",
+  "degree_program_name": "Біологія та біохімія",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -16678,9 +16678,9 @@
  {
   "url": "https://bioweb.lnu.edu.ua/academics/master/curriculum-ecology",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "Е2",
-  "specialty_name": "Екологія",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "Е2",
+  "degree_program_name": "Екологія",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -16890,18 +16890,18 @@
  {
   "url": "https://bioweb.lnu.edu.ua/academics/master/curriculum-biology-education",
   "faculty_host": "bioweb.lnu.edu.ua",
-  "specialty_code": "A4.05",
-  "specialty_name": "Середня освіта (Біологія та здоров'я людини)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "A4.05",
+  "degree_program_name": "Середня освіта (Біологія та здоров'я людини)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://geology.lnu.edu.ua/academics/bachelor/curriculum-earth-sciences",
   "faculty_host": "geology.lnu.edu.ua",
-  "specialty_code": "Е4",
-  "specialty_name": "Науки про Землю",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "Е4",
+  "degree_program_name": "Науки про Землю",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -17075,9 +17075,9 @@
  {
   "url": "https://geology.lnu.edu.ua/academics/bachelor/curriculum-environmental-studies",
   "faculty_host": "geology.lnu.edu.ua",
-  "specialty_code": "Е4",
-  "specialty_name": "Науки про Землю",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "Е4",
+  "degree_program_name": "Науки про Землю",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -17244,9 +17244,9 @@
  {
   "url": "https://geology.lnu.edu.ua/academics/bachelor/curriculum-earth-sciences-resources",
   "faculty_host": "geology.lnu.edu.ua",
-  "specialty_code": "Е4",
-  "specialty_name": "Науки про Землю",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "Е4",
+  "degree_program_name": "Науки про Землю",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -17383,9 +17383,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-history-and-civics",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "014.03",
-  "specialty_name": "«Середня освіта (Історія та громадянська освіта)»",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "014.03",
+  "degree_program_name": "«Середня освіта (Історія та громадянська освіта)»",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -17542,9 +17542,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-history-education",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "014.03",
-  "specialty_name": "«Середня освіта (Історія та громадянська освіта)»",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "014.03",
+  "degree_program_name": "«Середня освіта (Історія та громадянська освіта)»",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -17946,9 +17946,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-museology-monument-studies",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "027",
-  "specialty_name": "«Музеєзнавство, пам'яткознавство»",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "027",
+  "degree_program_name": "«Музеєзнавство, пам'яткознавство»",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -18010,9 +18010,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-history-and-archaeology",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "032",
-  "specialty_name": "«Історія та археологія»",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "032",
+  "degree_program_name": "«Історія та археологія»",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -18772,9 +18772,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-business-sociology",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "054",
-  "specialty_name": "«Соціологія, Бізнес-соціологія»",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "054",
+  "degree_program_name": "«Соціологія, Бізнес-соціологія»",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -19001,9 +19001,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/bachelor/curriculum-applied-sociology",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "054",
-  "specialty_name": "«Соціологія, Бізнес-соціологія»",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "054",
+  "degree_program_name": "«Соціологія, Бізнес-соціологія»",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -20007,9 +20007,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/master/curriculum-history-and-civics",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "014.03",
-  "specialty_name": "«Середня освіта (Історія та громадянська освіта)»",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "014.03",
+  "degree_program_name": "«Середня освіта (Історія та громадянська освіта)»",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -20134,9 +20134,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/master/curriculum-history-and-archaeology",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "032",
-  "specialty_name": "«Історія та археологія»",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "032",
+  "degree_program_name": "«Історія та археологія»",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -20663,9 +20663,9 @@
  {
   "url": "https://clio.lnu.edu.ua/academics/master/curriculum-sociology",
   "faculty_host": "clio.lnu.edu.ua",
-  "specialty_code": "054",
-  "specialty_name": "«Соціологія»",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "054",
+  "degree_program_name": "«Соціологія»",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -21008,9 +21008,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-music-art-education",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "014.13",
-  "specialty_name": "Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "014.13",
+  "degree_program_name": "Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -21619,9 +21619,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-choreography",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "024",
-  "specialty_name": "Хореографія, В6 Перформативні мистецтва (Хореографія)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "024",
+  "degree_program_name": "Хореографія, В6 Перформативні мистецтва (Хореографія)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -22563,9 +22563,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-theatre-and-cinema",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "026",
-  "specialty_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "026",
+  "degree_program_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -23473,9 +23473,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-theater-of-dolls",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "026",
-  "specialty_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "026",
+  "degree_program_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -23893,9 +23893,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/theatre-studies",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "026",
-  "specialty_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "026",
+  "degree_program_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -25056,9 +25056,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/stsenichne-mystetstvo-rezhyserske-mystetstvo-teatroznavstvo",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "В6",
-  "specialty_name": "Перформативні мистецтва, В6.01 Сценічне мистецтво",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В6",
+  "degree_program_name": "Перформативні мистецтва, В6.01 Сценічне мистецтво",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -25131,9 +25131,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-management-of-art",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "028",
-  "specialty_name": "Менеджмент соціокультурної діяльності",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "028",
+  "degree_program_name": "Менеджмент соціокультурної діяльності",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -26140,9 +26140,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/navchalnyy-plan-029-informatsiyna-bibliotechna-ta-arkhivna-sprava",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "029",
-  "specialty_name": "Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "029",
+  "degree_program_name": "Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -26680,9 +26680,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-025-muzychne-mystetstvo-khorove-dyryhuvannia",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "025",
-  "specialty_name": "Музичне мистецтво, В5 Музичне мистецтво",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "025",
+  "degree_program_name": "Музичне мистецтво, В5 Музичне мистецтво",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -27674,9 +27674,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/bachelor/curriculum-audiovisual-art-and-media-productions",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "В1",
-  "specialty_name": "Аудіовізуальне мистецтво та медіавиробництво (Продюсерство аудіовізуального мистецтва та медіавиробництво)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В1",
+  "degree_program_name": "Аудіовізуальне мистецтво та медіавиробництво (Продюсерство аудіовізуального мистецтва та медіавиробництво)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -27860,9 +27860,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-music-art-education",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "014.13",
-  "specialty_name": "Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "014.13",
+  "degree_program_name": "Середня освіта (Музичне мистецтво), А4 Середня освіта, А4.13 Мистецтво. Музичне мистецтво",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -27980,9 +27980,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-choreography",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "024",
-  "specialty_name": "Хореографія, В6 Перформативні мистецтва (Хореографія)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "024",
+  "degree_program_name": "Хореографія, В6 Перформативні мистецтва (Хореографія)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -28132,9 +28132,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-music-art",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "025",
-  "specialty_name": "Музичне мистецтво (Музикознавство), В5 Музичне мистецтво (Музикознавство)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "025",
+  "degree_program_name": "Музичне мистецтво (Музикознавство), В5 Музичне мистецтво (Музикознавство)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -28329,9 +28329,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-theatre-and-cinema",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "026",
-  "specialty_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "026",
+  "degree_program_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -28568,9 +28568,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/theatre-studies",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "026",
-  "specialty_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "026",
+  "degree_program_name": "Сценічне мистецтво (Акторське мистецтво драматичного театру і кіно), В6 Перформативні мистецтва (Акторське мистецтво драматичного театру і кіно)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -28927,9 +28927,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-management-of-art",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "028",
-  "specialty_name": "Менеджмент соціокультурної діяльності",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "028",
+  "degree_program_name": "Менеджмент соціокультурної діяльності",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -29222,9 +29222,9 @@
  {
   "url": "https://kultart.lnu.edu.ua/academics/master/curriculum-library-studies",
   "faculty_host": "kultart.lnu.edu.ua",
-  "specialty_code": "029",
-  "specialty_name": "Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "029",
+  "degree_program_name": "Інформаційна, бібліотечна та архівна справа, В13 Бібліотечна, інформаційна та архівна справа",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -29400,9 +29400,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-serednia-osvita",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "А4.01",
-  "specialty_name": "Середня освіта (Українська мова і література)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "А4.01",
+  "degree_program_name": "Середня освіта (Українська мова і література)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -30563,18 +30563,18 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-ukrajinska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.01",
-  "specialty_name": "Українська мова та література",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11.01",
+  "degree_program_name": "Українська мова та література",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-ukrainska-mova-iak-inozemna",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.01",
-  "specialty_name": "Українська мова та література",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11.01",
+  "degree_program_name": "Українська мова та література",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -30999,9 +30999,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-literary-art",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.01",
-  "specialty_name": "Українська мова та література",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11.01",
+  "degree_program_name": "Українська мова та література",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -31529,9 +31529,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-folklore-studies",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.09",
-  "specialty_name": "Фольклористика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11.09",
+  "degree_program_name": "Фольклористика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -32258,9 +32258,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-polska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -32996,9 +32996,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-bolharska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -33431,9 +33431,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-serbska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -33863,9 +33863,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-slovatska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -34343,9 +34343,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-slovenska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -34551,9 +34551,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-khorvatska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -35030,9 +35030,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-cheska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -35735,9 +35735,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-arabska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -36452,9 +36452,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-kytayska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -37077,9 +37077,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-perska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -37670,9 +37670,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-turetska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -38215,9 +38215,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-yaponska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11",
+  "degree_program_name": "033 Слов'янські мови та літератури (переклад включно), перша - польська",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -38954,9 +38954,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/bachelor/curriculum-applied-linguistics",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.10",
-  "specialty_name": "Прикладна лінгвістика",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "В11.10",
+  "degree_program_name": "Прикладна лінгвістика",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -39481,9 +39481,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-ukrajinska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.01",
-  "specialty_name": "Українська мова та література",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11.01",
+  "degree_program_name": "Українська мова та література",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -39938,9 +39938,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-literaturna-tvorchist",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.01",
-  "specialty_name": "Українська мова та література",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11.01",
+  "degree_program_name": "Українська мова та література",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -40266,9 +40266,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-folklore",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11.01",
-  "specialty_name": "Українська мова та література",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11.01",
+  "degree_program_name": "Українська мова та література",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -40774,9 +40774,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-bolharska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -40904,9 +40904,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-polska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -41231,9 +41231,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-serbska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -41489,9 +41489,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-slovatska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -41754,9 +41754,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-khorvatska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -41898,9 +41898,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-cheska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -42243,9 +42243,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-slovenska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "В11",
-  "specialty_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "В11",
+  "degree_program_name": "032 Слов'янські мови та літератури (переклад включно), перша - болгарська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -42425,9 +42425,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-perska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "B11",
-  "specialty_name": "067 Східні мови та літератури (переклад включно), перша - перська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "B11",
+  "degree_program_name": "067 Східні мови та літератури (переклад включно), перша - перська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -42713,9 +42713,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-kytayska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "B11",
-  "specialty_name": "067 Східні мови та літератури (переклад включно), перша - перська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "B11",
+  "degree_program_name": "067 Східні мови та літератури (переклад включно), перша - перська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -42822,9 +42822,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-yaponska-mova-ta-literatura",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "B11",
-  "specialty_name": "067 Східні мови та літератури (переклад включно), перша - перська",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "B11",
+  "degree_program_name": "067 Східні мови та літератури (переклад включно), перша - перська",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -43143,9 +43143,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-prykladna-lingvistyka",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "035.10",
-  "specialty_name": "Прикладна лінгвістика",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "035.10",
+  "degree_program_name": "Прикладна лінгвістика",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -44762,9 +44762,9 @@
  {
   "url": "https://philology.lnu.edu.ua/academics/master/curriculum-serednia-osvita",
   "faculty_host": "philology.lnu.edu.ua",
-  "specialty_code": "А4.01",
-  "specialty_name": "Середня освіта (Українська мова і література)",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "А4.01",
+  "degree_program_name": "Середня освіта (Українська мова і література)",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -44998,9 +44998,9 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-politology",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "С2",
-  "specialty_name": "Політологія",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "С2",
+  "degree_program_name": "Політологія",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -45580,9 +45580,9 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-psycology",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "С4",
-  "specialty_name": "Психологія(денна форма навчання)",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "С4",
+  "degree_program_name": "Психологія(денна форма навчання)",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -46052,9 +46052,9 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-philosophy",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "033",
-  "specialty_name": "Філософія",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "033",
+  "degree_program_name": "Філософія",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -46594,9 +46594,9 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/bachelor/curriculum-culture-studies",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "034",
-  "specialty_name": "Культурологія",
-  "specialty_degree": "BACHELOR",
+  "degree_program_code": "034",
+  "degree_program_name": "Культурологія",
+  "degree_program_degree": "BACHELOR",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -46935,9 +46935,9 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/master/curriculum-politology",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "052",
-  "specialty_name": "Політологія",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "052",
+  "degree_program_name": "Політологія",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -47557,18 +47557,18 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/master/curriculum-psycology",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "053",
-  "specialty_name": "Психологія",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "053",
+  "degree_program_name": "Психологія",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": []
  },
  {
   "url": "https://filos.lnu.edu.ua/academics/master/curriculum-philosophy",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "033",
-  "specialty_name": "Філософія",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "033",
+  "degree_program_name": "Філософія",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {
@@ -47726,9 +47726,9 @@
  {
   "url": "https://filos.lnu.edu.ua/academics/master/curriculum-culture-studies",
   "faculty_host": "filos.lnu.edu.ua",
-  "specialty_code": "034",
-  "specialty_name": "Культурологія",
-  "specialty_degree": "MASTER",
+  "degree_program_code": "034",
+  "degree_program_name": "Культурологія",
+  "degree_program_degree": "MASTER",
   "study_form": "FULL_TIME",
   "semesters": [
    {

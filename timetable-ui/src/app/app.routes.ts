@@ -5,7 +5,7 @@ import { ENTITY_PAGES } from './entity-pages';
 import { FacultyHome } from './faculty-home';
 import { BuildingHome } from './building-home';
 import { BuildingPage } from './building-page';
-import { SpecialtyDetailPage } from './specialty-page';
+import { DegreeProgramDetailPage } from './degree-program-page';
 import { AcademicGroupDetailPage } from './academic-group-page';
 import { LoginPage } from './login-page';
 import { ChangePasswordPage } from './change-password-page';
@@ -41,7 +41,7 @@ const PAGE_ROUTES: Routes = [
   { path: '', pathMatch: 'full', component: FacultyHome, canActivate: [authGuard] },
 
   // Lazy for the same reason as the drill-down routes below, and with more effect than any of
-  // them: FacultyPage pulls in every tab it can show — the department, specialty and group lists,
+  // them: FacultyPage pulls in every tab it can show — the department, degreeProgram and group lists,
   // the room and course pages, the constraint editors and the timetable view — and it is not on
   // the path to the one screen most people open the app for. `loadComponent` costs one request the
   // first time a faculty is opened and nothing after that; leaving it eager costs it to everyone,
@@ -57,8 +57,8 @@ const PAGE_ROUTES: Routes = [
   { path: 'department/:id/:section', canActivate: [authGuard],
     loadComponent: () => import('./department-page').then((m) => m.DepartmentDetailPage) },
 
-  { path: 'specialty/:id', pathMatch: 'full', redirectTo: '/specialty/:id/info' },
-  { path: 'specialty/:id/:section', component: SpecialtyDetailPage, canActivate: [authGuard] },
+  { path: 'degree-program/:id', pathMatch: 'full', redirectTo: '/degree-program/:id/info' },
+  { path: 'degree-program/:id/:section', component: DegreeProgramDetailPage, canActivate: [authGuard] },
 
   { path: 'academic-group/:id', pathMatch: 'full', redirectTo: '/academic-group/:id/info' },
   { path: 'academic-group/:id/:section', component: AcademicGroupDetailPage, canActivate: [authGuard] },

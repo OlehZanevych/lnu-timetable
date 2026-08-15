@@ -53,7 +53,7 @@
             <div class="cp-tile">
               <span class="cp-tile-label">У навчальних планах</span>
               <strong>{{ s.curriculumItems }} позиц.</strong>
-              <span class="muted">{{ s.specialties }} спеціальн. &middot; {{ fmtNumber(s.credits) }} кредитів</span>
+              <span class="muted">{{ s.degreePrograms }} осв. програм &middot; {{ fmtNumber(s.credits) }} кредитів</span>
             </div>
             <div class="cp-tile">
               <span class="cp-tile-label">Контактних годин</span>
@@ -122,10 +122,10 @@
                   </td>
                 </tr>
                 <tr>
-                  <th>Спеціальності</th>
+                  <th>Освітні програми</th>
                   <td>
-                    @for (sp of c.specialties ?? []; track sp.id) {
-                      <div><a [routerLink]="['/specialty', sp.id]">{{ sp.code }} {{ sp.name }}</a></div>
+                    @for (sp of c.degreePrograms ?? []; track sp.id) {
+                      <div><a [routerLink]="['/degree-program', sp.id]">{{ sp.code }} {{ sp.name }}</a></div>
                     } @empty { &mdash; }
                   </td>
                 </tr>
@@ -190,7 +190,7 @@
         <div class="page-header">
           <div>
             <h2>Навчальні плани</h2>
-            <p class="muted">{{ curricula().length }} позиц. у планах спеціальностей</p>
+            <p class="muted">{{ curricula().length }} позиц. у планах освітніх програм</p>
           </div>
           @if (canAddPlans()) {
             <button type="button" (click)="openItemCreate()">+ Додати до плану</button>
@@ -202,7 +202,7 @@
           <table class="wv-table">
             <thead>
               <tr>
-                <th>Спеціальність</th>
+                <th>Освітня програма</th>
                 <th>Семестр</th>
                 <th>Курс</th>
                 <th>Форма контролю</th>
@@ -215,8 +215,8 @@
               @for (item of curricula(); track item.id) {
                 <tr>
                   <td>
-                    @if (item.specialty) {
-                      <a [routerLink]="['/specialty', item.specialty.id]">{{ item.specialty.name }}</a>
+                    @if (item.degreeProgram) {
+                      <a [routerLink]="['/degree-program', item.degreeProgram.id]">{{ item.degreeProgram.name }}</a>
                     } @else { &mdash; }
                   </td>
                   <td>{{ item.semester }}</td>
@@ -280,7 +280,7 @@
           <table class="wv-table">
             <thead>
               <tr>
-                <th>Спеціальність</th>
+                <th>Освітня програма</th>
                 <th>Сем.</th>
                 <th>Вид роботи</th>
                 <th class="num">Годин</th>
@@ -295,7 +295,7 @@
               @for (d of deliveries(); track d.id) {
                 <tr>
                   <td>
-                    {{ d.specialtyName }}
+                    {{ d.degreeProgramName }}
                     @if (d.viaUmbrella) {
                       <div class="muted cp-via">у складі: {{ d.viaUmbrella }}</div>
                     }
@@ -356,7 +356,7 @@
         @for (w of workloadCards(); track w.id) {
           <div class="card wci-item-card">
             <div class="wci-item-header">
-              <strong>{{ w.specialtyName }} &middot; {{ w.semester }} сем. &middot; {{ hourTypeLabel(w.hourType) }}</strong>
+              <strong>{{ w.degreeProgramName }} &middot; {{ w.semester }} сем. &middot; {{ hourTypeLabel(w.hourType) }}</strong>
               <span>{{ w.lecturerNames || 'викладача не призначено' }}</span>
               <span>{{ w.groupNames || w.combinedGroupNames || '—' }}</span>
               <span class="badge">{{ w.startTimeSetName }}</span>
@@ -446,7 +446,7 @@
           <table class="wv-table">
             <thead>
               <tr>
-                <th>Спеціальність</th>
+                <th>Освітня програма</th>
                 <th>Сем.</th>
                 <th>Вид роботи</th>
                 <th>Кафедра</th>
@@ -461,7 +461,7 @@
             <tbody>
               @for (w of workloadCards(); track w.id) {
                 <tr [class.wv-gap]="!w.lecturerNames">
-                  <td>{{ w.specialtyName }}</td>
+                  <td>{{ w.degreeProgramName }}</td>
                   <td>{{ w.semester }}</td>
                   <td>{{ hourTypeShort(w.hourType) }}</td>
                   <td>
@@ -504,7 +504,7 @@
           <table class="wv-table">
             <thead>
               <tr>
-                <th>Спеціальність</th>
+                <th>Освітня програма</th>
                 <th>Сем.</th>
                 <th>Вид роботи</th>
                 <th>Кафедра</th>
@@ -515,7 +515,7 @@
             <tbody>
               @for (d of deliveries(); track d.id) {
                 <tr [class.wv-gap]="!d.workloadCount">
-                  <td>{{ d.specialtyName }}</td>
+                  <td>{{ d.degreeProgramName }}</td>
                   <td>{{ d.semester }}</td>
                   <td>{{ hourTypeShort(d.hourType) }}</td>
                   <td>{{ d.departmentName }}</td>
@@ -587,8 +587,8 @@
           </small>
         </label>
         <label>
-          <span>Спеціальності</span>
-          <app-multi-select [options]="specialtyOptions()" [(ngModel)]="editForm['specialtyIds']" name="specialtyIds" />
+          <span>Освітні програми</span>
+          <app-multi-select [options]="degreeProgramOptions()" [(ngModel)]="editForm['degreeProgramIds']" name="degreeProgramIds" />
         </label>
         <label>
           <span>Теги</span>
@@ -675,9 +675,9 @@
       @if (itemError()) { <p class="error">{{ itemError() }}</p> }
 
       <label>
-        <span>Спеціальність</span>
-        <app-search-select [options]="itemSpecialtyOptions()" [(ngModel)]="itemForm['specialtyId']"
-                           name="itemSpecialty" [ngModelOptions]="{ standalone: true }" />
+        <span>Освітня програма</span>
+        <app-search-select [options]="itemDegreeProgramOptions()" [(ngModel)]="itemForm['degreeProgramId']"
+                           name="itemDegreeProgram" [ngModelOptions]="{ standalone: true }" />
       </label>
       <label>
         <span>Семестр</span>
@@ -736,7 +736,7 @@
                            (ngModelChange)="onWciBlockChange($event)"
                            name="wciBlock" [ngModelOptions]="{ standalone: true }" />
         <small class="muted cp-field-hint">
-          Спеціальність, семестр і вид занять, які ця позиція передає кафедрі.
+          Освітня програма, семестр і вид занять, які ця позиція передає кафедрі.
         </small>
       </label>
       <label>
@@ -960,7 +960,7 @@
 
       <p class="confirm-text">
         Видалити навантаження<br>
-        <strong>{{ card.specialtyName }}, {{ card.semester }} сем., {{ hourTypeLabel(card.hourType) }}</strong><br>
+        <strong>{{ card.degreeProgramName }}, {{ card.semester }} сем., {{ hourTypeLabel(card.hourType) }}</strong><br>
         @if (card.lecturerNames) { викладач(і): {{ card.lecturerNames }} }
         @else { <span class="muted">без призначених викладачів</span> }
       </p>
@@ -993,8 +993,8 @@
       </div>
 
       <p class="confirm-text">
-        Вилучити дисципліну з плану спеціальності<br>
-        <strong>{{ item.specialty?.name ?? '&mdash;' }}</strong>, {{ item.semester }} семестр?
+        Вилучити дисципліну з плану освітньої програми<br>
+        <strong>{{ item.degreeProgram?.name ?? '&mdash;' }}</strong>, {{ item.semester }} семестр?
       </p>
 
       @if (cascade.working || cascade.workloads || cascade.entries) {
@@ -1027,7 +1027,7 @@
 
       <p class="confirm-text">
         Видалити позицію<br>
-        <strong>{{ row.specialtyName }}, {{ row.semester }} сем., {{ hourTypeLabel(row.hourType) }}</strong><br>
+        <strong>{{ row.degreeProgramName }}, {{ row.semester }} сем., {{ hourTypeLabel(row.hourType) }}</strong><br>
         закріплену за кафедрою «{{ row.departmentName }}»?
       </p>
 

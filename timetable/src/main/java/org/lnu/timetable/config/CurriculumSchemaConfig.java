@@ -33,12 +33,12 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             .nullableRelation("department")
             .nullableRelation("parentCourse")
             .relation("childCourses")
-            .relation("specialties")
+            .relation("degreePrograms")
             .relation("tags");
 
-        // specialtyId narrows the list to courses allowed for that specialty (see the
-        // course_specialties join table) — used when picking a course for a curriculum item so
-        // only courses actually permitted for the current specialty are offered, regardless of
+        // degreeProgramId narrows the list to courses allowed for that degree programme (see the
+        // course_degree_programs join table) — used when picking a course for a curriculum item so
+        // only courses actually permitted for the current programme are offered, regardless of
         // any faculty/department sub-filter also applied on the same connection.
         s.query("courseConnection").entity(Course.class).connection().orderBy("name")
             .filter("departmentId", "department_id")
@@ -48,14 +48,14 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
             // paged, filtered or created into; the section adds and detaches rows, so it wants a
             // connection like every other editable list.
             .filter("parentCourseId", "parent_course_id")
-            .relationFilter("specialtyId",
-                "EXISTS (SELECT 1 FROM course_specialties cs " +
-                "WHERE cs.course_id = courses.id AND cs.specialty_id = :specialtyId)");
+            .relationFilter("degreeProgramId",
+                "EXISTS (SELECT 1 FROM course_degree_programs cs " +
+                "WHERE cs.course_id = courses.id AND cs.degree_program_id = :degreeProgramId)");
         s.query("course").entity(Course.class).findById();
 
         s.mutation("createCourse").entity(Course.class).create()
             .inputFields("name", "courseType", "semester", "departmentId", "facultyId", "parentCourseId")
-            .manyToMany("specialtyIds", "course_specialties", "course_id", "specialty_id")
+            .manyToMany("degreeProgramIds", "course_degree_programs", "course_id", "degree_program_id")
             .nestedList("tags", CourseTag.class, "courseId", "tag")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -63,7 +63,7 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
 
         s.mutation("updateCourse").entity(Course.class).update()
             .inputFields("name", "courseType", "semester", "departmentId", "facultyId", "parentCourseId")
-            .manyToMany("specialtyIds", "course_specialties", "course_id", "specialty_id")
+            .manyToMany("degreeProgramIds", "course_degree_programs", "course_id", "degree_program_id")
             .nestedList("tags", CourseTag.class, "courseId", "tag")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("COURSE_NOT_FOUND", "Course not found")
@@ -95,24 +95,24 @@ public class CurriculumSchemaConfig implements GraphQLSchemaConfig {
     private void configureCurriculumItem(SchemaDefinition s) {
         s.type(CurriculumItem.class)
             .fields("semester", "controlForm", "ectsCredits")
-            .relation("specialty").relation("course").relation("hours");
+            .relation("degreeProgram").relation("course").relation("hours");
 
         s.query("curriculumItemConnection").entity(CurriculumItem.class).connection().orderBy("semester")
-            .filter("specialtyId", "specialty_id")
+            .filter("degreeProgramId", "degree_program_id")
             // The course detail page asks "where is this discipline taught?"; Course carries no
             // curriculumItems relation, so the connection is the only way in.
             .filter("courseId", "course_id");
         s.query("curriculumItem").entity(CurriculumItem.class).findById();
 
         s.mutation("createCurriculumItem").entity(CurriculumItem.class).create()
-            .inputFields("semester", "controlForm", "ectsCredits", "specialtyId", "courseId")
+            .inputFields("semester", "controlForm", "ectsCredits", "degreeProgramId", "courseId")
             .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateCurriculumItem").entity(CurriculumItem.class).update()
-            .inputFields("semester", "controlForm", "ectsCredits", "specialtyId", "courseId")
+            .inputFields("semester", "controlForm", "ectsCredits", "degreeProgramId", "courseId")
             .nestedList("hours", CurriculumItemHours.class, "curriculumItemId", "hourType", "hours")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("CURRICULUMITEM_NOT_FOUND", "CurriculumItem not found")

@@ -34,11 +34,11 @@ INSERT INTO public.departments (id, name, abbreviation, faculty_id, email, phone
 INSERT INTO public.departments (id, name, abbreviation, faculty_id, email, phone) VALUES (2, 'Кафедра програмування', 'КП', 1, 'programming.dep.ami@lnu.edu.ua', '(032) 239-47-57');
 INSERT INTO public.departments (id, name, abbreviation, faculty_id, email, phone) VALUES (3, 'Кафедра алгебри, топології та основ математики', 'КАТОМ', 2, 'algebra.dep@lnu.edu.ua', '(032) 239-41-74');
 
--- specialties (4 rows)
-INSERT INTO public.specialties (id, code, name, degree, faculty_id) VALUES (1, '014.09', 'Середня освіта (Інформатика)', 'BACHELOR', 1);
-INSERT INTO public.specialties (id, code, name, degree, faculty_id) VALUES (2, '113', 'Прикладна математика', 'BACHELOR', 1);
-INSERT INTO public.specialties (id, code, name, degree, faculty_id) VALUES (3, '014', 'Середня освіта (інформатика)', 'MASTER', 1);
-INSERT INTO public.specialties (id, code, name, degree, faculty_id) VALUES (4, '111', 'Математика', 'BACHELOR', 2);
+-- degree_programs (4 rows)
+INSERT INTO public.degree_programs (id, code, name, degree, faculty_id) VALUES (1, '014.09', 'Середня освіта (Інформатика)', 'BACHELOR', 1);
+INSERT INTO public.degree_programs (id, code, name, degree, faculty_id) VALUES (2, '113', 'Прикладна математика', 'BACHELOR', 1);
+INSERT INTO public.degree_programs (id, code, name, degree, faculty_id) VALUES (3, '014', 'Середня освіта (інформатика)', 'MASTER', 1);
+INSERT INTO public.degree_programs (id, code, name, degree, faculty_id) VALUES (4, '111', 'Математика', 'BACHELOR', 2);
 
 -- lecturers (8 rows)
 INSERT INTO public.lecturers (id, first_name, middle_name, last_name, email, "position", academic_degree_id, min_hours_per_week, max_hours_per_week, department_id) VALUES (1, 'Микола', 'Миколайович', 'Притула', 'mykola.prytula@lnu.edu.ua', 'HEAD_OF_DEPARTMENT', 3, NULL, NULL, 1);
@@ -51,13 +51,13 @@ INSERT INTO public.lecturers (id, first_name, middle_name, last_name, email, "po
 INSERT INTO public.lecturers (id, first_name, middle_name, last_name, email, "position", academic_degree_id, min_hours_per_week, max_hours_per_week, department_id) VALUES (8, 'Катерина', 'Миколаївна', 'Максимик', 'kateryna.maksymyk@lnu.edu.ua', 'ASSISTANT', NULL, NULL, NULL, 3);
 
 -- academic_groups (7 rows)
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (1, 'Мат-11', 1, 'FULL_TIME', NULL, 4);
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (2, 'ПМо-11', 1, 'FULL_TIME', NULL, 1);
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (3, 'ПМо-41', 4, 'FULL_TIME', NULL, 1);
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (4, 'ПМом-11', 1, 'FULL_TIME', NULL, 3);
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (5, 'ПМі-11', 1, 'FULL_TIME', NULL, 2);
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (6, 'ПМі-12', 1, 'FULL_TIME', NULL, 2);
-INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, specialty_id) VALUES (7, 'ПМі-41', 4, 'FULL_TIME', NULL, 2);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (1, 'Мат-11', 1, 'FULL_TIME', NULL, 4);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (2, 'ПМо-11', 1, 'FULL_TIME', NULL, 1);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (3, 'ПМо-41', 4, 'FULL_TIME', NULL, 1);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (4, 'ПМом-11', 1, 'FULL_TIME', NULL, 3);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (5, 'ПМі-11', 1, 'FULL_TIME', NULL, 2);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (6, 'ПМі-12', 1, 'FULL_TIME', NULL, 2);
+INSERT INTO public.academic_groups (id, name, course_year, study_form, students_count, degree_program_id) VALUES (7, 'ПМі-41', 4, 'FULL_TIME', NULL, 2);
 
 -- courses (16 rows)
 INSERT INTO public.courses (id, name, course_type, faculty_id, department_id, parent_course_id) VALUES (1, 'Алгебра та геометрія', 'MANDATORY', 1, 3, NULL);
@@ -77,24 +77,24 @@ INSERT INTO public.courses (id, name, course_type, faculty_id, department_id, pa
 INSERT INTO public.courses (id, name, course_type, faculty_id, department_id, parent_course_id) VALUES (15, 'Моделі статистичного навчання', 'ELECTIVE', 1, 1, 13);
 INSERT INTO public.courses (id, name, course_type, faculty_id, department_id, parent_course_id) VALUES (16, 'Лінійна алгебра', 'MANDATORY', 2, 3, NULL);
 
--- course_specialties (17 rows)
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (1, 1);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (2, 1);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (3, 1);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (4, 1);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (5, 1);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (6, 1);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (1, 2);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (7, 2);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (8, 2);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (9, 2);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (10, 2);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (11, 2);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (12, 3);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (13, 3);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (14, 3);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (15, 3);
-INSERT INTO public.course_specialties (course_id, specialty_id) VALUES (16, 4);
+-- course_degree_programs (17 rows)
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (1, 1);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (2, 1);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (3, 1);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (4, 1);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (5, 1);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (6, 1);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (1, 2);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (7, 2);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (8, 2);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (9, 2);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (10, 2);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (11, 2);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (12, 3);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (13, 3);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (14, 3);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (15, 3);
+INSERT INTO public.course_degree_programs (course_id, degree_program_id) VALUES (16, 4);
 
 -- course_tags (6 rows)
 INSERT INTO public.course_tags (id, course_id, tag) VALUES (1, 4, 'середня освіта (інформатика)');
@@ -105,17 +105,17 @@ INSERT INTO public.course_tags (id, course_id, tag) VALUES (5, 13, 'середн
 INSERT INTO public.course_tags (id, course_id, tag) VALUES (6, 13, 'семестр 2');
 
 -- curriculum_items (11 rows)
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (1, 1, 'EXAM', 5, 1, 1);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (2, 1, 'EXAM', 6, 1, 2);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (3, 7, 'EXAM', 4, 1, 3);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (4, 7, 'CREDIT', NULL, 1, 4);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (5, 1, 'EXAM', 5, 2, 1);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (6, 1, 'EXAM', 5, 2, 7);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (7, 7, 'EXAM', 4, 2, 8);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (8, 7, 'CREDIT', NULL, 2, 9);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (9, 2, 'GRADED_CREDIT', 3, 3, 12);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (10, 2, 'CREDIT', NULL, 3, 13);
-INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, specialty_id, course_id) VALUES (11, 1, 'EXAM', 5, 4, 16);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (1, 1, 'EXAM', 5, 1, 1);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (2, 1, 'EXAM', 6, 1, 2);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (3, 7, 'EXAM', 4, 1, 3);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (4, 7, 'CREDIT', NULL, 1, 4);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (5, 1, 'EXAM', 5, 2, 1);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (6, 1, 'EXAM', 5, 2, 7);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (7, 7, 'EXAM', 4, 2, 8);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (8, 7, 'CREDIT', NULL, 2, 9);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (9, 2, 'GRADED_CREDIT', 3, 3, 12);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (10, 2, 'CREDIT', NULL, 3, 13);
+INSERT INTO public.curriculum_items (id, semester, control_form, ects_credits, degree_program_id, course_id) VALUES (11, 1, 'EXAM', 5, 4, 16);
 
 -- curriculum_item_hours (20 rows)
 INSERT INTO public.curriculum_item_hours (id, curriculum_item_id, hour_type, hours) VALUES (1, 1, 'LECTURE', 32);
@@ -319,7 +319,7 @@ SELECT pg_catalog.setval('public.academic_degrees_id_seq', 3, true);
 SELECT pg_catalog.setval('public.buildings_id_seq', 2, true);
 SELECT pg_catalog.setval('public.faculties_id_seq', 3, true);
 SELECT pg_catalog.setval('public.departments_id_seq', 3, true);
-SELECT pg_catalog.setval('public.specialties_id_seq', 4, true);
+SELECT pg_catalog.setval('public.degree_programs_id_seq', 4, true);
 SELECT pg_catalog.setval('public.lecturers_id_seq', 8, true);
 SELECT pg_catalog.setval('public.academic_groups_id_seq', 7, true);
 SELECT pg_catalog.setval('public.combined_groups_id_seq', 1, false);

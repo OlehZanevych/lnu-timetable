@@ -1,8 +1,8 @@
 # The printable working curriculum (PDF)
 
-The **«Завантажити PDF»** button on the "Робочі навчальні плани" tab (`/specialty/{id}`) produces the
+The **«Завантажити PDF»** button on the "Робочі навчальні плани" tab (`/degree-program/{id}`) produces the
 document *«РОБОЧИЙ НАВЧАЛЬНИЙ ПЛАН на 20\_\_/20\_\_ навчальний рік»* — the working curriculum for the
-selected specialty and course year.
+selected degree programme and course year.
 
 The document is built **entirely on the client**: not one byte goes to the server, and the file is
 handed to the browser as a `Blob`. The code is `pdf-writer.ts` (the engine),
@@ -103,7 +103,7 @@ unit, whereas a curriculum is approved by a collegial body under the express nor
 ### Sheet 1 — the title page
 
 The ЗАТВЕРДЖУЮ block in the top right corner, the letterhead МОН → ЛНУ → faculty, the title «РОБОЧИЙ
-НАВЧАЛЬНИЙ ПЛАН на 20\_\_/20\_\_ навчальний рік», a table of header fields (specialty, degree,
+НАВЧАЛЬНИЙ ПЛАН на 20\_\_/20\_\_ навчальний рік», a table of header fields (degree programme, degree,
 faculty, mode of study, coverage of the plan, academic groups · academic year, items, credits, hours,
 departments) and a «Підстава» paragraph stating that the document is internal.
 
@@ -200,7 +200,7 @@ at the programme guarantor.
 - **Lecturer names** — deliberately: by practice they do not belong on a working curriculum, and the
   system has them on the department pages anyway. The "Навантаження викладачів" tab is where they
   appear.
-- **A link to the year of intake or cohort.** `Specialty` stores neither an admission year nor
+- **A link to the year of intake or cohort.** `DegreeProgram` stores neither an admission year nor
   student numbers by year, so the "academic year" in the title is taken from the generation date and
   the course year is chosen by hand with a filter. Because of that, a sheet covering "усі курси" is
   not a working curriculum in the usual sense, and the document says so in its notes.

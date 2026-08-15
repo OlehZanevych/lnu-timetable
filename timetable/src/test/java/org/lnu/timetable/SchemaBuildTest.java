@@ -50,7 +50,7 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("_service: _Service!"));
         // Query namespaces
         assertTrue(sdl.contains("buildings: BuildingQueries"));
-        assertTrue(sdl.contains("specialties: SpecialtyQueries"));
+        assertTrue(sdl.contains("degreePrograms: DegreeProgramQueries"));
         assertTrue(sdl.contains("lecturerWorkloads: LecturerWorkloadQueries"));
         assertTrue(sdl.contains("timetableEntries: TimetableEntryQueries"));
         assertTrue(sdl.contains("combinedGroups: CombinedGroupQueries"));
@@ -73,7 +73,7 @@ class SchemaBuildTest {
         // an EXISTS subquery) is printed exactly like a plain column filter — lecturerConnection's
         // facultyId below is one, reached through lecturers.department_id -> departments.faculty_id.
         assertTrue(sdl.contains("departmentConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
-        assertTrue(sdl.contains("specialtyConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
+        assertTrue(sdl.contains("degreeProgramConnection(facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
         assertTrue(sdl.contains("lecturerConnection(departmentId: ID, facultyId: ID, limit: Int! = 1000, offset: Int! = 0)"));
     }
 }

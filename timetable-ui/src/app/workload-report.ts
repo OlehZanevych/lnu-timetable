@@ -358,7 +358,7 @@ function drawPositions(doc: PdfDocument, stats: LecturerStats): void {
     { title: 'Курс', width: 11, align: 'center' as const },
     { title: 'Навчальна дисципліна', width: 60, align: 'left' as const },
     { title: 'Тип дисципліни', width: 26, align: 'left' as const },
-    { title: 'Спеціальність (освітня програма)', width: 50, align: 'left' as const },
+    { title: 'Освітня програма', width: 50, align: 'left' as const },
     { title: 'Вид навчальної роботи', width: 25, align: 'left' as const },
     { title: 'Формат проведення', width: 27, align: 'left' as const },
     { title: 'Академічні групи / студенти', width: 33, align: 'left' as const },
@@ -394,7 +394,7 @@ function drawPositions(doc: PdfDocument, stats: LecturerStats): void {
         { text: String(courseYearOf(item.semester)), align: 'center' },
         item.combined ? `${item.courseName} (об’єднана позиція)` : item.courseName,
         courseTypeLabel(item.courseType),
-        item.specialtyName || '—',
+        item.degreeProgramName || '—',
         HOUR_TYPE_LABELS[item.hourType] ?? item.hourType,
         TEACHING_FORMAT_LABELS[item.teachingFormat] ?? item.teachingFormat,
         item.teachingFormat === 'INDIVIDUALLY' && item.students !== undefined

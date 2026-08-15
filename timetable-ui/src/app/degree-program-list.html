@@ -1,7 +1,7 @@
 <div class="page-header">
   <div>
-    <h2>Спеціальності</h2>
-    <p class="muted">{{ specialties().length }} запис(ів)</p>
+    <h2>Освітні програми</h2>
+    <p class="muted">{{ degreePrograms().length }} запис(ів)</p>
   </div>
   @if (canCreate()) {
     <button type="button" (click)="openCreate()">+ Додати</button>
@@ -21,7 +21,7 @@
       </tr>
     </thead>
     <tbody>
-      @for (s of specialties(); track s.id) {
+      @for (s of degreePrograms(); track s.id) {
         <tr>
           <td>{{ s.code }}</td>
           <td>{{ s.name }}</td>
@@ -30,11 +30,11 @@
             @if (canEdit(s)) {
               <button type="button" class="ghost" (click)="openEdit(s)">Редагувати</button>
             }
-            <a [routerLink]="['/specialty', s.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
+            <a [routerLink]="['/degree-program', s.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="4" class="muted">Спеціальностей ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="4" class="muted">Освітніх програм ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>
@@ -46,7 +46,7 @@
   <div class="modal-backdrop" (click)="closeCreate()">
     <div class="modal modal-narrow" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3>Нова спеціальність</h3>
+        <h3>Нова освітня програма</h3>
         <button type="button" class="close" (click)="closeCreate()">&#x2715;</button>
       </div>
       @if (createError()) { <p class="error">{{ createError() }}</p> }
@@ -74,11 +74,11 @@
 
 <!-- ── Edit modal ── -->
 
-@if (editingSpec()) {
+@if (editingProg()) {
   <div class="modal-backdrop" (click)="closeEdit()">
     <div class="modal modal-narrow" (click)="$event.stopPropagation()">
       <div class="modal-header">
-        <h3>Редагування спеціальності</h3>
+        <h3>Редагування освітньої програми</h3>
         <button type="button" class="close" (click)="closeEdit()">&#x2715;</button>
       </div>
       @if (editError()) { <p class="error">{{ editError() }}</p> }
