@@ -337,8 +337,12 @@ public class AuthDataFetchers {
      * {@code onErrorResume(DataIntegrityViolationException.class, …)}, so a connection failure or a
      * statement timeout still propagates as a GraphQL error instead of being reported to an
      * administrator as "that lecturer does not exist".
+     * <p>
+     * Package-private and static because {@link SelfServiceDataFetchers} asks the same question
+     * about the same three constraints when a registration link is redeemed, and two copies of a
+     * SQLSTATE table are one copy too many.
      */
-    private String linkErrorStatus(Throwable e) {
+    static String linkErrorStatus(Throwable e) {
         Throwable root = NestedExceptionUtils.getMostSpecificCause(e);
         String state = root instanceof R2dbcException r && r.getSqlState() != null ? r.getSqlState() : "";
         return switch (state) {

@@ -45,6 +45,84 @@ export interface CurrentUser {
 export type PersonLink = 'lecturer' | 'student' | null;
 
 /**
+ * The two things a one-time e-mailed link can be: the link that creates the account of a викладач or
+ * a студент the institution has already entered, and the link that replaces a forgotten password.
+ * One word rather than two component names, because the two screens are the same screen — a form
+ * that asks for an address, and a form that sets a password — differing only in what they say.
+ */
+export type AccountLinkKind = 'register' | 'reset';
+
+/** `Mutation.requestRegistration`'s answer — see the service's `RegistrationRequestStatus`. */
+export type RegistrationRequestStatus =
+  | 'LINK_SENT'
+  | 'ALREADY_REGISTERED'
+  | 'PERSON_ALREADY_LINKED'
+  | 'NOT_ELIGIBLE'
+  | 'TOO_MANY_REQUESTS'
+  | 'MAIL_FAILED';
+
+/** `Mutation.requestPasswordReset`'s answer. */
+export type PasswordResetRequestStatus =
+  | 'LINK_SENT'
+  | 'UNKNOWN_EMAIL'
+  | 'ACCOUNT_DISABLED'
+  | 'TOO_MANY_REQUESTS'
+  | 'MAIL_FAILED';
+
+/** What a link is worth when the page carrying it opens. */
+export type AccountLinkStatus = 'VALID' | 'NOT_FOUND' | 'EXPIRED' | 'USED' | 'UNAVAILABLE';
+
+/** Why redeeming one failed. */
+export type AccountLinkErrorStatus =
+  | 'INVALID_TOKEN'
+  | 'EXPIRED_TOKEN'
+  | 'USED_TOKEN'
+  | 'WEAK_PASSWORD'
+  | 'ALREADY_REGISTERED'
+  | 'PERSON_ALREADY_LINKED'
+  | 'ACCOUNT_DISABLED';
+
+export interface RegistrationRequestResult {
+  isSuccess: boolean;
+  status: RegistrationRequestStatus;
+  /** Which kind of person the link went to; set only with `LINK_SENT`. */
+  role: 'LECTURER' | 'STUDENT' | null;
+  expiresInMinutes: number | null;
+}
+
+export interface PasswordResetRequestResult {
+  isSuccess: boolean;
+  status: PasswordResetRequestStatus;
+  expiresInMinutes: number | null;
+}
+
+/** What the service says about a link before it is spent — whose it is, and whether it still works. */
+export interface AccountLinkCheck {
+  isValid: boolean;
+  status: AccountLinkStatus;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  role: 'LECTURER' | 'STUDENT' | null;
+}
+
+export interface AccountLinkResult {
+  isSuccess: boolean;
+  token: string | null;
+  errorStatus: AccountLinkErrorStatus | null;
+}
+
+/** The root field that inspects each kind of link, and the one that spends it. */
+const LINK_QUERY_FIELD: Record<AccountLinkKind, string> = {
+  register: 'registrationLink',
+  reset: 'passwordResetLink'
+};
+const LINK_MUTATION_FIELD: Record<AccountLinkKind, string> = {
+  register: 'completeRegistration',
+  reset: 'resetPassword'
+};
+
+/**
  * Why a session ended without the user asking it to — the values of the backend's `AuthFailure`
  * enum, carried on the `X-Auth-Error` header and in `extensions.authError` of an `UNAUTHENTICATED`
  * GraphQL error, plus whatever the client works out on its own from the token's `exp` claim.
@@ -329,6 +407,84 @@ export class AuthService {
       shareReplay({ bufferSize: 1, refCount: false })
     );
     return this.meInFlight;
+  }
+
+  /**
+   * Asks for a registration link. The service answers with which of four things is true of this
+   * address — an account already has it, a викладач carries it, a студент carries it, or nobody
+   * does — and only the middle two send an e-mail. Nothing here needs a session.
+   */
+  requestRegistration(email: string): Observable<RegistrationRequestResult> {
+    const q = `mutation($email: String!) {
+      requestRegistration(email: $email) { isSuccess status role expiresInMinutes }
+    }`;
+    return this.gql
+      .request<{ requestRegistration: RegistrationRequestResult }>(q, { email })
+      .pipe(map((d) => d.requestRegistration));
+  }
+
+  /** Asks for a password-recovery link, for an address that already has an account. */
+  requestPasswordReset(email: string): Observable<PasswordResetRequestResult> {
+    const q = `mutation($email: String!) {
+      requestPasswordReset(email: $email) { isSuccess status expiresInMinutes }
+    }`;
+    return this.gql
+      .request<{ requestPasswordReset: PasswordResetRequestResult }>(q, { email })
+      .pipe(map((d) => d.requestPasswordReset));
+  }
+
+  /**
+   * What a link is worth, asked when the page carrying it opens and before anything is typed into
+   * it. A link that has expired or has already been used should say so on arrival rather than after
+   * somebody has chosen a password and pressed the button.
+   *
+   * The field name is chosen here rather than sent as a variable because it is a *field*, not a
+   * value: the two queries differ in what they ask for, not in what they carry. Everything the
+   * document carries — the token — is still a variable.
+   */
+  accountLink(kind: AccountLinkKind, token: string): Observable<AccountLinkCheck> {
+    const field = LINK_QUERY_FIELD[kind];
+    const q = `query($token: String!) {
+      ${field}(token: $token) { isValid status email firstName lastName role }
+    }`;
+    return this.gql
+      .request<Record<string, AccountLinkCheck>>(q, { token })
+      .pipe(map((d) => d[field]));
+  }
+
+  /**
+   * Spends the link: creates the account, or replaces the password. Either way the service hands
+   * back a token, so the person is signed in on the screen where they chose their password rather
+   * than being sent to the login form to type it again.
+   *
+   * The stored session, if any, is dropped first for the same reason `login` drops it: this is an
+   * unauthenticated operation, and a leftover token would only make the service report *its*
+   * failure on this response.
+   */
+  redeemAccountLink(kind: AccountLinkKind, token: string, password: string): Observable<AccountLinkResult> {
+    this.clearSession(null);
+    const field = LINK_MUTATION_FIELD[kind];
+    const q = `mutation($token: String!, $password: String!) {
+      ${field}(token: $token, password: $password) { isSuccess token errorStatus }
+    }`;
+    return this.gql.request<Record<string, AccountLinkResult>>(q, { token, password }).pipe(
+      map((d) => d[field]),
+      tap((res) => {
+        if (res.isSuccess && res.token) {
+          this.adoptSession(res.token);
+        }
+      })
+    );
+  }
+
+  /**
+   * Takes over a session issued by something other than `login` — today, by redeeming a
+   * registration or password-recovery link. Identical to what `login` does with its own token, and
+   * separate from it only because the caller reached the same place by a different road.
+   */
+  adoptSession(token: string) {
+    this.sessionEndReason.set(null);
+    this.setToken(token);
   }
 
   changePassword(currentPassword: string, newPassword: string): Observable<{ isSuccess: boolean; errorStatus?: string }> {

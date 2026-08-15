@@ -73,8 +73,14 @@ between environments* rather than by subject:
 
 | File | Holds |
 |---|---|
-| `application.properties` | what is the same everywhere — the connection URL and pool sizing, the `spring.flyway.*` block (see [Migrations](#migrations-flyway)), GraphiQL, `app.security.jwt-ttl-minutes`, and `spring.profiles.active=loc` |
-| `application-loc.properties` | what is not — `spring.r2dbc.username`/`password`, `app.security.jwt-secret`, the R2DBC SQL/param debug logging (which is how the N+1 query problem described below was originally spotted), and `app.apollo-sandbox.enabled` |
+| `application.properties` | what is the same everywhere — the connection URL and pool sizing, the `spring.flyway.*` block (see [Migrations](#migrations-flyway)), GraphiQL, `app.security.jwt-ttl-minutes`, the `account-token` TTL and cooldown, the `spring.mail.*` SMTP block, `app.base-url`, and `spring.profiles.active=loc` |
+| `application-loc.properties` | what is not — `spring.r2dbc.username`/`password`, `app.security.jwt-secret`, the R2DBC SQL/param debug logging (which is how the N+1 query problem described below was originally spotted), `app.base-url` (the client's own port in development), and `app.apollo-sandbox.enabled` |
+
+Two values are in **neither** file, because they are credentials rather than configuration: the
+mailbox the registration and password-recovery links are sent from is read from `MAIL_USERNAME` and
+`MAIL_PASSWORD` in the environment, with empty defaults so that a service started without them
+starts normally and reports `MAIL_FAILED` on the first attempt to send. See [Self-service
+registration and password recovery](#self-service-registration-and-password-recovery).
 
 The `loc` profile is activated from `application.properties` itself, so a local run needs nothing on
 the command line, and both files are checked in with working development values. Anything in the
@@ -137,8 +143,9 @@ what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF 
 `pg_type` and `ADD COLUMN IF NOT EXISTS`, V6 by both — `ADD COLUMN IF NOT EXISTS` for the column and
 `pg_constraint` for the `CHECK`, since there is no `ADD CONSTRAINT IF NOT EXISTS` — and V7 by
 `IF NOT EXISTS` on every object it creates, a `pg_type` guard around its `CREATE TYPE`, and
-`ON CONFLICT (name) DO NOTHING` on the `global_properties` rows it seeds, and V8 by guarding every
-rename on the old name still being there.
+`ON CONFLICT (name) DO NOTHING` on the `global_properties` rows it seeds, V8 by guarding every
+rename on the old name still being there, and V9 by `IF NOT EXISTS` on the table and the index it
+creates plus a `pg_type` guard around its `CREATE TYPE`.
 
 ### `V1__delete_curriculum_items_on_elective_courses.sql`
 
@@ -326,6 +333,30 @@ each `RENAME COLUMN` and a `pg_constraint` test around each `RENAME CONSTRAINT` 
 After `reset_db.sh`, `schema.sql` has already created everything under the new names and this
 migration finds nothing to do.
 
+### `V9__account_tokens.sql`
+
+Adds `account_tokens` and the `account_token_purpose` enum behind it — the one-time links that let a
+викладач or a студент create their own account, and let anybody replace a forgotten password. See
+[Self-service registration and password recovery](#self-service-registration-and-password-recovery)
+for what the table is and why it is one table rather than two.
+
+It adds one existing-table object besides that, and only one: `users_unique_lower_email`, the unique
+index on `lower(email)` described under [Who an account *is*](#who-an-account-is-userslecturer_id--usersstudent_id).
+No column is added to `users`, no grant is rewritten, and an account created through a link is
+indistinguishable from one an administrator created except that it has never needed
+`must_change_password`. A database that migrates and then never has `MAIL_USERNAME` set simply never
+issues a link, and everything else works exactly as before.
+
+**That index is the one statement here that can fail on a real database**, and failing is the right
+answer: it fails only when two accounts already differ in nothing but the capitalisation of their
+e-mail, which means at least one of them cannot sign in today. Flyway then refuses to start the
+service, which is how you find out. Decide which of the pair is the real account, move or delete the
+other, and start again — the migration's own comment says so at the statement.
+
+Idempotent by `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS` (both of them) and a
+`pg_type` guard around the `CREATE TYPE` — the same three tools V7 uses, for the same reason: after
+`reset_db.sh`, `schema.sql` has already created all of it.
+
 ---
 
 ## Run
@@ -508,6 +539,7 @@ ordering significance beyond their values, because `ORDER BY` on an enum column 
 | `online_class_platform` | `ZOOM`, `MICROSOFT_TEAMS`, `GOOGLE_MEET`, `MOODLE`, `SKYPE`, `WEBEX`, `BIGBLUEBUTTON`, `OTHER` — nullable, because "online, platform not yet decided" is a real state |
 | `grantee_type` | `USER`, `GROUP` — which column of a `permissions` row is set |
 | `access_level` | `EDIT`, `FULL`, `MANAGE` — how much a grant permits. The clearest case of why these are enums: the service asks `level >= 'FULL'` in SQL and `held.allows(required)` in Java, and both mean the same thing only because declaration order is comparison order |
+| `account_token_purpose` | `REGISTRATION`, `PASSWORD_RESET` — what an e-mailed one-time link is for, and which column of an `account_tokens` row therefore names its subject |
 | `study_form`, `degree`, `lecturer_position`, `room_kind`, `property_type` | see `schema.sql` |
 
 `hour_type` is declared "contact teaching, then the contact work around it, then the student's own
@@ -863,6 +895,7 @@ fetchers instead (see [Authentication & authorization](#authentication--authoriz
 | `groups` | name (unique), description |
 | `user_groups` | `(user_id, group_id)` — a user may belong to any number of groups |
 | `permissions` | a single grant: `grantee_type` (`USER`/`GROUP`) + exactly one of `user_id`/`group_id`, `resource_type` + `resource_id` (or `resource_type = 'GLOBAL'` with a `NULL` id for university-wide scope), `level` (`EDIT`/`FULL`/`MANAGE`, with no `DEFAULT` on purpose, so a forgotten column cannot quietly hand out delete rights), `granted_by`, `created_at`, `updated_at`. One row per grantee per exact resource, so re-granting a scope changes `level` in place rather than adding a near-duplicate |
+| `account_tokens` | one e-mailed link: `purpose` (`REGISTRATION`/`PASSWORD_RESET`), the SHA-256 of the token, the address it went to, exactly one of `lecturer_id`/`student_id`/`user_id` according to the purpose, `expires_at`, `used_at`. See [Self-service registration and password recovery](#self-service-registration-and-password-recovery) |
 
 #### Who an account *is*: `users.lecturer_id` / `users.student_id`
 
@@ -883,6 +916,14 @@ ambiguous without either being wrong on its own.
 `ON DELETE SET NULL` rather than `CASCADE` is the deliberate part. Striking a lecturer off the staff
 list must not delete their account along with its permission grants and its trail in
 `permissions.granted_by`; the account survives, unlinked, for an administrator to deal with.
+
+A third unique index, `users_unique_lower_email`, says that an address is one account however it is
+capitalised. `email` is already `UNIQUE`, but case-sensitively, while every lookup in the service is
+`lower(email) = lower(:email)` — so without it `A.Petrenko@lnu.edu.ua` and `a.petrenko@lnu.edu.ua`
+are two rows the column constraint permits and no code path can tell apart: the duplicate check
+before a new account sees neither of them, and `login` finds two rows where it expects one. It was
+added by [`V9`](#v9__account_tokenssql) because self-service registration is the first
+unauthenticated path that could create the second row.
 
 **The link is an identity, not a role.** It grants nothing and restricts nothing: authorization
 still comes entirely from `permissions` and the cascade below, and a linked account edits exactly
@@ -968,7 +1009,9 @@ org.lnu.timetable.framework
 │                  QueryDefinition, MutationDefinition (create/update/delete,
 │                  plus .nestedList(...) and .manyToMany(...) — see below)
 ├── schema/        DynamicGraphQLSchemaBuilder — builds GraphQLSchema from
-│                  metadata + config; DataFetcherProvider
+│                  metadata + config; DataFetcherProvider; HandWrittenApi +
+│                  SchemaTypeRegistry — the plug-in point for the parts of the
+│                  API that cannot be generated (see below)
 ├── query/         R2dbcQueryEngine — table-driven optimized SQL: selectOne,
 │                  selectList, selectWhere, count/countWhere, insert, update,
 │                  delete, the by-arbitrary-column updateWhere / deleteWhere,
@@ -980,7 +1023,54 @@ org.lnu.timetable.framework
                    (exposes the GraphQlSource bean)
 
 org.lnu.timetable.security   — authentication/authorization; see below
+org.lnu.timetable.mail       — MailService: the two e-mailed links, over SMTP
 ```
+
+### The parts that cannot be generated (`HandWrittenApi`)
+
+Almost everything in this schema is reflective: an annotated POJO plus a few declarative lines
+produce a type, a connection, three mutations and the SQL behind them. Three areas are not, and
+never could be.
+
+- **`GlobalProperty`** is a name/value store, not an entity keyed by an id.
+- **Authentication and access** — `login`, `me`, `changePassword`, the user, group and grant
+  management — because a password hash must never be reachable through fully-generic,
+  selection-set-driven machinery, and because `login` does not fit the id-keyed CRUD shape anyway.
+- **Self-service registration and password recovery**, for both of those reasons at once.
+
+The first two are wired into `DynamicGraphQLSchemaBuilder` by hand, each with a parameter on
+`buildSchema` and a `buildXxxTypes()` / `addXxxQueryFields()` / `addXxxMutationFields()` /
+`registerXxxFetchers()` quartet named after the area. That is a workable shape for one exception and
+a poor one for the third: the builder grows a parameter it can type-check nothing about, and an area
+can only be added by editing the framework.
+
+`HandWrittenApi` is that wiring, stated once:
+
+```java
+public interface HandWrittenApi {
+    default void buildTypes(SchemaTypeRegistry types) {}
+    default void addQueryFields(GraphQLObjectType.Builder queryBuilder) {}
+    default void addMutationFields(GraphQLObjectType.Builder mutationBuilder) {}
+    default void registerFetchers(GraphQLCodeRegistry.Builder codeRegistry) {}
+}
+```
+
+An implementation is an ordinary `@Component`. `DynamicGraphQlConfiguration` injects every one of
+them as `List<HandWrittenApi>` — the same way it already collects `List<GraphQLSchemaConfig>` — and
+the builder applies each at the point its own hardcoded areas are applied. A new hand-written area
+is a new bean and nothing else. Every method is defaulted, so an area that only adds queries does
+not have to say so four times.
+
+Two things it deliberately withholds. `SchemaTypeRegistry` is **write-only** — `object`,
+`enumeration`, `input`, and no way to read what anything else declared — so two areas cannot come to
+depend on the order they happen to be visited in. And nothing here routes through
+`AuthorizingDataFetcherProvider`: a hand-written area states its own rule, which for `login` and for
+`requestRegistration` is *none*, and inheriting the generic "must be signed in" would make both
+unreachable.
+
+`SelfServiceSchema` is the only implementation today. `GlobalProperty` and the auth surface were
+left where they are: moving working code to prove a point is how a refactor becomes a regression,
+and the interface's value is in what is added next, not in what is already correct.
 
 ### Define an entity
 
@@ -1245,9 +1335,14 @@ SELECT id AS "id", name AS "name" FROM faculties WHERE id = $1
 
 ## Authentication & authorization
 
-Users never self-register. An administrator creates an account (`createUser`) with a temporary
-password; the account is forced to change it (`must_change_password = TRUE`) before it can do
-anything else. Authentication is a stateless JWT (`io.jsonwebtoken`/jjwt) carrying only the user
+There are two ways an account comes into being, and both start from somebody the institution has
+already entered. An administrator creates one (`createUser`) with a temporary password, and the
+account is forced to change it (`must_change_password = TRUE`) before it can do anything else. Or a
+викладач or a студент whose own row carries an e-mail address creates their own, by following a link
+sent to that address — see [Self-service registration and password
+recovery](#self-service-registration-and-password-recovery). What there is no way to do is register
+as somebody the university has never heard of: the second road checks `lecturers` and then
+`students` for the address before it will send anything at all. Authentication is a stateless JWT (`io.jsonwebtoken`/jjwt) carrying only the user
 id as its subject — no roles or permissions are baked into the token, so revoking a user's access
 (deactivating the account, or removing a permission grant) takes effect on their *next* request
 rather than waiting for the token to expire. Passwords are hashed with BCrypt
@@ -1278,7 +1373,13 @@ around).
    management) bypass this decorator entirely — they're wired directly in
    `DynamicGraphQLSchemaBuilder.buildAuthTypes()`/`registerAuthFetchers()`, the same escape-hatch
    pattern used for `GlobalProperty` (see above), so a `User`'s password hash is never reachable
-   through the generic, selection-set-driven machinery.
+   through the generic, selection-set-driven machinery. The six self-service fields
+   (`requestRegistration`, `completeRegistration`, `requestPasswordReset`, `resetPassword` and the
+   two link-inspection queries) bypass it for the same reason and by a later route: they arrive
+   through the framework's [`HandWrittenApi`](#the-parts-that-cannot-be-generated-handwrittenapi)
+   plug-in point rather than from inside this class. Every one of them is reachable by an
+   unauthenticated caller by design — somebody with no account, or one they cannot open, is exactly
+   who they are for.
 
 ### Why the Flyway dependency list has four entries and not one
 
@@ -1355,7 +1456,7 @@ the classification because it never states one.
 
 ### The security package
 
-`org.lnu.timetable.security` is fifteen classes, and it is worth knowing which of them decides what:
+`org.lnu.timetable.security` is nineteen classes, and it is worth knowing which of them decides what:
 
 | Class | Role |
 |---|---|
@@ -1372,6 +1473,10 @@ the classification because it never states one.
 | `ResourceRef` | record — one `(resourceType, resourceId)` node of that ancestry, plus the synthetic `GLOBAL` root that university-wide grants name. Making `GLOBAL` a node of the same shape, rather than a magic string spliced into each grant query, is what removes the special case from every lookup |
 | `PermissionRepository` | everything else the auth tables need: users, groups, memberships, grants |
 | `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `searchUsers`, `accessLevels`, `grantsForResource`, the grant/membership mutations and `setUserLink` (with `linkErrorStatus`, the one place in the service that tells a `CHECK` from a foreign key by reading the `SQLSTATE`) |
+| `AccountTokenPurpose` | enum — the two things an e-mailed one-time link can be (`REGISTRATION`, `PASSWORD_RESET`), mirroring the `account_token_purpose` PostgreSQL enum the way `AccessLevel` mirrors `access_level` |
+| `AccountTokenRepository` | the SQL behind those links — issuing, the per-address cooldown, invalidating what was outstanding, redeeming — plus the two person lookups (`findLecturerByEmail`, `findStudentByEmail`) that decide whether a link may be sent at all. The one place in this package that reads a *domain* table by anything other than a declared permission edge |
+| `SelfServiceDataFetchers` | the six fetchers behind registration and recovery, and the four-question rule in [Self-service registration and password recovery](#self-service-registration-and-password-recovery) |
+| `SelfServiceSchema` | their GraphQL surface, added through the framework's `HandWrittenApi` plug-in point rather than hardcoded into the schema builder |
 | `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
 | `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
 
@@ -1534,6 +1639,99 @@ their own mistake immediately.
   straight from `DynamicDataFetchers` rather than through the authorizing decorator. They now go
   through `DataFetcherProvider#authenticated`.
 
+### Self-service registration and password recovery
+
+An account is created by an administrator, or by the person it belongs to. The second road is what
+this section is about, and the rule that makes it safe is narrow enough to state in one sentence:
+**a person the institution has already entered may claim the account that belongs to them, and
+nobody else may create one at all.**
+
+`requestRegistration` asks four questions of one address, in this order, and each of the four
+answers is a different thing to tell the person who typed it:
+
+| The address belongs to | Answer | What the client does with it |
+|---|---|---|
+| an existing account | `ALREADY_REGISTERED` | says so, and offers to send a password-recovery link to the same address instead — one button, already knowing the address |
+| a `Lecturer` | `LINK_SENT` (`role: LECTURER`) | «перевірте пошту» |
+| failing that, a `Student` | `LINK_SENT` (`role: STUDENT`) | the same |
+| nobody | `NOT_ELIGIBLE` | says self-registration is not open for this address, and who to ask |
+
+Викладачі are consulted before студенти because that is how an ambiguous address should resolve: a
+person who is both a doctoral студент and an assistant викладач exists, and the account they need is
+the one that opens their навантаження. A fifth answer, `PERSON_ALREADY_LINKED`, covers the case the
+address alone cannot see — a викладач who was given an account under a personal address and has
+since had a university one added to their row. `users_unique_lecturer` would refuse the second
+account anyway; checking here means the answer is a sentence rather than an integrity violation
+thirty minutes later.
+
+`requestPasswordReset` is the same shape with one question: does an account have this address.
+
+**The links.** 32 bytes from `SecureRandom`, base64url, in a path segment
+(`/register/<token>`, `/reset-password/<token>` — base64url contains no dot, which is what keeps
+`FrontendController`'s `[^.]*` patterns serving them). Only the SHA-256 is stored, in
+`account_tokens`, for the same reason `users.password_hash` is a hash: a link is a bearer credential
+for thirty minutes, and a dump of that table must not be a set of working ones. SHA-256 rather than
+BCrypt, deliberately — a lookup key has to be computed from the input rather than compared against
+every row, and what makes this one unguessable is that it is 256 bits of `SecureRandom`, not that
+the hash is expensive.
+
+Four rules keep a link from being worth more than one use:
+
+- **A delivered link supersedes what was outstanding.** Ask twice and the first e-mail's link stops
+  working, so the newest message is always the live one and nobody has to work out which of two is
+  current. It *expires* the older ones rather than marking them used, and the difference is what the
+  reader is told: `used_at` means «ви вже це зробили» — go and sign in — which is a lie to somebody
+  who never redeemed anything and has no password to sign in with. And it happens **after** the new
+  message has actually been sent, because retiring the old link first would mean an SMTP failure
+  left the person with no working link at all. A send that fails deletes the row it just wrote, so
+  nothing changed: the old link still works and the cooldown has not started.
+- **Redeeming is a conditional `UPDATE`** — `SET used_at = now() WHERE id = :id AND used_at IS NULL`,
+  read back through `rowsUpdated()`. Two tabs submitting the same link both reach it; exactly one
+  gets 1 back, and the loser is told «посилання вже використано» rather than colliding on a unique
+  index. It is done *before* the account is created for exactly that reason — and *after* the
+  password has been hashed, so that BCrypt refusing an over-long input costs a message rather than
+  the link.
+- **A cooldown of `app.security.account-token-cooldown-seconds`** (60) per address and purpose,
+  which bounds what one inbox can be sent.
+- **A cap of `app.security.account-token-max-per-minute`** (20) over every address at once, which
+  bounds what the mailbox as a whole can be made to send. The two limits have different victims: a
+  script walking a list of five thousand published university addresses trips the first not once,
+  and the damage is to the sending mailbox's reputation rather than to any one recipient. Both
+  refusals answer `TOO_MANY_REQUESTS`, since from outside they are the same "not now" and saying
+  which would only tell an attacker what they hit.
+
+**What the account gets.** Its name, from the викладач or студент row — read at redemption rather
+than copied onto the token when it was issued, since the thirty minutes in between are long enough
+for a кафедра to correct a misspelt surname. Its person link, set by construction rather than by an
+administrator's later `setUserLink`. `must_change_password = FALSE`, because the password was
+chosen by the person who will use it, over TLS, thirty seconds ago — forcing them to replace a
+secret only they have ever seen would be theatre. And a JWT in the mutation's response, so they are
+signed in on the screen where they chose it.
+
+**What it does not get: any permission at all.** Reads are open to every authenticated caller, so a
+newly registered викладач immediately sees «Мій кабінет», their навантаження and their розклад —
+which is the whole of what a self-registered account is for. Every write still needs a grant
+somebody holding `MANAGE` chose to make.
+
+**The mail.** `org.lnu.timetable.mail.MailService`, over SMTP, configured for
+`smtp.office365.com:587` with STARTTLS. The mailbox is a credential and is therefore in neither
+properties file: `MAIL_USERNAME` and `MAIL_PASSWORD` are read from the environment with empty
+defaults, so a service started without them starts normally and answers `MAIL_FAILED` on the first
+attempt to send rather than refusing to boot. On a host configured by
+[`scripts/deploy/install-service.sh`](../scripts/deploy/README.md#outgoing-mail) they are
+`--mail-username` / `--mail-password`, alongside `--base-url` for the address the links point at. `JavaMailSender` is blocking and everything else here
+is not, so each send runs on `Schedulers.boundedElastic()`. Two things Microsoft's side decides and
+neither is visible from this repository: **SMTP AUTH is disabled per mailbox by default** and has to
+be enabled for `timetable@lnu.edu.ua` explicitly, and a mailbox with multi-factor authentication
+cannot use its own password here at all — it needs an app password. The links themselves are built
+from `app.base-url`, which is `http://localhost:4200` in the `loc` profile (where the client runs on
+its own port) and `http://localhost:8080` otherwise: **set it to the public address before deploying
+anywhere real, or every link in every inbox points at the reader's own machine.**
+
+**Not hidden.** A public sign-up form normally answers every address with the same "check your
+inbox", so that the form cannot be used to test whether an address is registered. That is the wrong
+trade here, and the reasoning is in *Known limitations* along with what it costs.
+
 ### GraphQL API
 
 | Field | Kind | Notes |
@@ -1551,6 +1749,11 @@ their own mistake immediately.
 | `revokePermission(permissionId)` | mutation | needs `MANAGE` from a **strict ancestor** of the grant's resource, or that the caller made it (`granted_by`) — that second branch is checked first and needs no level at all. Refusals: `FORBIDDEN`, `PERMISSION_NOT_FOUND` |
 | `accessLevels(resourceType, resourceIds)` | query | `[ResourceAccess!]!` — `{ id, level }` per reachable id, which is what the frontend uses to decide which buttons to show. Ids the caller cannot reach are omitted rather than returned with a null level. Replaces `canModifyResources`, whose yes/no answer could not say whether the Delete button next to Edit belonged there |
 | `grantsForResource(resourceType, resourceId, includeInherited)` | query | who can reach a resource and at what level; needs `MANAGE` on it. `includeInherited` defaults to true, adding grants held on ancestors and university-wide grants, each marked `inherited: true` — "who can edit this кафедра" is answered wrongly by a list that omits the deanery above it. Ordered direct-first, then strongest level first within each group |
+| `requestRegistration(email)` | mutation | **unauthenticated**. Asks for a registration link. `LINK_SENT` (with `role`), `ALREADY_REGISTERED`, `PERSON_ALREADY_LINKED`, `NOT_ELIGIBLE`, `TOO_MANY_REQUESTS`, `MAIL_FAILED` — see above |
+| `requestPasswordReset(email)` | mutation | **unauthenticated**. `LINK_SENT`, `UNKNOWN_EMAIL`, `ACCOUNT_DISABLED`, `TOO_MANY_REQUESTS`, `MAIL_FAILED` |
+| `registrationLink(token)` / `passwordResetLink(token)` | query | **unauthenticated**. Inspects a link without spending it: `AccountLinkCheck { isValid, status, email, firstName, lastName, role }`, `status` being `VALID`, `NOT_FOUND`, `EXPIRED` (past its thirty minutes, or replaced by a newer link), `USED` or `UNAVAILABLE` (the link is good, but the account has since been deactivated or came into being some other way). What lets the page say «термін дії посилання минув» on arrival rather than after a password has been typed, and what keeps a form that cannot succeed off the screen |
+| `completeRegistration(token, password)` | mutation | **unauthenticated**. Creates the account, links it to the person the link named, and returns a JWT. Refusals: `INVALID_TOKEN`, `EXPIRED_TOKEN`, `USED_TOKEN`, `WEAK_PASSWORD` (under 8 characters, or over the 72 bytes BCrypt hashes), `ALREADY_REGISTERED`, `PERSON_ALREADY_LINKED` |
+| `resetPassword(token, password)` | mutation | **unauthenticated**. Sets the new password, clears `must_change_password`, returns a JWT. Refusals: the same minus the last two, plus `ACCOUNT_DISABLED` |
 | `searchUsers(query, limit)` | query | finds active accounts by e-mail or name (either order), case-insensitive substring, for the grantee picker. Needs `MANAGE` somewhere — university-wide or on any one resource — and returns identity only, never the person link. A query under two characters returns `[]` rather than an error; `limit` defaults to 20 and is clamped to 1..50. The full `users` listing stays admin-only: a deanery needs to find the person they are handing a кафедра to, not to enumerate the university's staff |
 
 Two GraphQL types carry the model: the enum `AccessLevel { EDIT, FULL, MANAGE }` — an enum rather
@@ -1564,7 +1767,7 @@ One consequence of the upsert worth knowing before it surprises somebody: `DO UP
 else's grant transfers the right to revoke it from the original granter to you.
 
 All admin-only fields fail with a `GraphQlAuthException` for non-admins; unauthenticated calls to
-anything except `login` fail the same way with "You must be signed in to do this." Both arrive as a
+anything except `login` and the six self-service fields above fail the same way with "You must be signed in to do this." Both arrive as a
 GraphQL error carrying `extensions.code` — `FORBIDDEN` when someone is signed in, `UNAUTHENTICATED`
 when nobody is (see [When a token expires](#when-a-token-expires)), which is the difference between
 a message to show and a session to end.
@@ -1581,21 +1784,30 @@ what made an expired session invisible for as long as it was: a `null` here now 
 profile is active inside the packaged jar as well, so **override it before deploying anywhere
 real** — `--app.security.jwt-secret=…`, `APP_SECURITY_JWTSECRET`, or `SPRING_APPLICATION_JSON`.
 
+Self-service registration adds four more, all in `application.properties`:
+`app.security.account-token-ttl-minutes` (30), `app.security.account-token-cooldown-seconds` (60),
+the `spring.mail.*` SMTP block, and `app.base-url`. The mailbox itself is not there — `MAIL_USERNAME`
+and `MAIL_PASSWORD` come from the environment — and `app.base-url` is the one of the four that is
+wrong by default for a deployment: override it, or the links point at the reader's own machine.
+
 `data.sql` seeds two groups ("Деканат ФПМіІ", "Завідувачі кафедр") and exactly one account:
 
 | Email | Password | Role |
 |---|---|---|
 | `admin@lnu.edu.ua` | `Admin#2026` | `GLOBAL` at `MANAGE` — the administrator grant — and no forced password change |
 
-Everything else about the auth tables is left for that administrator to create, which matches the
-no-self-registration rule: there is no seeded example of a forced password change, of a scoped
-`FACULTY`/`DEPARTMENT` grant, or of an account linked to a lecturer or a student. Both groups are
+Everything else about the auth tables is left for that administrator to create: there is no seeded
+example of a forced password change, of a scoped `FACULTY`/`DEPARTMENT` grant, or of an account
+linked to a lecturer or a student. `account_tokens` is seeded empty too, and stays empty until
+somebody asks for a link. Both groups are
 seeded empty — "Деканат ФПМіІ" keeps its `FACULTY` grant at `MANAGE`, so adding a user to it is enough to hand
 out faculty-wide access, and `permissions` carries just that grant plus the administrator's `GLOBAL`
 one.
 
 Exercising the person link therefore takes two steps on «Користувачі та права»: create the account,
-then point it at a lecturer or a student (`setUserLink`). Nothing in `data.sql` does it for you.
+then point it at a lecturer or a student (`setUserLink`). Nothing in `data.sql` does it for you —
+though self-service registration now does, for the accounts that arrive that way, since a link is
+issued to a person and the account it creates is linked to them by construction.
 
 ---
 
@@ -1656,8 +1868,12 @@ timetable/
 │   │                 People, Scheduling — which are the whole "API definition"
 │   │                 (which entity lives in which: "Where each entity is declared")
 │   ├── domain/       annotated POJOs, one per @GraphQLEntity table
-│   ├── framework/    the config-driven engine (see The framework above)
-│   ├── security/     JWT + AccessLevel/PermissionEvaluator (see Authentication & authorization)
+│   ├── framework/    the config-driven engine, plus HandWrittenApi — the plug-in point
+│   │                 for the parts of the API it cannot generate (see The framework above)
+│   ├── security/     JWT + AccessLevel/PermissionEvaluator, and the one-time links behind
+│   │                 self-service registration (see Authentication & authorization)
+│   ├── mail/         MailService — those links, over SMTP; the only place this service
+│   │                 sends mail from
 │   ├── controller/   IndexController redirects / to Apollo Sandbox; FrontendController
 │   │                 serves the built Angular client — one or the other, never both
 │   │                 (see Serving the frontend from this service)
@@ -1727,6 +1943,43 @@ setup](#database-setup).
   until another pattern is added there. It is a fixed list of patterns rather than a catch-all precisely so that
   requests for real files keep falling through to the static resource handler — see [Serving the
   frontend from this service](#serving-the-frontend-from-this-service).
+- **Self-service registration says which of four things is true of an address, and that is a
+  deliberate disclosure.** `requestRegistration` answers `ALREADY_REGISTERED`, `LINK_SENT` or
+  `NOT_ELIGIBLE`, so anybody may test whether a given address has an account or belongs to a
+  викладач or студент here. A public sign-up form would answer all three with the same "check your
+  inbox". Two things make that the wrong trade for this system: the population is closed and already
+  published — a person's university address is on their кафедра's own web page — so there is nothing
+  to learn that is not already on the web, and the three answers are not interchangeable, since an
+  address that will never work has to say so or its owner waits for an e-mail that is not coming and
+  concludes the system is broken. The cost is real: it is an enumeration oracle, and a *free* one —
+  the two rate limits count links actually issued, so the three answers that send no e-mail are
+  unlimited, and a script can read back which of a list of addresses has an account and which
+  belongs to a викладач rather than a студент as fast as it can ask. A closed institutional
+  deployment behind a university network is the setting this was judged in; a public one should
+  reconsider it, and would want a per-caller limit on the question as well as on the sending.
+- **Redeeming a link is two statements, not one transaction.** `markUsed` and the `INSERT` into
+  `users` (or the `UPDATE` of a password) are separate round trips, and only a
+  `DataIntegrityViolationException` is recovered — so a connection dropped between them leaves the
+  link spent, no account created, and a generic «не вдалося завершити дію» on screen, with the
+  60-second cooldown blocking an immediate retry. The two reachable causes of a failure *between*
+  them have been moved out of the way (the password is hashed and length-checked before the link is
+  spent, and the length bound is BCrypt's own 72 bytes), so what is left is the database itself
+  failing mid-request. Wrapping the pair in a `TransactionalOperator` is the fix, and is worth doing
+  the next time this code is opened.
+- **Spent and expired `account_tokens` rows are never deleted.** A used link is kept so that a second
+  click can say «посилання вже використано» instead of «посилання недійсне», which is the difference
+  between "you have already done this" and "somebody sent you something broken" — but nothing ever
+  prunes them, so the table grows by one row per link ever issued. At institutional volumes that is
+  tens of rows a term and will not matter for years; a `DELETE FROM account_tokens WHERE created_at
+  < now() - INTERVAL '30 days'` on a schedule is the whole of the fix when it does.
+- **The mailbox has to be one Microsoft still lets authenticate with a password.** SMTP AUTH is
+  disabled per mailbox by default on Office 365 and has to be enabled for `timetable@lnu.edu.ua`
+  explicitly, and a mailbox with multi-factor authentication cannot use its own password at all —
+  it needs an app password. Neither is visible from this repository, and the symptom of getting it
+  wrong is a `MAIL_FAILED` with an authentication failure in the log. Moving to the Microsoft Graph
+  API with client credentials would remove the dependency entirely, at the cost of an Azure app
+  registration; `spring.mail.host`/`port` being ordinary properties is the cheap escape in the
+  meantime — a departmental relay works with no code change.
 - **The `ukrainian` collation needs a Postgres built with ICU** (standard from v15). On a build
   without it, `schema.sql` fails at `CREATE COLLATION` — substitute the `provider = libc,
   locale = 'uk_UA.utf8'` variant noted at that line, which in turn needs that locale generated

@@ -10,6 +10,20 @@ sudo scripts/deploy/install-service.sh          # prompts for the credentials, w
 That builds the current checkout, installs a systemd unit, starts it, and adds a cron job that
 watches the branch. Everything below is what it did and why.
 
+Everything it asks for can also be given on the command line, which is what a provisioning script
+wants:
+
+```bash
+sudo scripts/deploy/install-service.sh <db_username> <db_password> <jwt_secret> \
+    --mail-username timetable@lnu.edu.ua \
+    --mail-password '<app password>' \
+    --base-url https://timetable.lnu.edu.ua
+```
+
+The last three are optional and are what turns on [self-service registration and password
+recovery](../../timetable/README.md#self-service-registration-and-password-recovery); the service
+runs perfectly well without them and simply cannot send a link.
+
 | | |
 |---|---|
 | `install-service.sh` | the one-shot configurator. Writes the credentials, the unit, the cron entry and the logrotate config; idempotent, so re-running it is how you change any of them |
@@ -21,7 +35,7 @@ watches the branch. Everything below is what it did and why.
 
 | Path | What |
 |---|---|
-| `/etc/lnu-timetable/service.env` | the database credentials, the JWT secret, the port and the detected `JAVA_HOME`. Root-owned, mode 600 |
+| `/etc/lnu-timetable/service.env` | the database credentials, the JWT secret, the port, the detected `JAVA_HOME`, and — when they were given — the mailbox credentials and the public base URL. Root-owned, mode 600 |
 | `/etc/lnu-timetable/build.env` | optional, and yours to write: sourced before every build when the toolchain cannot be found automatically |
 | `/etc/systemd/system/lnu-timetable.service` | the unit |
 | root's crontab | `update.sh`, every ten minutes |
@@ -161,6 +175,39 @@ arguments, so they do not show up in `ps` for anyone with a shell on the machine
 installer rewrites the four keys it owns — the two credentials, the JWT secret and the port — and
 keeps every other line in that file, so overrides you add by hand survive a credential change.
 
+### Outgoing mail
+
+Self-service registration and password recovery send a link from a mailbox. Three options configure
+it, and all three are optional — the service starts without them and reports «не вдалося надіслати
+листа» on the first attempt rather than refusing to boot:
+
+| Option | Becomes | What it is |
+|---|---|---|
+| `--mail-username ADDR` | `MAIL_USERNAME` | the mailbox to send from, e.g. `timetable@lnu.edu.ua` |
+| `--mail-password PASS` | `MAIL_PASSWORD` | its password, or an app password |
+| `--base-url URL` | `APP_BASEURL` | the public address this instance answers on |
+
+Interactively the installer asks for them too, after the credentials, and Enter skips them.
+
+The third is not optional in practice, and the installer says so at the end if mail is configured
+without it. `app.base-url` is what the links inside those messages are built from and it defaults to
+`http://localhost:8080`, so without it every link in every inbox is a link to the reader's own
+machine.
+
+**A run that says nothing about mail leaves mail alone.** The set of keys the installer rewrites is
+not fixed: the five it always owns, plus `MAIL_USERNAME`/`MAIL_PASSWORD` only when
+`--mail-username` was given, plus `APP_BASEURL` only when `--base-url` was. Everything else in the
+file is preserved as before. So re-running the installer to change the port or rotate the JWT secret
+keeps a mailbox configured months ago, instead of quietly switching registration off — and removing
+a mailbox is an edit to `/etc/lnu-timetable/service.env`, which is a deliberate act rather than a
+side effect. `--mail-username` and `--mail-password` must be given together; half a mailbox cannot
+authenticate.
+
+See the service README's [Self-service registration and password
+recovery](../../timetable/README.md#self-service-registration-and-password-recovery) for what those
+links are, and for the two things Microsoft's side decides about whether that mailbox may
+authenticate with a password at all.
+
 ## Day to day
 
 ```bash
@@ -175,8 +222,9 @@ scripts/deploy/update.sh --no-pull        # rebuild and redeploy this checkout, 
 sudo scripts/deploy/install-service.sh --uninstall
 ```
 
-Re-run `install-service.sh` to change a credential, the port (`--port`), the branch (`--branch`) or
-the interval (`--interval`); it overwrites in place. `--uninstall` removes the unit, the cron entry
+Re-run `install-service.sh` to change a credential, the port (`--port`), the branch (`--branch`),
+the interval (`--interval`) or the mailbox (`--mail-username`/`--mail-password`/`--base-url`); it
+overwrites in place, and leaves alone whatever the run did not mention. `--uninstall` removes the unit, the cron entry
 and the logrotate config, and deliberately leaves `/etc/lnu-timetable/service.env` and `run/` alone.
 
 ## Prerequisites on the host

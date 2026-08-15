@@ -5,7 +5,10 @@
 #
 # Usage (run as root, from anywhere):
 #   sudo scripts/deploy/install-service.sh <db_username> <db_password> <jwt_secret>
-#   sudo scripts/deploy/install-service.sh                  # prompts for all three, without echo
+#   sudo scripts/deploy/install-service.sh                  # prompts for each, without echo
+#   sudo scripts/deploy/install-service.sh <db_username> <db_password> <jwt_secret> \
+#       --mail-username timetable@lnu.edu.ua --mail-password '<app password>' \
+#       --base-url https://timetable.lnu.edu.ua
 #
 # Options:
 #   --port N              port to serve on (default 80)
@@ -16,21 +19,37 @@
 #   --skip-build          install everything, but keep the jar already in run/
 #   --uninstall           stop and remove the unit, the cron entry and the logrotate config
 #
+# Outgoing mail (optional — it is what sends the registration and password-recovery links):
+#   --mail-username ADDR  the mailbox to send from, e.g. timetable@lnu.edu.ua
+#   --mail-password PASS  its password (or app password); goes together with --mail-username
+#   --base-url URL        the public address this instance answers on, e.g.
+#                         https://timetable.lnu.edu.ua — what the links in those messages are
+#                         built from. Without it they point at http://localhost:8080.
+#
+# These three are named options rather than further positional arguments, so that mail can be
+# configured, changed or left alone independently of the credentials. A run that names none of them
+# does not touch whatever is already in the env file: mail is optional, the service starts without
+# it, and self-service registration then reports "не вдалося надіслати листа" rather than failing to
+# boot. Giving one of --mail-username / --mail-password without the other is an error, since a
+# half-configured mailbox cannot authenticate.
+#
 # Passing the secrets as arguments puts them in your shell history and, for the moment the script
-# runs, in "ps" output. Run it with no arguments and it prompts for each without echoing, which is
-# the better habit on a machine that anyone else can log in to.
+# runs, in "ps" output. Run it with no arguments and it prompts for each without echoing — including
+# for the mail settings, which may be skipped by pressing Enter — which is the better habit on a
+# machine that anyone else can log in to.
 #
 # What it installs
 # ----------------
-#   /etc/lnu-timetable/service.env         the three secrets and the port, root-owned, mode 600
+#   /etc/lnu-timetable/service.env         the secrets and the port, root-owned, mode 600
 #   /etc/systemd/system/<name>.service     the unit: runs scripts/deploy/run-service.sh, restarts
 #                                          on failure, starts at boot
 #   root's crontab                         scripts/deploy/update.sh every N minutes
 #   /etc/logrotate.d/<name>                weekly rotation for run/update.log
 #
 # Nothing secret is written into the repository. The credentials reach the JVM as environment
-# variables (SPRING_R2DBC_USERNAME, SPRING_R2DBC_PASSWORD, APP_SECURITY_JWTSECRET) rather than as
-# command-line arguments, so they do not appear in "ps" for the life of the process.
+# variables (SPRING_R2DBC_USERNAME, SPRING_R2DBC_PASSWORD, APP_SECURITY_JWTSECRET, MAIL_USERNAME,
+# MAIL_PASSWORD) rather than as command-line arguments, so they do not appear in "ps" for the life
+# of the process.
 #
 # Why systemd and not a pidfile
 # -----------------------------
@@ -52,6 +71,14 @@ INTERVAL=10
 SERVICE_NAME=lnu-timetable
 SKIP_BUILD=false
 UNINSTALL=false
+MAIL_USERNAME=""
+MAIL_PASSWORD=""
+BASE_URL=""
+# "Did this run decide these keys?" — not "are they non-empty". A run that says nothing about mail
+# must leave whatever is already in the env file alone, and that is a different question from
+# whether the value happens to be blank.
+MAIL_GIVEN=false
+BASE_URL_GIVEN=false
 POSITIONAL=()
 
 while [[ $# -gt 0 ]]; do
@@ -63,7 +90,10 @@ while [[ $# -gt 0 ]]; do
         --service-name) SERVICE_NAME="${2:?--service-name needs a value}"; shift 2 ;;
         --skip-build)   SKIP_BUILD=true; shift ;;
         --uninstall)    UNINSTALL=true; shift ;;
-        -h|--help)      sed -n '2,40p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --mail-username) MAIL_USERNAME="${2:?--mail-username needs a value}"; MAIL_GIVEN=true; shift 2 ;;
+        --mail-password) MAIL_PASSWORD="${2:?--mail-password needs a value}"; MAIL_GIVEN=true; shift 2 ;;
+        --base-url)      BASE_URL="${2:?--base-url needs a value}"; BASE_URL_GIVEN=true; shift 2 ;;
+        -h|--help)      sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)             echo "Error: unknown option '$1' (try --help)" >&2; exit 1 ;;
         *)              POSITIONAL+=("$1"); shift ;;
     esac
@@ -101,6 +131,15 @@ fi
 # ---- sanity ------------------------------------------------------------------------------------
 [[ -x "$REPO_ROOT/scripts/build-app.sh" ]] || die "$REPO_ROOT does not look like the lnu-timetable repository (no scripts/build-app.sh)"
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "--port must be a number, got '$PORT'"
+# A mailbox needs both halves to authenticate, so half of one is always a mistake rather than a
+# choice. Caught here, before anything is written, rather than as an SMTP authentication failure in
+# the journal the first time somebody tries to register.
+if [[ -n "$MAIL_USERNAME" && -z "$MAIL_PASSWORD" ]] || [[ -z "$MAIL_USERNAME" && -n "$MAIL_PASSWORD" ]]; then
+    die "--mail-username and --mail-password go together; give both or neither"
+fi
+if [[ -n "$BASE_URL" && ! "$BASE_URL" =~ ^https?:// ]]; then
+    die "--base-url must be a full URL including the scheme, e.g. https://timetable.lnu.edu.ua (got '$BASE_URL')"
+fi
 if [[ ! "$INTERVAL" =~ ^[0-9]+$ ]] || (( INTERVAL < 1 || INTERVAL > 59 )); then
     die "--interval must be 1-59 minutes, got '$INTERVAL'"
 fi
@@ -135,6 +174,28 @@ elif (( ${#POSITIONAL[@]} == 0 )); then
     read -r  -p 'Database username: ' DB_USERNAME
     read -rs -p 'Database password: ' DB_PASSWORD; echo
     read -rs -p 'JWT secret (>= 32 bytes): ' JWT_SECRET; echo
+    # Mail is asked for last and may be skipped, because it is the one part of this the service
+    # runs without. Skipping leaves whatever is already in the env file untouched rather than
+    # clearing it, so re-running to change the port does not switch mail off.
+    if [[ "$MAIL_GIVEN" == false ]]; then
+        echo
+        echo 'Outgoing mail sends the registration and password-recovery links. Press Enter to'
+        echo 'skip it — the service runs without, and self-service registration then reports that'
+        echo 'the message could not be sent.'
+        read -r -p 'Mail username (e.g. timetable@lnu.edu.ua), or Enter to skip: ' MAIL_USERNAME
+        if [[ -n "$MAIL_USERNAME" ]]; then
+            read -rs -p 'Mail password: ' MAIL_PASSWORD; echo
+            [[ -n "$MAIL_PASSWORD" ]] || die "the mail password may not be empty"
+            MAIL_GIVEN=true
+        fi
+    fi
+    if [[ "$BASE_URL_GIVEN" == false && "$MAIL_GIVEN" == true ]]; then
+        read -r -p 'Public base URL for the links (e.g. https://timetable.lnu.edu.ua): ' BASE_URL
+        if [[ -n "$BASE_URL" ]]; then
+            [[ "$BASE_URL" =~ ^https?:// ]] || die "the base URL must include the scheme, e.g. https://timetable.lnu.edu.ua"
+            BASE_URL_GIVEN=true
+        fi
+    fi
 else
     die "expected either three arguments (db_username db_password jwt_secret) or none at all; got ${#POSITIONAL[@]}"
 fi
@@ -160,11 +221,21 @@ chmod 700 "$ENV_DIR"
 # This file is rewritten on every run, and it is also the documented place to put any other
 # property the deployment overrides — SPRING_R2DBC_URL to point at a database that is not on
 # localhost, for one. Rewriting it wholesale would delete those silently on the next credential
-# change, so keep every line whose key is not one of the four this script owns.
+# change, so keep every line whose key this run does not own.
+#
+# Which keys those are is not a constant, and that is the whole of how mail can be left alone. The
+# five below are rewritten every time; MAIL_USERNAME / MAIL_PASSWORD / APP_BASEURL join them only
+# when this run was told about them, so a re-run to change the port or the JWT secret preserves a
+# mailbox configured months ago instead of quietly switching self-service registration off.
+OWNED_KEYS=(SPRING_R2DBC_USERNAME SPRING_R2DBC_PASSWORD APP_SECURITY_JWTSECRET SERVER_PORT JAVA_HOME)
+[[ "$MAIL_GIVEN" == true ]] && OWNED_KEYS+=(MAIL_USERNAME MAIL_PASSWORD)
+[[ "$BASE_URL_GIVEN" == true ]] && OWNED_KEYS+=(APP_BASEURL)
+OWNED_RE="^($(IFS='|'; printf '%s' "${OWNED_KEYS[*]}"))="
+
 PRESERVED=""
 if [[ -f "$ENV_FILE" ]]; then
     PRESERVED="$(grep -vE '^[[:space:]]*(#|$)' "$ENV_FILE" \
-        | grep -vE '^(SPRING_R2DBC_USERNAME|SPRING_R2DBC_PASSWORD|APP_SECURITY_JWTSECRET|SERVER_PORT|JAVA_HOME)=' || true)"
+        | grep -vE "$OWNED_RE" || true)"
     [[ -n "$PRESERVED" ]] && say "keeping $(printf '%s\n' "$PRESERVED" | wc -l | tr -d ' ') setting(s) already in $ENV_FILE"
 fi
 
@@ -188,15 +259,38 @@ if [[ -n "$DETECTED_JAVA_HOME" ]]; then
 JAVA_HOME=$DETECTED_JAVA_HOME
 EOF
 fi
+if [[ "$MAIL_GIVEN" == true ]]; then
+    cat >> "$ENV_FILE" <<EOF
+
+# The mailbox the registration and password-recovery links are sent from. These two are read by
+# the placeholders in application.properties (spring.mail.username=\${MAIL_USERNAME:}) rather than
+# by relaxed binding, which is why they are not spelled SPRING_MAIL_*.
+MAIL_USERNAME=$MAIL_USERNAME
+MAIL_PASSWORD=$MAIL_PASSWORD
+EOF
+fi
+if [[ "$BASE_URL_GIVEN" == true ]]; then
+    cat >> "$ENV_FILE" <<EOF
+
+# What the links inside those messages are built from (app.base-url). Its default is
+# http://localhost:8080, which in somebody else's inbox is a link to their own machine.
+APP_BASEURL=$BASE_URL
+EOF
+fi
 if [[ -n "$PRESERVED" ]]; then
     cat >> "$ENV_FILE" <<EOF
 
-# Kept from the previous version of this file. Anything that is not one of the four keys above
-# survives a re-run; add further overrides here rather than to the unit.
+# Kept from the previous version of this file. Anything this run did not set survives it; add
+# further overrides here rather than to the unit.
 $PRESERVED
 EOF
 fi
 chmod 600 "$ENV_FILE"
+
+# What the file ends up saying about mail, read back rather than inferred — the answer may have
+# come from this run, from a previous one, or from a line somebody added by hand.
+MAIL_CONFIGURED=false; grep -qE '^MAIL_USERNAME=.' "$ENV_FILE" && MAIL_CONFIGURED=true
+BASE_URL_CONFIGURED=false; grep -qE '^APP_BASEURL=.' "$ENV_FILE" && BASE_URL_CONFIGURED=true
 
 # ---- build and deploy ------------------------------------------------------------------------------
 if [[ "$SKIP_BUILD" == true ]]; then
@@ -282,6 +376,23 @@ EOF
 
 # ---- report ------------------------------------------------------------------------------------------
 echo
+if [[ "$MAIL_CONFIGURED" == true ]]; then
+    echo "Outgoing mail: $(sed -n 's/^MAIL_USERNAME=//p' "$ENV_FILE" | tail -n1)"
+    if [[ "$BASE_URL_CONFIGURED" == true ]]; then
+        echo "Links point at: $(sed -n 's/^APP_BASEURL=//p' "$ENV_FILE" | tail -n1)"
+    else
+        echo
+        echo "Warning: mail is configured but APP_BASEURL is not, so every registration and"
+        echo "         password-recovery link will point at http://localhost:8080 — a dead link in"
+        echo "         anybody's inbox but your own. Re-run with --base-url https://<public address>."
+    fi
+else
+    echo "Outgoing mail is not configured, so self-service registration and password recovery will"
+    echo "report that the message could not be sent. Re-run with --mail-username, --mail-password"
+    echo "and --base-url to enable them."
+fi
+
+echo
 if [[ "$HEALTHY" == true ]]; then
     echo "Done. $SERVICE_NAME is running and answering on port $PORT."
 else
@@ -303,5 +414,6 @@ It restarts itself if it dies, and starts again after a reboot. Every $INTERVAL 
 $GIT_REMOTE/$GIT_BRANCH; when that branch moves it pulls, rebuilds, redeploys and restarts, and if the new
 build will not come up it puts the previous jar back.
 
-Re-run this script to change a credential, the port or the interval — it overwrites in place.
+Re-run this script to change a credential, the port or the interval — it overwrites in place. A
+re-run that says nothing about mail leaves the mailbox settings exactly as they were.
 EOF

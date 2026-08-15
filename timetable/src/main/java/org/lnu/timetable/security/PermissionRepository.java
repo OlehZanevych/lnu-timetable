@@ -93,12 +93,31 @@ public class PermissionRepository {
             .all();
     }
 
+    /**
+     * The administrator's {@code createUser}: an account with a temporary password, which its owner
+     * has to replace before the session is good for anything else.
+     */
     public Mono<Long> insertUser(String email, String firstName, String lastName, String passwordHash,
                                   Long lecturerId, Long studentId) {
+        return insertUser(email, firstName, lastName, passwordHash, lecturerId, studentId, true);
+    }
+
+    /**
+     * The same, saying explicitly whether the new password is a temporary one.
+     * <p>
+     * {@code must_change_password} exists because an administrator has to invent a password for
+     * somebody else and therefore knows it. Nobody else does: an account created through a
+     * registration link was given its password by the person who will use it, over TLS, and forcing
+     * them to change it on the next screen would be asking them to replace a secret only they have
+     * ever seen. So self-registration passes {@code false}, and it is the one caller that does.
+     */
+    public Mono<Long> insertUser(String email, String firstName, String lastName, String passwordHash,
+                                  Long lecturerId, Long studentId, boolean mustChangePassword) {
         return db.sql("INSERT INTO users (email, first_name, last_name, password_hash, must_change_password, is_active, " +
                 "lecturer_id, student_id) " +
-                "VALUES (:email, :firstName, :lastName, :hash, TRUE, TRUE, :lecturerId, :studentId) RETURNING id")
+                "VALUES (:email, :firstName, :lastName, :hash, :mustChange, TRUE, :lecturerId, :studentId) RETURNING id")
             .bind("email", email).bind("firstName", firstName).bind("lastName", lastName).bind("hash", passwordHash)
+            .bind("mustChange", mustChangePassword)
             .bind("lecturerId", Parameters.in(R2dbcType.BIGINT, lecturerId))
             .bind("studentId", Parameters.in(R2dbcType.BIGINT, studentId))
             .map(row -> (Long) row.get("id"))

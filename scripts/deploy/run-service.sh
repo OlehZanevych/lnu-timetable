@@ -19,8 +19,15 @@
 #   JAVA_OPTS     extra JVM options, e.g. "-Xmx1g"
 #
 # The credentials are NOT set here. systemd supplies them from /etc/lnu-timetable/service.env as
-# SPRING_R2DBC_USERNAME, SPRING_R2DBC_PASSWORD and APP_SECURITY_JWTSECRET, so that they never
-# appear in a command line and never become visible in "ps".
+# SPRING_R2DBC_USERNAME, SPRING_R2DBC_PASSWORD, APP_SECURITY_JWTSECRET and — when outgoing mail has
+# been configured — MAIL_USERNAME and MAIL_PASSWORD, so that they never appear in a command line
+# and never become visible in "ps". APP_BASEURL travels the same way; it is not a secret, but it
+# belongs beside the mailbox it is only useful with.
+#
+# Nothing here needs to know whether mail is configured. Spring reads those three through the
+# placeholders in application.properties, whose defaults are empty, so an env file that never
+# mentions them starts the service exactly as before — the only difference is that a registration
+# link cannot be sent.
 
 set -euo pipefail
 
@@ -31,7 +38,7 @@ REQUIRED_JAVA=25
 
 for arg in "$@"; do
     case "$arg" in
-        -h|--help) sed -n '2,23p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     esac
 done
 

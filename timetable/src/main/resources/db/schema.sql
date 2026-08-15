@@ -1029,6 +1029,15 @@ CREATE TABLE users
 CREATE UNIQUE INDEX users_unique_lecturer ON users (lecturer_id) WHERE lecturer_id IS NOT NULL;
 CREATE UNIQUE INDEX users_unique_student  ON users (student_id)  WHERE student_id IS NOT NULL;
 
+-- `email` is already UNIQUE, but case-sensitively, while every lookup in the service is
+-- `lower(email) = lower(:email)` — an address is not two accounts because somebody capitalised a
+-- letter. Without this, 'A.Petrenko@lnu.edu.ua' and 'a.petrenko@lnu.edu.ua' are two rows the
+-- column constraint permits and no code path can tell apart: the duplicate-check before a new
+-- account sees neither of them, and `login` finds two rows where it expects one. Self-service
+-- registration is the first unauthenticated path that could create the second row, which is what
+-- made this worth stating in the schema rather than in a convention.
+CREATE UNIQUE INDEX users_unique_lower_email ON users (lower(email));
+
 CREATE TABLE groups
 (
     id          BIGSERIAL PRIMARY KEY,
@@ -1102,6 +1111,63 @@ CREATE UNIQUE INDEX permissions_unique_grant
 CREATE INDEX permissions_user_idx ON permissions (user_id) WHERE user_id IS NOT NULL;
 CREATE INDEX permissions_group_idx ON permissions (group_id) WHERE group_id IS NOT NULL;
 CREATE INDEX permissions_resource_idx ON permissions (resource_type, resource_id);
+
+
+-- ============================ Self-service registration & password recovery ============================
+--
+-- One-time links, e-mailed to somebody the institution has already entered, and valid for
+-- `app.security.account-token-ttl-minutes` (30). Two things arrive through this table and nothing
+-- else does:
+--
+--   REGISTRATION   — a викладач or a студент whose own row carries an e-mail, and who has no
+--                    account yet, asks for one. The row records which person the link belongs to,
+--                    so the account created at the end of it is linked to them by construction
+--                    rather than by an administrator's later `setUserLink`.
+--   PASSWORD_RESET — an existing account has forgotten its password. The row records the account.
+--
+-- The token itself is never stored. What is stored is its SHA-256, lowercase hex, for the same
+-- reason `users.password_hash` is a hash: a link is a bearer credential for thirty minutes, and a
+-- dump of this table must not be a set of working ones. `token_hash` is the lookup key precisely
+-- because the plaintext is not here to look it up by.
+--
+-- Spent rows are kept (`used_at`) rather than deleted, so a second click on a link that already
+-- worked can say «посилання вже використано» instead of «посилання недійсне» — the difference
+-- between "you have already done this" and "somebody sent you something broken".
+--
+-- `used_at` and `expires_at` therefore carry one fact each, and asking a second link for the same
+-- address does not touch the first's `used_at`: it brings its `expires_at` forward instead, so the
+-- superseded link reads as «термін дії минув, замовте нове» rather than as «ви вже це зробили»,
+-- which would send somebody who has never set a password to a login form to use it.
+CREATE TYPE account_token_purpose AS ENUM ('REGISTRATION', 'PASSWORD_RESET');
+
+CREATE TABLE account_tokens
+(
+    id          BIGSERIAL PRIMARY KEY,
+    purpose     account_token_purpose NOT NULL,
+    -- SHA-256 of the token carried in the link, lowercase hex.
+    token_hash  CHAR(64)              NOT NULL UNIQUE,
+    -- The address the link was sent to. Kept so that a token cannot be redeemed against a person
+    -- whose e-mail has since been changed to somebody else's, and so the per-address cooldown in
+    -- AccountTokenRepository has something to count.
+    email       VARCHAR(255)          NOT NULL,
+    -- Exactly one of the three is set, and which one follows from `purpose` — see the CHECK below.
+    lecturer_id BIGINT REFERENCES lecturers (id) ON DELETE CASCADE,
+    student_id  BIGINT REFERENCES students (id) ON DELETE CASCADE,
+    user_id     BIGINT REFERENCES users (id) ON DELETE CASCADE,
+    expires_at  TIMESTAMP             NOT NULL,
+    used_at     TIMESTAMP,
+    created_at  TIMESTAMP             NOT NULL DEFAULT now(),
+    CONSTRAINT account_tokens_subject_check CHECK (
+        (purpose = 'REGISTRATION' AND user_id IS NULL
+            AND ((lecturer_id IS NULL) <> (student_id IS NULL))) OR
+        (purpose = 'PASSWORD_RESET' AND user_id IS NOT NULL
+            AND lecturer_id IS NULL AND student_id IS NULL)
+    )
+);
+
+-- What the cooldown and the "invalidate what is outstanding" sweep both read: every live link for
+-- one address and purpose, newest first.
+CREATE INDEX account_tokens_recent_idx ON account_tokens (lower(email), purpose, created_at DESC);
 
 
 -- ============================ Flyway's own bookkeeping ============================

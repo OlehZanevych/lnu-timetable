@@ -5,7 +5,7 @@ description: Get oriented in the lnu-timetable project by reading its Markdown d
 
 # Orientation (lnu-timetable)
 
-The project's documentation is ~9,500 lines across fourteen Markdown files. Reading it end to end is
+The project's documentation is ~10,200 lines across fourteen Markdown files. Reading it end to end is
 both slow and unnecessary: most of it is depth on subsystems a given task never touches. Read the
 **map** in full, then only the **sections your task lands in**.
 
@@ -29,7 +29,9 @@ global and lives in `src/styles.css`.
 POJOs in `domain/`; the four `*SchemaConfig` classes in `config/` declare the API; the GraphQL schema
 and the SQL are generated at startup from that metadata by `framework/`. Adding an entity means
 adding a POJO and a `configure<Entity>` method — nothing else. When asked to add or change an
-endpoint, work through the config, never by writing a controller.
+endpoint, work through the config, never by writing a controller. The exceptions — `GlobalProperty`,
+the auth surface, self-service registration — are hand-written GraphQL, and a new one is a
+`HandWrittenApi` bean rather than an edit to the schema builder.
 
 **The client has two architectures side by side.** Generic metadata-driven CRUD tables
 (`entities.ts` + `BaseEntity` + `entity-page.html`, one route per entity) *and* hand-written
@@ -72,7 +74,7 @@ grep -n "^## \|^### " timetable-ui/README.md
 |---|---|
 | Database, entities, a table, a migration | `timetable/README.md` → *Domain model*, *Migrations (Flyway)* |
 | Adding/changing a GraphQL query or mutation | `timetable/README.md` → *The framework* (esp. *The query catalogue*, *Where each entity is declared*) |
-| Login, permissions, delegation | `timetable/README.md` → *Authentication & authorization*; then `timetable-ui/README.md` → *Authentication* |
+| Login, registration, permissions, delegation | `timetable/README.md` → *Authentication & authorization*; then `timetable-ui/README.md` → *Authentication* |
 | A client page or widget | `timetable-ui/README.md` → *Two architectures, side by side* (find the page's own `####` subsection) |
 | Routing, tabs, URLs | `timetable-ui/README.md` → *Routes*, *The open tab is part of the URL* |
 | The timetable solver | `timetable-ui/TIMETABLE-GENERATION.md`, and `timetable-ui/SOLVER-OPTIMISATION.md` + `scripts/timetable-bench/README.md` for the measurements |

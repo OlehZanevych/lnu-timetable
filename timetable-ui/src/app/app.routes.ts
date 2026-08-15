@@ -32,6 +32,27 @@ import { kebabCase } from './section-route';
 const PAGE_ROUTES: Routes = [
   { path: 'login', component: LoginPage },
   { path: 'change-password', component: ChangePasswordPage, canActivate: [authGuard] },
+
+  // Self-service accounts. Four routes, two components: a form that asks for an e-mail address and
+  // a form that sets a password, each doing duty for both registration and password recovery — the
+  // pair differ in a heading and in which mutation they post, and `data.mode` is that difference.
+  //
+  // None of the four carries a guard, and none may: a викладач who has no account and a користувач
+  // who has forgotten their password are exactly the two people who cannot sign in first. The
+  // service side is unguarded to match — these are the only fields besides `login` that an
+  // anonymous caller may reach.
+  //
+  // Lazy, like /admin and «Мій кабінет» and for the same reason: each is a whole screen that is
+  // opened once in the lifetime of an account, and the initial bundle is close to its budget. The
+  // cost is one request the first time a link from an e-mail is followed.
+  { path: 'register', pathMatch: 'full', data: { mode: 'register' },
+    loadComponent: () => import('./account-request-page').then((m) => m.AccountRequestPage) },
+  { path: 'register/:token', data: { mode: 'register' },
+    loadComponent: () => import('./account-link-page').then((m) => m.AccountLinkPage) },
+  { path: 'forgot-password', pathMatch: 'full', data: { mode: 'reset' },
+    loadComponent: () => import('./account-request-page').then((m) => m.AccountRequestPage) },
+  { path: 'reset-password/:token', data: { mode: 'reset' },
+    loadComponent: () => import('./account-link-page').then((m) => m.AccountLinkPage) },
   // Lazy for the same reasons as the three below: it is a whole screen with its own queries
   // (including the lecturer and student lists behind the person-link pickers), only an
   // administrator can open it, and the main bundle sits close to its budget.

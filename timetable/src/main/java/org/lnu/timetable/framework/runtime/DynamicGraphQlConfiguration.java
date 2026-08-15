@@ -4,6 +4,7 @@ import graphql.GraphQL;
 import graphql.schema.GraphQLSchema;
 import org.lnu.timetable.framework.config.GraphQLSchemaConfig;
 import org.lnu.timetable.framework.schema.DynamicGraphQLSchemaBuilder;
+import org.lnu.timetable.framework.schema.HandWrittenApi;
 import org.lnu.timetable.security.AuthDataFetchers;
 import org.lnu.timetable.security.AuthorizingDataFetcherProvider;
 import org.springframework.context.annotation.Bean;
@@ -28,6 +29,12 @@ import java.util.List;
  * generated schema with no per-entity wiring. Authentication itself is resolved per-request by
  * {@code org.lnu.timetable.security.AuthenticationGraphQlInterceptor}, a {@code
  * WebGraphQlInterceptor} bean that Spring GraphQL picks up automatically.
+ * <p>
+ * The parts of the API that cannot be generated — self-service registration and password recovery
+ * today — arrive as {@link HandWrittenApi} beans and are collected here rather than named one by
+ * one, so adding another needs no change to this class or to the schema builder. {@code
+ * GlobalProperty} and the authentication surface predate that interface and are still passed
+ * explicitly.
  */
 @Configuration
 public class DynamicGraphQlConfiguration {
@@ -37,8 +44,10 @@ public class DynamicGraphQlConfiguration {
                                        List<GraphQLSchemaConfig> configs,
                                        DynamicDataFetchers fetchers,
                                        AuthorizingDataFetcherProvider authorizingFetchers,
-                                       AuthDataFetchers authDataFetchers) {
-        GraphQLSchema schema = schemaBuilder.buildSchema(configs, authorizingFetchers, fetchers, authDataFetchers);
+                                       AuthDataFetchers authDataFetchers,
+                                       List<HandWrittenApi> handWrittenApis) {
+        GraphQLSchema schema = schemaBuilder.buildSchema(configs, authorizingFetchers, fetchers, authDataFetchers,
+            handWrittenApis);
         GraphQL graphQl = GraphQL.newGraphQL(schema).build();
 
         return new GraphQlSource() {

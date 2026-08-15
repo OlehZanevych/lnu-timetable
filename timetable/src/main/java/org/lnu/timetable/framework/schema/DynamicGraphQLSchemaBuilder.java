@@ -30,6 +30,13 @@ public class DynamicGraphQLSchemaBuilder {
     private final Map<String, GraphQLInputObjectType> builtInputTypes = new LinkedHashMap<>();
     private final Map<String, GraphQLEnumType> builtEnumTypes = new LinkedHashMap<>();
 
+    /**
+     * The hand-written areas of the API that are not hardcoded into this class — see
+     * {@link HandWrittenApi}. Set by {@link #buildSchema}, which runs once per application, in the
+     * same "mutable field written during one build" style as the three maps above.
+     */
+    private List<HandWrittenApi> handWrittenApis = List.of();
+
     public DynamicGraphQLSchemaBuilder(EntityMetadataRegistry metadataRegistry) {
         this.metadataRegistry = metadataRegistry;
     }
@@ -47,9 +54,18 @@ public class DynamicGraphQLSchemaBuilder {
      * @param authFetchers           supplies the hand-rolled authentication/user/group/permission fetchers (see
      *                               {@link #buildAuthTypes()}); deliberately bypasses {@code fetchers} entirely
      *                               so unauthenticated operations like {@code login} stay reachable.
+     * @param handWrittenApis        every {@link HandWrittenApi} bean in the context — the hand-written areas of the
+     *                               API that are <em>not</em> hardcoded into this class. {@code GlobalProperty} and
+     *                               the authentication surface still are, for no better reason than that they were
+     *                               here first; everything added since arrives this way, which is what lets a new
+     *                               one be written without editing the framework. Applied in the order Spring
+     *                               supplies them, which is not depended on: an area may only add types and fields,
+     *                               never read what another added.
      */
     public GraphQLSchema buildSchema(List<GraphQLSchemaConfig> configs, DataFetcherProvider fetchers,
-                                      DynamicDataFetchers globalPropertyFetchers, AuthDataFetchers authFetchers) {
+                                      DynamicDataFetchers globalPropertyFetchers, AuthDataFetchers authFetchers,
+                                      List<HandWrittenApi> handWrittenApis) {
+        this.handWrittenApis = handWrittenApis == null ? List.of() : handWrittenApis;
         SchemaDefinition schemaDef = collectSchemaDefinition(configs);
         buildAllTypes(schemaDef);
 
@@ -80,6 +96,9 @@ public class DynamicGraphQLSchemaBuilder {
         builtTypes.put("ConnectionPageInfo", buildPageInfoType());
         buildGlobalPropertyTypes();
         buildAuthTypes();
+        for (HandWrittenApi api : handWrittenApis) {
+            api.buildTypes(typeRegistry());
+        }
 
         for (TypeDefinition typeDef : schemaDef.getTypes()) {
             buildObjectType(typeDef);
@@ -132,6 +151,9 @@ public class DynamicGraphQLSchemaBuilder {
         addApolloFederationServiceField(builder);
         addGlobalPropertyQueryField(builder);
         addAuthQueryFields(builder);
+        for (HandWrittenApi api : handWrittenApis) {
+            api.addQueryFields(builder);
+        }
 
         return builder.build();
     }
@@ -169,6 +191,9 @@ public class DynamicGraphQLSchemaBuilder {
 
         addGlobalPropertyMutationField(builder);
         addAuthMutationFields(builder);
+        for (HandWrittenApi api : handWrittenApis) {
+            api.addMutationFields(builder);
+        }
 
         return builder.build();
     }
@@ -193,8 +218,36 @@ public class DynamicGraphQLSchemaBuilder {
         if (authFetchers != null) {
             registerAuthFetchers(codeRegistry, authFetchers);
         }
+        for (HandWrittenApi api : handWrittenApis) {
+            api.registerFetchers(codeRegistry);
+        }
 
         return codeRegistry.build();
+    }
+
+    /**
+     * The write-only view of the three type maps handed to each {@link HandWrittenApi}. Each type is
+     * keyed by its own name, which is also how {@code GraphQLTypeReference.typeRef(...)} finds it —
+     * so an area declaring two types with one name overwrites its own first one rather than
+     * colliding with anything else's.
+     */
+    private SchemaTypeRegistry typeRegistry() {
+        return new SchemaTypeRegistry() {
+            @Override
+            public void object(GraphQLObjectType type) {
+                builtTypes.put(type.getName(), type);
+            }
+
+            @Override
+            public void enumeration(GraphQLEnumType type) {
+                builtEnumTypes.put(type.getName(), type);
+            }
+
+            @Override
+            public void input(GraphQLInputObjectType type) {
+                builtInputTypes.put(type.getName(), type);
+            }
+        };
     }
 
     private GraphQLSchema assembleSchema(

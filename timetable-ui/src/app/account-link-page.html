@@ -1,0 +1,50 @@
+<div class="login-wrap">
+  <div class="card login-card">
+    <h2>{{ heading() }}</h2>
+    <p class="muted">Львівський національний університет імені Івана Франка</p>
+
+    @if (loadError()) {
+      <p class="error">{{ loadError() }}</p>
+    } @else if (check() === null) {
+      <p class="muted">Перевіряємо посилання…</p>
+    } @else if (problem(); as p) {
+      <div class="account-outcome warn">
+        <strong>{{ p.title }}</strong>
+        <p>{{ p.detail }}</p>
+      </div>
+      <p class="muted login-hint">
+        @if (p.again) {
+          <a [routerLink]="requestAgainPath()">Замовити нове посилання</a> ·
+        }
+        <a routerLink="/login">Увійти</a>
+      </p>
+    } @else if (check(); as c) {
+      <p class="muted">
+        {{ personName() }}@if (roleLabel()) { <span> · {{ roleLabel() }}</span> }
+      </p>
+      <p class="muted">{{ c.email }}</p>
+
+      @if (error()) {
+        <p class="error">{{ error() }}</p>
+      }
+
+      <form (ngSubmit)="submit()" class="entity-form login-form">
+        <label>
+          <span>Пароль (мінімум 8 символів)</span>
+          <input type="password" [(ngModel)]="password" name="password" required minlength="8"
+                 autocomplete="new-password" />
+        </label>
+        <label>
+          <span>Підтвердіть пароль</span>
+          <input type="password" [(ngModel)]="confirmPassword" name="confirmPassword" required
+                 autocomplete="new-password" />
+        </label>
+        <div class="actions">
+          <button type="submit" [disabled]="submitting()">
+            {{ submitting() ? 'Збереження…' : (kind === 'register' ? 'Завершити реєстрацію' : 'Зберегти пароль') }}
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</div>
