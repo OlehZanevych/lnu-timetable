@@ -98,11 +98,16 @@ class SchemaBuildTest {
     /**
      * The self-service area with nothing behind it. Building a schema only ever asks it for types,
      * field definitions and fetcher <em>lambdas</em> — none of which touch a repository, a mailer or
-     * a signing key — so the collaborators can all be null and the constructor's one real argument
-     * is the base URL it would build links from.
+     * a signing key — so the five collaborators can all be null.
+     * <p>
+     * The four values that follow them are the {@code @Value}-injected settings, in order: the base
+     * URL links would be built from, the token's lifetime in minutes, the per-address cooldown in
+     * seconds, and the cap on links issued per minute across every address. None of them is read
+     * while a schema is being built; they are here because this is the only constructor, and adding
+     * a fifth setting to it breaks this line — which is the intended way to find out.
      */
     private SelfServiceSchema selfService() {
-        return new SelfServiceSchema(
-            new SelfServiceDataFetchers(null, null, null, null, null, "http://localhost", 30, 60));
+        return new SelfServiceSchema(new SelfServiceDataFetchers(
+            null, null, null, null, null, "http://localhost", 30, 60, 20));
     }
 }
