@@ -350,9 +350,12 @@ lnu-timetable/
     └── scripts/
         ├── check-graphql-variables.mjs  npm run lint:graphql — the one check that needs
         │                                neither a service nor a browser
-        └── workload-bench/  the benchmark for the workload generator: two Node scripts,
-                             48 generated department instances, and the measured
-                             before-and-after — see its own README
+        ├── workload-bench/  the benchmark for the workload generator: two Node scripts,
+        │                    48 generated department instances, and the measured
+        │                    before-and-after — see its own README
+        └── timetable-bench/ the benchmark for the timetable solver: instances built
+                             backwards around a hidden feasible schedule, an independent
+                             scorer, and the study behind SOLVER-OPTIMISATION.md
 ```
 
 ---
@@ -370,3 +373,23 @@ On a host configured by `scripts/deploy/install-service.sh` one of them is answe
 runs with that profile dropped and its own credentials, and the installer refuses a JWT secret that
 is the checked-in one. The rest still stand — it does not create the database and it does not touch
 the CORS filter.
+
+---
+
+## License
+
+[**PolyForm Noncommercial License 1.0.0**](./LICENSE.md) — copyright © 2026 Oleh Zanevych.
+
+Any noncommercial purpose is a permitted purpose, which is most of what this repository
+exists for: personal study, research, experiment and testing, and use by an educational
+institution, a public research organization or a government institution, whatever the
+source of its funding. So a university may run it, a student may read it and build on it,
+and a dissertation may cite it. Pass the licence on with any part of it you pass on.
+
+Anything commercial — selling it, running it as a paid service, or using it in the course
+of a business — is **not** granted here and needs a separate licence from me first:
+<oleh.zanevych@gmail.com>.
+
+Third-party components keep their own terms: the Liberation Serif subsets under
+`timetable-ui/public/fonts/` are under the SIL Open Font License 1.1, and every npm and
+Maven dependency is licensed by its own author.
