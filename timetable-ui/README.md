@@ -166,7 +166,12 @@ src/app/
 │                             #   and reports what the service found; one component, data.mode apart
 ├── account-link-page.ts/.html     # "/register/:token" and "/reset-password/:token" — what a link in
 │                             #   an e-mail opens; checks the link, then sets the password
-├── admin-page.ts/.html       # "/admin" — user/group/access management console (admin-only)
+├── admin-page.ts/.html       # "/admin" — accounts, group *creation* and access management
+│                             #   (admin-only); group membership lives on the group's own page
+├── user-groups-page.ts/.html # "/user-groups" — the groups this account may administer
+├── user-group-page.ts/.html  # "/user-group/:id/:section" — one group: «Учасники» and
+│                             #   «Посилання-запрошення»
+├── join-group-page.ts/.html  # "/join/:token" — what an invitation link opens
 ├── app.ts / app.html         # shell: LNU header + sidebar navigation
 ├── app.css                    # empty — every style in this app is global, in src/styles.css
 ├── app.config.ts             # bootstrap providers: router + HttpClient with authInterceptor
@@ -2012,7 +2017,10 @@ is noticeable on the larger lists (a degree programme can have 200+ courses).
 | `/register`, `/forgot-password` | `AccountRequestPage` | **lazy** — no guard; one component, `data.mode` apart: the form that asks for an address and reports what the service found |
 | `/register/:token`, `/reset-password/:token` | `AccountLinkPage` | **lazy** — no guard; one component again: the form a link from an e-mail opens, which sets the password |
 | `/change-password` | `ChangePasswordPage` | `authGuard` only — reachable while `mustChangePassword` is set |
-| `/admin` | `AdminPage` | **lazy** — `authGuard` + `adminGuard`; user/group/access management and the person link |
+| `/admin` | `AdminPage` | **lazy** — `authGuard` + `adminGuard`; accounts, group creation, access and the person link. Group *membership* is on the group's own page |
+| `/user-groups` | `UserGroupsPage` | **lazy** — `authGuard` only: the groups this caller may administer, which is not the same question as «is this an administrator» |
+| `/user-group/:id/:section` | `UserGroupPage` | **lazy** — one group: «Учасники» and «Посилання-запрошення» |
+| `/join/:token` | `JoinGroupPage` | **lazy** — `authGuard`; the screen an invitation link opens |
 | `/` | `FacultyHome` | faculty tiles, drill-down entry point |
 | `/faculty/:id/:section` | `FacultyPage` | **lazy** — tabbed faculty detail, incl. the «Доступ» tab |
 | `/building/:id/:section` | `BuildingPage` | building detail |
@@ -2042,13 +2050,26 @@ The token is a **path segment** rather than a query parameter so that the servic
 token contains no dot, so a reloaded or pasted link reaches this router rather than the
 static-resource handler.
 
+`/join/:token` carries the same kind of token and the opposite guard, and that is the feature rather
+than an oversight: an invitation adds an *account* to a group, so there has to be one. `authGuard`
+sends an anonymous visitor to `/login` with `redirectTo` pointing back at the link, so signing in —
+or registering, for a викладач or студент who may — returns them to it with the token intact.
+
+`/user-groups` and `/user-group/:id/:section` carry `authGuard` and **not** `adminGuard`, which is
+the point of them: a group is administrable by whoever holds MANAGE over everything it can reach, and
+that is a question only the service can answer. Both pages ask it (`manageableGroups`) rather than
+reasoning about the caller's grants, and the group page answers «Немає доступу» when the answer is
+no — an empty table would read as «ця група порожня».
+
 The sidebar (`app.html`) links to the drill-down entry point ("🎓 Факультети") and — only when the
 signed-in account is linked to a lecturer or a student — to «📅 Мій кабінет»,
 then a flat "Загальне" group of generic-table links for entities with no dedicated page
 (`/building`, `/room-group`, `/abstract-room`, `/class-start-time-set`, `/class-start-time`,
 `/academic-degree`) plus «Час переходу між корпусами» and the global settings page ("Глобальні
-властивості"), and — only for an administrator — an
-"Адміністрування" group holding the single "Користувачі та права" link.
+властивості"), and an "Адміністрування" group holding "Користувачі та права" (administrators only)
+and "Групи користувачів" (anyone holding MANAGE anywhere — `AuthService.canDelegate`, since
+administering a group needs MANAGE over everything that group can reach and nobody without MANAGE
+anywhere can qualify; which groups those actually are is `manageableGroups`, and the page asks it).
 Every link in that group except «Корпуси» is hidden from an account the screen behind it would
 refuse, on exactly the answer that screen gives, so a visible link always opens something usable;
 «Корпуси» stays because it is also the way to a корпус and its аудиторії, and its own buttons are
@@ -2067,22 +2088,24 @@ link either, and that is deliberate: nobody navigates to a discipline or a room 
 arrive from the list they were already reading. Every such list carries an «Відкрити →» link in its
 last column, driven by `EntityMeta.detailRoute` (see [Generic CRUD
 tables](#generic-crud-tables-entitiests--baseentity)), so the route is reachable from wherever the
-entity is mentioned rather than from one place. They are three of the thirteen `loadComponent`
+entity is mentioned rather than from one place. They are three of the sixteen `loadComponent`
 routes in the file. Each pulls in `TimetableView`, the grid and — on the Course page — the whole aggregation
 of curricula and workloads, and the cost of deferring them is one extra request the first time a
 user opens one.
 
-The other ten are there on the same reasoning, and the list has grown as the application has. «Мій
-кабінет» mounts `TimetableView` and is opened only by an account that is a person; the
+The other thirteen are there on the same reasoning, and the list has grown as the application has.
+«Мій кабінет» mounts `TimetableView` and is opened only by an account that is a person; the
 administration console carries its own queries, including the full lecturer and student lists behind
-the person pickers, and is opened only by an administrator; `/global-properties` and
+the person pickers, and is opened only by an administrator; the three group screens
+(«Групи користувачів», one group, and the page an invitation link opens) are each a whole screen with
+its own queries, and two of the three are opened by a handful of accounts a handful of times; `/global-properties` and
 `/building-travel-times` are single-purpose editors with stylesheets of their own; the four
 self-service routes are two components between them, each a whole screen opened once in the lifetime
 of an account. `FacultyPage` and `DepartmentDetailPage` moved the most: `FacultyPage` alone pulls in
 every tab it can show — the department, degree programme and group lists, the room and course pages,
 the constraint editors and the timetable view — and it is not on the path to the one screen most
-people open the application for. Together the thirteen take the initial chunk from just over the
-1.00 MB error budget to **738 kB**.
+people open the application for. Together the sixteen take the initial chunk from just over the
+1.00 MB error budget to **740 kB**.
 
 The budget is worth stating plainly, because it is the thing that keeps forcing these decisions: the
 production build *fails* above 1.00 MB and warns above 500 kB. Anything added to a route that is
@@ -2090,7 +2113,7 @@ eager pays that toll on every cold load, including the student who only ever rea
 
 ### The open tab is part of the URL (`section-route.ts`)
 
-Each of the nine tabbed pages above is **two** route entries, not one:
+Each of the ten tabbed pages above is **two** route entries, not one:
 
 ```ts
 { path: 'faculty/:id', pathMatch: 'full', redirectTo: '/faculty/:id/info' },
@@ -2293,7 +2316,7 @@ two guards cost one `me` query rather than two.
 
 - **`authGuard`** — redirects to `/login` (with a `redirectTo` query param) when there's no
   signed-in user; redirects to `/change-password` when `mustChangePassword` is still set (except
-  for that route itself). Applied to every route except `/login`. A stored token whose profile
+  for that route itself). Applied to every route except `/login` and the four self-service ones. A stored token whose profile
   hasn't been fetched yet is resolved via `refreshMe()` first, and a `me` of `null` — or a thrown
   request — ends the session rather than passing.
 - **`adminGuard`** — additionally requires `isAdmin`; applied only to `/admin`.
@@ -2613,7 +2636,9 @@ spec asked an administrator to be able to do, in one screen:
 - **Create users** with a temporary password (shown once on screen after creation, since the
   backend never returns a password) — the new account must change it on first login.
 - **Activate/deactivate** existing accounts.
-- **Create groups** and manage membership (add/remove a user to/from a group).
+- **Create groups.** Membership is no longer here: every group's name links to its own page, where
+  the members are a list with a search over accounts rather than two boxes for a user id and a group
+  id — see [«Групи користувачів»](#групи-користувачів-usergroupspage--usergrouppage) below.
 - **Link an account to a person** — say which викладач or which студент an account is
   (`users.lecturer_id` / `users.student_id`), through searchable pickers over every lecturer and
   every student, either when creating the account or afterwards from the «Прив'язати» button on its
@@ -2628,13 +2653,66 @@ spec asked an administrator to be able to do, in one screen:
   `ResourceAccessPanel` described above then opens on it. `GLOBAL` is the one scope with no page of
   its own, which is why this console keeps a way to name a resource by hand at all.
 
+### «Групи користувачів» (`UserGroupsPage` / `UserGroupPage`)
+
+Membership is how access travels: a grant may name a group, so adding an account to «Деканат ФПМіІ»
+is handing it the факультет. The only way to do that used to be two text boxes on «Користувачі та
+права» into which the numeric id of a user and the numeric id of a group were typed, by an
+administrator, one account at a time. That is survivable at four users and impossible during the
+weeks the university's data is entered — the moment the most accounts exist and the fewest of them
+belong to anyone with an id to hand.
+
+`/user-groups` lists the groups this account may administer, from `manageableGroups`. `/user-group/:id`
+is the group itself, with the open tab in the URL like every other drill-down page here:
+
+- **«Учасники»** — who is in it, with a search over accounts (`searchUsers`, the same query the
+  grantee pickers use) instead of an id, and «Вилучити» beside each row.
+- **«Посилання-запрошення»** — a link that adds whoever follows it to this group. A lifetime is
+  chosen as a number and a unit (5 minutes … 30 days, the service's bounds, stated on screen rather
+  than only enforced), the new link is shown in full above the table so it can be copied straight
+  away, and the table lists every live link with what it is worth: when it expires and how long that
+  is from now, how many accounts have joined through it, and who made it. «Видалити» is the whole of
+  revocation.
+
+Both tabs are gated by one question asked of the service — is this group in `manageableGroups` — and
+a group reached by URL without that right renders «Немає доступу» rather than an empty table, because
+an empty table reads as «ця група порожня». The client does not reproduce the rule
+(`GroupAdminPolicy`: an administrator, or MANAGE over every resource the group holds a grant on); it
+asks and believes the answer, the same way [Hiding UI the user can't
+use](#hiding-ui-the-user-cant-use) reads the cascade from `Query.accessModel` rather than keeping a
+copy of it.
+
+The link the page shares is built from `location.origin`, not from anything the server says, so it is
+correct on whichever address this client is actually being used at. Copying goes through
+`navigator.clipboard`, which needs a secure context; where there is none (any origin that is not
+`https://` or localhost) the field is selected instead, so the button is never dead.
+
+### «Приєднання до групи» (`JoinGroupPage`, `/join/:token`)
+
+What an invitation link opens. It checks the token before anything is pressed — «термін дії посилання
+минув» and «Ви вже учасник цієї групи» are sentences on arrival rather than the result of a failed
+mutation — and then offers one button.
+
+Joining rebuilds both halves of the client's picture of what this account may do, and that is not
+housekeeping: an account's permissions are the union of its own grants and its groups', so joining
+one changes them. `refreshMe()` re-reads the profile, which is what the sidebar and everything gated
+on `creatableResourceTypes` are drawn from; `clearAccessCache()` drops the per-row levels behind
+`accessLevel(type, id)`, which would otherwise keep answering «no» for every row the session had
+already looked at. Doing only the first leaves a new member with a fuller sidebar and the same
+read-only rows, wondering what the link did.
+
 ### Seeded accounts (local dev)
 
 Matching the backend's `data.sql`: `admin@lnu.edu.ua` / `Admin#2026` signs in as the full `GLOBAL`
-administrator, and it is the **only** seeded account. The forced change-password flow, a scoped
-`FACULTY`/`DEPARTMENT` grant and the person link behind «Мій кабінет» all have to be set up from
-`/admin` first — creating an account there always sets `mustChangePassword`, so the first of those
-needs nothing more than one «+ Створити користувача».
+administrator, and it is the **only** seeded account. The forced change-password flow and the person
+link behind «Мій кабінет» have to be set up from `/admin` first — creating an account there always
+sets `mustChangePassword`, so the first of those needs nothing more than one «+ Створити
+користувача».
+
+Scoped grants *are* seeded, and no account holds one: `data.sql` carries «Деканат ФПМіІ»'s `FACULTY`
+grant at `MANAGE` and the nineteen `FACULTY` grants at `EDIT` held by «Волонтери — наповнення даних»,
+and all three seeded groups are empty. Adding one account to a group is therefore the shortest way to
+see scoped access behave — on the group's own page, or through a link from it.
 
 The other road to a second account needs no administrator but does need working mail: give a
 `Lecturer` or a `Student` an e-mail address you can read, set `MAIL_USERNAME`/`MAIL_PASSWORD` on the
@@ -2817,5 +2895,7 @@ nothing was sent to.
   semester and degree programme, which `faculty-timetable-list.ts` does not currently load.
 - Nothing re-asks after a grant changes. `AuthService` caches `me`, the access model and the
   per-resource levels for the session, and `clearAccessCache()` is called after granting or revoking
-  from a «Доступ» panel — but a grant made by *somebody else* while a tab is open is not noticed
-  until the page is reloaded. The server is unaffected: it re-reads the grants on every request.
+  from a «Доступ» panel, and after joining a group by invitation — the three ways the caller's own
+  access changes under them in this client — but a grant made by *somebody else* while a tab is open
+  is not noticed until the page is reloaded. The server is unaffected: it re-reads the grants on
+  every request.

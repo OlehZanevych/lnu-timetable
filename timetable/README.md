@@ -56,13 +56,13 @@ psql -h localhost -U postgres -d lnu-timetable -f src/main/resources/db/data.sql
 `schema.sql` starts with `DROP SCHEMA public CASCADE`, so it always recreates a clean
 schema.
 
-**The second command does not succeed against `data.sql` as it stands.** `schema.sql` now carries
-`degree_programs.duration_semesters` — `NOT NULL`, with no default — while every
-`INSERT INTO degree_programs` in `data.sql` predates the column and supplies no value for it. Each of
-those inserts is therefore rejected, and everything hanging off a programme (its групи, its
-навчальний план, and the навантаження and розклад derived from that plan) is rejected behind them.
-Re-dump `data.sql` from a database [`V10`](#v10__degree_program_semesterssql) has already run
-against, as that section says; `reset_db.sh` runs these same two files and is no better off.
+`data.sql` has since been re-dumped from a database every migration in the tree has run against, so
+the two commands succeed as they stand. That re-dump is load-bearing rather than cosmetic, and twice
+over: the dump's `degree_programs` inserts now name `duration_semesters`, which
+[`V10`](#v10__degree_program_semesterssql) made `NOT NULL` with no default and which no earlier dump
+could satisfy; and its `flyway_schema_history` block now records V1…V12 as applied, which is what
+[Migrations](#migrations-flyway) below reasons about. Re-dump it the same way after adding a
+migration that changes what a table's columns are.
 
 `data.sql` is no longer a pristine `pg_dump` of a hand-entered database: on top of the real LNU
 structure it carries the **ФПМІ 2025/2026 timetable**, transcribed from the faculty's published
@@ -141,11 +141,19 @@ spring.flyway.baseline-version=0
   and `data.sql` re-create the very rows it was supposed to remove, with nothing left to remove
   them. Run the two files first, as [Database setup](#database-setup) already says.
 
-`reset_db.sh` drops the schema and re-applies both files, `flyway_schema_history` included, so the
-next start re-baselines and re-runs every migration against the freshly seeded data. That is why a
-migration here has to stay correct against `data.sql` as shipped, not merely against whatever a
-particular database happens to hold — and why every migration in the tree is written to match
-nothing on a second run rather than to assume it runs once. Each does it differently, according to
+`reset_db.sh` drops the schema and re-applies both files, `flyway_schema_history` included — and
+that last inclusion is what decides what happens next. Flyway baselines a schema only when the
+history table is *missing*, and after a reset it is present and populated: the dump carries the
+baseline row plus V1…V12, so **nothing re-baselines and no migration in the tree runs again**. That
+is the right outcome — the dump was taken after they ran, so their effects are already in the data —
+and it means only a migration added *since* the last dump runs on a reset. There is none today.
+(`schema.sql` says the same thing in its comment above `flyway_schema_history`; the two are meant to
+agree.)
+
+Every migration here is nevertheless written to match nothing on a second run rather than to assume
+it runs once, because a reset is not the only way one meets a database that has already had it: a
+deployment carrying real data replays whatever it has not recorded, and a database seeded from an
+older dump replays everything after it. Each does it differently, according to
 what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF NOT EXISTS` and
 `ON CONFLICT DO NOTHING`, V3 and V4 by testing `pg_constraint` / the rows themselves, V5 by testing
 `pg_type` and `ADD COLUMN IF NOT EXISTS`, V6 by both — `ADD COLUMN IF NOT EXISTS` for the column and
@@ -156,7 +164,9 @@ rename on the old name still being there, V9 by `IF NOT EXISTS` on the table and
 creates plus a `pg_type` guard around its `CREATE TYPE`, and V10 by `ADD COLUMN IF NOT EXISTS`, a
 backfill restricted to the rows that have no value yet, a `SET NOT NULL` that is a no-op on a column
 that already has it, `CREATE TABLE IF NOT EXISTS`, and a `pg_constraint` test around the one `CHECK`
-it adds to an existing table.
+it adds to an existing table, V11 by `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS`,
+and V12 — which inserts rows rather than creating objects — by a `WHERE NOT EXISTS` on each of the
+two, so a replay adds neither a second group of the same name nor a second grant of the same scope.
 
 ### `V1__delete_curriculum_items_on_elective_courses.sql`
 
@@ -407,9 +417,60 @@ a replay; `SET NOT NULL` is a no-op on a column that already has it, and the tab
 are guarded the usual way. After `reset_db.sh`, `schema.sql` has already created all of this with the
 column non-null from the start, and every step here finds nothing to do.
 
-One consequence outside the migration: `data.sql` predates the column, and its
-`INSERT INTO degree_programs (id, code, name, degree, faculty_id)` cannot satisfy a `NOT NULL` column
-with no default. Re-dump it from a database this migration has run against.
+One consequence outside the migration, since resolved: `data.sql` predated the column, and its
+`INSERT INTO degree_programs (id, code, name, degree, faculty_id)` could not satisfy a `NOT NULL`
+column with no default. It has been re-dumped from a database this migration had run against, so its
+`degree_programs` inserts now name `duration_semesters`.
+
+### `V11__group_invitations.sql`
+
+Adds `group_invitations` — the links that let somebody put themselves into a group instead of being
+added to it one account at a time. The table, its unique `token`, the `(group_id, created_at DESC)`
+index the listing reads, and the `CHECK` that bounds a link's life to between five minutes and thirty
+days. Nothing existing changes: no column is added to `users` or `groups`, and no grant is touched.
+
+After `reset_db.sh`, `schema.sql` has already created the table, its `CHECK` and its index, and
+`data.sql` records this migration as applied — so it does not run there at all, and would find
+nothing to do if it did.
+
+See [Group invitation links](#group-invitation-links) for why the token is stored as it is and who
+may mint one.
+
+### `V12__data_entry_volunteers_group.sql`
+
+Seeds «Волонтери — наповнення даних» and one `FACULTY` grant at `EDIT` per факультет, enumerated
+from `faculties` rather than written out — nineteen grants against the university as `data.sql`
+records it.
+
+On a database built from the shipped files it inserts **nothing**, and that is not a failure of the
+migration: `data.sql` was re-dumped after this ran, so it already carries the group, the nineteen
+grants and the `flyway_schema_history` row saying V12 is applied. The migration is for the databases
+the dump does not reach — a deployment holding real data, or one seeded from an older dump.
+
+It is a *data* migration, and the only one here that exists to make the product usable on the day it
+is installed rather than to carry a schema forward. The system is empty until somebody types the
+university into it, that work is done by volunteers over a few weeks, and scoping twenty accounts by
+hand is the thing that does not happen. The group is the scope, handed out once — an invitation link,
+now — and withdrawn in one act: delete the group and every grant below it goes too
+(`permissions.group_id` is `ON DELETE CASCADE`), leaving the accounts themselves intact.
+
+Nineteen faculty grants rather than one `GLOBAL` grant, and the difference is exactly the three
+exclusions the job came with — global properties (which need `GLOBAL`, so no number of faculty grants
+reaches them), account management (`GLOBAL` at `MANAGE`), and deletion (`FULL`, one level above what
+this group holds). What that scoping costs is stated in the migration's own header and worth
+repeating here: `Building` and `AcademicDegree` are `@PermissionRoot` and stay out of reach, a
+факультет created *after* the migration runs gets no grant, **an аудиторія that names a корпус and no
+факультет is not covered either** — 31 of the 75 rooms in `data.sql`, and 12 of the 14 room groups,
+which belong to no факультет and no кафедра — and a `ClassStartTimeSet` that names a факультет — «Вечірні заняття (ФПМІ)», the one such row in `data.sql` — is covered like anything else
+hanging off that faculty. The two university-wide bell sets are not. If the bells must be untouchable
+outright, the way to say so is to leave every set university-wide rather than to weaken these grants.
+
+The rooms are the gap most likely to be noticed first, and it has two answers, both an
+administrator's rather than this migration's: give those 31 аудиторії the факультет they in fact
+belong to, or add one `BUILDING` grant at `EDIT` per корпус — `Room` hangs off a корпус as well as a
+факультет, so that covers every аудиторія in it. The second also brings корпуси and the travel-time
+matrix into scope, which is data entry too, and still reaches neither the global properties nor the
+accounts.
 
 ---
 
@@ -945,7 +1006,7 @@ reporting full coverage of a set that has grown.
 
 ### `users` / `groups` / `permissions` — outside the entity framework
 
-Like `global_properties`, the four auth tables have no `@GraphQLEntity` domain class — a `User`'s
+Like `global_properties`, the six auth tables have no `@GraphQLEntity` domain class — a `User`'s
 `password_hash` must never be reachable through the fully-generic, selection-set-driven query
 machinery, so `User`/`Group`/`PermissionGrant` are hand-built GraphQL types with hand-written
 fetchers instead (see [Authentication & authorization](#authentication--authorization) below).
@@ -956,6 +1017,7 @@ fetchers instead (see [Authentication & authorization](#authentication--authoriz
 | `groups` | name (unique), description |
 | `user_groups` | `(user_id, group_id)` — a user may belong to any number of groups |
 | `permissions` | a single grant: `grantee_type` (`USER`/`GROUP`) + exactly one of `user_id`/`group_id`, `resource_type` + `resource_id` (or `resource_type = 'GLOBAL'` with a `NULL` id for university-wide scope), `level` (`EDIT`/`FULL`/`MANAGE`, with no `DEFAULT` on purpose, so a forgotten column cannot quietly hand out delete rights), `granted_by`, `created_at`, `updated_at`. One row per grantee per exact resource, so re-granting a scope changes `level` in place rather than adding a near-duplicate |
+| `group_invitations` | one shareable link into a group: `group_id`, the `token` itself (not a hash — see [Group invitation links](#group-invitation-links)), `expires_at` bounded to 5 minutes … 30 days by a `CHECK`, `join_count`, `created_by`. Deleting the row is how a link is revoked |
 | `account_tokens` | one e-mailed link: `purpose` (`REGISTRATION`/`PASSWORD_RESET`), the SHA-256 of the token, the address it went to, exactly one of `lecturer_id`/`student_id`/`user_id` according to the purpose, `expires_at`, `used_at`. See [Self-service registration and password recovery](#self-service-registration-and-password-recovery) |
 
 #### Who an account *is*: `users.lecturer_id` / `users.student_id`
@@ -1539,7 +1601,7 @@ the classification because it never states one.
 
 ### The security package
 
-`org.lnu.timetable.security` is twenty classes, and it is worth knowing which of them decides what:
+`org.lnu.timetable.security` is twenty-four classes, and it is worth knowing which of them decides what:
 
 | Class | Role |
 |---|---|
@@ -1554,12 +1616,16 @@ the classification because it never states one.
 | `PermissionEvaluator` | the decision point, one per request: grants loaded once, ancestry walked set-at-a-time, results memoised. Deliberately not thread-safe — GraphQL resolves fields concurrently, and the memo is only sound because a request's fields share one instance rather than racing several |
 | `PermissionGraphRepository` | the set-at-a-time reads the evaluator walks the graph with — `fetchForeignKeys`, `fetchJoinParents`, `fetchLabel`. These no longer swallow database errors: a failed read used to look like "no ancestors", i.e. a silent denial, and now propagates |
 | `ResourceRef` | record — one `(resourceType, resourceId)` node of that ancestry, plus the synthetic `GLOBAL` root that university-wide grants name. Making `GLOBAL` a node of the same shape, rather than a magic string spliced into each grant query, is what removes the special case from every lookup |
-| `PermissionRepository` | everything else the auth tables need: users, groups, memberships, grants |
-| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `searchUsers`, `accessLevels`, `grantsForResource`, the grant/membership mutations and `setUserLink` (with `linkErrorStatus`, the one place in the service that tells a `CHECK` from a foreign key by reading the `SQLSTATE`) |
+| `PermissionRepository` | everything else the auth tables need: users, groups, memberships, grants — including `grantsOfGroup`, the one read `GroupAdminPolicy` decides on |
+| `GroupAdminPolicy` | the one rule for who may administer a group — an administrator, or `MANAGE` over **every** resource that group holds a grant on. Shared by the membership mutations and the invitation links, because putting an account into a group and minting a link into it are the same act through different doors. See [Group invitation links](#group-invitation-links) |
+| `AuthDataFetchers` | the twenty-odd hand-written fetchers behind `login`, `me`, `changePassword`, `users`, `groups`, `searchUsers`, `accessLevels`, `grantsForResource`, the grant mutations, the membership mutations (gated by `GroupAdminPolicy` rather than by «is this an admin» since invitation links arrived) and `setUserLink` (with `linkErrorStatus`, the one place in the service that tells a `CHECK` from a foreign key by reading the `SQLSTATE`) |
 | `AccountTokenPurpose` | enum — the two things an e-mailed one-time link can be (`REGISTRATION`, `PASSWORD_RESET`), mirroring the `account_token_purpose` PostgreSQL enum the way `AccessLevel` mirrors `access_level` |
 | `AccountTokenRepository` | the SQL behind those links — issuing, the per-address cooldown, invalidating what was outstanding, redeeming — plus the two person lookups (`findLecturerByEmail`, `findStudentByEmail`) that decide whether a link may be sent at all. The one place in this package that reads a *domain* table by anything other than a declared permission edge |
 | `SelfServiceDataFetchers` | the six fetchers behind registration and recovery, and the four-question rule in [Self-service registration and password recovery](#self-service-registration-and-password-recovery) |
 | `SelfServiceSchema` | their GraphQL surface, added through the framework's `HandWrittenApi` plug-in point rather than hardcoded into the schema builder |
+| `GroupInvitationRepository` | the SQL behind `group_invitations`. Writes `expires_at` as `now() + make_interval(mins => :ttl)` so that both sides of the table's lifetime `CHECK` come from one clock |
+| `GroupInvitationDataFetchers` | the six fetchers behind the invitation links, and the one place that decides what redeeming one is worth: a single `user_groups` row, never an account and never a grant |
+| `GroupInvitationSchema` | their GraphQL surface, a `HandWrittenApi` like `SelfServiceSchema` |
 | `AccessModelSchema` | one query, `accessModel`: the permission cascade by resource type, so the client can decide what to draw from the graph this service enforces rather than from a copy of it. A `HandWrittenApi` for the same reason `SelfServiceSchema` is one — it is not a row keyed by an id — and it answers from `PermissionTypeGraph`, which is built once at startup |
 | `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
 | `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
@@ -1817,6 +1883,58 @@ anywhere real, or every link in every inbox points at the reader's own machine.*
 inbox", so that the form cannot be used to test whether an address is registered. That is the wrong
 trade here, and the reasoning is in *Known limitations* along with what it costs.
 
+### Group invitation links
+
+Membership is how access travels here: a grant may name a group, and «Деканат ФПМіІ» holds `MANAGE`
+on its факультет, so putting an account into a group is the act that lets that account do anything at
+all. That act was an administrator's, one account at a time, through two text boxes on «Користувачі та
+права» into which the numeric id of a user and the numeric id of a group were typed. It is the right
+shape for handing somebody a кафедра and the wrong one for the weeks the university's data is
+entered, when the most accounts exist and the fewest of them belong to anyone an administrator knows
+by id.
+
+Two changes, and the second is only the first said in public.
+
+**Membership is no longer administrator-only.** `addUserToGroup` and `removeUserFromGroup` are
+governed by `GroupAdminPolicy`: an administrator, **or** somebody holding `MANAGE` over *every*
+resource the group holds a grant on. That is delegation's own rule — you may hand out only what you
+hold — applied to the act that actually hands access out. Both halves are load-bearing: *every*
+rather than *any*, because a group granted both `FACULTY` #1 and `DEPARTMENT` #7 is worth both and
+the head of that one кафедра must not be able to mint faculty-wide access through the side door of
+membership; and a group with **no grants at all** is an administrator's alone, because "every" over
+an empty set is vacuously true and an empty group is one grant away from being a powerful one.
+`createGroup` stays administrator-only — a group that does not exist yet holds no grants to measure
+anybody against.
+
+**An invitation is that same act, delegated to the person joining.** A link into one group, good for
+between five minutes and thirty days, shared however its holder likes, listed and deletable on the
+group's own page. Redeeming one inserts a single `user_groups` row for the account already signed in
+and does nothing else: it creates no account, makes no grant, and confers no right to invite anybody
+further. A visitor who has no account is sent to `/login` — self-service registration stays what it
+was, open only to a викладач or a студент the institution has already entered.
+
+**The token is stored as it is, and `account_tokens` stores only a SHA-256.** The difference is what
+the two are for. A registration link goes to one address and is spent once, so nobody ever needs to
+read it back, and hashing costs nothing. An invitation is shared with a room full of people over
+days, and whoever made it has to be able to open «Посилання-запрошення» a week later and paste the
+same link into a second chat — which a hash cannot answer. Hashing here would mean either «shown
+once, then never again» or a new link per re-share, and both make the list a worse answer to the
+question the list exists for.
+
+So `group_invitations` holds live bearer credentials, and that is bounded rather than denied. Every
+row expires, and no row may outlive thirty days (a `CHECK`, not only a validated argument — a client
+that forgets to check its own form must not be able to write a link that outlives the term). Every
+row can be deleted the moment it has done its work, which is the whole of revocation: there is no
+disabled state, because a link that should stop working should stop existing. The token is reachable
+through exactly one query, which refuses anybody who may not administer the group. And what redeeming
+one is worth is membership of one group — never an account, never a grant.
+
+One thing the lifetime bound taught: `expires_at` is written as `now() + make_interval(mins => :ttl)`
+rather than from the JVM's clock. The `CHECK` compares it against `created_at`, which defaults to the
+database's `now()`, so computing one side in Java means comparing two clocks — and a request for the
+maximum thirty days fails with an integrity violation nobody can reproduce whenever the two machines
+disagree by a millisecond.
+
 ### GraphQL API
 
 | Field | Kind | Notes |
@@ -1828,7 +1946,14 @@ trade here, and the reasoning is in *Known limitations* along with what it costs
 | `setUserLink(userId, lecturerId?, studentId?)` | mutation | **admin-only**; says which lecturer or student an account belongs to. Both omitted clears the link; both given fails `BOTH_LINKS_SET`; a person another account already claims fails `ALREADY_LINKED`; an id naming nobody fails `INVALID_LINK` |
 | `setUserActive(userId, active)` | mutation | **admin-only**; deactivates/reactivates an account |
 | `users` | query | **admin-only**; all accounts |
-| `createGroup(name, description)`, `addUserToGroup`/`removeUserFromGroup` | mutation | **admin-only** group management |
+| `createGroup(name, description)` | mutation | **admin-only**. A new group holds no grants, so there is nobody but an administrator for `GroupAdminPolicy` to measure |
+| `addUserToGroup`/`removeUserFromGroup` | mutation | needs `MANAGE` over **every** resource the group holds a grant on, or administrator access — see [Group invitation links](#group-invitation-links). No longer admin-only |
+| `manageableGroups` | query | the groups this caller may administer — every group for an administrator, and for anybody else the ones the rule above admits. `groups` stays open to every signed-in caller, because naming a group is not administering it |
+| `groupInvitations(groupId)` | query | every invitation of one group, newest first, **tokens included**. Refused with `FORBIDDEN` unless the caller may administer that group |
+| `groupInvitation(token)` | query | inspects a link without redeeming it: `GroupInvitationCheck { isValid, status, groupId, groupName, isMember }`, `status` being `VALID`, `NOT_FOUND` or `EXPIRED`. Signed-in callers only — an invitation joins an *account* to a group |
+| `createGroupInvitation(groupId, ttlMinutes)` | mutation | mints a link. `ttlMinutes` is 5 … 43 200 (thirty days), checked here and again by the table. Refusals: `INVALID_TTL`, `GROUP_NOT_FOUND`, and `FORBIDDEN` as a GraphQL error |
+| `deleteGroupInvitation(invitationId)` | mutation | revokes a link by deleting it. Membership already gained through it is untouched — revoking an invitation is not revoking access, which is what `revokePermission` is for. Refusals: `NOT_FOUND`, and `FORBIDDEN` as a GraphQL error |
+| `joinGroupByInvitation(token)` | mutation | redeems a link: one `user_groups` row for the signed-in account, and `join_count + 1`. `ALREADY_MEMBER` is read off the insert (`ON CONFLICT DO NOTHING` updating no rows) rather than asked first, so two tabs cannot count one member twice. Refusals: `INVALID_TOKEN`, `EXPIRED_TOKEN`, `ALREADY_MEMBER` |
 | `groups` | query | any authenticated user |
 | `grantPermission(granteeType, userId\|groupId, resourceType, resourceId, level)` | mutation | needs `MANAGE` on the resource; `resourceId` is omitted only for `GLOBAL`. Re-granting an existing scope moves its level and answers `isSuccess: true` with `errorStatus: UPDATED`. Refusals: `FORBIDDEN` (no `MANAGE` there, or no access at all), `LEVEL_ABOVE_OWN`, `INVALID_GRANTEE` (neither or both of user/group, or an id naming nobody), `UNKNOWN_RESOURCE_TYPE`, `UNKNOWN_ACCESS_LEVEL` |
 | `revokePermission(permissionId)` | mutation | needs `MANAGE` from a **strict ancestor** of the grant's resource, or that the caller made it (`granted_by`) — that second branch is checked first and needs no level at all. Refusals: `FORBIDDEN`, `PERMISSION_NOT_FOUND` |
@@ -1901,19 +2026,29 @@ the `spring.mail.*` SMTP block, and `app.base-url`. The mailbox itself is not th
 and `MAIL_PASSWORD` come from the environment — and `app.base-url` is the one of the four that is
 wrong by default for a deployment: override it, or the links point at the reader's own machine.
 
-`data.sql` seeds two groups ("Деканат ФПМіІ", "Завідувачі кафедр") and exactly one account:
+`data.sql` seeds three groups («Деканат ФПМіІ», «Завідувачі кафедр», «Волонтери — наповнення даних»)
+and exactly one account:
 
 | Email | Password | Role |
 |---|---|---|
 | `admin@lnu.edu.ua` | `Admin#2026` | `GLOBAL` at `MANAGE` — the administrator grant — and no forced password change |
 
 Everything else about the auth tables is left for that administrator to create: there is no seeded
-example of a forced password change, of a scoped `FACULTY`/`DEPARTMENT` grant, or of an account
-linked to a lecturer or a student. `account_tokens` is seeded empty too, and stays empty until
-somebody asks for a link. Both groups are
-seeded empty — "Деканат ФПМіІ" keeps its `FACULTY` grant at `MANAGE`, so adding a user to it is enough to hand
-out faculty-wide access, and `permissions` carries just that grant plus the administrator's `GLOBAL`
-one.
+example of a forced password change, and none of an account linked to a lecturer or a student.
+`account_tokens` and `group_invitations` are seeded empty too, and stay empty until somebody asks for
+a link.
+
+All three groups are seeded **empty**, which is what keeps the twenty-one grants in `permissions`
+from being anybody's access yet: the administrator's `GLOBAL` at `MANAGE`, «Деканат ФПМіІ»'s
+`FACULTY` grant at `MANAGE`, and the nineteen `FACULTY` grants at `EDIT` that «Волонтери — наповнення
+даних» holds. Adding one user to the first is enough to hand out faculty-wide access; adding one to
+the third is enough to put somebody to work entering data. Both are one act now — a link from the
+group's own page, or a search on it — rather than an administrator typing two ids.
+
+The third group is «Волонтери — наповнення даних» — the scope the people entering the university's
+data work in, and nothing above it. It reaches the dump by way of
+[`V12`](#v12__data_entry_volunteers_groupsql), which is also where what that scoping deliberately
+does and does not reach is written down.
 
 Exercising the person link therefore takes two steps on «Користувачі та права»: create the account,
 then point it at a lecturer or a student (`setUserLink`). Nothing in `data.sql` does it for you —

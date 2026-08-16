@@ -74,8 +74,13 @@ const ARG_TYPES = {
   granteeType: 'String!', permissionId: 'ID!', level: 'AccessLevel!',
   resourceType: 'String!', resourceId: 'ID', resourceIds: '[ID!]!', includeInherited: 'Boolean',
   // Self-service registration and password recovery (SelfServiceSchema) — the one-time link's
-  // token, which is a value like any other and travels as a variable like any other.
+  // token, which is a value like any other and travels as a variable like any other. The same
+  // `token` is what a group invitation carries (GroupInvitationSchema), which is why it is one entry
+  // and not two.
   token: 'String!',
+  // Group invitation links (GroupInvitationSchema). `groupId` and `userId` are already above, from
+  // the membership mutations these sit beside.
+  ttlMinutes: 'Int!', invitationId: 'ID!',
 };
 
 const NAME = `(${Object.keys(ARG_TYPES).join('|')})`;

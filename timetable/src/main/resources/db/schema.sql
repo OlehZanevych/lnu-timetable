@@ -1163,6 +1163,59 @@ CREATE INDEX permissions_group_idx ON permissions (group_id) WHERE group_id IS N
 CREATE INDEX permissions_resource_idx ON permissions (resource_type, resource_id);
 
 
+-- ============================ Group invitation links ============================
+--
+-- A link that puts whoever follows it into one group. Membership is what carries access — a grant
+-- may name a group, and «Деканат ФПМіІ» holds MANAGE on its факультет — so adding an account to a
+-- group is the act that lets it do anything at all. Doing that one account at a time is right for
+-- handing somebody a кафедра and wrong for the week the data is entered, when twenty volunteers
+-- arrive at once; an invitation is the same act, delegated to the person joining.
+--
+-- Redeeming one inserts a single `user_groups` row for the account already signed in, and nothing
+-- else: it never creates an account, never makes a grant, and never confers the right to invite
+-- anybody further.
+--
+-- **The token is stored as it is, and `account_tokens` stores only a hash.** The difference is what
+-- the two are for. A registration link goes to one address and is spent once, so nobody ever needs
+-- to read it back. An invitation is shared with a room full of people over days, and whoever made
+-- it has to be able to open «Посилання-запрошення» a week later and paste the same link into a
+-- second chat — which a hash cannot answer. So this table holds live bearer credentials, bounded
+-- rather than denied: every row expires (five minutes to thirty days, in the CHECK below), every
+-- row can be deleted the moment it has done its work, and what redeeming one is worth is membership
+-- of one group. It is outside the entity framework, like every other table in this section, and is
+-- read only by callers who may already administer the group.
+CREATE TABLE group_invitations
+(
+    id         BIGSERIAL PRIMARY KEY,
+    group_id   BIGINT      NOT NULL REFERENCES groups (id) ON DELETE CASCADE,
+    -- 32 bytes from SecureRandom, base64url — 43 characters and no dot, which is what keeps
+    -- FrontendController's `[^.]*` patterns serving the page that carries it.
+    token      VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMP   NOT NULL,
+    -- How many accounts joined through this link. A counter rather than a table of redemptions: who
+    -- is in the group is already `user_groups`, and the only question left is «did anyone use the
+    -- link I sent», which is what is asked before deleting it.
+    join_count INTEGER     NOT NULL DEFAULT 0,
+    -- Survives the account that made it, for the reason `permissions.granted_by` does: who opened a
+    -- door is worth knowing after they have gone.
+    created_by BIGINT REFERENCES users (id) ON DELETE SET NULL,
+    created_at TIMESTAMP   NOT NULL DEFAULT now(),
+    -- The lifetime bounds, in the schema rather than only in the mutation: at least five minutes, at
+    -- most thirty days. Both sides of the comparison must come from the same clock, so the service
+    -- writes `expires_at` as `now() + make_interval(mins => :ttl)` — the database's now(), the same
+    -- value `created_at` defaults to inside that statement. Computing it from the JVM's clock
+    -- instead makes the thirty-day maximum fail whenever the two machines disagree by a millisecond.
+    CONSTRAINT group_invitations_lifetime_check CHECK (
+        expires_at >= created_at + INTERVAL '5 minutes' AND
+        expires_at <= created_at + INTERVAL '30 days'
+    )
+);
+
+-- `token` is UNIQUE, which is how redemption looks a link up. This is the other question: every
+-- invitation of one group, newest first — what «Посилання-запрошення» lists.
+CREATE INDEX group_invitations_group_idx ON group_invitations (group_id, created_at DESC);
+
+
 -- ============================ Self-service registration & password recovery ============================
 --
 -- One-time links, e-mailed to somebody the institution has already entered, and valid for
@@ -1224,8 +1277,9 @@ CREATE INDEX account_tokens_recent_idx ON account_tokens (lower(email), purpose,
 --
 -- Flyway creates this table itself the first time it runs, so it would be reasonable to expect it
 -- not to belong in a hand-written schema. It belongs here for one concrete reason: data.sql is a
--- data-only pg_dump of a real database, and that database had the table, so the dump carries six
--- INSERT INTO public.flyway_schema_history rows. Loading data.sql into a schema this file has just
+-- data-only pg_dump of a real database, and that database had the table, so the dump carries a row
+-- per migration that had run there — thirteen of them as it stands, the baseline plus V1..V12, and
+-- one more with every re-dump that follows a migration. Loading data.sql into a schema this file has just
 -- created therefore needs the table to already exist — without it, reset_db.sh gets as far as the
 -- дамп's flyway block and fails there.
 --
@@ -1236,10 +1290,12 @@ CREATE INDEX account_tokens_recent_idx ON account_tokens (lower(email), purpose,
 --
 -- What this changes about a freshly reset database. Flyway baselines a schema only when the history
 -- table is *missing*; now it is present and populated, so spring.flyway.baseline-on-migrate never
--- fires, and the migrations data.sql already records as applied (V1..V5) are not run a second time.
+-- fires, and the migrations data.sql already records as applied (V1..V12) are not run a second time.
 -- That is the right outcome — the dump was taken after they ran, so their effects are in the data
 -- already — but it does mean this table is now part of what data.sql restores, and a migration
--- added after the last dump (today, V6) is the only kind that still runs on a reset.
+-- added after the last dump is the only kind that still runs on a reset. Today there is none: the
+-- dump was taken after V12, so a reset applies nothing at all and the migrations exist for the
+-- databases the dump does not reach.
 CREATE TABLE flyway_schema_history
 (
     installed_rank INTEGER                NOT NULL,

@@ -59,6 +59,21 @@ const PAGE_ROUTES: Routes = [
   { path: 'admin', canActivate: [authGuard, adminGuard],
     loadComponent: () => import('./admin-page').then((m) => m.AdminPage) },
 
+  // Groups of users, and the invitation links that fill them. Not behind `adminGuard`: a group is
+  // administrable by whoever holds MANAGE over everything it can reach (`GroupAdminPolicy`), which
+  // is a question only the service can answer — so the guard is the ordinary one and the pages ask.
+  //
+  // `/join/:token` is guarded too, and that is the feature rather than an oversight: an invitation
+  // adds an *account* to a group, so there has to be one. An anonymous visitor is sent to /login
+  // carrying `redirectTo`, and returns to the link after signing in.
+  { path: 'user-groups', canActivate: [authGuard],
+    loadComponent: () => import('./user-groups-page').then((m) => m.UserGroupsPage) },
+  { path: 'user-group/:id', pathMatch: 'full', redirectTo: '/user-group/:id/members' },
+  { path: 'user-group/:id/:section', canActivate: [authGuard],
+    loadComponent: () => import('./user-group-page').then((m) => m.UserGroupPage) },
+  { path: 'join/:token', canActivate: [authGuard],
+    loadComponent: () => import('./join-group-page').then((m) => m.JoinGroupPage) },
+
   { path: '', pathMatch: 'full', component: FacultyHome, canActivate: [authGuard] },
 
   // Lazy for the same reason as the drill-down routes below, and with more effect than any of

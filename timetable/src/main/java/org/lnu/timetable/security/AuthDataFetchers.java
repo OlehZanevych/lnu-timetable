@@ -29,7 +29,8 @@ import java.util.Map;
  * {@link AuthorizingDataFetcherProvider} (that decorator only wraps the generic,
  * entity-metadata-driven {@code DataFetcherProvider}) — each method here reads the
  * {@link Principal} straight from the GraphQL context and applies whatever check that particular
- * operation needs (none at all for {@code login}, "is this an admin" for user/group management,
+ * operation needs (none at all for {@code login}, "is this an admin" for account management and for
+ * creating a group, {@link GroupAdminPolicy} for a group's membership, and
  * {@link AccessLevel#MANAGE} on the target resource for permission delegation).
  */
 @Component
@@ -41,16 +42,19 @@ public class AuthDataFetchers {
     private final EntityMetadataRegistry entityRegistry;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    private final GroupAdminPolicy groupPolicy;
 
     public AuthDataFetchers(PermissionRepository permissionRepo, PermissionGraphRepository graphRepo,
                              PermissionService permissionService, EntityMetadataRegistry entityRegistry,
-                             JwtService jwtService, PasswordEncoder passwordEncoder) {
+                             JwtService jwtService, PasswordEncoder passwordEncoder,
+                             GroupAdminPolicy groupPolicy) {
         this.permissionRepo = permissionRepo;
         this.graphRepo = graphRepo;
         this.permissionService = permissionService;
         this.entityRegistry = entityRegistry;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
+        this.groupPolicy = groupPolicy;
     }
 
     // --- Query.me / Query.users / Query.groups / Query.accessLevels ---
@@ -396,19 +400,35 @@ public class AuthDataFetchers {
         }).toFuture();
     }
 
+    /**
+     * Membership is no longer administrator-only. It is governed by {@link GroupAdminPolicy} — an
+     * administrator, or somebody holding MANAGE over every resource the group holds a grant on —
+     * which is delegation's own rule («you may hand out only what you hold») applied to the act that
+     * actually hands access out here. An administrator was the bottleneck for the one thing a
+     * деканат does most often, and the invitation links in {@code GroupInvitationSchema} would have
+     * made that bottleneck incoherent as well as inconvenient: the same person may already mint a
+     * link into the group, which ends with exactly this row.
+     * <p>
+     * {@code createGroup} stays administrator-only, because a group that does not exist yet holds no
+     * grants for the policy to measure anybody against.
+     */
     public DataFetcher<?> addUserToGroup() {
-        return env -> requireAdmin(env).flatMap(admin -> {
-            Long userId = Long.parseLong(env.getArgument("userId").toString());
-            Long groupId = Long.parseLong(env.getArgument("groupId").toString());
-            return permissionRepo.addUserToGroup(userId, groupId).map(rows -> simpleResult(true, null));
+        return env -> requirePrincipal(env).flatMap(principal -> {
+            Long userId = idArgument(env, "userId");
+            Long groupId = idArgument(env, "groupId");
+            return groupPolicy.require(evaluatorOf(env, principal), groupId)
+                .flatMap(ok -> permissionRepo.addUserToGroup(userId, groupId))
+                .map(rows -> simpleResult(true, null));
         }).toFuture();
     }
 
     public DataFetcher<?> removeUserFromGroup() {
-        return env -> requireAdmin(env).flatMap(admin -> {
-            Long userId = Long.parseLong(env.getArgument("userId").toString());
-            Long groupId = Long.parseLong(env.getArgument("groupId").toString());
-            return permissionRepo.removeUserFromGroup(userId, groupId).map(rows -> simpleResult(true, null));
+        return env -> requirePrincipal(env).flatMap(principal -> {
+            Long userId = idArgument(env, "userId");
+            Long groupId = idArgument(env, "groupId");
+            return groupPolicy.require(evaluatorOf(env, principal), groupId)
+                .flatMap(ok -> permissionRepo.removeUserFromGroup(userId, groupId))
+                .map(rows -> simpleResult(true, null));
         }).toFuture();
     }
 

@@ -272,6 +272,18 @@ export class AuthService {
     () => new Set(this.currentUser()?.creatableResourceTypes ?? [])
   );
 
+  /**
+   * Whether this account can delegate access *somewhere* — it holds MANAGE on at least one resource,
+   * or university-wide. What draws the «Групи користувачів» link, since administering a group needs
+   * MANAGE over everything that group can reach and nobody without MANAGE anywhere can qualify.
+   *
+   * A type-level guess of the same kind as `canCreateType`: it decides whether a link is worth
+   * drawing, never whether an act is allowed. Which groups this account may actually administer is
+   * `manageableGroups`, answered by the service against the group's own grants.
+   */
+  canDelegate = computed(() =>
+    (this.currentUser()?.permissions ?? []).some((grant) => grant.level === 'MANAGE'));
+
   mustChangePassword = computed(() => this.currentUser()?.mustChangePassword ?? false);
 
   /**

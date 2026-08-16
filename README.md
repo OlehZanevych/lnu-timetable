@@ -66,6 +66,11 @@ full (which adds deletion) and manage (which adds the right to hand the same acc
 else, so a deanery delegates a кафедра itself rather than queuing behind an administrator), with the
 client hiding what a given account cannot use — down to whole pages and tabs — from the same cascade
 the service enforces, published rather than copied;
+**invitation links into a group** — membership is how access travels here, so putting an account
+into a group is the act that hands it whatever that group can reach; a link does that act once for
+however many people follow it, lives between five minutes and thirty days, and is revoked by
+deleting it, while who may mint one is the delegation rule read again («MANAGE over everything the
+group can reach»), which is also what took group membership off the administrator's desk;
 **self-service accounts** for the people already in the system — a викладач or a студент whose row
 carries an e-mail address creates their own account by following a link sent to it, valid thirty
 minutes, and anybody who has forgotten a password replaces it the same way, while an address
@@ -143,8 +148,15 @@ Sign in with one of the seeded accounts:
 That is the **only** seeded account, so the first thing a fresh database needs is for that
 administrator to create the accounts the institution actually wants, scope them with permission
 grants at the level each job actually needs, and (for a lecturer or a student) point them at the
-person they belong to. The two seeded groups survive with no members, «Деканат ФПМіІ» still holding
+person they belong to. The three seeded groups survive with no members, «Деканат ФПМіІ» still holding
 its `FACULTY` grant, ready to be populated.
+
+The third of them is «Волонтери — наповнення даних», which reaches `data.sql` by way of
+[`V12`](./timetable/README.md#v12__data_entry_volunteers_groupsql): one `FACULTY` grant at `EDIT` per
+факультет, which is the scope the people who type the university in work in — every кафедра, освітня
+програма, discipline, навчальний план, викладач, аудиторія, навантаження and розклад, and none of the
+global properties, the university-wide bell schedules or the accounts. Filling it is what the
+invitation links are for: open the group, make a link, share it once.
 
 A викладач or a студент need not wait for any of that: if their own row carries an e-mail address
 they register themselves at `/register`, and the account that results is linked to them by
@@ -251,8 +263,8 @@ self-service registration works from the first start rather than after an edit t
 
 | Document | What it covers |
 |---|---|
-| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files) and the `HandWrittenApi` plug-in point for the parts of it that cannot be generated, the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, self-service registration and password recovery, the levelled permission model — how it is evaluated, how it is published to the client, and why an entity that declares no owner does not start — and the person link that says who an account is |
-| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the registration and password-recovery screens, the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI — which button each level opens, which screens and tabs hide themselves entirely, and the «Немає доступу» card that answers a link to one of them |
+| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files) and the `HandWrittenApi` plug-in point for the parts of it that cannot be generated, the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, self-service registration and password recovery, group invitation links and the one rule that governs a group's membership, the levelled permission model — how it is evaluated, how it is published to the client, and why an entity that declares no owner does not start — and the person link that says who an account is |
+| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the registration and password-recovery screens, the group pages and the screen an invitation link opens, the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI — which button each level opens, which screens and tabs hide themselves entirely, and the «Немає доступу» card that answers a link to one of them |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
 | [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, the worker portfolio, a traced example, complexity, and the code map |

@@ -5,7 +5,7 @@ description: Get oriented in the lnu-timetable project by reading its Markdown d
 
 # Orientation (lnu-timetable)
 
-The project's documentation is ~10,200 lines across fourteen Markdown files. Reading it end to end is
+The project's documentation is ~10,600 lines across fourteen Markdown files. Reading it end to end is
 both slow and unnecessary: most of it is depth on subsystems a given task never touches. Read the
 **map** in full, then only the **sections your task lands in**.
 
@@ -30,12 +30,13 @@ POJOs in `domain/`; the four `*SchemaConfig` classes in `config/` declare the AP
 and the SQL are generated at startup from that metadata by `framework/`. Adding an entity means
 adding a POJO and a `configure<Entity>` method — nothing else. When asked to add or change an
 endpoint, work through the config, never by writing a controller. The exceptions — `GlobalProperty`,
-the auth surface, self-service registration — are hand-written GraphQL, and a new one is a
-`HandWrittenApi` bean rather than an edit to the schema builder.
+the auth surface, self-service registration, group invitation links — are hand-written GraphQL, and a
+new one is a `HandWrittenApi` bean rather than an edit to the schema builder.
 
 **The client has two architectures side by side.** Generic metadata-driven CRUD tables
 (`entities.ts` + `BaseEntity` + `entity-page.html`, one route per entity) *and* hand-written
-drill-down pages (faculty, department, degree programme, course, lecturer, room, «Мій кабінет»). Both are
+drill-down pages (faculty, department, degree programme, course, lecturer, room, user group,
+«Мій кабінет»). Both are
 intentional: the generic half is for reference data, the hand-written half for the screens where the
 work actually happens. Know which half you are in before changing anything.
 
@@ -112,8 +113,8 @@ as it changes what you are about to do.
 
 The repository lives on the user's Mac; reach it with `mcp__remote-devices__device_bash` under the
 mounted path, not with the sandbox's own tools. There is no JDK 25 or reachable Maven Central in the
-sandbox, so **the Java cannot be compiled here** — say so plainly rather than implying it was
-checked. What can be verified locally:
+sandbox, so **`mvn` cannot run and the jar cannot be built here** — say so plainly rather than
+implying a build was checked. What can be verified locally:
 
 ```bash
 cd timetable-ui && npx tsc -p tsconfig.app.json --noEmit
@@ -122,7 +123,17 @@ cd timetable-ui && npx ng build --configuration production --no-progress   # ini
 ```
 
 PostgreSQL 16 *is* available in the sandbox, so a migration can be rehearsed for real against a
-throwaway database — do that rather than reasoning about SQL in the abstract.
+throwaway database — do that rather than reasoning about SQL in the abstract. Stage `schema.sql` and
+`data.sql` with `device_stage_files` and load both; an 8 MB dump copies in seconds.
+
+The Java can be **type-checked** here even though it cannot be built, which is worth doing before
+claiming a change compiles: the sandbox has `javac` 21, and `timetable/target/timetable-0.0.1-SNAPSHOT.jar`
+(when a build exists) carries every dependency under `BOOT-INF/lib`. Copy the sources into the
+sandbox, unpack those jars onto the classpath, and `javac -proc:none -encoding UTF-8` the whole of
+`security/`, `framework/` and `mail/`. The same classpath will even run
+`DynamicGraphQLSchemaBuilder.buildSchema(...)` and print the SDL, which is how a new `HandWrittenApi`
+is checked without a database. What this does not cover: anything needing a Java 25 language feature
+(none is used today), the Maven build itself, and every test that needs Postgres or Spring.
 
 ## Maintenance
 

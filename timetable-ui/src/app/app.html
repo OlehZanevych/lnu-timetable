@@ -62,9 +62,16 @@
       <a routerLink="/global-properties" routerLinkActive="active">Глобальні властивості</a>
     }
 
-    @if (auth.isAdmin()) {
+    <!-- «Групи користувачів» is drawn for anyone holding MANAGE anywhere, not only for an
+         administrator: a деканат administers the group their факультет was delegated to. Which
+         groups those are is the service's answer (`manageableGroups`), and the page asks it — this
+         is only the question of whether the link is worth drawing at all. -->
+    @if (auth.isAdmin() || auth.canDelegate()) {
       <h3>Адміністрування</h3>
-      <a routerLink="/admin" routerLinkActive="active">Користувачі та права</a>
+      @if (auth.isAdmin()) {
+        <a routerLink="/admin" routerLinkActive="active">Користувачі та права</a>
+      }
+      <a routerLink="/user-groups" routerLinkActive="active">Групи користувачів</a>
     }
   </nav>
   }
