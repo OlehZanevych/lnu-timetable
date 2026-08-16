@@ -32,7 +32,10 @@
       <div class="wci-hours-block">
         <div class="wci-hours-header">
           <span>{{ hourTypeLabel(h.hourType) }}: {{ h.hours }}</span>
-          @if (canAddWorkingItem(h.hourType)) {
+          <!-- canAddWorkingItem() says this вид роботи can carry позиції at all; canModify() says
+               this account may write them. The table below keeps the first test only, so a reader
+               without «Редагування» still sees what is already planned. -->
+          @if (canModify() && canAddWorkingItem(h.hourType)) {
             <button type="button" class="ghost" (click)="openCreate(h, item)">+ Додати</button>
           }
         </div>
@@ -65,8 +68,12 @@
                     </td>
                   }
                   <td class="row-actions">
-                    <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>
-                    <button type="button" class="ghost danger" (click)="remove(wci)">Видалити</button>
+                    @if (canModify()) {
+                      <button type="button" class="ghost" (click)="openEdit(h, item, wci)">Редагувати</button>
+                    }
+                    @if (canDelete()) {
+                      <button type="button" class="ghost danger" (click)="remove(wci)">Видалити</button>
+                    }
                   </td>
                 </tr>
               } @empty {

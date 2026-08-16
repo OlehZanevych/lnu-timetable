@@ -1,6 +1,8 @@
 import { Component, Input, OnChanges, OnInit, WritableSignal, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { GqlVars, GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { compareUk } from './sort';
 import { TimeSelect } from './time-select';
 
@@ -39,6 +41,14 @@ interface SubjectMeta {
   connection: string;
   /** connection argument that scopes the list to the page's department or faculty */
   filterArg: string;
+  /**
+   * The `permissions.resource_type` of whatever `scopeId` names — which is the same thing
+   * `filterArg` names, said in the vocabulary the permission service speaks. Lecturers hang off a
+   * кафедра and groups and rooms off a факультет, so the level that governs a card is asked about
+   * here rather than assumed: this component is mounted from two different pages, and hardcoding
+   * either type would ask the wrong question on the other one.
+   */
+  scopeType: string;
   entity: string;
   /** mutation argument name, e.g. `lecturer:` */
   single: string;
@@ -59,6 +69,7 @@ const SUBJECTS: Record<ConstraintSubject, SubjectMeta> = {
     namespace: 'lecturers',
     connection: 'lecturerConnection',
     filterArg: 'departmentId',
+    scopeType: 'DEPARTMENT',
     entity: 'Lecturer',
     single: 'lecturer',
     selection: 'firstName middleName lastName',
@@ -74,6 +85,7 @@ const SUBJECTS: Record<ConstraintSubject, SubjectMeta> = {
     namespace: 'academicGroups',
     connection: 'academicGroupConnection',
     filterArg: 'facultyId',
+    scopeType: 'FACULTY',
     entity: 'AcademicGroup',
     single: 'academicGroup',
     selection: 'name courseYear studyForm degreeProgram { id name }',
@@ -94,6 +106,7 @@ const SUBJECTS: Record<ConstraintSubject, SubjectMeta> = {
     namespace: 'rooms',
     connection: 'roomConnection',
     filterArg: 'facultyId',
+    scopeType: 'FACULTY',
     entity: 'Room',
     single: 'room',
     selection: 'number name building { id name }',
@@ -163,11 +176,28 @@ const TYPES = Object.keys(TYPE_LABELS) as ConstraintType[];
 })
 export class TimetableConstraintList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   /** Which subject this instance edits. */
   @Input({ required: true }) subject!: ConstraintSubject;
   /** The department id (lecturers) or faculty id (groups, rooms) the list is scoped to. */
   @Input({ required: true }) scopeId!: string;
+
+  /** This account's level on the кафедра or факультет `scopeId` names — see `SubjectMeta.scopeType`. */
+  private scopeLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force here: the scope's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.scopeLevel()));
+
+  /**
+   * Whether the cards are a form or a reading.
+   *
+   * `EDIT` is the only level this screen has any use for. Saving a card is an `update<Entity>`
+   * carrying the full desired `timetableConstraints` list, and a rule the reader removed is deleted
+   * by not being in that list — it is a consequence of the update, not a `delete<Entity>` of its own,
+   * so gating «Вилучити правило» or «Очистити» on `FULL` would demand a level the write never uses.
+   */
+  canEdit = computed(() => allows(this.effectiveLevel(), 'EDIT'));
 
   readonly TYPES = TYPES;
   readonly TYPE_LABELS = TYPE_LABELS;
@@ -198,11 +228,31 @@ export class TimetableConstraintList implements OnInit, OnChanges {
 
   ngOnInit() {
     this.initialized = true;
-    if (this.scopeId) this.load();
+    if (this.scopeId) { this.loadPermission(); this.load(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.scopeId) this.load();
+    if (this.initialized && this.scopeId) { this.loadPermission(); this.load(); }
+  }
+
+  /**
+   * Asks about the scope this instance was handed, in whichever vocabulary its subject belongs to.
+   * A reply that arrives after the host has switched tabs — «Обмеження розкладу викладачів» and
+   * «…аудиторій» are the same component with a different subject and a different id — is dropped
+   * rather than allowed to answer for the scope now on screen.
+   */
+  private loadPermission() {
+    const id = this.scopeId;
+    const type = this.meta.scopeType;
+    this.scopeLevel.set(null);
+    this.auth.accessLevel(type, id).subscribe({
+      next: (level) => {
+        if (id === this.scopeId && type === this.meta.scopeType) this.scopeLevel.set(level);
+      },
+      error: () => {
+        if (id === this.scopeId && type === this.meta.scopeType) this.scopeLevel.set(null);
+      }
+    });
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -282,6 +332,7 @@ export class TimetableConstraintList implements OnInit, OnChanges {
   // ── Editing ──────────────────────────────────────────────────────────────
 
   addRule(block: Block) {
+    if (!this.canEdit()) return;
     block.rules.update((rs) => [...rs, {
       id: null,
       type: signal<ConstraintType>('NOT_BEFORE'),
@@ -295,6 +346,7 @@ export class TimetableConstraintList implements OnInit, OnChanges {
   }
 
   removeRule(block: Block, index: number) {
+    if (!this.canEdit()) return;
     block.rules.update((rs) => rs.filter((_, i) => i !== index));
     block.dirty.set(true);
     block.error.set('');
@@ -413,6 +465,13 @@ export class TimetableConstraintList implements OnInit, OnChanges {
   // ── Saving ───────────────────────────────────────────────────────────────
 
   save(block: Block) {
+    // «Зберегти» is not drawn without EDIT, so a card can only be dirty here by some other route.
+    // The service refuses the mutation anyway; stopping before the request turns a round trip into a
+    // sentence the reader can act on.
+    if (!this.canEdit()) {
+      block.error.set('Змінення обмежень потребує рівня доступу «Редагування».');
+      return;
+    }
     if (this.hasViolations(block)) {
       block.error.set('Виправте помилки перед збереженням.');
       return;
@@ -473,6 +532,7 @@ export class TimetableConstraintList implements OnInit, OnChanges {
   }
 
   clear(block: Block) {
+    if (!this.canEdit()) return;
     block.rules.set([]);
     block.dirty.set(true);
     block.error.set('');

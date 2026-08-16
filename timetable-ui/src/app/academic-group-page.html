@@ -41,7 +41,9 @@
         @if (g) {
           <div class="page-header">
             <h2>Інформація про групу</h2>
-            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+            @if (canModifyGroup()) {
+              <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+            }
           </div>
           <div class="card info-card">
             <table class="info-table">

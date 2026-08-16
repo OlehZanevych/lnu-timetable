@@ -1,3 +1,6 @@
+@if (denied()) {
+  <app-no-access [need]="need" />
+} @else {
 <div class="page-header">
   <div>
     <h2>Глобальні властивості</h2>
@@ -61,4 +64,5 @@
   </section>
 } @empty {
   <p class="muted">Властивостей ще немає.</p>
+}
 }

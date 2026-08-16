@@ -2,6 +2,8 @@ import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GqlVars, GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { HOUR_TYPE_OPTIONS, ONLINE_CLASS_PLATFORM_OPTIONS, SEMESTER_PARITY_OPTIONS, toOptions } from './entities';
@@ -185,8 +187,31 @@ interface CardForm {
 })
 export class RoomAssignmentList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   @Input() facultyId!: string;
+
+  /**
+   * This account's level on the факультет whose classes are listed.
+   *
+   * The факультет is the right scope for the same reason this page is a faculty page at all: the
+   * rooms belong to it (`rooms.faculty_id`), and a card's placement is a claim on a resource shared
+   * across every кафедра that teaches here. A grant on one кафедра does not decide it.
+   */
+  private facultyLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the факультет's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.facultyLevel()));
+
+  /** Writing a card's rooms, and creating or updating its онлайн row. */
+  canEdit = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /**
+   * Removing a stored онлайн row — `deleteLecturerWorkloadOnlineClass`, which is what carrying a
+   * card away from «Онлайн» does. It is the one delete this page performs, and the only thing on it
+   * that asks for «Повний доступ».
+   */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
 
   readonly SEMESTER_PARITY_OPTIONS = SEMESTER_PARITY_OPTIONS;
   /** The платформа dropdown. Adapted to app-search-select's `{ id, label }` shape once, here. */
@@ -232,6 +257,7 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   ngOnInit() {
     this.initialized = true;
     if (!this.facultyId) { this.loading.set(false); return; }
+    this.loadPermission();
     this.loadFilterOptions();
     this.loadRoomOptions();
     // The classes are loaded *by* loadGlobalParity, not beside it: the parity is a server-side
@@ -242,10 +268,24 @@ export class RoomAssignmentList implements OnInit, OnChanges {
 
   ngOnChanges() {
     if (this.initialized && this.facultyId) {
+      this.loadPermission();
       this.loadFilterOptions();
       this.loadRoomOptions();
       this.loadAll();
     }
+  }
+
+  /**
+   * Asks about the факультет this board was opened on. An answer that arrives after the host has
+   * moved to another one is dropped, exactly as a stale class list is by `loadToken`.
+   */
+  private loadPermission() {
+    const id = this.facultyId;
+    this.facultyLevel.set(null);
+    this.auth.accessLevel('FACULTY', id).subscribe({
+      next: (level) => { if (id === this.facultyId) this.facultyLevel.set(level); },
+      error: () => { if (id === this.facultyId) this.facultyLevel.set(null); }
+    });
   }
 
   // ── Filters ───────────────────────────────────────────────────────────────
@@ -685,6 +725,37 @@ export class RoomAssignmentList implements OnInit, OnChanges {
     return HOUR_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
   }
 
+  /**
+   * Where the class is held, written out — what stands in for the three pickers when the reader may
+   * not use them.
+   *
+   * The pickers are the only place this page states a placement, so hiding them without this would
+   * turn a board that answers «що ще нікому не призначено?» into a list of course names. The wording
+   * follows the same order the radios do, and a card assigned none of the three says so rather than
+   * showing an empty line — it is the case the red tint exists for.
+   */
+  placementLabel(card: ClassCard): string {
+    const name = (options: Option[], id: string) => options.find((o) => o.id === id)?.label ?? '';
+    if (card.online) {
+      const parts = [
+        card.onlinePlatform ? `Онлайн (${name(this.PLATFORM_OPTIONS, card.onlinePlatform)})` : 'Онлайн',
+        card.onlineMeetingUrl,
+        card.onlineNote
+      ];
+      return parts.filter(Boolean).join(' · ');
+    }
+    if (card.abstractRoomId) {
+      const label = name(this.abstractRoomOptions(), card.abstractRoomId);
+      return label ? `Абстрактна аудиторія: ${label}` : 'Абстрактна аудиторія';
+    }
+    const rooms = card.roomIds.map((id) => name(this.roomOptions(), id)).filter(Boolean);
+    const groups = card.roomGroupIds.map((id) => name(this.roomGroupOptions(), id)).filter(Boolean);
+    const parts: string[] = [];
+    if (rooms.length) parts.push(`Аудиторії: ${rooms.join(', ')}`);
+    if (groups.length) parts.push(`Групи аудиторій: ${groups.join(', ')}`);
+    return parts.length ? parts.join(' · ') : 'Місце не призначено — будь-яка аудиторія факультету';
+  }
+
   // ── Editing ───────────────────────────────────────────────────────────────
 
   /**
@@ -757,7 +828,35 @@ export class RoomAssignmentList implements OnInit, OnChanges {
   canSave(card: ClassCard): boolean {
     const f = this.form(card);
     if (f.mode === 'ABSTRACT' && !f.abstractRoomId) return false;
+    // Permission is a separate question from whether the draft is worth sending, and both have to
+    // hold: `EDIT` for the placement itself, and `FULL` when the save also has to remove a stored
+    // онлайн row, which is a delete and asks for what every other delete asks for.
+    if (!this.canEdit()) return false;
+    if (this.clearsOnline(card) && !this.canDelete()) return false;
     return this.isDirty(card) && !this.saving().has(card.workloadId);
+  }
+
+  /**
+   * Whether saving this card would delete its `lecturer_workload_online_classes` row — the class is
+   * stored as online and the draft has been carried to one of the other two placements. The row's
+   * *presence* is the fact that the class is online, so there is no way to stop it being online
+   * without deleting it (see `saveOnline`).
+   */
+  private clearsOnline(card: ClassCard): boolean {
+    return card.online && this.form(card).mode !== 'ONLINE';
+  }
+
+  /**
+   * Why «Зберегти» is missing on a card that has been edited — shown in its place, so a деканат
+   * holding «Редагування» learns that taking a class off «Онлайн» is a deletion rather than
+   * concluding that the button is broken.
+   */
+  saveBlockedReason(card: ClassCard): string {
+    if (!this.canEdit()) return '';
+    if (this.clearsOnline(card) && !this.canDelete()) {
+      return 'Скасування онлайн-заняття вилучає запис і потребує рівня доступу «Повний доступ».';
+    }
+    return '';
   }
 
   /** Restores a card's draft to what is stored, mode included. */

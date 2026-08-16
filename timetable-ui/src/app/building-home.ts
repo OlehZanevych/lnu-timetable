@@ -2,6 +2,8 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 
 interface Building {
   id: string;
@@ -18,6 +20,24 @@ interface Building {
 })
 export class BuildingHome {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
+
+  /** This account's level on each корпус it can reach at all; absent means none. */
+  private levels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
+
+  /**
+   * A корпус is a declared `@PermissionRoot` — nothing owns it — so only a university-wide grant
+   * creates one. That is why this button used to be the clearest symptom of the old heuristic: a
+   * викладач holding one кафедра was offered «+ Додати корпус», and the service refused it.
+   */
+  canCreate(): boolean {
+    return this.auth.canCreateType('BUILDING');
+  }
+
+  /** Editing a корпус needs EDIT on it, or university-wide. Deleting is not offered from this list. */
+  canEdit(b: Building): boolean {
+    return allows(maxLevel(this.auth.globalLevel(), this.levels().get(String(b.id))), 'EDIT');
+  }
 
   buildings = signal<Building[]>([]);
   error = signal('');
@@ -39,9 +59,18 @@ export class BuildingHome {
   load() {
     const q = `query($limit: Int!) { buildings { buildingConnection(limit: $limit) { nodes { id name address city postalCode } } } }`;
     this.gql.request(q, { limit: 200 }).subscribe({
-      next: (d: any) => this.buildings.set(d.buildings.buildingConnection.nodes),
+      next: (d: any) => {
+        const list = d.buildings.buildingConnection.nodes;
+        this.buildings.set(list);
+        this.loadPermissions(list.map((b: Building) => String(b.id)));
+      },
       error: (e) => this.error.set(e.message)
     });
+  }
+
+  private loadPermissions(ids: string[]) {
+    if (this.auth.globalLevel() === 'MANAGE' || !ids.length) return;
+    this.auth.accessLevels('BUILDING', ids).subscribe((levels) => this.levels.set(levels));
   }
 
   // ── Create ────────────────────────────────────────────────────────────────

@@ -150,12 +150,19 @@
 
       <!-- ── Scheduling ── -->
 
+      <!-- The four tabs below enter data, so each is wrapped in the gate as well as being hidden
+           from the nav: the nav decides what is worth offering, the gate answers a pasted URL. -->
+
       @case ('roomAssignment') {
-        <app-room-assignment-list [facultyId]="fid" />
+        <app-access-gate [need]="sectionNeed('roomAssignment')">
+          <app-room-assignment-list [facultyId]="fid" />
+        </app-access-gate>
       }
 
       @case ('timetable') {
-        <app-faculty-timetable-list [facultyId]="fid" />
+        <app-access-gate [need]="sectionNeed('timetable')">
+          <app-faculty-timetable-list [facultyId]="fid" />
+        </app-access-gate>
       }
 
       @case ('facultyTimetable') {
@@ -203,11 +210,15 @@
       }
 
       @case ('groupConstraints') {
-        <app-timetable-constraint-list subject="academicGroup" [scopeId]="fid" />
+        <app-access-gate [need]="sectionNeed('groupConstraints')">
+          <app-timetable-constraint-list subject="academicGroup" [scopeId]="fid" />
+        </app-access-gate>
       }
 
       @case ('roomConstraints') {
-        <app-timetable-constraint-list subject="room" [scopeId]="fid" />
+        <app-access-gate [need]="sectionNeed('roomConstraints')">
+          <app-timetable-constraint-list subject="room" [scopeId]="fid" />
+        </app-access-gate>
       }
 
       <!-- ── Access ── -->

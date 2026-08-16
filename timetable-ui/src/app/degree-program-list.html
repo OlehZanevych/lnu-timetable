@@ -17,6 +17,7 @@
         <th>Код</th>
         <th>Назва</th>
         <th>Ступінь</th>
+        <th>Семестрів</th>
         <th></th>
       </tr>
     </thead>
@@ -26,6 +27,7 @@
           <td>{{ s.code }}</td>
           <td>{{ s.name }}</td>
           <td>{{ degreeLabel(s.degree) }}</td>
+          <td>{{ s.durationSemesters }}</td>
           <td class="row-actions">
             @if (canEdit(s)) {
               <button type="button" class="ghost" (click)="openEdit(s)">Редагувати</button>
@@ -34,7 +36,7 @@
           </td>
         </tr>
       } @empty {
-        <tr><td colspan="4" class="muted">Освітніх програм ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
+        <tr><td colspan="5" class="muted">Освітніх програм ще немає &mdash; натисніть &laquo;Додати&raquo;.</td></tr>
       }
     </tbody>
   </table>
@@ -62,6 +64,11 @@
         <label>
           <span>Ступінь *</span>
           <app-search-select [options]="degreeOptions" [(ngModel)]="createForm['degree']" name="degree" />
+        </label>
+        <label>
+          <span>Тривалість навчання, семестрів *</span>
+          <input type="number" min="1" [(ngModel)]="createForm['durationSemesters']"
+                 name="durationSemesters" required />
         </label>
         <div class="actions">
           <button type="submit">Створити</button>
@@ -94,6 +101,11 @@
         <label>
           <span>Ступінь *</span>
           <app-search-select [options]="degreeOptions" [(ngModel)]="editForm['degree']" name="degree" />
+        </label>
+        <label>
+          <span>Тривалість навчання, семестрів *</span>
+          <input type="number" min="1" [(ngModel)]="editForm['durationSemesters']"
+                 name="durationSemesters" required />
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

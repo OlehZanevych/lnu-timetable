@@ -3,7 +3,9 @@
     <h2>Факультети</h2>
     <p class="muted">Оберіть факультет для роботи в його контексті</p>
   </div>
-  <button type="button" (click)="openCreate()">+ Додати факультет</button>
+  @if (canCreate()) {
+    <button type="button" (click)="openCreate()">+ Додати факультет</button>
+  }
 </div>
 
 @if (error()) {
@@ -62,7 +64,9 @@
         </ul>
       </div>
       <div class="building-list-actions">
-        <button type="button" class="ghost" (click)="openEdit(f)">Редагувати</button>
+        @if (canEdit(f)) {
+          <button type="button" class="ghost" (click)="openEdit(f)">Редагувати</button>
+        }
         <a [routerLink]="['/faculty', f.id]" class="btn-link">&#x0412;&#x0456;&#x0434;&#x043A;&#x0440;&#x0438;&#x0442;&#x0438; &#x2192;</a>
       </div>
     </li>

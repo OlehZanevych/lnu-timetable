@@ -39,9 +39,13 @@
       <span class="muted">
         задано {{ setCount(block) }} обмежень &middot; спеціальних {{ specificCount(block) }}
       </span>
-      <button type="button" class="ghost" [disabled]="!setCount(block) || block.saving()" (click)="clear(block)">
-        Очистити
-      </button>
+      <!-- «Очистити» prepares an update that drops every rule, so it goes with «Зберегти»: without
+           EDIT on the кафедра the card is a reading of the limits, not a form. -->
+      @if (canEdit()) {
+        <button type="button" class="ghost" [disabled]="!setCount(block) || block.saving()" (click)="clear(block)">
+          Очистити
+        </button>
+      }
     </div>
 
     @if (block.error()) { <p class="error">{{ block.error() }}</p> }
@@ -54,10 +58,13 @@
       </ul>
     }
 
+    <!-- Every field below carries [readonly] rather than being hidden: these boxes are the only
+         place the stored limits are written down, and somebody who may read a кафедра's навантаження
+         but not change it still needs to see the numbers the generator is working to. -->
     <div class="lc-scalars">
       <label [class.invalid]="invalid.has(MIN_HOURS)">
         <span>{{ label(MIN_HOURS) }}</span>
-        <input type="number" min="0" placeholder="не задано"
+        <input type="number" min="0" placeholder="не задано" [readonly]="!canEdit()"
                [ngModel]="value(block, MIN_HOURS)" (ngModelChange)="setValue(block, MIN_HOURS, $event)"
                [name]="'minH_' + block.id" [ngModelOptions]="{ standalone: true }" />
       </label>
@@ -69,12 +76,13 @@
           }
         </span>
         <input type="number" min="0" [placeholder]="defaultMaxHours() !== null ? defaultMaxHours() : 'не задано'"
+               [readonly]="!canEdit()"
                [ngModel]="value(block, MAX_HOURS)" (ngModelChange)="setValue(block, MAX_HOURS, $event)"
                [name]="'maxH_' + block.id" [ngModelOptions]="{ standalone: true }" />
       </label>
       <label [class.invalid]="invalid.has(MAX_COURSES)">
         <span>{{ label(MAX_COURSES) }}</span>
-        <input type="number" min="0" placeholder="не задано"
+        <input type="number" min="0" placeholder="не задано" [readonly]="!canEdit()"
                [ngModel]="value(block, MAX_COURSES)" (ngModelChange)="setValue(block, MAX_COURSES, $event)"
                [name]="'maxC_' + block.id" [ngModelOptions]="{ standalone: true }" />
       </label>
@@ -99,11 +107,11 @@
               <td>
                 <div class="lc-pair">
                   <input type="number" min="0" placeholder="мін" [attr.aria-label]="label(minKey)"
-                         [class.invalid]="invalid.has(minKey)"
+                         [class.invalid]="invalid.has(minKey)" [readonly]="!canEdit()"
                          [ngModel]="value(block, minKey)" (ngModelChange)="setValue(block, minKey, $event)"
                          [name]="minKey + '_' + block.id" [ngModelOptions]="{ standalone: true }" />
                   <input type="number" min="0" placeholder="макс" [attr.aria-label]="label(maxKey)"
-                         [class.invalid]="invalid.has(maxKey)"
+                         [class.invalid]="invalid.has(maxKey)" [readonly]="!canEdit()"
                          [ngModel]="value(block, maxKey)" (ngModelChange)="setValue(block, maxKey, $event)"
                          [name]="maxKey + '_' + block.id" [ngModelOptions]="{ standalone: true }" />
                 </div>
@@ -114,17 +122,19 @@
       </tbody>
     </table>
 
-    <div class="lc-actions">
-      <button type="button" [disabled]="!block.dirty() || block.saving() || issues.length" (click)="save(block)">
-        {{ block.saving() ? 'Збереження&hellip;' : 'Зберегти' }}
-      </button>
-      @if (block.dirty()) {
-        <button type="button" class="ghost" [disabled]="block.saving()" (click)="revert(block)">Скасувати</button>
-      }
-      @if (issues.length) {
-        <span class="muted lc-blocked">Збереження заблоковано до усунення суперечностей.</span>
-      }
-    </div>
+    @if (canEdit()) {
+      <div class="lc-actions">
+        <button type="button" [disabled]="!block.dirty() || block.saving() || issues.length" (click)="save(block)">
+          {{ block.saving() ? 'Збереження&hellip;' : 'Зберегти' }}
+        </button>
+        @if (block.dirty()) {
+          <button type="button" class="ghost" [disabled]="block.saving()" (click)="revert(block)">Скасувати</button>
+        }
+        @if (issues.length) {
+          <span class="muted lc-blocked">Збереження заблоковано до усунення суперечностей.</span>
+        }
+      </div>
+    }
   </div>
 } @empty {
   <p class="muted">

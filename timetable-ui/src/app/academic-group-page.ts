@@ -1,7 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { StudentPage } from './entity-pages';
 import { SearchSelect } from './search-select';
 import { STUDY_FORM_OPTIONS, toOptions } from './entities';
@@ -29,6 +31,7 @@ interface AcademicGroup {
 export class AcademicGroupDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
   private gql = inject(GraphqlService);
+  auth = inject(AuthService);
 
   readonly groupId: string = this.route.snapshot.paramMap.get('id')!;
   readonly studyFormOptions = toOptions(STUDY_FORM_OPTIONS);
@@ -40,6 +43,15 @@ export class AcademicGroupDetailPage implements OnInit {
   private nav = sectionNav<GroupSection>(
     () => ['/academic-group', this.groupId], () => SECTION_KEYS, () => 'info');
   readonly activeSection = this.nav.active;
+
+  /**
+   * This user's level on this академічна група, which «Редагувати» is worth drawing only at EDIT and
+   * above — the same expression `AcademicGroupList#canEdit` gates the very same `updateAcademicGroup`
+   * with, so the row in the table and the page it opens never disagree. Deleting a group is not
+   * offered here, so no FULL question arises. The «Студенти» tab asks its own, inside `<app-student>`.
+   */
+  groupLevel = signal<AccessLevel | null>(null);
+  canModifyGroup = computed(() => allows(maxLevel(this.auth.globalLevel(), this.groupLevel()), 'EDIT'));
 
   selectSection(key: GroupSection) { this.nav.select(key); }
 
@@ -60,7 +72,10 @@ export class AcademicGroupDetailPage implements OnInit {
     this.groupPreset = { academicGroupId: this.groupId };
   }
 
-  ngOnInit() { this.load(); }
+  ngOnInit() {
+    this.load();
+    this.auth.accessLevel('ACADEMIC_GROUP', this.groupId).subscribe((level) => this.groupLevel.set(level));
+  }
 
   studyFormLabel(v: string): string {
     return STUDY_FORM_OPTIONS.find((o) => o.value === v)?.label ?? v;

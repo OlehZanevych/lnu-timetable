@@ -1,9 +1,11 @@
 import { Directive, Input, OnChanges, OnInit, SimpleChanges, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { GqlVars, GraphqlService } from './graphql.service';
 import { EntityMeta, FieldMeta, entityBySingle, toOptions } from './entities';
 import { Option } from './search-select';
 import { AuthService } from './auth.service';
 import { AccessLevel, allows, maxLevel } from './access-level';
+import { AccessNeed, anywhereNeed } from './access-need';
 import { toResourceType } from './resource-type';
 
 /** Shared CRUD logic for every entity page. Subclasses only provide `meta`. */
@@ -82,8 +84,23 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   /**
    * Key/value pairs pre-filled into the create form when openCreate() is called.
    * Useful for pre-selecting a parent entity (e.g. { facultyId: '1' }).
+   *
+   * It is a setter rather than a plain field because these values are also the scope «+ Додати» is
+   * authorized against, and hosts change them: the faculty page's «Дисципліни» tab narrows
+   * `coursePreset` to a кафедра as soon as one is chosen in the sub-filter, and a завідувач holding
+   * that кафедра — and nothing on the faculty — may create a discipline only once it is. Comparing
+   * the serialised value rather than the reference is what keeps that from re-asking on every change
+   * detection pass: the host builds the object in a getter, so it is a new object every read.
    */
-  @Input() presets: Record<string, string> = {};
+  @Input()
+  set presets(val: Record<string, string>) {
+    const next = val ?? {};
+    const changed = JSON.stringify(next) !== JSON.stringify(this._presets);
+    this._presets = next;
+    if (changed && this.initialized) this.resolveCreateAccess();
+  }
+  get presets(): Record<string, string> { return this._presets; }
+  private _presets: Record<string, string> = {};
 
   /**
    * Scopes the option list for specific ref fields.
@@ -115,12 +132,64 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   /** The current user's access level per row id of this page's entity type; absent means none. */
   accessById = signal<Map<string, AccessLevel>>(new Map());
 
-  /** Whether the "+ Add" control should be shown at all — a coarse, cheap heuristic (any admin or
-   *  any delegated permission at all); the actual create mutation is still authoritatively checked
-   *  server-side regardless, so this only ever hides the button, never grants access. */
-  get canShowCreate(): boolean {
-    return this.auth.isAdmin() || (this.auth.currentUser()?.permissions?.length ?? 0) > 0;
+  /** This entity's `permissions.resource_type` — `WorkingCurriculumItem` → `WORKING_CURRICULUM_ITEM`. */
+  get resourceType(): string {
+    return toResourceType(this.meta.name);
   }
+
+  /**
+   * Whether «+ Додати» is worth showing, resolved once the answer is known.
+   *
+   * It used to be «this account holds at least one grant, anywhere», which is how a викладач whose
+   * grant was one кафедра was shown «+ Додати» on «Корпуси». Two questions replaced it, and which one
+   * applies depends on how the table is being used:
+   *
+   * - **embedded under a parent** (the rooms of a faculty, the lecturers of a department), where
+   *   `presets` already name the parent the new row would hang off: the level held over *that* row,
+   *   which is exactly the edge `PermissionEvaluator#levelForNew` walks on the server;
+   * - **standalone**, where the parent is chosen inside the form and there is nothing to check yet:
+   *   whether a row of this type could be created anywhere at all.
+   */
+  createAllowed = signal(false);
+
+  get canShowCreate(): boolean {
+    return this.createAllowed();
+  }
+
+  /**
+   * Whether this table is a screen of its own rather than a tab inside one — declared by the route
+   * (`data.gatePage`), so an embedded list never hides itself. A faculty's «Аудиторії» tab is worth
+   * reading whether or not the reader may edit anything in it; `/class-start-time`, which is a table
+   * and an «+ Додати» and nothing else, is not.
+   */
+  private readonly gatesWholePage = inject(ActivatedRoute).snapshot.data['gatePage'] === true;
+
+  private createChecked = signal(false);
+  private rowsChecked = signal(false);
+
+  /**
+   * What the «Немає доступу» card names when this page refuses. Cached, so the binding hands the
+   * same object back every read: a fresh one each time is a re-render loop in front of anything that
+   * reacts to its inputs, and `meta` is a subclass field, so it cannot be built in a field
+   * initialiser here.
+   */
+  private cachedPageNeed: AccessNeed | null = null;
+
+  get pageNeed(): AccessNeed {
+    return (this.cachedPageNeed ??= anywhereNeed(this.resourceType));
+  }
+
+  /**
+   * True when this standalone table has nothing to offer: the caller can create no row of this type
+   * and can edit none of the rows it holds. Both halves matter — somebody granted one single
+   * `ClassStartTimeSet` cannot create another, and would be shown an empty refusal by the first test
+   * alone.
+   */
+  pageDenied = computed(() =>
+    this.gatesWholePage
+    && this.createChecked() && this.rowsChecked()
+    && !this.createAllowed()
+    && !this.rows().some((row) => this.canEdit(row)));
 
   /**
    * The route to a row's own page, or null when this entity has none. Declared once per entity in
@@ -155,6 +224,40 @@ export abstract class BaseEntity implements OnInit, OnChanges {
     this.initialized = true;
     this.load();
     this.loadOptions();
+    this.resolveCreateAccess();
+  }
+
+  /**
+   * Answers "may this caller add one of these here" against the published cascade rather than against
+   * a list of parent fields kept here — `accessModel` says which of this entity's fields name a
+   * permission parent, so a `presets` map that happens to fix some other column (a filter, a default)
+   * is not mistaken for a scope.
+   */
+  private resolveCreateAccess() {
+    const type = this.resourceType;
+    this.auth.accessModel().subscribe({
+      next: (model) => {
+        const node = model.find((n) => n.resourceType === type);
+        const named = (node?.parents ?? []).filter((parent) => this.presets[parent.field]);
+        if (named.length === 0) {
+          this.createAllowed.set(this.auth.canCreateType(type));
+          this.createChecked.set(true);
+          return;
+        }
+        this.auth.levelForNew(type, this.presets).subscribe((level) => {
+          this.createAllowed.set(allows(level, 'EDIT'));
+          this.createChecked.set(true);
+        });
+      },
+      // Without the model there is no way to tell which presets name a parent, but the coarser
+      // question can still be answered from the session — and answering it is much better than
+      // silently deciding no: an administrator who lost one request would otherwise lose every
+      // «+ Додати» until they reloaded.
+      error: () => {
+        this.createAllowed.set(this.auth.canCreateType(type));
+        this.createChecked.set(true);
+      }
+    });
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -216,10 +319,15 @@ export abstract class BaseEntity implements OnInit, OnChanges {
   private loadAccessLevels(rows: any[]) {
     // A university-wide MANAGE grant already answers every row; anything weaker still has to ask,
     // because a grant on an individual row can be stronger than the global one.
-    if (this.auth.globalLevel() === 'MANAGE' || rows.length === 0) return;
-    const resourceType = toResourceType(this.meta.name);
-    this.auth.accessLevels(resourceType, rows.map((r) => String(r.id)))
-      .subscribe((levels) => this.accessById.set(levels));
+    if (this.auth.globalLevel() === 'MANAGE' || rows.length === 0) {
+      this.rowsChecked.set(true);
+      return;
+    }
+    this.auth.accessLevels(this.resourceType, rows.map((r) => String(r.id)))
+      .subscribe({
+        next: (levels) => { this.accessById.set(levels); this.rowsChecked.set(true); },
+        error: () => this.rowsChecked.set(true)
+      });
   }
 
   private loadOptions() {

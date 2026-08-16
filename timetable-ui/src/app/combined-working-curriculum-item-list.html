@@ -41,9 +41,14 @@
       </tbody>
     </table>
 
-    <div class="merge-actions">
-      <button type="button" [disabled]="!canMerge(g)" (click)="merge(g)">Об'єднати вибрані ({{ g.selected.size }})</button>
-    </div>
+    <!-- canMerge() only counts the ticked rows; canCombine() is the right to write the об'єднання.
+         Without it the пропозиція stays on the page as a reading — these позиції could be combined
+         by whoever maintains the кафедра — with nothing here to do it. -->
+    @if (canCombine()) {
+      <div class="merge-actions">
+        <button type="button" [disabled]="!canMerge(g)" (click)="merge(g)">Об'єднати вибрані ({{ g.selected.size }})</button>
+      </div>
+    }
   </div>
 }
 
@@ -57,7 +62,9 @@
   <div class="card wci-item-card">
     <div class="wci-item-header">
       <strong>Об'єднання {{ i + 1 }}</strong>
-      <button type="button" class="ghost danger" (click)="remove(c)">Видалити об'єднання</button>
+      @if (canDelete()) {
+        <button type="button" class="ghost danger" (click)="remove(c)">Видалити об'єднання</button>
+      }
     </div>
 
     <table class="wci-table">

@@ -1,6 +1,7 @@
 package org.lnu.timetable.security;
 
 import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
+import org.lnu.timetable.framework.metadata.PermissionTypeGraph;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,12 +31,14 @@ import org.springframework.stereotype.Service;
 public class PermissionService {
 
     private final EntityMetadataRegistry registry;
+    private final PermissionTypeGraph typeGraph;
     private final PermissionGraphRepository graphRepo;
     private final PermissionRepository permissionRepo;
 
-    public PermissionService(EntityMetadataRegistry registry, PermissionGraphRepository graphRepo,
-                              PermissionRepository permissionRepo) {
+    public PermissionService(EntityMetadataRegistry registry, PermissionTypeGraph typeGraph,
+                              PermissionGraphRepository graphRepo, PermissionRepository permissionRepo) {
         this.registry = registry;
+        this.typeGraph = typeGraph;
         this.graphRepo = graphRepo;
         this.permissionRepo = permissionRepo;
     }
@@ -47,7 +50,7 @@ public class PermissionService {
      * wasteful: it starts with an empty cache.
      */
     public PermissionEvaluator newEvaluator(Long userId) {
-        return new PermissionEvaluator(userId, registry, graphRepo, permissionRepo);
+        return new PermissionEvaluator(userId, registry, typeGraph, graphRepo, permissionRepo);
     }
 
     public String resourceTypeOf(Class<?> entityClass) {

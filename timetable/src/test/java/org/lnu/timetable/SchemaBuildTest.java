@@ -11,14 +11,17 @@ import org.lnu.timetable.config.SchedulingSchemaConfig;
 import org.lnu.timetable.framework.config.MutationDefinition;
 import org.lnu.timetable.framework.config.QueryDefinition;
 import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
+import org.lnu.timetable.framework.metadata.PermissionTypeGraph;
 import org.lnu.timetable.framework.metadata.RelationMetadata;
 import org.lnu.timetable.framework.schema.DataFetcherProvider;
 import org.lnu.timetable.framework.schema.DynamicGraphQLSchemaBuilder;
+import org.lnu.timetable.security.AccessModelSchema;
 import org.lnu.timetable.security.SelfServiceDataFetchers;
 import org.lnu.timetable.security.SelfServiceSchema;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SchemaBuildTest {
@@ -43,7 +46,7 @@ class SchemaBuildTest {
                 new PeopleSchemaConfig(),
                 new SchedulingSchemaConfig()
             ),
-            noop, null, null, List.of(selfService())
+            noop, null, null, List.of(selfService(), new AccessModelSchema(new PermissionTypeGraph(registry)))
         );
         String sdl = new SchemaPrinter().print(schema);
         System.out.println(sdl);
@@ -93,6 +96,45 @@ class SchemaBuildTest {
         assertTrue(sdl.contains("enum RegistrationRequestStatus"));
         assertTrue(sdl.contains("NOT_ELIGIBLE"));
         assertTrue(sdl.contains("enum PersonRole"));
+
+        // The published permission cascade, and the two fields on `me` that are read against it.
+        // Building the graph at all is half the assertion: PermissionTypeGraph is constructed from
+        // the registry above, and EntityMetadataRegistry now refuses an entity that declares neither
+        // a permission parent nor @PermissionRoot — so a forgotten edge fails here, in a test that
+        // needs no database, rather than at the first denial in production.
+        assertTrue(sdl.contains("accessModel: [ResourceTypeAccess!]!"));
+        assertTrue(sdl.contains("type ResourceTypeAccess"));
+        assertTrue(sdl.contains("isRoot: Boolean!"));
+        assertTrue(sdl.contains("creatableResourceTypes: [String!]!"));
+        assertTrue(sdl.contains("globalLevel: AccessLevel"));
+    }
+
+    /**
+     * The cascade, read the way the client reads it. BUILDING is a declared {@code @PermissionRoot}
+     * — the entity behind the bug this was written for, where a викладач holding one кафедра was
+     * shown «Редагувати» on every корпус — so nothing but a GLOBAL grant may create one, and a grant
+     * on a факультет must not put it within reach. A grant on a FACULTY, meanwhile, has to reach a
+     * DEPARTMENT and everything under it, or half the client's screens would hide themselves from
+     * the deanery who owns them.
+     */
+    @Test
+    void publishesThePermissionCascadeByType() {
+        PermissionTypeGraph graph = new PermissionTypeGraph(new EntityMetadataRegistry());
+
+        assertTrue(graph.node("BUILDING").root());
+        assertTrue(graph.node("ACADEMIC_DEGREE").root());
+        assertFalse(graph.node("FACULTY").root());
+
+        assertTrue(graph.coveredBy("FACULTY").contains("DEPARTMENT"));
+        assertTrue(graph.coveredBy("FACULTY").contains("LECTURER_WORKLOAD"));
+        assertFalse(graph.coveredBy("FACULTY").contains("BUILDING"));
+
+        // Holding EDIT on a кафедра: лектори and their навантаження, yes; корпуси and факультети, no.
+        assertTrue(graph.creatableFrom(List.of("DEPARTMENT")).contains("LECTURER"));
+        assertFalse(graph.creatableFrom(List.of("DEPARTMENT")).contains("BUILDING"));
+        assertFalse(graph.creatableFrom(List.of("DEPARTMENT")).contains("FACULTY"));
+        // A root is never creatable from any grant — only from GLOBAL, which the caller handles.
+        assertFalse(graph.creatableFrom(graph.allTypes()).contains("BUILDING"));
     }
 
     /**

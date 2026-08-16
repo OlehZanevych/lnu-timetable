@@ -1,5 +1,9 @@
 @let m = meta;
 
+@if (pageDenied()) {
+  <app-no-access [need]="pageNeed" />
+} @else {
+
 <div class="page-header">
   <div>
     <h2>{{ m.label }}</h2>
@@ -58,8 +62,10 @@
           <td [attr.colspan]="tableFields.length + 1" class="muted">
             @if (filteredToNothing()) {
               За запитом «{{ search }}» нічого не знайдено.
-            } @else {
+            } @else if (canShowCreate) {
               Даних ще немає &mdash; натисніть &laquo;Додати&raquo;.
+            } @else {
+              Даних ще немає.
             }
           </td>
         </tr>
@@ -128,4 +134,5 @@
       </form>
     </div>
   </div>
+}
 }

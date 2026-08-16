@@ -45,7 +45,10 @@
           лише семестр {{ fixed }}
         </span>
       }
-      <button type="button" class="ghost" [disabled]="!canAddItem(block)" (click)="addItem(block)">+ Семестр</button>
+      <!-- canAddItem() is about semesters left to plan, canModify() about the right to plan them. -->
+      @if (canModify()) {
+        <button type="button" class="ghost" [disabled]="!canAddItem(block)" (click)="addItem(block)">+ Семестр</button>
+      }
     </div>
 
     @for (item of block.items(); track item.key) {
@@ -53,9 +56,11 @@
         <div class="ce-item-header">
           <span>{{ itemTitle(item) }}</span>
           <span class="muted">Всього годин: {{ totalHours(item) }}</span>
-          <button type="button" class="ghost danger" [disabled]="item.saving()" (click)="removeItem(block, item)">
-            {{ item.id ? 'Видалити' : 'Прибрати' }}
-          </button>
+          @if (canRemoveItem(item)) {
+            <button type="button" class="ghost danger" [disabled]="item.saving()" (click)="removeItem(block, item)">
+              {{ item.id ? 'Видалити' : 'Прибрати' }}
+            </button>
+          }
         </div>
 
         @if (item.error()) { <p class="error">{{ item.error() }}</p> }
@@ -66,19 +71,27 @@
               Семестр *
               @if (isOffSemester(block, item)) { <em class="ce-hours-flag">не відповідає дисципліні</em> }
             </span>
-            <app-search-select [options]="semesterOptions(block, item)" placeholder="— не обрано —"
-                               [ngModel]="item.semester()" (ngModelChange)="setField(item, 'semester', $event)"
-                               [name]="'semester_' + item.key" [ngModelOptions]="{ standalone: true }" />
+            @if (canModify()) {
+              <app-search-select [options]="semesterOptions(block, item)" placeholder="— не обрано —"
+                                 [ngModel]="item.semester()" (ngModelChange)="setField(item, 'semester', $event)"
+                                 [name]="'semester_' + item.key" [ngModelOptions]="{ standalone: true }" />
+            } @else {
+              <span class="ce-readonly">{{ item.semester() || '—' }}</span>
+            }
           </label>
           <label>
             <span>Форма контролю *</span>
-            <app-search-select [options]="CONTROL_FORM_SELECT_OPTIONS" placeholder="— не обрано —"
-                               [ngModel]="item.controlForm()" (ngModelChange)="setField(item, 'controlForm', $event)"
-                               [name]="'controlForm_' + item.key" [ngModelOptions]="{ standalone: true }" />
+            @if (canModify()) {
+              <app-search-select [options]="CONTROL_FORM_SELECT_OPTIONS" placeholder="— не обрано —"
+                                 [ngModel]="item.controlForm()" (ngModelChange)="setField(item, 'controlForm', $event)"
+                                 [name]="'controlForm_' + item.key" [ngModelOptions]="{ standalone: true }" />
+            } @else {
+              <span class="ce-readonly">{{ controlFormLabel(item.controlForm()) }}</span>
+            }
           </label>
           <label>
             <span>ECTS</span>
-            <input type="number" min="0" placeholder="не задано"
+            <input type="number" min="0" placeholder="не задано" [readonly]="!canModify()"
                    [ngModel]="item.ectsCredits()" (ngModelChange)="setField(item, 'ectsCredits', $event)"
                    [name]="'ects_' + item.key" [ngModelOptions]="{ standalone: true }" />
           </label>
@@ -97,7 +110,7 @@
                   {{ row.label }}
                   @if (willDelete(row)) { <em class="ce-hours-flag">буде вилучено</em> }
                 </span>
-                <input type="number" min="0" placeholder="не задано"
+                <input type="number" min="0" placeholder="не задано" [readonly]="!canModify()"
                        [ngModel]="row.hours()" (ngModelChange)="setHours(item, row, $event)"
                        [name]="'hours_' + item.key + '_' + row.hourType" [ngModelOptions]="{ standalone: true }" />
               </label>
@@ -105,14 +118,18 @@
           </div>
         </div>
 
-        <div class="ce-item-actions">
-          <button type="button" [disabled]="!item.dirty() || item.saving()" (click)="save(block, item)">
-            {{ item.saving() ? 'Збереження&hellip;' : (item.id ? 'Зберегти' : 'Створити') }}
-          </button>
-          @if (item.dirty()) {
-            <button type="button" class="ghost" [disabled]="item.saving()" (click)="revertItem(block, item)">Скасувати</button>
-          }
-        </div>
+        <!-- Without «Редагування» there is nothing to save, so the block stays on the page as a
+             reading of the план rather than as a form. -->
+        @if (canModify()) {
+          <div class="ce-item-actions">
+            <button type="button" [disabled]="!item.dirty() || item.saving()" (click)="save(block, item)">
+              {{ item.saving() ? 'Збереження&hellip;' : (item.id ? 'Зберегти' : 'Створити') }}
+            </button>
+            @if (item.dirty()) {
+              <button type="button" class="ghost" [disabled]="item.saving()" (click)="revertItem(block, item)">Скасувати</button>
+            }
+          </div>
+        }
       </div>
     } @empty {
       <p class="muted ce-course-empty">Позицій навчального плану для цієї дисципліни ще немає.</p>

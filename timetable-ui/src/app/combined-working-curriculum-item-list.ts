@@ -1,6 +1,8 @@
 import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { HOUR_TYPE_OPTIONS } from './entities';
 import { compareUk } from './sort';
 import { CourseTagRef, courseLabel } from './course-label';
@@ -77,6 +79,7 @@ interface CombinedItem {
 })
 export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   @Input() departmentId!: string;
 
@@ -93,6 +96,35 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
   /** Proposed merge groups, built from the department's not-yet-combined working curriculum items. */
   proposals = computed(() => this.buildProposals(this.rawItems()));
 
+  // ── Access ───────────────────────────────────────────────────────────────
+
+  /**
+   * This account's level on the кафедра whose позиції are being combined here.
+   *
+   * Both proposals and existing об'єднання are read through this one кафедра, and an об'єднання is
+   * only ever made of its own позиції — so the grant on the кафедра is the grant that authorises
+   * both mutations, and one question answers the whole page.
+   */
+  private departmentLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the кафедра's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.departmentLevel()));
+
+  /** Об'єднання creates a combined_working_curriculum_item, so it needs «Редагування». */
+  canCombine = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /** Taking an об'єднання apart deletes that row, and deletions need «Повний доступ». */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
+
+  private loadPermissions() {
+    // Answering with the previous кафедра's level while the new answer is in flight would offer its
+    // controls over somebody else's позиції for a moment, so the old one is dropped first.
+    this.departmentLevel.set(null);
+    if (!this.departmentId) return;
+    this.auth.accessLevel('DEPARTMENT', this.departmentId)
+      .subscribe((level) => this.departmentLevel.set(level));
+  }
+
   private initialized = false;
 
   ngOnInit() {
@@ -107,6 +139,7 @@ export class CombinedWorkingCurriculumItemList implements OnInit, OnChanges {
   private loadAll() {
     this.loadItems();
     this.loadCombined();
+    this.loadPermissions();
   }
 
   private loadItems() {

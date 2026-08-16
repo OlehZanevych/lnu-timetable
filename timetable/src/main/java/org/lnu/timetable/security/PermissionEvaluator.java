@@ -5,6 +5,7 @@ import org.lnu.timetable.framework.metadata.EntityMetadata;
 import org.lnu.timetable.framework.metadata.EntityMetadataRegistry;
 import org.lnu.timetable.framework.metadata.PermissionJoinParentEdge;
 import org.lnu.timetable.framework.metadata.PermissionParentEdge;
+import org.lnu.timetable.framework.metadata.PermissionTypeGraph;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -67,6 +68,7 @@ public class PermissionEvaluator {
 
     private final Long userId;
     private final EntityMetadataRegistry registry;
+    private final PermissionTypeGraph typeGraph;
     private final PermissionGraphRepository graphRepo;
     private final PermissionRepository permissionRepo;
 
@@ -76,10 +78,11 @@ public class PermissionEvaluator {
     /** Effective level per node, for every node whose full ancestry has already been walked. */
     private final Map<ResourceRef, AccessLevel> resolved = new HashMap<>();
 
-    PermissionEvaluator(Long userId, EntityMetadataRegistry registry, PermissionGraphRepository graphRepo,
-                        PermissionRepository permissionRepo) {
+    PermissionEvaluator(Long userId, EntityMetadataRegistry registry, PermissionTypeGraph typeGraph,
+                        PermissionGraphRepository graphRepo, PermissionRepository permissionRepo) {
         this.userId = userId;
         this.registry = registry;
+        this.typeGraph = typeGraph;
         this.graphRepo = graphRepo;
         this.permissionRepo = permissionRepo;
         this.grants = loadGrants().cache();
@@ -135,6 +138,33 @@ public class PermissionEvaluator {
     public Mono<Boolean> canDelegateSomewhere() {
         return grants.map(g -> AccessLevel.allows(g.global(), AccessLevel.MANAGE)
             || g.byResource().values().stream().anyMatch(level -> level.allows(AccessLevel.MANAGE)));
+    }
+
+    /**
+     * Which kinds of thing this caller could create <em>somewhere</em> — the answer behind every
+     * «+ Додати» button and every page that exists only to add rows.
+     *
+     * <p>It is a question about types, not rows, and that is what makes it cheap: no row is named, so
+     * nothing is walked and nothing is read beyond the grants already loaded. A grant at
+     * {@link AccessLevel#EDIT} or above covers its own type and everything below it
+     * ({@link PermissionTypeGraph#coveredBy}), and a type is creatable when one of its foreign-key
+     * parents is in that set — the same edge {@link #levelForNew} checks, one level up.
+     *
+     * <p>It is deliberately an over-approximation: it says a create of this kind is possible
+     * somewhere, not that it is possible here. The client uses it to decide whether a button or a
+     * whole screen is worth showing; the write itself is still authorized against the row it names.
+     * The alternative the client had before was «this account holds some grant», which showed
+     * «+ Додати корпус» to a викладач whose grant was one кафедра.
+     */
+    public Mono<Set<String>> creatableResourceTypes() {
+        return grants.map(g -> {
+            if (AccessLevel.allows(g.global(), AccessLevel.EDIT)) return typeGraph.allTypes();
+            List<String> editable = g.byResource().entrySet().stream()
+                .filter(e -> e.getValue().allows(AccessLevel.EDIT))
+                .map(e -> e.getKey().resourceType())
+                .toList();
+            return typeGraph.creatableFrom(editable);
+        });
     }
 
     /** The caller's effective level on one row, or null if they have no access to it at all. */

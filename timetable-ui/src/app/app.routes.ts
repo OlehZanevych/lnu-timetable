@@ -160,8 +160,14 @@ const ENTITY_TABLE_ROUTES: Routes = [
   // Building is the one entity whose table is a page of tiles instead — BuildingHome, not the
   // generic component. It is listed here rather than above because /building is its table's path.
   { path: 'building', pathMatch: 'full', component: BuildingHome, canActivate: [authGuard] },
+  // `gatePage` is what tells BaseEntity that this table *is* the screen, and it is set only for the
+  // tables `entity-pages.ts` marks `editorsOnly`: a standalone screen of nothing but rows and an
+  // «+ Додати» renders «Немає доступу» instead when the caller can neither add a row nor edit one.
+  // The same components embedded in a faculty or department page carry no such data, so a tab stays
+  // readable either way — reading is open to any signed-in user by design.
   ...ENTITY_PAGES.map((p) => ({
-    path: kebabCase(p.single), pathMatch: 'full' as const, component: p.component, canActivate: [authGuard]
+    path: kebabCase(p.single), pathMatch: 'full' as const, component: p.component,
+    canActivate: [authGuard], data: { gatePage: p.editorsOnly === true }
   })),
 ];
 

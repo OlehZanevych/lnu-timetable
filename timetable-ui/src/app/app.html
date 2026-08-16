@@ -31,15 +31,36 @@
       <a class="nav-timetable" routerLink="/me" routerLinkActive="active">📅 Мій кабінет</a>
     }
 
+    <!-- Everything under «Загальне» is a screen for maintaining reference data, and each is hidden
+         from an account that could neither add a row nor edit one it already holds — the same test
+         the screen itself applies, so a visible link always opens something usable. «Корпуси» stays:
+         it is also how a reader reaches a корпус and its аудиторії, and its own buttons are gated. -->
     <h3>Загальне</h3>
     <a routerLink="/building" routerLinkActive="active">Корпуси</a>
-    <a routerLink="/building-travel-times" routerLinkActive="active">Час переходу між корпусами</a>
-    <a routerLink="/room-group" routerLinkActive="active">Групи аудиторій</a>
-    <a routerLink="/abstract-room" routerLinkActive="active">Абстрактні аудиторії</a>
-    <a routerLink="/class-start-time-set" routerLinkActive="active">Набори часів занять</a>
-    <a routerLink="/class-start-time" routerLinkActive="active">Часи початку занять</a>
-    <a routerLink="/academic-degree" routerLinkActive="active">Наукові ступені</a>
-    <a routerLink="/global-properties" routerLinkActive="active">Глобальні властивості</a>
+    <!-- `canCreateType` rather than `canReachType` for this one: the matrix is edited per cell, and a
+         cell is governed by the корпуси at its two ends, so a grant naming one travel-time row gives
+         its holder nothing to do here. Asking the wider question would offer a link to «Немає доступу». -->
+    @if (auth.canCreateType('BUILDING_TRAVEL_TIME')) {
+      <a routerLink="/building-travel-times" routerLinkActive="active">Час переходу між корпусами</a>
+    }
+    @if (auth.canReachType('ROOM_GROUP')) {
+      <a routerLink="/room-group" routerLinkActive="active">Групи аудиторій</a>
+    }
+    @if (auth.canReachType('ABSTRACT_ROOM')) {
+      <a routerLink="/abstract-room" routerLinkActive="active">Абстрактні аудиторії</a>
+    }
+    @if (auth.canReachType('CLASS_START_TIME_SET')) {
+      <a routerLink="/class-start-time-set" routerLinkActive="active">Набори часів занять</a>
+    }
+    @if (auth.canReachType('CLASS_START_TIME')) {
+      <a routerLink="/class-start-time" routerLinkActive="active">Часи початку занять</a>
+    }
+    @if (auth.canReachType('ACADEMIC_DEGREE')) {
+      <a routerLink="/academic-degree" routerLinkActive="active">Наукові ступені</a>
+    }
+    @if (auth.allows(auth.globalLevel(), 'EDIT')) {
+      <a routerLink="/global-properties" routerLinkActive="active">Глобальні властивості</a>
+    }
 
     @if (auth.isAdmin()) {
       <h3>Адміністрування</h3>

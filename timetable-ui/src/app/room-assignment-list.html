@@ -65,7 +65,18 @@
       </div>
     </div>
 
-    @if (form(c); as f) {
+    <!-- Without EDIT on the факультет the card states its placement instead of offering it: the
+         three pickers are the only rendering of where a class is held, so dropping them without a
+         sentence in their place would leave the board unable to answer the question it exists
+         for — «яким заняттям ще нічого не призначено?». -->
+    @if (!canEdit()) {
+      <div class="tt-block-form">
+        <label class="ra-field-wide">
+          <span>Де проходить заняття</span>
+          <span class="tt-block-place">{{ placementLabel(c) }}</span>
+        </label>
+      </div>
+    } @else if (form(c); as f) {
       <div class="ra-mode">
         <span>Де проходить заняття:</span>
         <label class="gen-mode">
@@ -133,6 +144,9 @@
           <button type="button" [disabled]="!canSave(c)" (click)="save(c)">
             {{ saving().has(c.workloadId) ? 'Збереження…' : 'Зберегти' }}
           </button>
+          @if (saveBlockedReason(c); as reason) {
+            <span class="muted lc-blocked">{{ reason }}</span>
+          }
         </div>
       </div>
     }

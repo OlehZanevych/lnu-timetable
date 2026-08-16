@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
 import { AccessLevel, allows, maxLevel } from './access-level';
+import { AccessNeed, anywhereNeed, rowNeed } from './access-need';
+import { AccessGate } from './access-gate';
 import { ResourceAccessPanel } from './resource-access';
 import { SearchSelect, Option } from './search-select';
 import { SEMESTER_PARITY_OPTIONS } from './entities';
@@ -35,7 +37,23 @@ export type FacultySection =
   | 'groupConstraints' | 'roomConstraints'
   | 'access';
 
-interface SectionDef { key: FacultySection; label: string; group: string; }
+/**
+ * One tab. `writes` names the kind of thing a tab exists to maintain, and is what decides whether the
+ * tab is offered: the nav hides it and the body refuses with «Немає доступу» unless this account
+ * could reach something of that kind — something to add, or something already theirs to edit.
+ *
+ * It is deliberately not «EDIT on this факультет». The rows behind these tabs belong further down:
+ * «Формування розкладу» writes TimetableEntry, which hangs off a навантаження and therefore off a
+ * кафедра, and a завідувач holding that кафедра has always been allowed to place their own classes.
+ * Gating the tab on the факультет would have taken a screen away from the person whose work it is,
+ * which is the opposite of the point. The type-level answer over-shows instead — a завідувач sees the
+ * tab on a faculty where nothing is theirs — and everything inside it is still gated on the row.
+ *
+ * Declared here rather than as a list of keys next to the tab strip because the strip and the switch
+ * in the template are two places that must agree about which tab is which; a table they both read
+ * cannot drift apart when the next scheduling tab is added.
+ */
+interface SectionDef { key: FacultySection; label: string; group: string; writes?: string; }
 
 interface Faculty {
   id: string;
@@ -58,10 +76,12 @@ const SECTIONS: SectionDef[] = [
   { key: 'courses',                label: 'Дисципліни',           group: 'Навчальні плани' },
   // "Розклад" runs in the order the work does: say where each class may be held and when its
   // groups and rooms are unavailable, then generate a timetable that obeys all three, then read it.
-  { key: 'roomAssignment',         label: 'Призначення аудиторій', group: 'Розклад' },
-  { key: 'groupConstraints',       label: 'Обмеження груп',       group: 'Розклад' },
-  { key: 'roomConstraints',        label: 'Обмеження аудиторій',  group: 'Розклад' },
-  { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад' },
+  // The first four of them are that work, and belong to whoever does it; «Розклад факультету» is the
+  // result everybody reads, so it is the one tab of the five that is not marked as writing data.
+  { key: 'roomAssignment',         label: 'Призначення аудиторій', group: 'Розклад', writes: 'LECTURER_WORKLOAD' },
+  { key: 'groupConstraints',       label: 'Обмеження груп',       group: 'Розклад', writes: 'ACADEMIC_GROUP' },
+  { key: 'roomConstraints',        label: 'Обмеження аудиторій',  group: 'Розклад', writes: 'ROOM' },
+  { key: 'timetable',              label: 'Формування розкладу',  group: 'Розклад', writes: 'TIMETABLE_ENTRY' },
   { key: 'facultyTimetable',       label: 'Розклад факультету',   group: 'Розклад' },
   // Only rendered for someone holding «Керування доступом» here — see canManageAccess below and
   // the panel's own guard. The деканат delegates their own faculty from this tab; there is no
@@ -69,7 +89,13 @@ const SECTIONS: SectionDef[] = [
   { key: 'access',                 label: 'Доступ',               group: 'Факультет' },
 ];
 
-/** Which slugs `/faculty/:id/:section` recognises — see `section-route.ts`. */
+/**
+ * Which slugs `/faculty/:id/:section` recognises — see `section-route.ts`. Every tab, including the
+ * ones a given reader is not offered: a slug missing from here is not a refused address but an
+ * unknown one, and `sectionNav` answers those by silently opening «Інформація». Somebody handed
+ * `/faculty/3/timetable` should land on the розклад tab and be told what access it needs, not be
+ * quietly moved somewhere else and left to wonder whether the link was wrong.
+ */
 const SECTION_KEYS: FacultySection[] = SECTIONS.map((s) => s.key);
 
 @Component({
@@ -79,7 +105,7 @@ const SECTION_KEYS: FacultySection[] = SECTIONS.map((s) => s.key);
     RouterLink, FormsModule, SearchSelect,
     DepartmentList, DegreeProgramList, AcademicGroupList, RoomAssignmentList, FacultyTimetableList,
     TimetableConstraintList, TimetableView, RoomPage, RoomGroupPage, CoursePage, CombinedGroupPage,
-    ResourceAccessPanel
+    ResourceAccessPanel, AccessGate
   ]
 })
 export class FacultyPage implements OnInit {
@@ -101,6 +127,26 @@ export class FacultyPage implements OnInit {
 
   /** Whether the «Доступ» tab is offered — MANAGE on this faculty, or university-wide. */
   canManageAccess = computed(() => allows(maxLevel(this.auth.globalLevel(), this.facultyLevel()), 'MANAGE'));
+
+  /**
+   * The requirement behind one tab, in the shape `AccessGate` resolves — what each writing tab's body
+   * is wrapped in, so that a pasted link to one of them is answered on the screen instead of by a tab
+   * strip that simply does not mention it.
+   *
+   * Cached per key, because the gate re-asks whenever the bound need changes identity and a freshly
+   * built object on every change-detection pass would never stop re-asking.
+   */
+  private readonly sectionNeeds = new Map<string, AccessNeed>();
+
+  sectionNeed(key: FacultySection): AccessNeed {
+    let need = this.sectionNeeds.get(key);
+    if (!need) {
+      const writes = SECTIONS.find((s) => s.key === key)?.writes;
+      need = writes ? anywhereNeed(writes) : rowNeed('FACULTY', this.facultyId);
+      this.sectionNeeds.set(key, need);
+    }
+    return need;
+  }
 
   faculty = signal<Faculty | null>(null);
   error = signal('');
@@ -290,7 +336,11 @@ export class FacultyPage implements OnInit {
 
   sectionsForGroup(group: string): SectionDef[] {
     return SECTIONS.filter((s) => s.group === group)
-      .filter((s) => s.key !== 'access' || this.canManageAccess());
+      .filter((s) => s.key !== 'access' || this.canManageAccess())
+      // A tab that exists only to enter data has nothing to show a reader who may not enter any:
+      // every control on it would be refused, so offering it is offering «Немає доступу» under a
+      // name that promises розклад. The address still works — see SECTION_KEYS.
+      .filter((s) => !s.writes || this.auth.canReachType(s.writes));
   }
 
   selectSection(key: FacultySection) { this.nav.select(key); }

@@ -34,21 +34,32 @@
             (click)="selectSection('combinedItems')">
       &#x1F517; Об'єднані позиції РНП
     </button>
-    <button type="button" class="faculty-nav-item"
-            [class.active]="activeSection() === 'constraints'"
-            (click)="selectSection('constraints')">
-      &#x1F6E1; Обмеження навантаження
-    </button>
-    <button type="button" class="faculty-nav-item"
-            [class.active]="activeSection() === 'timetableConstraints'"
-            (click)="selectSection('timetableConstraints')">
-      &#x1F553; Обмеження розкладу
-    </button>
-    <button type="button" class="faculty-nav-item"
-            [class.active]="activeSection() === 'workloads'"
-            (click)="selectSection('workloads')">
-      &#x1F5C2; Навантаження викладачів
-    </button>
+    <!-- The three tabs that enter data rather than report it. Each is offered on the kind of thing it
+         maintains, which is also what the gate around its body resolves — the кафедра's own level is
+         the wrong question, since a grant may name a викладач directly. Asked per tab rather than
+         once for the group: the first two write a викладач and the third a навантаження, and an
+         account holding one and not the other was otherwise offered a tab that then refused it. The
+         read-only «Зведене навантаження», «Оцінка навантаження» and «Розклад кафедри» below stay
+         where they are for everyone. -->
+    @if (canReach('LECTURER')) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === 'constraints'"
+              (click)="selectSection('constraints')">
+        &#x1F6E1; Обмеження навантаження
+      </button>
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === 'timetableConstraints'"
+              (click)="selectSection('timetableConstraints')">
+        &#x1F553; Обмеження розкладу
+      </button>
+    }
+    @if (canReach('LECTURER_WORKLOAD')) {
+      <button type="button" class="faculty-nav-item"
+              [class.active]="activeSection() === 'workloads'"
+              (click)="selectSection('workloads')">
+        &#x1F5C2; Навантаження викладачів
+      </button>
+    }
     <button type="button" class="faculty-nav-item"
             [class.active]="activeSection() === 'workloadSummary'"
             (click)="selectSection('workloadSummary')">
@@ -113,17 +124,23 @@
 
     <!-- ── Lecturer workload constraints ── -->
     @if (activeSection() === 'constraints') {
-      <app-lecturer-constraint-list [departmentId]="departmentId" />
+      <app-access-gate [need]="sectionNeed('LECTURER')">
+        <app-lecturer-constraint-list [departmentId]="departmentId" />
+      </app-access-gate>
     }
 
     <!-- ── Lecturer timetable constraints ── -->
     @if (activeSection() === 'timetableConstraints') {
-      <app-timetable-constraint-list subject="lecturer" [scopeId]="departmentId" />
+      <app-access-gate [need]="sectionNeed('LECTURER')">
+        <app-timetable-constraint-list subject="lecturer" [scopeId]="departmentId" />
+      </app-access-gate>
     }
 
     <!-- ── Lecturer workloads ── -->
     @if (activeSection() === 'workloads') {
-      <app-lecturer-workload-list [departmentId]="departmentId" />
+      <app-access-gate [need]="sectionNeed('LECTURER_WORKLOAD')">
+        <app-lecturer-workload-list [departmentId]="departmentId" />
+      </app-access-gate>
     }
 
     <!-- ── Department workload summary ── -->

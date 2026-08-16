@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 import { GqlVars, GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { Option, SearchSelect } from './search-select';
 import { DAY_OF_WEEK_OPTIONS, HOUR_TYPE_OPTIONS, SEMESTER_PARITY_OPTIONS, WEEK_PARITY_OPTIONS,
          onlineClassPlatformLabel } from './entities';
@@ -281,8 +283,27 @@ const EXTERNAL_ENTRY_SELECTION = `nodes {
 })
 export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   @Input() facultyId!: string;
+
+  /**
+   * This account's level on the факультет whose розклад is being built.
+   *
+   * One question for the whole board: every `timetable_entries` row written here belongs to a
+   * workload of a кафедра of this факультет, and the solver writes them by the hundred in one pass,
+   * so the факультет is the scope both the hand-placed and the generated writes answer to.
+   */
+  private facultyLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the факультет's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.facultyLevel()));
+
+  /** Placing a class, moving one, and applying a generated розклад — all creates and updates. */
+  canEdit = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /** «Скасувати» on a placed class, which deletes its `timetable_entries` row. */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
 
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
   readonly DAY_OF_WEEK_OPTIONS: Option[] = DAY_OF_WEEK_OPTIONS.map((o) => ({ id: o.value, label: o.label }));
@@ -396,6 +417,7 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     this.initialized = true;
     this.loadClassStartTimes();
     if (this.facultyId) {
+      this.loadPermission();
       this.loadRooms();
       this.loadGlobalProperties();
     }
@@ -403,9 +425,23 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
 
   ngOnChanges() {
     if (!this.initialized || !this.facultyId) return;
+    this.loadPermission();
     this.loadRooms();
     if (this.parityResolved) this.loadItems();
     else this.loadGlobalProperties();
+  }
+
+  /**
+   * Asks about the факультет this board was opened on, dropping an answer that arrives after the
+   * host has moved to another one — the same care every other late response on this screen is given.
+   */
+  private loadPermission() {
+    const id = this.facultyId;
+    this.facultyLevel.set(null);
+    this.auth.accessLevel('FACULTY', id).subscribe({
+      next: (level) => { if (id === this.facultyId) this.facultyLevel.set(level); },
+      error: () => { if (id === this.facultyId) this.facultyLevel.set(null); }
+    });
   }
 
   ngOnDestroy() {
@@ -867,11 +903,32 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
 
   canSave(block: Block): boolean {
     const f = this.form(block);
+    // Permission first, and separately from the rest: what follows asks whether the selection is a
+    // complete placement, which is a different question from whether this account may store one.
+    if (!this.canEdit()) return false;
     // A room is required only of a class that is in one: demanding one of an online class would
     // make an entry the generator can write impossible to correct by hand.
     return !!f.dayOfWeek && !!f.classStartTimeId
       && (!this.isInRoom(block) || !!f.roomId)
       && (!block.isBiweekly || !!f.weekParity);
+  }
+
+  /**
+   * When and where a class currently sits, as a sentence — what a block shows in place of its four
+   * pickers to somebody who may read the розклад but not build it. A block nobody has placed yet
+   * says so, which is the state the card's red tint is already about.
+   */
+  scheduledLabel(block: Block): string {
+    if (block.dayOfWeek == null) return 'Не заплановано';
+    const start = block.classStartTimeId ? this.classStartTimeStarts().get(block.classStartTimeId) ?? '' : '';
+    const span = start ? `${start}–${this.endTimeFor(start, block.durationHours)}` : '';
+    const place = this.isInRoom(block)
+      ? this.roomOptions().find((o) => o.id === block.roomId)?.label ?? ''
+      : this.placeLabel(block);
+    const parity = block.isBiweekly
+      ? this.BIWEEKLY_PARITY_OPTIONS.find((o) => o.id === block.weekParity)?.label ?? ''
+      : '';
+    return [this.dayLabel(block.dayOfWeek), span, place, parity].filter(Boolean).join(' · ');
   }
 
   save(block: Block) {
@@ -903,6 +960,12 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
 
   remove(block: Block) {
     if (!block.entryId) return;
+    // Taking a class out of the розклад deletes its row rather than blanking it, so it asks for
+    // «Повний доступ» — a деканат trusted to move a пара is not thereby trusted to unschedule it.
+    if (!this.canDelete()) {
+      this.actionError.set('Скасування заняття потребує рівня доступу «Повний доступ» до факультету.');
+      return;
+    }
     this.actionError.set('');
     const q = `mutation($id: ID!) { timetableEntries { deleteTimetableEntry(id: $id) { isSuccess errorStatus } } }`;
     this.gql.request(q, { id: block.entryId }).subscribe({
@@ -944,6 +1007,11 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
     // still-running first one, and the *old* result would arrive first and be planned against the
     // new block list.
     if (this.genBusy) return;
+    // A search that can take two minutes of somebody's CPU, whose single outcome is «Застосувати».
+    // Refusing to start it is not a convenience here: running it for an account that may not write
+    // the schedule would end at a button that cannot be pressed, which is worse than not offering
+    // the search. The panel is not drawn without EDIT either.
+    if (!this.canEdit()) return;
     if (this.generatableCount() === 0) return;
     this.genBusy = true;
     this.cancelRequested = false;
@@ -1441,6 +1509,14 @@ export class FacultyTimetableList implements OnInit, OnChanges, OnDestroy {
   async applyPlan() {
     const plan = this.genPlan();
     if (!plan) return;
+    // The heaviest write in the application: an entire faculty's розклад, batched into aliased
+    // documents and sent in one go. Creates and updates only — nothing here is deleted — so EDIT is
+    // the level it asks for, checked once before the first batch rather than per entry.
+    if (!this.canEdit()) {
+      this.genError.set('Застосування розкладу потребує рівня доступу «Редагування» до факультету.');
+      this.genStage.set('error');
+      return;
+    }
     const total = this.planChangeCount();
     if (total === 0) { this.genStage.set('done'); return; }
 

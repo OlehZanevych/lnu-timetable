@@ -1,8 +1,9 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, finalize, map, shareReplay, tap } from 'rxjs';
+import { Observable, catchError, finalize, forkJoin, map, of, shareReplay, switchMap, tap, throwError } from 'rxjs';
 import { GraphqlService } from './graphql.service';
-import { AccessLevel, allows } from './access-level';
+import { AccessLevel, allows, maxLevel } from './access-level';
+import { AccessNeed, GLOBAL_RESOURCE_TYPE, isRowNeed } from './access-need';
 
 export interface CurrentGroup {
   id: string;
@@ -39,6 +40,33 @@ export interface CurrentUser {
   studentId: string | null;
   groups: CurrentGroup[];
   permissions: PermissionGrant[];
+  /** The university-wide level this account holds, or null. `MANAGE` is what `isAdmin` means. */
+  globalLevel: AccessLevel | null;
+  /**
+   * The entity types this account could create something of *somewhere*, computed by the service from
+   * its grants and the `@PermissionParent` cascade (see `Query.accessModel`). A type-level answer —
+   * "possible somewhere", not "possible here" — which is exactly what deciding whether to draw a
+   * button or a whole screen needs, and which the client cannot work out for itself without keeping
+   * its own copy of the hierarchy.
+   */
+  creatableResourceTypes: string[];
+}
+
+/** One upward foreign key of the published cascade — see `Query.accessModel`. */
+export interface ResourceParent {
+  resourceType: string;
+  /** The input field carrying this parent's id: `faculty_id` is sent as `facultyId`. */
+  field: string;
+  isNullable: boolean;
+}
+
+/** One entity type of the published cascade. */
+export interface ResourceTypeAccess {
+  resourceType: string;
+  parents: ResourceParent[];
+  joinParentResourceTypes: string[];
+  /** Declared `@PermissionRoot`: nothing owns it, so only a `GLOBAL` grant reaches it. */
+  isRoot: boolean;
 }
 
 /** Which person, if any, the signed-in account belongs to — what «Мій кабінет» renders itself from. */
@@ -221,8 +249,27 @@ export class AuthService {
    * The caller's university-wide level, if they hold a GLOBAL grant. `MANAGE` is what `isAdmin`
    * means; `EDIT` or `FULL` is somebody trusted with everything except handing out access.
    */
-  globalLevel = computed<AccessLevel | null>(
-    () => this.currentUser()?.permissions?.find((p) => p.resourceType === 'GLOBAL')?.level ?? null
+  globalLevel = computed<AccessLevel | null>(() => {
+    const user = this.currentUser();
+    if (!user) return null;
+    // Answered by the service now (`CurrentUser.globalLevel`). The scan of `permissions` behind it is
+    // the same answer computed the old way, kept so a client running against a service that predates
+    // the field still gates correctly rather than silently treating everybody as having nothing.
+    return user.globalLevel ?? user.permissions?.find((p) => p.resourceType === 'GLOBAL')?.level ?? null;
+  });
+
+  /**
+   * The entity types this account could create something of somewhere — the answer behind every
+   * «+ Додати» and every screen that exists only to add rows.
+   *
+   * It replaced «holds at least one grant anywhere», which is how a викладач whose grant was a single
+   * кафедра was shown «+ Додати корпус»: a button that opened a form whose mutation the service was
+   * always going to refuse with «Creating a Building here requires EDIT access.» The set comes from
+   * the service, computed from the same annotation graph that authorizes the write, so adding an
+   * entity keeps it correct with no edit here.
+   */
+  creatableTypes = computed<ReadonlySet<string>>(
+    () => new Set(this.currentUser()?.creatableResourceTypes ?? [])
   );
 
   mustChangePassword = computed(() => this.currentUser()?.mustChangePassword ?? false);
@@ -397,6 +444,7 @@ export class AuthService {
   refreshMe(): Observable<CurrentUser | null> {
     if (this.meInFlight) return this.meInFlight;
     const q = `{ me { id email firstName lastName mustChangePassword isAdmin lecturerId studentId
+      globalLevel creatableResourceTypes
       groups { id name description }
       permissions { id granteeType resourceType resourceId level resourceLabel }
     } }`;
@@ -552,6 +600,117 @@ export class AuthService {
 
   /** Whether a level held (as returned above) is enough for a given action. */
   allows = allows;
+
+  /**
+   * Could this account create something of `resourceType` somewhere? Synchronous, because it is
+   * answered from `Query.me`, which every guarded route has already resolved — a sidebar link cannot
+   * wait for a round trip to decide whether to exist.
+   *
+   * A university-wide `EDIT` covers every type, including the two roots (`BUILDING`,
+   * `ACADEMIC_DEGREE`) that no other grant can reach.
+   */
+  canCreateType(resourceType: string): boolean {
+    if (resourceType === GLOBAL_RESOURCE_TYPE) return allows(this.globalLevel(), 'EDIT');
+    return allows(this.globalLevel(), 'EDIT') || this.creatableTypes().has(resourceType);
+  }
+
+  /**
+   * Whether this account holds a grant naming a row of `resourceType` directly — the second half of
+   * "is this screen worth a link". Somebody granted one single `ClassStartTimeSet` can create no
+   * other, so {@link canCreateType} says no, and hiding the screen would hide the one row they
+   * maintain.
+   */
+  holdsGrantOfType(resourceType: string): boolean {
+    return (this.currentUser()?.permissions ?? []).some((p) => p.resourceType === resourceType);
+  }
+
+  /**
+   * Whether a screen about `resourceType` has anything to offer this account: something to add, or
+   * something already theirs to edit. What the sidebar hides a link on, and what the standalone
+   * generic tables refuse themselves with.
+   */
+  canReachType(resourceType: string): boolean {
+    return this.canCreateType(resourceType) || this.holdsGrantOfType(resourceType);
+  }
+
+  /**
+   * The published permission cascade (`Query.accessModel`), fetched at most once per session.
+   *
+   * It is constant for the lifetime of the service — it is derived from annotations at startup — so
+   * one request answers every question that needs it, and the `shareReplay` means the four callers
+   * that ask during a first paint send one query between them.
+   */
+  private accessModelRequest: Observable<ResourceTypeAccess[]> | null = null;
+
+  accessModel(): Observable<ResourceTypeAccess[]> {
+    if (!this.accessModelRequest) {
+      const q = `{ accessModel { resourceType isRoot joinParentResourceTypes parents { resourceType field isNullable } } }`;
+      this.accessModelRequest = this.gql.request<{ accessModel: ResourceTypeAccess[] }>(q).pipe(
+        map((d) => d.accessModel),
+        // A `shareReplay` that has seen an error replays *the error* to everyone who asks afterwards,
+        // and this handle is held for the life of the session — so one lost request would have hidden
+        // every «+ Додати» from an administrator until they reloaded the page. Forgetting the failed
+        // attempt makes the next caller retry instead.
+        catchError((e) => { this.accessModelRequest = null; return throwError(() => e); }),
+        shareReplay({ bufferSize: 1, refCount: false })
+      );
+    }
+    return this.accessModelRequest;
+  }
+
+  /**
+   * The level this account would have over a row of `resourceType` created with `input` — the highest
+   * it holds over any parent the new row names.
+   *
+   * This is `PermissionEvaluator#levelForNew` on the client, reading the same graph off
+   * `Query.accessModel` rather than re-stating it: the fields that count are exactly the entity's
+   * foreign-key parents, because nothing points at a row that does not exist yet. An input naming
+   * none of them has no covering scope, so only a `GLOBAL` grant creates it — which is why a Room
+   * belonging to no building and no faculty is a university-wide object on both sides.
+   */
+  levelForNew(resourceType: string, input: Record<string, unknown>): Observable<AccessLevel | null> {
+    return this.accessModel().pipe(
+      switchMap((model) => {
+        const node = model.find((n) => n.resourceType === resourceType);
+        const named = (node?.parents ?? [])
+          .map((parent) => ({ type: parent.resourceType, id: input[parent.field] }))
+          .filter((p) => p.id !== undefined && p.id !== null && p.id !== '')
+          .map((p) => ({ type: p.type, id: String(p.id) }));
+        if (named.length === 0) return of(this.globalLevel());
+        return forkJoin(named.map((p) => this.accessLevel(p.type, p.id))).pipe(
+          map((levels) => levels.reduce<AccessLevel | null>((best, l) => maxLevel(best, l), this.globalLevel()))
+        );
+      })
+    );
+  }
+
+  /**
+   * Does this account meet `need`? The one place the three shapes of {@link AccessNeed} are turned
+   * into an answer, so that a page, the tab that opens it and the sidebar link that leads to it are
+   * all gated by the same evaluation rather than by three that were written to agree.
+   */
+  resolveNeed(need: AccessNeed): Observable<boolean> {
+    const required = need.level ?? 'EDIT';
+    if (!this.currentUser()) return of(false);
+    if (need.type === GLOBAL_RESOURCE_TYPE) return of(allows(this.globalLevel(), required));
+    if ('id' in need && !need.id) {
+      // A row was named and its id is not here yet — a signal still resolving, a route param not
+      // parsed. Answering the weaker "anywhere of this kind" question instead would fail *open*:
+      // somebody holding a grant on a different faculty would be shown this one's editors for as
+      // long as the id took to arrive.
+      return of(false);
+    }
+    if (!isRowNeed(need)) {
+      // No row to ask about: the question is whether this kind of thing is within reach at all —
+      // something of the kind to add, or something of it already this account's to edit. Only EDIT
+      // is meaningful here; «may I delete some room somewhere» is not a question any screen asks,
+      // and answering it would need a row.
+      return of(this.canReachType(need.type));
+    }
+    return this.accessLevel(need.type, String(need.id)).pipe(
+      map((level) => allows(maxLevel(this.globalLevel(), level), required))
+    );
+  }
 
   /** Invalidate the cached access levels (e.g. after a grantPermission/revokePermission mutation). */
   clearAccessCache() {

@@ -4,6 +4,8 @@ import { RouterLink } from '@angular/router';
 import { forkJoin, map, of } from 'rxjs';
 import { GqlVars, GraphqlService } from './graphql.service';
 import { AuthService } from './auth.service';
+import { NoAccessCard } from './access-gate';
+import { anywhereNeed } from './access-need';
 import { AccessLevel, allows, maxLevel } from './access-level';
 import { compareUk } from './sort';
 
@@ -50,7 +52,7 @@ interface Cell {
 @Component({
   selector: 'app-building-travel-times',
   templateUrl: './building-travel-times.html',
-  imports: [FormsModule, RouterLink]
+  imports: [FormsModule, RouterLink, NoAccessCard]
 })
 export class BuildingTravelTimesPage implements OnInit {
   private gql = inject(GraphqlService);
@@ -164,9 +166,26 @@ export class BuildingTravelTimesPage implements OnInit {
   }
 
   private loadPermissions(ids: string[]) {
-    if (this.auth.globalLevel() === 'MANAGE' || !ids.length) return;
-    this.auth.accessLevels('BUILDING', ids).subscribe((levels) => this.buildingLevels.set(levels));
+    if (this.auth.globalLevel() === 'MANAGE' || !ids.length) {
+      this.permissionsChecked.set(true);
+      return;
+    }
+    this.auth.accessLevels('BUILDING', ids).subscribe({
+      next: (levels) => { this.buildingLevels.set(levels); this.permissionsChecked.set(true); },
+      error: () => this.permissionsChecked.set(true)
+    });
   }
+
+  /** False until the answer is in, so the page never shows a refusal it is about to take back. */
+  private permissionsChecked = signal(false);
+
+  /**
+   * The matrix is a grid of inputs and a Save bar; with no корпус to edit there is nothing left of
+   * it, so the page refuses as a whole rather than rendering a read-only grid nobody asked for. The
+   * sidebar hides the link on the same answer.
+   */
+  readonly need = anywhereNeed('BUILDING_TRAVEL_TIME');
+  readonly denied = computed(() => this.permissionsChecked() && !this.canEditAnything());
 
   /** Any cell at all — used to hide the save bar from an account that can only read. */
   canEditAnything = computed(() =>

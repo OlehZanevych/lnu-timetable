@@ -275,6 +275,9 @@ export const ENTITIES: EntityMeta[] = [
       { name: 'code', label: 'Код', type: 'text', required: true },
       { name: 'name', label: 'Назва', type: 'text', required: true },
       { name: 'degree', label: 'Ступінь', type: 'enum', required: true, enumOptions: DEGREE_OPTIONS },
+      // NOT NULL in the database and non-null in the input payload, so the form has to collect it:
+      // a programme has a length, and it is what «Тривалість семестрів» lists the semesters of.
+      { name: 'durationSemesters', label: 'Семестрів', type: 'number', required: true, min: 1 },
       ref('facultyId', 'Факультет', 'faculty', 'faculty', 'name', true)
     ]
   },

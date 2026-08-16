@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GqlVars, GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { Option, SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { CONTROL_FORM_OPTIONS, DURATION_HOURS_OPTIONS, HOUR_TYPE_OPTIONS, TEACHING_FORMAT_OPTIONS, toOptions } from './entities';
@@ -187,8 +189,32 @@ const HOUR_TYPE_ORDER = ['LECTURE', 'PRACTICAL', 'LAB', 'CONSULTATION', 'ASSESSM
 })
 export class LecturerWorkloadList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   @Input() departmentId!: string;
+
+  /**
+   * This account's level on the кафедра this tab belongs to.
+   *
+   * Every row this screen writes — a `lecturer_workloads` row, its candidate pool, the pairings of
+   * an INDIVIDUALLY item — hangs off a working curriculum item of this department, so the кафедра is
+   * the scope that governs all of them and one lookup answers the page. The generator writes the
+   * same rows in bulk and is governed by the same answer.
+   */
+  private departmentLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the кафедра's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.departmentLevel()));
+
+  /** Creating and updating навантаження, its candidates and its pairings — and applying a plan. */
+  canEdit = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /**
+   * Deleting a навантаження, and dropping a lecturer out of a candidate pool that already stored
+   * them — the second being a `deleteLecturerWorkloadCandidate` rather than part of the workload's
+   * own nested lists, and therefore a delete like any other.
+   */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
 
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
@@ -289,6 +315,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
     this.loadCombinedGroupOptions();
     this.loadDefaultDurationHours();
     if (this.departmentId) {
+      this.loadPermission();
       this.loadLecturerOptions();
       this.loadClassStartTimeSets();
       this.loadAll();
@@ -297,10 +324,24 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
   ngOnChanges() {
     if (this.initialized && this.departmentId) {
+      this.loadPermission();
       this.loadLecturerOptions();
       this.loadClassStartTimeSets();
       this.loadAll();
     }
+  }
+
+  /**
+   * Asks about the кафедра the tab was opened on. A reply about the department the reader has since
+   * navigated away from is not an answer about this one, so it is dropped rather than applied.
+   */
+  private loadPermission() {
+    const id = this.departmentId;
+    this.departmentLevel.set(null);
+    this.auth.accessLevel('DEPARTMENT', id).subscribe({
+      next: (level) => { if (id === this.departmentId) this.departmentLevel.set(level); },
+      error: () => { if (id === this.departmentId) this.departmentLevel.set(null); }
+    });
   }
 
   private loadAll() {
@@ -733,6 +774,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   // ── Create / Edit ────────────────────────────────────────────────────────
 
   openCreate(wci: WorkingItem) {
+    if (!this.canEdit()) return;
     this.editingId.set(null);
     this.activeWorkingCurriculumItemId = wci.id;
     this.activeCombinedWorkingCurriculumItemId = null;
@@ -750,6 +792,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   openEdit(wci: WorkingItem, w: Workload) {
+    if (!this.canEdit()) return;
     this.editingId.set(w.id);
     this.activeWorkingCurriculumItemId = wci.id;
     this.activeCombinedWorkingCurriculumItemId = null;
@@ -772,6 +815,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
    * doesn't apply (it's a per-item SEPARATELY-teaching concept — see canUseCombinedGroups).
    */
   openCreateCombined(c: CombinedItem) {
+    if (!this.canEdit()) return;
     this.editingId.set(null);
     this.activeWorkingCurriculumItemId = null;
     this.activeCombinedWorkingCurriculumItemId = c.id;
@@ -789,6 +833,7 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   openEditCombined(c: CombinedItem, w: Workload) {
+    if (!this.canEdit()) return;
     this.editingId.set(w.id);
     this.activeWorkingCurriculumItemId = null;
     this.activeCombinedWorkingCurriculumItemId = c.id;
@@ -920,6 +965,23 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
 
   save() {
     if (!this.activeWorkingCurriculumItemId && !this.activeCombinedWorkingCurriculumItemId) return;
+
+    if (!this.canEdit()) {
+      this.formError.set('Збереження навантаження потребує рівня доступу «Редагування» до кафедри.');
+      return;
+    }
+
+    // A lecturer whose score has been cleared is not edited out of the pool, they are deleted from
+    // it: `reconcileCandidates` sends `deleteLecturerWorkloadCandidate` for the row that was stored.
+    // So the same «Повний доступ» every «Видалити» asks for is asked here, and asked *now* rather
+    // than mid-save — the workload half goes out first, and a refusal after it lands leaves a
+    // half-applied modal to explain.
+    const dropped = this.formCandidates().filter((r) => r.id && r.desirability.trim() === '');
+    if (dropped.length && !this.canDelete()) {
+      this.formError.set(
+        `Вилучення кандидата «${dropped[0].lecturerLabel}» потребує рівня доступу «Повний доступ» до кафедри.`);
+      return;
+    }
 
     const bad = this.formCandidates().find((r) => this.isBadScore(r));
     if (bad) {
@@ -1189,6 +1251,10 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   generate() {
+    // The generator's only product is a plan, and the only thing to do with a plan is apply it.
+    // Running a search for somebody who may not write its outcome would spend their time to arrive
+    // at a button that refuses, so the panel is not drawn without EDIT and the run stops here too.
+    if (!this.canEdit()) return;
     this.genError.set('');
     this.genResult.set(null);
     this.genRunning.set(true);
@@ -1222,6 +1288,13 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   applyPlan() {
     const changed = this.changedAssignments();
     if (!changed.length) return;
+    // The largest write this screen makes: one `updateLecturerWorkload` per changed row, the whole
+    // кафедра's plan in a single click. It is still an update rather than a delete, so EDIT is the
+    // level — but it is emphatically not something «is somebody signed in» should reach.
+    if (!this.canEdit()) {
+      this.genError.set('Застосування плану потребує рівня доступу «Редагування» до кафедри.');
+      return;
+    }
     this.genApplying.set(true);
     this.genError.set('');
 
@@ -1260,6 +1333,12 @@ export class LecturerWorkloadList implements OnInit, OnChanges {
   }
 
   remove(w: Workload) {
+    // A навантаження carries its candidates, its pairings and every timetable entry placed for it,
+    // so removing one is a delete in the full sense and asks for «Повний доступ», not «Редагування».
+    if (!this.canDelete()) {
+      this.error.set('Видалення навантаження потребує рівня доступу «Повний доступ» до кафедри.');
+      return;
+    }
     const q = `mutation($id: ID!) { lecturerWorkloads { deleteLecturerWorkload(id: $id) { isSuccess errorStatus } } }`;
     this.gql.request(q, { id: w.id }).subscribe({
       next: (d: any) => {

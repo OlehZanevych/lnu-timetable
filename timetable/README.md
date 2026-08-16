@@ -56,9 +56,17 @@ psql -h localhost -U postgres -d lnu-timetable -f src/main/resources/db/data.sql
 `schema.sql` starts with `DROP SCHEMA public CASCADE`, so it always recreates a clean
 schema.
 
+**The second command does not succeed against `data.sql` as it stands.** `schema.sql` now carries
+`degree_programs.duration_semesters` — `NOT NULL`, with no default — while every
+`INSERT INTO degree_programs` in `data.sql` predates the column and supplies no value for it. Each of
+those inserts is therefore rejected, and everything hanging off a programme (its групи, its
+навчальний план, and the навантаження and розклад derived from that plan) is rejected behind them.
+Re-dump `data.sql` from a database [`V10`](#v10__degree_program_semesterssql) has already run
+against, as that section says; `reset_db.sh` runs these same two files and is no better off.
+
 `data.sql` is no longer a pristine `pg_dump` of a hand-entered database: on top of the real LNU
 structure it carries the **ФПМІ 2025/2026 timetable**, transcribed from the faculty's published
-PDF sheets — 1428 `timetable_entries` over both halves of the year, with the rooms, room groups,
+PDF sheets — 1381 `timetable_entries` over both halves of the year, with the rooms, room groups,
 courses, curriculum items and `lecturer_workloads` they needed. Two things follow for anyone
 querying it. `timetable_entries` has **no semester column** — the semester lives on the curriculum
 item behind the workload — and both halves are loaded, so *any* query over the timetable must
@@ -144,8 +152,11 @@ what it changes: V1 by deleting on a predicate that stops matching, V2 with `IF 
 `pg_constraint` for the `CHECK`, since there is no `ADD CONSTRAINT IF NOT EXISTS` — and V7 by
 `IF NOT EXISTS` on every object it creates, a `pg_type` guard around its `CREATE TYPE`, and
 `ON CONFLICT (name) DO NOTHING` on the `global_properties` rows it seeds, V8 by guarding every
-rename on the old name still being there, and V9 by `IF NOT EXISTS` on the table and the index it
-creates plus a `pg_type` guard around its `CREATE TYPE`.
+rename on the old name still being there, V9 by `IF NOT EXISTS` on the table and the index it
+creates plus a `pg_type` guard around its `CREATE TYPE`, and V10 by `ADD COLUMN IF NOT EXISTS`, a
+backfill restricted to the rows that have no value yet, a `SET NOT NULL` that is a no-op on a column
+that already has it, `CREATE TABLE IF NOT EXISTS`, and a `pg_constraint` test around the one `CHECK`
+it adds to an existing table.
 
 ### `V1__delete_curriculum_items_on_elective_courses.sql`
 
@@ -357,6 +368,49 @@ Idempotent by `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS` (both o
 `pg_type` guard around the `CREATE TYPE` — the same three tools V7 uses, for the same reason: after
 `reset_db.sh`, `schema.sql` has already created all of it.
 
+### `V10__degree_program_semesters.sql`
+
+How long a programme runs, and how long each of its semesters runs.
+
+The розклад decides how many classes a week a plan position needs by dividing its hours by
+(weeks × class length), and the weeks in that division came from `semester_duration_weeks` — one
+number for the whole university. That holds for most of a degree and stops holding at the end of one:
+the last semester of a master's programme is largely taken up by the final attestation and a work
+placement, so its teaching runs for fewer weeks than sixteen, and planning it as sixteen puts *fewer*
+classes a week on the timetable than the plan's hours actually require.
+
+Two things are added. `degree_programs.duration_semesters` says how long the programme is, and
+`degree_program_semesters` overrides the weeks for one semester of one programme — one row per
+semester that *differs*, since a missing row means «the usual length», which is exactly what the
+global property is for. Filling the table in exhaustively would turn one number that can be corrected
+in one place into several hundred copies of it that cannot.
+
+**Three steps for one column, because it is `NOT NULL`.** A `NOT NULL` column cannot be added in one
+statement to a table that already holds rows, so it arrives nullable, every row is given a value, and
+only then is the constraint added:
+
+| Degree | Semesters |
+|---|---|
+| `BACHELOR`, `PHD`, `DOCTOR_OF_SCIENCE` | 8 |
+| `MASTER`, `JUNIOR_BACHELOR` | 4 |
+
+All five are named explicitly rather than left to an `ELSE`, because a row still `NULL` at step three
+stops the migration with a constraint violation and nothing says why. Only `BACHELOR` and `MASTER`
+appear in the current data — 40 programmes and 32 — and the other three carry the ordinary length for
+their degree; a database holding one of them should have it corrected on the programme's own page.
+Nothing infers the length from the curriculum, deliberately — a programme whose plan has
+only been entered up to the fifth semester is still a four-year programme, and reading the plan would
+produce a confidently wrong number for exactly the programmes that are half-entered.
+
+The backfill is `WHERE duration_semesters IS NULL`, so a value somebody has since corrected survives
+a replay; `SET NOT NULL` is a no-op on a column that already has it, and the table and its constraint
+are guarded the usual way. After `reset_db.sh`, `schema.sql` has already created all of this with the
+column non-null from the start, and every step here finds nothing to do.
+
+One consequence outside the migration: `data.sql` predates the column, and its
+`INSERT INTO degree_programs (id, code, name, degree, faculty_id)` cannot satisfy a `NOT NULL` column
+with no default. Re-dump it from a database this migration has run against.
+
 ---
 
 ## Run
@@ -458,7 +512,8 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 | `BuildingTravelTime` | `building_travel_times` | whole minutes (`CHECK (minutes >= 0)`); → fromBuilding, toBuilding, both `ON DELETE CASCADE`, so removing a building takes its journeys with it. Directed: (from, to) and (to, from) may differ, and `CHECK` forbids a row from a building to itself. Both ends are `@PermissionParent`s, so a grant over either building covers the journey between them |
 | `Faculty` | `faculties` | → building?, departments, degreePrograms, rooms |
 | `Department` (кафедра) | `departments` | → faculty, lecturers, courses |
-| `DegreeProgram` (освітня програма) | `degree_programs` | code, degree; → faculty, groups, curriculum items |
+| `DegreeProgram` (освітня програма) | `degree_programs` | code, degree, `duration_semesters` (NOT NULL — how long the programme runs, counted in semesters rather than as the number its last semester carries, since a master's plan may run 9–11); → faculty, groups, curriculum items, semesters |
+| `DegreeProgramSemester` | `degree_program_semesters` | how many teaching weeks one semester of one programme runs for, overriding the `semester_duration_weeks` global property. One row per semester that *differs* — a missing row means the usual length, which is what the property is for. `semester` is the number the plan itself uses; unique per (programme, semester); → degree programme |
 | `Course` (дисципліна) | `courses` | type (incl. `ELECTIVE_GROUP`/`ELECTIVE`), optional `semester` — when set, the only semester the discipline may be planned for, enforced by the client on both curriculum screens and printed before its tags wherever it is named (see [`V6`](#v6__course_semestersql)); → faculty? *or* department? directly responsible for it, self-referential parent/child (an `ELECTIVE_GROUP` course's `childCourses` are its `ELECTIVE` options), M-N degree programmes this course may be added to a curriculum for (`course_degree_programs`), 1-N tags |
 | `CourseTag` | `course_tags` | free-form label shown after the course's name (e.g. "англійською"); → course |
 | `CurriculumItem` | `curriculum_items` | semester, control form, ECTS; → **degree programme directly** (no separate `Curriculum`/`curricula` table — removed), course, hours |
@@ -486,7 +541,9 @@ lecturer + groups + periodicity; the schedule assigns it a day, slot, room and w
 
 Relationships: one-to-one, one-to-many, many-to-one and many-to-many are all supported.
 Notable unique constraints (`schema.sql`): `buildings.name`, `faculties.abbreviation`,
-`departments.abbreviation`, `degree_programs(name, degree)`, `academic_groups.name`,
+`departments.abbreviation`, `degree_programs(name, degree)`,
+`degree_program_semesters(degree_program_id, semester)` (a programme states each of its semesters'
+length at most once, so re-stating it is an update rather than a second row), `academic_groups.name`,
 `lecturers.email`, `building_travel_times(from_building_id, to_building_id)` (one figure per
 ordered pair; the pair was this table's primary key until V3 gave it a surrogate `id`),
 `curriculum_items(course_id, degree_program_id, semester)`,
@@ -602,12 +659,12 @@ columnValues, whereColumn, whereValue)` — an `update()` variant keyed by an ar
 instead of the conventional `id` — was added specifically to make `updateGlobalProperty` possible
 without touching the generic `update()`/`selectOne()` methods every other entity relies on.
 
-**What the table holds.** `data.sql` seeds nineteen rows, in two groups.
+**What the table holds.** `data.sql` seeds twenty-one rows, in three groups.
 
 | Property | Seeded | What it governs |
 |---|---|---|
 | `academic_hour_duration_minutes` | 40 | length of one academic hour; every class end time in the client is computed from it |
-| `semester_duration_weeks` | 16 | weeks in a semester; the schedule builder divides a workload's hours by it |
+| `semester_duration_weeks` | 16 | weeks in a semester; the schedule builder divides a workload's hours by it — unless the programme states otherwise for that semester in `degree_program_semesters`, which overrides this number for it (see [`V10`](#v10__degree_program_semesterssql)) |
 | `current_semester_parity` | `ODD` | which half-year is running; the default of every semester filter |
 | `default_class_duration_hours` | 2 | what a new workload starts at |
 | `default_max_hours_per_year` | 600 | annual teaching ceiling for a lecturer who sets none of their own |
@@ -616,8 +673,9 @@ without touching the generic `update()`/`selectOne()` methods every other entity
 | `min_credits_*` / `max_credits_*` (`junior_bachelor`, `bachelor`, `master`, `phd`) | 120/120, 180/240, 90/120, 30/60 | the volume a programme of each degree must fall within |
 | `min_elective_share_percent` | 25 | least share of a programme that must be elective |
 | `max_courses_per_semester` · `max_exams_per_semester` | 8 · 5 | per-semester ceilings a plan is advised against |
+| `abstract_room_travel_time_minutes` · `university_commute_time_minutes` | 60 · 80 | the journey to an abstract room that is sited in no building, and the journey between home and the university that a day mixing an online class with an in-room one has to leave room for (see [`V7`](#v7__abstract_rooms_and_online_classessql)) |
 
-The second group — everything from `hours_per_ects_credit` down — arrived when the client's
+The second group — `hours_per_ects_credit` through `max_exams_per_semester` — arrived when the client's
 curriculum checks stopped being constants. The reason is worth recording on this side too, because
 it constrains what the service may assume: **these figures are not invariants.** Some are statutory
 and change when the law does (the elective quota was rewritten by Закон № 3642-IX in 2024); the rest
@@ -627,7 +685,10 @@ and the
 client drops the check that rests on it — so `updateGlobalProperty` accepts an empty string and must
 keep accepting one. These rows now ship in `data.sql` itself; the separate
 `global-properties-limits.sql` that once carried them for an older database is gone, superseded by
-the Flyway migrations described under [Schema migrations](#migrations-flyway).
+the Flyway migrations described under [Schema migrations](#migrations-flyway). The third group is the
+last two rows, seeded by [`V7`](#v7__abstract_rooms_and_online_classessql) when a class stopped
+having to be held in a room: they are the two journeys `building_travel_times` cannot price, because
+neither of them has a building at both ends.
 
 Nothing in the service reads any of these: they are stored and served, and every one of them is
 applied in the client. That is the same division as everywhere else — see *How the two halves divide
@@ -956,7 +1017,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 |---|---|
 | `Faculty` | `Building`? |
 | `Department`, `DegreeProgram` | `Faculty` |
-| `Room` | `Faculty`?, `Building`? |
+| `Room`, `AbstractRoom` | `Faculty`?, `Building`? |
 | `RoomTimetableConstraint` | `Room` |
 | `RoomGroup` | `Faculty`?, `Department`? |
 | `ClassStartTimeSet` | `Faculty`? |
@@ -965,7 +1026,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `CourseTag` | `Course` |
 | `Lecturer` | `Department` |
 | `LecturerWorkloadConstraint`, `LecturerTimetableConstraint` | `Lecturer` |
-| `AcademicGroup` | `DegreeProgram` |
+| `AcademicGroup`, `DegreeProgramSemester` | `DegreeProgram` |
 | `AcademicGroupTimetableConstraint` | `AcademicGroup` |
 | `CombinedGroup` | any member `AcademicGroup` (via `combined_group_academic_groups`) |
 | `Student` | `AcademicGroup` |
@@ -976,15 +1037,26 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `LecturerWorkload` | `WorkingCurriculumItem`?, `CombinedWorkingCurriculumItem`?, any linked `Lecturer`/`AcademicGroup`/`CombinedGroup` (join tables) |
 | `LecturerWorkloadCandidate` | `LecturerWorkload` |
 | `LecturerWorkloadCandidateConstraint` | `LecturerWorkloadCandidate` |
-| `LecturerWorkloadStudent` | `LecturerWorkload` |
+| `LecturerWorkloadStudent`, `LecturerWorkloadOnlineClass` | `LecturerWorkload` |
 | `TimetableEntry` | `LecturerWorkload`, `Room` |
 | `BuildingTravelTime` | `Building` at *either* end (`from_building_id`, `to_building_id`) |
-| `Building`, `AcademicDegree` | *(none — top-level; only a `GLOBAL` grant reaches these, at `EDIT` to create or change one and `FULL` to delete it)* |
+| `Building`, `AcademicDegree` | *(nothing — both declare `@PermissionRoot`; only a `GLOBAL` grant reaches them, at `EDIT` to create or change one and `FULL` to delete it)* |
 
 `LecturerWorkload`'s rooms and room groups are deliberately **not** permission parents: being able
 to modify a room, or the list of rooms in a group, must not confer the right to modify every
 workload that happens to be allowed to use it. Its `ClassStartTimeSet` is left out for the same
 reason.
+
+**An entity that declares nothing at all does not start.** "Nothing is above this" and "the edge was
+forgotten" used to be the same state — the absence of an annotation — and they have opposite
+consequences: the first is a university-wide object, the second silently drops the entity out of
+every faculty's cascade until a deanery reports that they can no longer edit their own rows. Nothing
+fails, no test notices, and the symptom arrives as a denial weeks later. `@PermissionRoot` is the
+first of the two said out loud, and `EntityMetadataRegistry` now refuses to build metadata for a
+`@GraphQLEntity` that declares neither it nor a parent — so the question is answered at startup, by
+whoever adds the entity, and `SchemaBuildTest` reaches it without a database. Declaring *both* is
+refused just as loudly: a root has no owner and an entity with an owner inherits from it, so the two
+together describe nothing the cascade could act on.
 
 `?` marks a `nullable = true` edge (the FK may be unset, in which case that path just doesn't
 apply). Following these edges upward from any row yields the full set of resources whose grant
@@ -1001,10 +1073,15 @@ cascade the product spec asked for.
 org.lnu.timetable.framework
 ├── annotation/    @GraphQLEntity, @Description, @Nullable, @PgEnum,
 │                  @OneToOne, @OneToMany, @ManyToOne, @ManyToMany,
-│                  @PermissionParent(s), @PermissionJoinParent(s) — see below
+│                  @PermissionParent(s), @PermissionJoinParent(s),
+│                  @PermissionRoot — see below
 ├── metadata/      EntityMetadataRegistry — scans @GraphQLEntity at startup,
 │                  builds EntityMetadata (fields, columns, types, relations,
-│                  resourceType, permissionParents, permissionJoinParents)
+│                  resourceType, permissionParents, permissionJoinParents,
+│                  permissionRoot) and refuses an entity that declares no
+│                  permission edge and no root;
+│                  PermissionTypeGraph — the same cascade at the level of
+│                  resource types, for the questions that name no row
 ├── config/        GraphQLSchemaConfig + DSL: SchemaDefinition, TypeDefinition,
 │                  QueryDefinition, MutationDefinition (create/update/delete,
 │                  plus .nestedList(...) and .manyToMany(...) — see below)
@@ -1029,7 +1106,7 @@ org.lnu.timetable.mail       — MailService: the two e-mailed links, over SMTP
 ### The parts that cannot be generated (`HandWrittenApi`)
 
 Almost everything in this schema is reflective: an annotated POJO plus a few declarative lines
-produce a type, a connection, three mutations and the SQL behind them. Three areas are not, and
+produce a type, a connection, three mutations and the SQL behind them. Four areas are not, and
 never could be.
 
 - **`GlobalProperty`** is a name/value store, not an entity keyed by an id.
@@ -1037,6 +1114,8 @@ never could be.
   management — because a password hash must never be reachable through fully-generic,
   selection-set-driven machinery, and because `login` does not fit the id-keyed CRUD shape anyway.
 - **Self-service registration and password recovery**, for both of those reasons at once.
+- **`accessModel`**, the permission cascade published by resource type, because it is metadata about
+  the schema rather than a row in it — there is no table to select from and no id to key it by.
 
 The first two are wired into `DynamicGraphQLSchemaBuilder` by hand, each with a parameter on
 `buildSchema` and a `buildXxxTypes()` / `addXxxQueryFields()` / `addXxxMutationFields()` /
@@ -1068,9 +1147,11 @@ depend on the order they happen to be visited in. And nothing here routes throug
 `requestRegistration` is *none*, and inheriting the generic "must be signed in" would make both
 unreachable.
 
-`SelfServiceSchema` is the only implementation today. `GlobalProperty` and the auth surface were
-left where they are: moving working code to prove a point is how a refactor becomes a regression,
-and the interface's value is in what is added next, not in what is already correct.
+`SelfServiceSchema` and `AccessModelSchema` are the two implementations today, and the second is what
+the interface was for: `accessModel` arrived as a `@Component` and a constructor argument, with no
+parameter added to `buildSchema` and no edit to the framework at all. `GlobalProperty` and the auth
+surface were left where they are: moving working code to prove a point is how a refactor becomes a
+regression, and the interface's value is in what is added next, not in what is already correct.
 
 ### Define an entity
 
@@ -1221,12 +1302,12 @@ faculty" instead of widening to every group in the university.
 
 ### Where each entity is declared
 
-The four `*SchemaConfig` classes are the whole API surface — 31 entities, one `configure<Entity>`
+The four `*SchemaConfig` classes are the whole API surface — 32 entities, one `configure<Entity>`
 method each, split by subject area:
 
 | Config class | Entities declared |
 |---|---|
-| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `DegreeProgram`, `Room`, `RoomTimetableConstraint`\*, `RoomGroup`, `AbstractRoom` |
+| `OrganizationSchemaConfig` | `Building`, `BuildingTravelTime`, `Faculty`, `Department`, `DegreeProgram`, `DegreeProgramSemester`\*, `Room`, `RoomTimetableConstraint`\*, `RoomGroup`, `AbstractRoom` |
 | `CurriculumSchemaConfig` | `Course`, `CourseTag`\*, `CurriculumItem`, `CurriculumItemHours`, `WorkingCurriculumItem`, `CombinedWorkingCurriculumItem` |
 | `PeopleSchemaConfig` | `AcademicDegree`, `Lecturer`, `LecturerWorkloadConstraint`\*, `LecturerTimetableConstraint`\*, `Student`, `AcademicGroup`, `AcademicGroupTimetableConstraint`\*, `CombinedGroup` |
 | `SchedulingSchemaConfig` | `LecturerWorkload`, `LecturerWorkloadStudent`\*, `LecturerWorkloadCandidate`\*\*, `LecturerWorkloadCandidateConstraint`\*, `ClassStartTimeSet`, `ClassStartTime`, `TimetableEntry`, `LecturerWorkloadOnlineClass`\*\*\* |
@@ -1239,7 +1320,8 @@ The exceptions are all children written through a parent:
   how a class is marked online and put back in a room — so the mutations are the API.
 - \* **type-only** (`s.type(...)` with no queries or mutations): registered so a parent's relation
   field resolves, but written exclusively through that parent's `.nestedList(...)` —
-  `CourseTag` through `Course.tags`, `LecturerWorkloadConstraint` through
+  `CourseTag` through `Course.tags`, `DegreeProgramSemester` through `DegreeProgram.semesters`,
+  `LecturerWorkloadConstraint` through
   `Lecturer.workloadConstraints`, `LecturerWorkloadStudent` through
   `LecturerWorkload.studentAssignments`, `LecturerWorkloadCandidateConstraint` through
   `LecturerWorkloadCandidate.constraints`, and the three `*TimetableConstraint`s through
@@ -1294,7 +1376,7 @@ single-row `<entity>(id:)` query.
 | `courseConnection` | `name` | `departmentId`, `facultyId`, `parentCourseId`, `degreeProgramId` (r) |
 | `curriculumItemConnection` | `semester` | `degreeProgramId`, `courseId` |
 | `curriculumItemHoursConnection` | `hourType` | `curriculumItemId` |
-| `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r) |
+| `workingCurriculumItemConnection` | `id` | `departmentId`, `facultyId` (r), `semesterParity` (r), `courseId` (r) |
 | `combinedWorkingCurriculumItemConnection` | `id` | `facultyId` (r), `departmentIds` (r), `semesterParity` (r) |
 | `lecturerWorkloadConnection` | `id` | — |
 | `abstractRoomConnection` | `name` | `facultyId`, `buildingId` |
@@ -1302,9 +1384,10 @@ single-row `<entity>(id:)` query.
 | `classStartTimeConnection` | `ordinal` | `classStartTimeSetId` |
 | `timetableEntryConnection` | `dayOfWeek` | `workloadId`, `roomId`, `roomIds` (r), `lecturerIds` (r), `academicGroupIds` (r), `semesterParity` (r) |
 
-Nine entities are missing from this table on purpose, and the omission is the design rather than a
-gap: `CourseTag`, `LecturerWorkloadConstraint`, `LecturerTimetableConstraint`,
-`AcademicGroupTimetableConstraint`, `RoomTimetableConstraint`, `LecturerWorkloadStudent` and
+Ten entities are missing from this table on purpose, and the omission is the design rather than a
+gap: `CourseTag`, `DegreeProgramSemester`, `LecturerWorkloadConstraint`,
+`LecturerTimetableConstraint`, `AcademicGroupTimetableConstraint`, `RoomTimetableConstraint`,
+`LecturerWorkloadStudent` and
 `LecturerWorkloadCandidateConstraint` are read through their parent's relation field and written
 through its `.nestedList(...)`; `LecturerWorkloadCandidate` is read through
 `LecturerWorkload.candidates` while being written through mutations of its own; and
@@ -1456,7 +1539,7 @@ the classification because it never states one.
 
 ### The security package
 
-`org.lnu.timetable.security` is nineteen classes, and it is worth knowing which of them decides what:
+`org.lnu.timetable.security` is twenty classes, and it is worth knowing which of them decides what:
 
 | Class | Role |
 |---|---|
@@ -1477,6 +1560,7 @@ the classification because it never states one.
 | `AccountTokenRepository` | the SQL behind those links — issuing, the per-address cooldown, invalidating what was outstanding, redeeming — plus the two person lookups (`findLecturerByEmail`, `findStudentByEmail`) that decide whether a link may be sent at all. The one place in this package that reads a *domain* table by anything other than a declared permission edge |
 | `SelfServiceDataFetchers` | the six fetchers behind registration and recovery, and the four-question rule in [Self-service registration and password recovery](#self-service-registration-and-password-recovery) |
 | `SelfServiceSchema` | their GraphQL surface, added through the framework's `HandWrittenApi` plug-in point rather than hardcoded into the schema builder |
+| `AccessModelSchema` | one query, `accessModel`: the permission cascade by resource type, so the client can decide what to draw from the graph this service enforces rather than from a copy of it. A `HandWrittenApi` for the same reason `SelfServiceSchema` is one — it is not a row keyed by an id — and it answers from `PermissionTypeGraph`, which is built once at startup |
 | `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
 | `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
 
@@ -1589,6 +1673,7 @@ Its surface:
 | `coveringRefs(resourceType, resourceId)` | every node a grant could sit on and still cover this row — what the admin UI lists *effective* access from |
 | `holdsManageAbove(resourceType, resourceId)` | whether the caller's `MANAGE` comes from a **strict** ancestor — the revoke rule below |
 | `isAdmin()` / `globalLevel()` / `canDelegateSomewhere()` | the university-wide answers |
+| `creatableResourceTypes()` | which *kinds* of thing the caller could create somewhere — a question with no row in it, answered from the grants already loaded and `PermissionTypeGraph`, so it costs neither a query nor a walk |
 
 Each mutation names the level it needs, in one `switch` in `AuthorizingDataFetcherProvider`:
 `create` and `update` need `EDIT`, `delete` needs `FULL`. Reads still need only a signed-in caller.
@@ -1737,7 +1822,7 @@ trade here, and the reasoning is in *Known limitations* along with what it costs
 | Field | Kind | Notes |
 |---|---|---|
 | `login(email, password)` | mutation | returns a JWT + whether the account must change its password |
-| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin` — which is exactly `GLOBAL` at `MANAGE` — `lecturerId`/`studentId`, groups, and every effective grant with its `level`), or `null` |
+| `me` | query | the signed-in `CurrentUser` (profile, `isAdmin` — which is exactly `GLOBAL` at `MANAGE` — `lecturerId`/`studentId`, groups, and every effective grant with its `level`), or `null`. Also `globalLevel` and `creatableResourceTypes` — see below |
 | `changePassword(currentPassword, newPassword)` | mutation | minimum 8 characters; clears `mustChangePassword` |
 | `createUser(email, firstName, lastName, temporaryPassword, lecturerId?, studentId?)` | mutation | **admin-only**; the created account must change its password on first login. The two optional ids link it to a person straight away — at most one of them, or `BOTH_LINKS_SET` |
 | `setUserLink(userId, lecturerId?, studentId?)` | mutation | **admin-only**; says which lecturer or student an account belongs to. Both omitted clears the link; both given fails `BOTH_LINKS_SET`; a person another account already claims fails `ALREADY_LINKED`; an id naming nobody fails `INVALID_LINK` |
@@ -1748,6 +1833,7 @@ trade here, and the reasoning is in *Known limitations* along with what it costs
 | `grantPermission(granteeType, userId\|groupId, resourceType, resourceId, level)` | mutation | needs `MANAGE` on the resource; `resourceId` is omitted only for `GLOBAL`. Re-granting an existing scope moves its level and answers `isSuccess: true` with `errorStatus: UPDATED`. Refusals: `FORBIDDEN` (no `MANAGE` there, or no access at all), `LEVEL_ABOVE_OWN`, `INVALID_GRANTEE` (neither or both of user/group, or an id naming nobody), `UNKNOWN_RESOURCE_TYPE`, `UNKNOWN_ACCESS_LEVEL` |
 | `revokePermission(permissionId)` | mutation | needs `MANAGE` from a **strict ancestor** of the grant's resource, or that the caller made it (`granted_by`) — that second branch is checked first and needs no level at all. Refusals: `FORBIDDEN`, `PERMISSION_NOT_FOUND` |
 | `accessLevels(resourceType, resourceIds)` | query | `[ResourceAccess!]!` — `{ id, level }` per reachable id, which is what the frontend uses to decide which buttons to show. Ids the caller cannot reach are omitted rather than returned with a null level. Replaces `canModifyResources`, whose yes/no answer could not say whether the Delete button next to Edit belonged there |
+| `accessModel` | query | `[ResourceTypeAccess!]!` — the permission cascade by entity type: each type's foreign-key parents (with the input field naming each), its join-table parents, and whether it is a `@PermissionRoot`. Derived from the annotations at startup, so it is constant for the lifetime of the service and a client fetches it once. What lets the frontend answer "could this account create one of these" and "which of the values I am about to send names a scope" without keeping its own copy of the hierarchy |
 | `grantsForResource(resourceType, resourceId, includeInherited)` | query | who can reach a resource and at what level; needs `MANAGE` on it. `includeInherited` defaults to true, adding grants held on ancestors and university-wide grants, each marked `inherited: true` — "who can edit this кафедра" is answered wrongly by a list that omits the deanery above it. Ordered direct-first, then strongest level first within each group |
 | `requestRegistration(email)` | mutation | **unauthenticated**. Asks for a registration link. `LINK_SENT` (with `role`), `ALREADY_REGISTERED`, `PERSON_ALREADY_LINKED`, `NOT_ELIGIBLE`, `TOO_MANY_REQUESTS`, `MAIL_FAILED` — see above |
 | `requestPasswordReset(email)` | mutation | **unauthenticated**. `LINK_SENT`, `UNKNOWN_EMAIL`, `ACCOUNT_DISABLED`, `TOO_MANY_REQUESTS`, `MAIL_FAILED` |
@@ -1761,6 +1847,31 @@ than a string so a client cannot invent a fourth value and so introspection carr
 means — and `ResourceAccess { id, level }`. `PermissionGrant` gained `level: AccessLevel!` and
 `inherited: Boolean`, the latter set only by `grantsForResource` and only as a display hint: an
 inherited grant is shown as context and cannot be revoked from there.
+
+#### Publishing what a caller could do, and where
+
+`accessLevels` answers "may I edit *this* row", which is the right question next to a row and the
+wrong one before a screen exists. A client also has to decide whether to draw «+ Додати» at all, and
+whether a page of nothing but editors is worth offering — and neither has a row to ask about. That
+gap is why the frontend used to guess: it showed «+ Додати» to anyone holding a grant *anywhere*, so
+a викладач whose grant was one кафедра was offered «+ Додати корпус» and refused by this service the
+moment they pressed it.
+
+Two fields on `CurrentUser` and one query close it, and all three are derived from the annotations
+already declared on the domain classes rather than from anything new:
+
+| Field | Answers |
+|---|---|
+| `CurrentUser.globalLevel` | this account's university-wide level, or null. The client used to scan `permissions` for `resource_type = 'GLOBAL'` itself |
+| `CurrentUser.creatableResourceTypes` | the entity types it could create something of **somewhere** — `PermissionEvaluator#creatableResourceTypes`, over grants already loaded for the request, so `me` costs what it did |
+| `Query.accessModel` | the cascade by type, from `PermissionTypeGraph` |
+
+`creatableResourceTypes` is a type-level answer on purpose: "possible somewhere", not "possible
+here". It is what decides whether a control or a whole screen is worth drawing, and it is never what
+decides whether a write is accepted — that is still `AuthorizingDataFetcherProvider`, against the
+row. Reading it as permission would be a mistake in the safe direction (a shown button, a refused
+mutation) rather than in the dangerous one, but it is worth stating which of the two questions it is
+answering.
 
 One consequence of the upsert worth knowing before it surprises somebody: `DO UPDATE` also sets
 `granted_by` to whoever re-granted. Since revocation keys on `granted_by`, re-levelling somebody
@@ -1847,13 +1958,19 @@ schema and the queries you send are unchanged; only the number of SQL round trip
 
 ## Adding a new entity (the whole workflow)
 
-1. Create the annotated POJO in `org.lnu.timetable.domain`.
+1. Create the annotated POJO in `org.lnu.timetable.domain`, and say who owns it: a
+   `@PermissionParent`/`@PermissionJoinParent` for each way a grant should cascade into it, or
+   `@PermissionRoot` if it genuinely belongs to the university rather than to anything. This is not
+   optional — an entity declaring neither fails startup, because the two used to be indistinguishable
+   and one of them is a bug nothing reports (see [Permission cascade
+   annotations](#permission-cascade-annotations-on-domain-entities)).
 2. Add its table to `src/main/resources/db/schema.sql` (and seed rows to `data.sql`).
 3. Add a `type` + queries + mutations block in the relevant `*SchemaConfig` (or a new one,
    registered as a `@Component` implementing `GraphQLSchemaConfig` — all of them are picked
    up automatically via `List<GraphQLSchemaConfig>` injection).
-4. Restart — the schema, SQL handlers and relation batch loaders are regenerated
-   automatically.
+4. Restart — the schema, SQL handlers, relation batch loaders, the authorization cascade and the
+   `accessModel` the frontend reads it from are all regenerated automatically. Nothing in the client
+   needs editing for its permission handling to be correct about the new entity.
 
 ---
 
@@ -2003,8 +2120,11 @@ setup](#database-setup).
   substring `"NOT_FOUND"`, so it cannot distinguish the two. `lecturer_workloads.duration_hours`
   (`CHECK … BETWEEN 1 AND 4`) surfaces as `LECTURERWORKLOAD_NOT_FOUND`; a malformed
   `constraint_value` on any of the three timetable-constraint tables surfaces as its parent's
-  `RELATED_NOT_FOUND`; `room_groups_scope_check`, `class_start_time_sets_default_scope_check` and
-  `courses_semester_check` (a `semester` of `0` or less on a discipline) behave the same way. In
+  `RELATED_NOT_FOUND`; `room_groups_scope_check`, `class_start_time_sets_default_scope_check`,
+  `courses_semester_check` (a `semester` of `0` or less on a discipline) and the two length rules
+  V10 added — `degree_programs_duration_semesters_check`, and the `semester` / `duration_weeks`
+  checks a `degree_program_semesters` row passes through as part of its programme's `semesters`
+  list — behave the same way. In
   practice each is only reachable by bypassing the UI, which validates the
   same rules client-side and blocks the save — but a direct API caller gets a message that names
   the wrong problem. Distinguishing them would mean inspecting the Postgres `SQLSTATE`
