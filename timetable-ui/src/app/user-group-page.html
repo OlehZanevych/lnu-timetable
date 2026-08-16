@@ -1,0 +1,192 @@
+<div class="faculty-header">
+  <a routerLink="/user-groups" class="back-link">&#x2190; Групи користувачів</a>
+  <div class="faculty-header-title">
+    <div>
+      <h2>{{ group()?.name || 'Група користувачів' }}</h2>
+      @if (group()?.description) {
+        <p class="muted">{{ group()?.description }}</p>
+      }
+    </div>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@if (mayAdminister() === false) {
+  <div class="card no-access">
+    <h3>Немає доступу</h3>
+    <p class="muted">
+      Керувати цією групою може адміністратор або той, хто має рівень «Керування доступом» на всі
+      ресурси, до яких група має доступ. Членство в групі надає її доступ, тому й керування нею
+      вимагає того самого рівня.
+    </p>
+  </div>
+} @else if (group(); as g) {
+  <div class="faculty-layout">
+
+  <!-- Nav -->
+  <nav class="faculty-nav">
+    <p class="faculty-nav-group">Група</p>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'members'"
+            (click)="selectSection('members')">
+      &#x1F465; Учасники
+      @if (g.members.length) { <span class="nav-badge">{{ g.members.length }}</span> }
+    </button>
+    <button type="button" class="faculty-nav-item"
+            [class.active]="activeSection() === 'invitations'"
+            (click)="selectSection('invitations')">
+      &#x1F517; Посилання-запрошення
+      @if (invitations().length) { <span class="nav-badge">{{ invitations().length }}</span> }
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <div class="faculty-section">
+
+  @switch (activeSection()) {
+
+    <!-- ── Members ── -->
+    @case ('members') {
+      @if (memberError()) { <p class="error">{{ memberError() }}</p> }
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr><th>Прізвище, ім'я</th><th>Ел. пошта</th><th>Активний</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (m of g.members; track m.id) {
+              <tr>
+                <td>{{ memberName(m) }}</td>
+                <td>{{ m.email }}</td>
+                <td>{{ m.isActive ? 'Так' : 'Ні' }}</td>
+                <td class="row-actions">
+                  <button type="button" class="ghost" (click)="removeMember(m)">Вилучити</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="4" class="muted">У групі ще немає учасників.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="margin-top: 14px; padding: 16px 20px;">
+        <h4>Додати учасника</h4>
+        <form (ngSubmit)="searchUsers()" class="entity-form">
+          <label style="flex: 1 1 260px">
+            <span>Пошук за прізвищем, іменем або ел. поштою</span>
+            <input type="text" [(ngModel)]="memberSearch" name="memberSearch" placeholder="щонайменше 2 символи" />
+          </label>
+          <div class="actions">
+            <button type="submit" [disabled]="searching()">{{ searching() ? 'Пошук…' : 'Знайти' }}</button>
+          </div>
+        </form>
+
+        @if (searchResults(); as rows) {
+          <table style="margin-top: 10px;">
+            <tbody>
+              @for (u of rows; track u.id) {
+                <tr>
+                  <td>{{ memberName(u) }}</td>
+                  <td>{{ u.email }}</td>
+                  <td class="row-actions">
+                    <button type="button" (click)="addMember(u)">Додати</button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr><td colspan="3" class="muted">Нічого не знайдено, або всі знайдені вже в групі.</td></tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    }
+
+    <!-- ── Invitation links ── -->
+    @case ('invitations') {
+      <p class="muted">
+        Посилання-запрошення додає до цієї групи того, хто ним скористається. Воно нічого більше не
+        дає: обліковий запис за ним не створюється, доступ окремо не надається, і той, хто приєднався,
+        не може запрошувати інших. Достатньо мати обліковий запис і бути в системі.
+      </p>
+
+      @if (createError()) { <p class="error">{{ createError() }}</p> }
+
+      <div class="card" style="padding: 16px 20px;">
+        <form (ngSubmit)="createInvitation()" class="entity-form">
+          <label>
+            <span>Термін дії</span>
+            <input type="number" min="1" [(ngModel)]="ttlAmount" name="ttlAmount" required />
+          </label>
+          <label>
+            <span>&nbsp;</span>
+            <select [(ngModel)]="ttlUnit" name="ttlUnit">
+              <option value="minutes">хвилин</option>
+              <option value="hours">годин</option>
+              <option value="days">діб</option>
+            </select>
+          </label>
+          <div class="actions">
+            <button type="submit" [disabled]="creating() || !ttlValid()">
+              {{ creating() ? 'Створення…' : '+ Створити посилання' }}
+            </button>
+          </div>
+        </form>
+        <p class="muted">Від 5 хвилин до 30 діб.</p>
+      </div>
+
+      @if (justCreated(); as inv) {
+        <div class="card account-outcome" style="margin-top: 14px;">
+          <strong>Посилання створено.</strong>
+          <p class="muted">Поділіться ним із тими, кого запрошуєте. Воно є в переліку нижче й доки не видалене — працює.</p>
+          <div class="invite-link-row">
+            <input type="text" readonly [value]="linkFor(inv)" [id]="'invite-link-' + inv.id" />
+            <button type="button" (click)="copyLink(inv)">
+              {{ copied() === inv.id ? 'Скопійовано' : 'Копіювати' }}
+            </button>
+          </div>
+        </div>
+      }
+
+      <div class="card" style="margin-top: 14px;">
+        <table>
+          <thead>
+            <tr><th>Посилання</th><th>Діє до</th><th>Приєдналось</th><th>Створив</th><th></th></tr>
+          </thead>
+          <tbody>
+            @for (inv of invitations(); track inv.id) {
+              <tr [class.muted]="inv.isExpired">
+                <td>
+                  <div class="invite-link-row">
+                    <input type="text" readonly [value]="linkFor(inv)" [id]="'invite-link-' + inv.id" />
+                    <button type="button" class="ghost" (click)="copyLink(inv)">
+                      {{ copied() === inv.id ? 'Скопійовано' : 'Копіювати' }}
+                    </button>
+                  </div>
+                </td>
+                <td>
+                  {{ formatMoment(inv.expiresAt) }}
+                  <span class="muted"> · {{ remaining(inv) }}</span>
+                </td>
+                <td>{{ inv.joinCount }}</td>
+                <td>{{ inv.createdByName || '—' }}<span class="muted"> · {{ formatMoment(inv.createdAt) }}</span></td>
+                <td class="row-actions">
+                  <button type="button" class="ghost" (click)="deleteInvitation(inv)">Видалити</button>
+                </td>
+              </tr>
+            } @empty {
+              <tr><td colspan="5" class="muted">Посилань ще немає.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  </div>
+  </div>
+} @else if (mayAdminister() !== null) {
+  <p class="muted">Групу не знайдено.</p>
+}

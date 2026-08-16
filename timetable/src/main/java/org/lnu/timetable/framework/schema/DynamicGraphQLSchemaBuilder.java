@@ -661,12 +661,14 @@ public class DynamicGraphQLSchemaBuilder {
             .argument(newArgument().name("description").type(GraphQLString)));
 
         mutationBuilder.field(newFieldDefinition().name("addUserToGroup").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
-            .description("Administrator-only")
+            .description("Adds an account to a group. Needs MANAGE over every resource the group holds a grant on, or "
+                + "administrator access — see GroupAdminPolicy. Membership is how access travels, so the rule "
+                + "is delegation's: you may hand out only what you hold")
             .argument(newArgument().name("userId").type(GraphQLNonNull.nonNull(GraphQLID)))
             .argument(newArgument().name("groupId").type(GraphQLNonNull.nonNull(GraphQLID))));
 
         mutationBuilder.field(newFieldDefinition().name("removeUserFromGroup").type(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("SimpleResponse")))
-            .description("Administrator-only")
+            .description("Removes an account from a group. The same rule as addUserToGroup")
             .argument(newArgument().name("userId").type(GraphQLNonNull.nonNull(GraphQLID)))
             .argument(newArgument().name("groupId").type(GraphQLNonNull.nonNull(GraphQLID))));
 

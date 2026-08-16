@@ -170,6 +170,15 @@ pipeline cannot seed the person link «Мій кабінет» reads. Both are o
 `build_sql.py`'s `auth_block`, and neither is a reason to avoid re-running the
 scrape — just re-apply the account decisions afterwards.
 
+More has accumulated in the checked-in dump since, and none of it comes from
+here: the «Волонтери — наповнення даних» group and its nineteen `FACULTY` grants
+(seeded by `V12`), the empty `group_invitations` block, and — most easily missed
+— the `flyway_schema_history` rows recording V1…V12 as applied. Without those
+last ones a freshly loaded database re-runs every migration on the next start.
+Each is written to be a no-op on a second run, so nothing breaks; but the dump
+this pipeline writes is a database *before* the migrations rather than after
+them, which is a different starting point from the one the READMEs describe.
+
 The same caveat applies to ids in general: `departments`, `lecturers` and
 `degree_programs` in the checked-in `data.sql` have been renumbered by hand since
 this pipeline last wrote it (the кафедра/викладачі/освітні програми of прикладна

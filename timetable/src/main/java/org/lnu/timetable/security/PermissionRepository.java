@@ -337,6 +337,21 @@ public class PermissionRepository {
         return spec.map(this::mapPermission).all();
     }
 
+    /**
+     * Every grant held <em>by</em> one group — the other direction from {@link #grantsForResource},
+     * which asks what sits on a resource. This asks what a group is worth, and it is what decides
+     * who may administer that group's invitation links: whoever holds MANAGE over every resource the
+     * group can already reach, since anything less would let somebody hand out access they do not
+     * have themselves by putting a stranger into a group that has it. See
+     * {@code GroupAdminPolicy}.
+     */
+    public Flux<PermissionRow> grantsOfGroup(Long groupId) {
+        return db.sql(SELECT_GRANT + " FROM permissions WHERE grantee_type = 'GROUP' AND group_id = :groupId")
+            .bind("groupId", groupId)
+            .map(this::mapPermission)
+            .all();
+    }
+
     private static final String SELECT_GRANT =
         "SELECT id, grantee_type, user_id, group_id, resource_type, resource_id, level, granted_by";
 

@@ -152,12 +152,18 @@
 <h3 class="hours-title" style="margin-top: 28px;">Групи</h3>
 <div class="card">
   <table>
-    <thead><tr><th>Назва</th><th>Опис</th></tr></thead>
+    <thead><tr><th>Назва</th><th>Опис</th><th></th></tr></thead>
     <tbody>
       @for (g of groups(); track g.id) {
-        <tr><td>{{ g.name }}</td><td>{{ g.description || '&mdash;' }}</td></tr>
+        <tr>
+          <td><a class="ent-link" [routerLink]="['/user-group', g.id]">{{ g.name }}</a></td>
+          <td>{{ g.description || '&mdash;' }}</td>
+          <td class="row-actions">
+            <a class="ent-link" [routerLink]="['/user-group', g.id, 'invitations']">Посилання-запрошення</a>
+          </td>
+        </tr>
       } @empty {
-        <tr><td colspan="2" class="muted">Груп ще немає.</td></tr>
+        <tr><td colspan="3" class="muted">Груп ще немає.</td></tr>
       }
     </tbody>
   </table>
@@ -180,23 +186,14 @@
   </form>
 </div>
 
-<div class="card" style="margin-top: 14px; padding: 16px 20px;">
-  @if (membershipError()) { <p class="error">{{ membershipError() }}</p> }
-  <form class="entity-form">
-    <label>
-      <span>Користувач (ID)</span>
-      <input type="text" [(ngModel)]="membership.userId" name="membershipUserId" />
-    </label>
-    <label>
-      <span>Група (ID)</span>
-      <input type="text" [(ngModel)]="membership.groupId" name="membershipGroupId" />
-    </label>
-    <div class="actions">
-      <button type="button" (click)="addToGroup()">Додати до групи</button>
-      <button type="button" class="ghost" (click)="removeFromGroup()">Видалити з групи</button>
-    </div>
-  </form>
-</div>
+<!-- Membership used to be two text boxes here, into which the numeric id of a user and the numeric
+     id of a group were typed. It lives on the group's own page now — a list of who is in it, a
+     search over accounts instead of an id, and the invitation links that let people join without
+     being added one at a time. -->
+<p class="muted" style="margin-top: 10px;">
+  Учасники груп та посилання-запрошення — на сторінці кожної групи (натисніть її назву вище), або в
+  розділі <a class="ent-link" routerLink="/user-groups">«Групи користувачів»</a>.
+</p>
 
 <!-- ── Access ── -->
 

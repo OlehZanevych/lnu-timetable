@@ -90,10 +90,6 @@ export class AdminPage implements OnInit {
   newGroup = { name: '', description: '' };
   createGroupError = signal('');
 
-  // membership form
-  membership = { userId: '', groupId: '' };
-  membershipError = signal('');
-
   /**
    * Which resource the access panel below is pointed at. The panel itself — `<app-resource-access>`
    * — is the same component the факультет and кафедра pages carry as their «Доступ» tab; all this
@@ -329,21 +325,4 @@ export class AdminPage implements OnInit {
     });
   }
 
-  addToGroup() {
-    this.membershipError.set('');
-    const q = `mutation($userId: ID!, $groupId: ID!) { addUserToGroup(userId: $userId, groupId: $groupId) { isSuccess errorStatus } }`;
-    this.gql.request(q, this.membership).subscribe({
-      next: (d: any) => { if (!d.addUserToGroup.isSuccess) this.membershipError.set('Помилка додавання.'); },
-      error: (e) => this.membershipError.set(e.message)
-    });
-  }
-
-  removeFromGroup() {
-    this.membershipError.set('');
-    const q = `mutation($userId: ID!, $groupId: ID!) { removeUserFromGroup(userId: $userId, groupId: $groupId) { isSuccess errorStatus } }`;
-    this.gql.request(q, this.membership).subscribe({
-      next: (d: any) => { if (!d.removeUserFromGroup.isSuccess) this.membershipError.set('Помилка видалення.'); },
-      error: (e) => this.membershipError.set(e.message)
-    });
-  }
 }

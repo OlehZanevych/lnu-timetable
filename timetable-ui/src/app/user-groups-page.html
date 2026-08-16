@@ -1,0 +1,48 @@
+<div class="page-header">
+  <div>
+    <h2>Групи користувачів</h2>
+    <p class="muted">
+      Членство в групі надає її доступ. Керувати групою може адміністратор або той, хто має рівень
+      «Керування доступом» на всі ресурси, до яких ця група має доступ.
+    </p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+
+@if (groups(); as rows) {
+  <div class="card">
+    <table>
+      <thead><tr><th>Назва</th><th>Опис</th><th>Учасників</th><th></th></tr></thead>
+      <tbody>
+        @for (g of rows; track g.id) {
+          <tr>
+            <td><a class="ent-link" [routerLink]="['/user-group', g.id]">{{ g.name }}</a></td>
+            <td>{{ g.description || '&mdash;' }}</td>
+            <td>{{ g.members.length }}</td>
+            <td class="row-actions">
+              <a class="ent-link" [routerLink]="['/user-group', g.id, 'invitations']">Посилання-запрошення</a>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="4" class="muted">
+              Немає груп, якими Ви можете керувати.
+              @if (!auth.isAdmin()) {
+                Щоб керувати групою, потрібен рівень «Керування доступом» на всі ресурси, до яких
+                вона має доступ — його надає адміністратор або деканат.
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  @if (auth.isAdmin()) {
+    <p class="muted" style="margin-top: 10px;">
+      Нові групи створюються на сторінці <a class="ent-link" routerLink="/admin">«Користувачі та права»</a>.
+    </p>
+  }
+} @else if (!error()) {
+  <p class="muted">Завантаження…</p>
+}

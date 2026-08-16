@@ -1,0 +1,49 @@
+<div class="login-wrap">
+  <div class="card login-card">
+    <h2>Приєднання до групи</h2>
+    <p class="muted">Львівський національний університет імені Івана Франка</p>
+
+    @if (loadError()) {
+      <p class="error">{{ loadError() }}</p>
+    } @else if (joined(); as name) {
+      <div class="account-outcome ok">
+        <strong>Вас додано до групи «{{ name }}».</strong>
+        <p>Доступ, який має ця група, тепер Ваш. Він з'явиться в меню зліва.</p>
+        <button type="button" (click)="goHome()">До системи</button>
+      </div>
+    } @else if (check() === null) {
+      <p class="muted">Перевіряємо посилання…</p>
+    } @else if (problem(); as p) {
+      <div class="account-outcome warn">
+        <strong>{{ p.title }}</strong>
+        <p>{{ p.detail }}</p>
+      </div>
+      <p class="muted login-hint"><a routerLink="/">До системи</a></p>
+    } @else if (check(); as c) {
+      @if (c.isMember) {
+        <div class="account-outcome ok">
+          <strong>Ви вже учасник групи «{{ c.groupName }}».</strong>
+          <p>Нічого робити не потрібно.</p>
+          <button type="button" (click)="goHome()">До системи</button>
+        </div>
+      } @else {
+        <p>
+          Вас запрошено до групи <strong>«{{ c.groupName }}»</strong>.
+        </p>
+        <p class="muted">
+          Приєднавшись, Ви отримаєте той доступ, який надано цій групі. Ви входите як
+          {{ auth.currentUser()?.email }}.
+        </p>
+
+        @if (error()) { <p class="error">{{ error() }}</p> }
+
+        <div class="actions">
+          <button type="button" (click)="join()" [disabled]="joining()">
+            {{ joining() ? 'Приєднання…' : 'Приєднатися до групи' }}
+          </button>
+          <button type="button" class="ghost" (click)="goHome()">Не зараз</button>
+        </div>
+      }
+    }
+  </div>
+</div>

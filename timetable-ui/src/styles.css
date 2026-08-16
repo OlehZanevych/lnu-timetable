@@ -504,6 +504,18 @@ button.danger:hover { background: #991b1b !important; }
    error, since three of the six things that can happen are neither a success nor a fault. The
    three tones are the three kinds of answer: a link is on its way, something is true of this
    address that the reader has to act on, or the send itself failed. */
+/* The invitation link itself, in a read-only field beside the button that copies it. A field
+   rather than text: the link is 60 characters of base64url that nobody retypes, and selecting it by
+   hand is what a caller falls back to where `navigator.clipboard` is unavailable (any origin that is
+   not https:// or localhost). */
+.invite-link-row { display: flex; gap: 8px; align-items: center; }
+.invite-link-row input {
+  flex: 1 1 auto; min-width: 220px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: #f8fafc; color: #334155;
+}
+.invite-link-row button { white-space: nowrap; }
+
 .account-outcome { border-radius: 8px; padding: 12px 14px; margin-top: 14px; font-size: 14px; }
 .account-outcome p { margin: 6px 0 0; }
 .account-outcome button { margin-top: 10px; }
