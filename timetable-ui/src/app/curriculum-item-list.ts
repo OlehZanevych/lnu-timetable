@@ -2,6 +2,8 @@ import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GqlVars, GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
@@ -83,6 +85,7 @@ const toPlanItem = (item: CurriculumItem): PlanItemInput => {
 })
 export class CurriculumItemList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
   private settings = inject(GlobalPropertiesService);
 
   @Input() degreeProgramId!: string;
@@ -161,6 +164,35 @@ export class CurriculumItemList implements OnInit, OnChanges {
     return facultyId ? this.departmentOptions().filter((d) => d.facultyId === facultyId) : this.departmentOptions();
   });
 
+  // ── Access ───────────────────────────────────────────────────────────────
+
+  /**
+   * This account's level on the освітня програма this table belongs to.
+   *
+   * Every row here is a позиція of that one план, and every mutation the table sends names its id,
+   * so the освітня програма is the edge the server authorises all three of them through — the same
+   * one `levelForNew` walks for a row that does not exist yet. One question answers the whole page.
+   */
+  private degreeProgramLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the освітня програма's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.degreeProgramLevel()));
+
+  /** «+ Додати» and «Редагувати» both write a позиція, so both need «Редагування». */
+  canModify = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /** «Видалити» drops a позиція of the план outright, which needs «Повний доступ». */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
+
+  private loadPermissions() {
+    // Answering with the previous освітня програма's level while the new answer is in flight would
+    // offer its controls over somebody else's план for a moment, so the old one is dropped first.
+    this.degreeProgramLevel.set(null);
+    if (!this.degreeProgramId) return;
+    this.auth.accessLevel('DEGREE_PROGRAM', this.degreeProgramId)
+      .subscribe((level) => this.degreeProgramLevel.set(level));
+  }
+
   private initialized = false;
 
   ngOnInit() {
@@ -168,11 +200,11 @@ export class CurriculumItemList implements OnInit, OnChanges {
     this.settings.ensureLoaded();
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
-    if (this.degreeProgramId) { this.loadItems(); this.loadStudyForms(); }
+    if (this.degreeProgramId) { this.loadItems(); this.loadStudyForms(); this.loadPermissions(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.degreeProgramId) { this.loadItems(); this.loadStudyForms(); }
+    if (this.initialized && this.degreeProgramId) { this.loadItems(); this.loadStudyForms(); this.loadPermissions(); }
   }
 
   private loadFacultyOptions() {

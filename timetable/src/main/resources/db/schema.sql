@@ -97,13 +97,63 @@ CREATE TYPE degree AS ENUM ('JUNIOR_BACHELOR', 'BACHELOR', 'MASTER', 'PHD', 'DOC
 
 CREATE TABLE degree_programs
 (
-    id            BIGSERIAL PRIMARY KEY,
-    code          VARCHAR(16)  COLLATE ukrainian NOT NULL,
-    name          VARCHAR(160) COLLATE ukrainian NOT NULL,
-    degree        degree       NOT NULL,
-    faculty_id    BIGINT NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
+    id                 BIGSERIAL PRIMARY KEY,
+    code               VARCHAR(16)  COLLATE ukrainian NOT NULL,
+    name               VARCHAR(160) COLLATE ukrainian NOT NULL,
+    degree             degree       NOT NULL,
+    faculty_id         BIGINT       NOT NULL REFERENCES faculties (id) ON DELETE CASCADE,
+    -- How long the programme runs, counted in semesters: 8 for a four-year bachelor's programme, 3 or
+    -- 4 for a master's depending on the programme. A count, not the number its last semester carries
+    -- — the two are the same only for a programme whose semesters start at 1, and in the current data
+    -- they often do not: some master's programmes number their semesters 9, 10, 11, carrying on from
+    -- the bachelor's degree they follow, while others start again at 1.
+    --
+    -- NOT NULL, and with no DEFAULT: every programme has a length, and the number of semesters a
+    -- розклад is planned across is not something the system should be guessing at. A DEFAULT would be
+    -- the guess — one number that is right for bachelor's programmes and wrong for every master's,
+    -- entered automatically and indistinguishable afterwards from one somebody chose.
+    duration_semesters INTEGER NOT NULL CHECK (duration_semesters > 0),
     UNIQUE (name, degree)
 );
+
+-- How long one semester of one programme actually lasts, in teaching weeks.
+--
+-- The number of weekly classes a розклад has to place is hours ÷ (weeks × class length), and the
+-- weeks in that division come from the `semester_duration_weeks` global property — one number for
+-- the whole university. That holds for most of a degree and stops holding at the end of one: the last
+-- semester of a master's programme is largely taken up by the final attestation and a work placement,
+-- so its teaching runs for fewer weeks than the sixteen the property claims, and planning it as
+-- sixteen puts fewer classes a week on the timetable than the plan's hours actually require.
+--
+-- One row per semester that *differs*, rather than one per semester of every programme. A missing
+-- row is not missing data — it means «the usual length», which is exactly what the global property
+-- is for, and filling the table in exhaustively would turn one number that can be corrected in one
+-- place into several hundred copies of it that cannot.
+--
+-- `semester` is the number the plan itself uses — the same value curriculum_items.semester carries
+-- for this programme — because lining the two up is the entire purpose of the row. That numbering is
+-- the programme's own and is not necessarily 1-based: a master's programme whose plan runs 9, 10, 11
+-- states 9, 10, 11 here, not 1, 2, 3.
+--
+-- It is bounded below but not above. A CHECK cannot read degree_programs.duration_semesters from
+-- here, so a row naming a semester the programme does not have is accepted by the database and means
+-- nothing: no curriculum item carries that semester, so nothing is ever planned against it.
+CREATE TABLE degree_program_semesters
+(
+    id                BIGSERIAL PRIMARY KEY,
+    degree_program_id BIGINT  NOT NULL REFERENCES degree_programs (id) ON DELETE CASCADE,
+    semester          INTEGER NOT NULL CHECK (semester > 0),
+    -- Teaching weeks, replacing `semester_duration_weeks` for this one semester of this one
+    -- programme. Whole weeks, and greater than zero: a semester with no teaching weeks would make
+    -- the division above undefined rather than describing a semester anybody has.
+    duration_weeks    INTEGER NOT NULL CHECK (duration_weeks > 0),
+    -- A programme states each of its semesters' length at most once; re-stating it is an update of
+    -- this row rather than a second row meaning the same thing.
+    UNIQUE (degree_program_id, semester)
+);
+
+COMMENT ON TABLE degree_program_semesters IS
+    'Per-semester override of the semester_duration_weeks global property, for one degree programme. A semester with no row here runs for the global number of weeks.';
 
 -- ============================ People & groups ============================
 

@@ -5,10 +5,12 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PermissionRoot;
 
 import java.util.List;
 
 @Data
+@PermissionRoot("Науковий ступінь is defined by the state and shared by every faculty; nobody here owns one")
 @GraphQLEntity(table = "academic_degrees")
 public class AcademicDegree {
 

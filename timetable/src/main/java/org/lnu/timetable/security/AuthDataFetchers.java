@@ -68,7 +68,12 @@ public class AuthDataFetchers {
             .flatMap(groupIds -> Mono.zip(
                 evaluator.isAdmin(),
                 permissionRepo.effectiveGrants(principal.userId(), groupIds).collectList(),
-                permissionRepo.groupsForUser(principal.userId()).collectList()
+                permissionRepo.groupsForUser(principal.userId()).collectList(),
+                // Both come off grants the evaluator has already loaded and cached for this request,
+                // so `me` still costs what it did: the client gets what it can do in the same answer
+                // that tells it who it is, rather than asking again once per screen.
+                evaluator.globalLevel().map(AccessLevel::name).defaultIfEmpty(""),
+                evaluator.creatableResourceTypes()
             ).map(tuple -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", principal.userId());
@@ -84,6 +89,10 @@ public class AuthDataFetchers {
                 m.put("isAdmin", tuple.getT1());
                 m.put("permissions", tuple.getT2().stream().map(this::permissionToMap).toList());
                 m.put("groups", tuple.getT3().stream().map(this::groupToMap).toList());
+                // Mono.zip has no way to carry an absent value, so "no GLOBAL grant" travels as the
+                // empty string and becomes null here rather than an AccessLevel nobody holds.
+                m.put("globalLevel", tuple.getT4().isEmpty() ? null : tuple.getT4());
+                m.put("creatableResourceTypes", List.copyOf(tuple.getT5()));
                 return m;
             }));
     }

@@ -146,8 +146,26 @@ public class EntityMetadataRegistry {
                 pjp.value(), pjp.joinTable(), pjp.selfColumn(), pjp.parentColumn()));
         }
 
+        // "Nothing is above this" and "the edge was forgotten" used to look identical from here, and
+        // they have opposite consequences: the first is a university-wide object, the second silently
+        // drops the entity out of every faculty's cascade until a деканат reports that they can no
+        // longer edit their own rows. Saying which one it is costs one annotation and is checked now,
+        // at startup, rather than discovered later from a denial.
+        boolean permissionRoot = entityClass.isAnnotationPresent(PermissionRoot.class);
+        if (permissionRoot && !(permissionParents.isEmpty() && permissionJoinParents.isEmpty())) {
+            throw new IllegalStateException(entityClass.getSimpleName()
+                + " is annotated @PermissionRoot but also declares a permission parent. It is one or the other:"
+                + " a root has no owner, and an entity with an owner inherits from it.");
+        }
+        if (!permissionRoot && permissionParents.isEmpty() && permissionJoinParents.isEmpty()) {
+            throw new IllegalStateException(entityClass.getSimpleName()
+                + " declares no @PermissionParent and no @PermissionJoinParent, so no grant except GLOBAL can"
+                + " ever reach it. If that is intended, say so with @PermissionRoot; if it is not, declare the"
+                + " ancestor it hangs off.");
+        }
+
         return new EntityMetadata(entityClass, tableName, keyColumn, fields, selectableColumns, relations,
-            resourceType, permissionParents, permissionJoinParents);
+            resourceType, permissionParents, permissionJoinParents, permissionRoot);
     }
 
     private Class<?> getCollectionGenericType(Field field) {

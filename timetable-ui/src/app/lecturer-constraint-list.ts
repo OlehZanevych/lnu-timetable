@@ -2,6 +2,8 @@ import { Component, Input, OnChanges, OnInit, WritableSignal, computed, inject, 
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { compareUk } from './sort';
 import { DepartmentWorkloadSummary } from './department-workload-summary';
 
@@ -100,8 +102,31 @@ interface Violation { message: string; keys: string[] }
 })
 export class LecturerConstraintList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
 
   @Input() departmentId!: string;
+
+  /**
+   * This account's level on the кафедра whose lecturers are being edited here.
+   *
+   * Every write this component makes is an `updateLecturer` carrying the `workloadConstraints`
+   * nested list, and a Lecturer's permission scope is its кафедра, so one question answers the whole
+   * screen: nothing here is scoped any narrower than the department the tab belongs to.
+   */
+  private departmentLevel = signal<AccessLevel | null>(null);
+
+  /** The level actually in force: the кафедра's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.departmentLevel()));
+
+  /**
+   * Whether this account may change a card at all.
+   *
+   * `EDIT` and not `FULL`, including for «Очистити»: clearing a lecturer's fields does not delete
+   * anything by itself, it prepares an update that sends a shorter `workloadConstraints` list, and
+   * the rows that disappear do so because the nested list no longer names them. That is one
+   * `updateLecturer`, and an update needs `EDIT`.
+   */
+  canEdit = computed(() => allows(this.effectiveLevel(), 'EDIT'));
 
   readonly HOUR_TYPES = HOUR_TYPES;
   readonly SCOPES = SCOPES;
@@ -143,11 +168,24 @@ export class LecturerConstraintList implements OnInit, OnChanges {
 
   ngOnInit() {
     this.initialized = true;
-    if (this.departmentId) this.load();
+    if (this.departmentId) { this.loadPermission(); this.load(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.departmentId) this.load();
+    if (this.initialized && this.departmentId) { this.loadPermission(); this.load(); }
+  }
+
+  /**
+   * Asks about the кафедра the tab was opened on. The answer is dropped if the host has moved on to
+   * another department in the meantime: a late reply about the previous one would decide this one.
+   */
+  private loadPermission() {
+    const id = this.departmentId;
+    this.departmentLevel.set(null);
+    this.auth.accessLevel('DEPARTMENT', id).subscribe({
+      next: (level) => { if (id === this.departmentId) this.departmentLevel.set(level); },
+      error: () => { if (id === this.departmentId) this.departmentLevel.set(null); }
+    });
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────
@@ -361,6 +399,13 @@ export class LecturerConstraintList implements OnInit, OnChanges {
   // ── Saving ───────────────────────────────────────────────────────────────
 
   save(block: LecturerBlock) {
+    // The template does not draw «Зберегти» without EDIT, so reaching here means the card was made
+    // dirty some other way; the mutation is refused server-side either way, and stopping short of it
+    // spares the user a round trip that comes back «requires EDIT access».
+    if (!this.canEdit()) {
+      block.error.set('Змінення обмежень потребує рівня доступу «Редагування» до кафедри.');
+      return;
+    }
     if (this.hasViolations(block)) {
       block.error.set('Виправте суперечності перед збереженням.');
       return;
@@ -404,6 +449,7 @@ export class LecturerConstraintList implements OnInit, OnChanges {
 
   /** Clears every field of a card — saving then removes all of that lecturer's constraints. */
   clear(block: LecturerBlock) {
+    if (!this.canEdit()) return;
     for (const k of ALL_KEYS) block.values[k].set('');
     block.dirty.set(true);
     block.error.set('');

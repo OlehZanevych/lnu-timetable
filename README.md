@@ -53,9 +53,19 @@ items, working curriculum items, workloads, room assignment, timetable entries �
 level in place, so fixing one discipline no longer means visiting a degree programme page, then a
 department page, then a faculty page in turn. An `ELECTIVE_GROUP` also manages its electives there.
 
+**Not every semester is the same length.** A degree programme now says how many semesters it runs
+for, and «Тривалість семестрів» on its page says how many teaching weeks any one of them lasts where
+that differs from the one number the whole university otherwise uses — the last semester of a
+master's programme, mostly, where the final attestation and a work placement take up the rest. Those
+figures are recorded but not yet read by the arithmetic that decides how many classes a week a plan
+position needs: see [«Тривалість
+семестрів»](./timetable-ui/README.md#semester-lengths-degreeprogramsemesterlist-тривалість-семестрів).
+
 Alongside it: JWT sign-in with entity-scoped, cascading permissions, at three ordered levels — edit,
 full (which adds deletion) and manage (which adds the right to hand the same access to somebody
-else, so a deanery delegates a кафедра itself rather than queuing behind an administrator);
+else, so a deanery delegates a кафедра itself rather than queuing behind an administrator), with the
+client hiding what a given account cannot use — down to whole pages and tabs — from the same cascade
+the service enforces, published rather than copied;
 **self-service accounts** for the people already in the system — a викладач or a студент whose row
 carries an e-mail address creates their own account by following a link sent to it, valid thirty
 minutes, and anybody who has forgotten a password replaces it the same way, while an address
@@ -241,8 +251,8 @@ self-service registration works from the first start rather than after an edit t
 
 | Document | What it covers |
 |---|---|
-| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files) and the `HandWrittenApi` plug-in point for the parts of it that cannot be generated, the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, self-service registration and password recovery, the levelled permission model and how it is evaluated, and the person link that says who an account is |
-| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the registration and password-recovery screens, the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI down to which button each level opens |
+| [`timetable/README.md`](./timetable/README.md) | the domain model and every table, the config-driven entity framework (no controllers, services, repositories or `.gqls` files) and the `HandWrittenApi` plug-in point for the parts of it that cannot be generated, the generated GraphQL surface and its query catalogue, N+1-safe relation batching, the Flyway migrations that carry a database forward, authentication, self-service registration and password recovery, the levelled permission model — how it is evaluated, how it is published to the client, and why an entity that declares no owner does not start — and the person link that says who an account is |
+| [`timetable-ui/README.md`](./timetable-ui/README.md) | the two UI architectures that coexist, every page and child-list widget, the tab of a drill-down page in the URL, editing and deleting from a drill-down page and the links that lead between them, «Мій кабінет», the registration and password-recovery screens, the travel-time matrix, how every value reaches the service as a GraphQL variable, the reusable form controls, the pure modules that hold the logic, Ukrainian sorting and collation, and the permission-aware UI — which button each level opens, which screens and tabs hide themselves entirely, and the «Немає доступу» card that answers a link to one of them |
 | [`timetable-ui/WORKLOAD-GENERATION.md`](./timetable-ui/WORKLOAD-GENERATION.md) | assigning lecturers to working curriculum items: constraint semantics, the three passes, complexity, a worked example, and what is and isn't guaranteed |
 | [`timetable-ui/scripts/workload-bench/README.md`](./timetable-ui/scripts/workload-bench/README.md) | the benchmark behind that algorithm — 48 synthetic department instances, how they are sized from the statutory 600-hour ceiling, every metric defined, and the before-and-after of the optimisation |
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, the worker portfolio, a traced example, complexity, and the code map |

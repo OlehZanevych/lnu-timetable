@@ -7,7 +7,11 @@
 
 @if (error()) { <p class="error">{{ error() }}</p> }
 
-<!-- ── Automatic generation ── -->
+<!-- ── Automatic generation ──
+     The panel exists only to produce a plan and then write it over the whole кафедра, so it is
+     drawn only for somebody who could write that plan. There is no reading of the навантаження in
+     it that the tables below do not already give. -->
+@if (canEdit()) {
 <div class="card gen-panel">
   <div class="gen-header">
     <strong>&#x2699; Автоматичне формування навантаження</strong>
@@ -106,6 +110,7 @@
     </details>
   }
 </div>
+}
 
 @if (combinedItems().length > 0) {
   <h3>Об'єднані позиції</h3>
@@ -126,7 +131,9 @@
 
         <div class="lw-record">
           <div class="lw-record-header">
-            <button type="button" class="ghost" (click)="openCreateCombined(c)">+ Додати навантаження</button>
+            @if (canEdit()) {
+              <button type="button" class="ghost" (click)="openCreateCombined(c)">+ Додати навантаження</button>
+            }
           </div>
 
           <table class="wci-table">
@@ -158,9 +165,15 @@
                   <td>{{ academicGroupNames(w.academicGroups) }}</td>
                   <td>{{ w.durationHours }} год.</td>
                   <td class="cell-info">{{ startTimeSetName(w) }}</td>
+                  <!-- The row itself stays whatever the reader may do with it: who teaches this
+                       position, to which groups and on which bells is what the tab is read for. -->
                   <td class="row-actions">
-                    <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
-                    <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
+                    @if (canEdit()) {
+                      <button type="button" class="ghost" (click)="openEditCombined(c, w)">Редагувати</button>
+                    }
+                    @if (canDelete()) {
+                      <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
+                    }
                   </td>
                 </tr>
               } @empty {
@@ -206,7 +219,9 @@
                   } @else { &mdash; }
                 </span>
               }
-              <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
+              @if (canEdit()) {
+                <button type="button" class="ghost" (click)="openCreate(wci)">+ Додати навантаження</button>
+              }
             </div>
 
             <table class="wci-table">
@@ -281,8 +296,12 @@
                     }
                     <td class="cell-info">{{ startTimeSetName(w) }}</td>
                     <td class="row-actions">
-                      <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
-                      <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
+                      @if (canEdit()) {
+                        <button type="button" class="ghost" (click)="openEdit(wci, w)">Редагувати</button>
+                      }
+                      @if (canDelete()) {
+                        <button type="button" class="ghost danger" (click)="remove(w)">Видалити</button>
+                      }
                     </td>
                   </tr>
                 } @empty {

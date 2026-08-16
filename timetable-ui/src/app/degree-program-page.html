@@ -19,7 +19,7 @@
   <!-- Nav -->
   <nav class="faculty-nav">
     <p class="faculty-nav-group">Освітня програма</p>
-    @for (sec of sections; track sec.key) {
+    @for (sec of sections(); track sec.key) {
       <button type="button" class="faculty-nav-item"
               [class.active]="activeSection() === sec.key"
               (click)="selectSection(sec.key)"
@@ -38,7 +38,9 @@
         @if (s) {
           <div class="page-header">
             <h2>Інформація про освітню програму</h2>
-            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+            @if (canModifyDegreeProgram()) {
+              <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+            }
           </div>
           <div class="card info-card">
             <table class="info-table">
@@ -47,15 +49,27 @@
                 <tr><th>Код</th><td>{{ s.code || '&mdash;' }}</td></tr>
                 <tr><th>Назва</th><td>{{ s.name || '&mdash;' }}</td></tr>
                 <tr><th>Ступінь</th><td>{{ degreeLabels[s.degree] || s.degree || '&mdash;' }}</td></tr>
+                <tr><th>Тривалість навчання</th><td>{{ s.durationSemesters }} семестр(ів)</td></tr>
               </tbody>
             </table>
           </div>
         }
       }
 
+      <!-- ── Semester lengths ── -->
+      @case ('semesters') {
+        <app-access-gate [need]="sectionNeed('DEGREE_PROGRAM_SEMESTER')">
+          <app-degree-program-semester-list [degreeProgramId]="degreeProgramId" />
+        </app-access-gate>
+      }
+
       <!-- ── Curriculum editor ── -->
+      <!-- Gated as well as hidden from the nav: the tab strip decides what is worth offering, the
+           gate answers whoever arrives here by a link somebody sent them. -->
       @case ('curriculaEditor') {
-        <app-curriculum-editor [degreeProgramId]="degreeProgramId" [degree]="s?.degree ?? ''" />
+        <app-access-gate [need]="sectionNeed('CURRICULUM_ITEM')">
+          <app-curriculum-editor [degreeProgramId]="degreeProgramId" [degree]="s?.degree ?? ''" />
+        </app-access-gate>
       }
 
       <!-- ── Curricula ── -->
@@ -66,7 +80,9 @@
 
       <!-- ── Working curriculum editor ── -->
       @case ('workingCurriculaEditor') {
-        <app-working-curriculum-list [degreeProgramId]="degreeProgramId" [degreeProgramFacultyId]="s?.faculty?.id ?? null" />
+        <app-access-gate [need]="sectionNeed('WORKING_CURRICULUM_ITEM')">
+          <app-working-curriculum-list [degreeProgramId]="degreeProgramId" [degreeProgramFacultyId]="s?.faculty?.id ?? null" />
+        </app-access-gate>
       }
 
       <!-- ── Working curricula (read-only, with the printable РНП) ── -->
@@ -105,6 +121,11 @@
         <label>
           <span>Ступінь *</span>
           <app-search-select [options]="DEGREE_SELECT_OPTIONS" [(ngModel)]="editForm['degree']" name="degree" placeholder="— не обрано —" />
+        </label>
+        <label>
+          <span>Тривалість навчання, семестрів *</span>
+          <input type="number" min="1" [(ngModel)]="editForm['durationSemesters']"
+                 name="durationSemesters" required />
         </label>
         <div class="actions">
           <button type="submit">Зберегти</button>

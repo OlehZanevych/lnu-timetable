@@ -12,6 +12,8 @@ interface DegreeProgram {
   code: string;
   name: string;
   degree: string;
+  /** How long the programme runs, in semesters — NOT NULL in the database, so always present. */
+  durationSemesters: number;
 }
 
 @Component({
@@ -62,7 +64,7 @@ export class DegreeProgramList implements OnInit, OnChanges {
 
   load() {
     if (!this.facultyId) return;
-    const q = `query($facultyId: ID, $limit: Int!) { degreePrograms { degreeProgramConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } } } }`;
+    const q = `query($facultyId: ID, $limit: Int!) { degreePrograms { degreeProgramConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree durationSemesters } } } }`;
     this.gql.request(q, { facultyId: this.facultyId, limit: 200 }).subscribe({
       next: (d: any) => {
         const nodes = d.degreePrograms.degreeProgramConnection.nodes;
@@ -74,6 +76,22 @@ export class DegreeProgramList implements OnInit, OnChanges {
       },
       error: (e) => this.error.set(e.message)
     });
+  }
+
+  /**
+   * The programme's length in semesters, or null after reporting why it is not usable.
+   *
+   * The column is NOT NULL and the input payload says so, so an empty box would be refused by the
+   * service with `RELATED_NOT_FOUND` — the generic status a failed constraint arrives as, which
+   * names the wrong problem entirely. One sentence here is worth more than that round trip.
+   */
+  private readDuration(form: Record<string, any>, report: { set: (m: string) => void }): number | null {
+    const value = Number(form['durationSemesters']);
+    if (!Number.isInteger(value) || value <= 0) {
+      report.set('«Тривалість навчання»: ціле число семестрів, більше за нуль.');
+      return null;
+    }
+    return value;
   }
 
   degreeLabel(v: string): string {
@@ -90,6 +108,9 @@ export class DegreeProgramList implements OnInit, OnChanges {
     for (const f of ['code', 'name', 'degree']) {
       if (this.createForm[f]) input[f] = this.createForm[f];
     }
+    const duration = this.readDuration(this.createForm, this.createError);
+    if (duration === null) return;
+    input['durationSemesters'] = duration;
     const q = `mutation($input: DegreeProgramInputPayload!) { degreePrograms { createDegreeProgram(degreeProgram: $input) { isSuccess errorStatus } } }`;
     this.gql.request(q, { input }).subscribe({
       next: (d: any) => {
@@ -108,6 +129,7 @@ export class DegreeProgramList implements OnInit, OnChanges {
       code: prog.code ?? '',
       name: prog.name ?? '',
       degree: prog.degree ?? '',
+      durationSemesters: prog.durationSemesters ?? '',
     };
     this.editError.set('');
     this.editingProg.set(prog);
@@ -122,6 +144,9 @@ export class DegreeProgramList implements OnInit, OnChanges {
     for (const f of ['code', 'name', 'degree']) {
       if (this.editForm[f] !== undefined && this.editForm[f] !== '') input[f] = this.editForm[f];
     }
+    const duration = this.readDuration(this.editForm, this.editError);
+    if (duration === null) return;
+    input['durationSemesters'] = duration;
     const q = `mutation($id: ID!, $input: DegreeProgramInputPayload!) { degreePrograms { updateDegreeProgram(id: $id, degreeProgram: $input) { isSuccess errorStatus } } }`;
     this.gql.request(q, { id: prog.id, input }).subscribe({
       next: (d: any) => {

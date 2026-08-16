@@ -10,7 +10,9 @@
             title="Навчальний план освітньої програми у форматі PDF">
       @if (exporting()) { Формування&hellip; } @else { &#x1F4C4; Завантажити PDF }
     </button>
-    <button type="button" (click)="openCreate()">+ Додати</button>
+    @if (canModify()) {
+      <button type="button" (click)="openCreate()">+ Додати</button>
+    }
   </div>
 </div>
 
@@ -59,8 +61,12 @@
             }
           </td>
           <td class="row-actions">
-            <button type="button" class="ghost" (click)="openEdit(item)">Редагувати</button>
-            <button type="button" class="ghost danger" (click)="remove(item)">Видалити</button>
+            @if (canModify()) {
+              <button type="button" class="ghost" (click)="openEdit(item)">Редагувати</button>
+            }
+            @if (canDelete()) {
+              <button type="button" class="ghost danger" (click)="remove(item)">Видалити</button>
+            }
           </td>
         </tr>
       } @empty {

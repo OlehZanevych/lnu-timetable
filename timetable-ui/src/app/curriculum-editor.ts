@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { CONTROL_FORM_OPTIONS, HOUR_TYPE_OPTIONS, toOptions } from './entities';
@@ -122,6 +124,7 @@ interface CourseBlock {
 })
 export class CurriculumEditor implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
   private settings = inject(GlobalPropertiesService);
 
   @Input() degreeProgramId!: string;
@@ -134,6 +137,17 @@ export class CurriculumEditor implements OnInit, OnChanges {
   readonly CONTROL_FORM_OPTIONS = CONTROL_FORM_OPTIONS;
   readonly HOUR_TYPE_OPTIONS = HOUR_TYPE_OPTIONS;
   readonly CONTROL_FORM_SELECT_OPTIONS = toOptions(CONTROL_FORM_OPTIONS);
+
+  /**
+   * The Ukrainian name of a control form, for the case where the picker is not offered.
+   *
+   * Somebody who may read this план but not edit *this* programme reaches the editor — the tab is
+   * offered on the kind of thing it maintains, not on this row — and sees it without «Зберегти».
+   * A live dropdown there collects a choice that has nowhere to go, so the value is printed instead.
+   */
+  controlFormLabel(value: string): string {
+    return CONTROL_FORM_OPTIONS.find((o) => o.value === value)?.label ?? value ?? '—';
+  }
 
   blocks = signal<CourseBlock[]>([]);
   error = signal('');
@@ -196,17 +210,56 @@ export class CurriculumEditor implements OnInit, OnChanges {
   hasUnsaved = computed(() =>
     this.blocks().some((b) => b.items().some((i) => i.dirty())));
 
+  // ── Access ───────────────────────────────────────────────────────────────
+
+  /**
+   * This account's level on the освітня програма whose навчальний план is on screen.
+   *
+   * One grant decides every control here, because every position this page writes hangs off that one
+   * освітня програма: `createCurriculumItem` sends its id, and the server measures the write against
+   * the parent the new row names. Asking about the освітня програма once is therefore the same
+   * question as asking about each of its позиції, and it can be asked before any of them exist.
+   */
+  private degreeProgramLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the освітня програма's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.degreeProgramLevel()));
+
+  /** Adding a semester block and saving one both write, so both need «Редагування». */
+  canModify = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /** Removing a stored позиція is a deletion, and deletions need «Повний доступ». */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
+
+  /**
+   * Whether a block's remove button belongs on the page, which depends on what removing it means.
+   * A block that was never saved is dropped from the screen and nothing more — part of adding it,
+   * and covered by the same «Редагування». A stored one goes through `deleteCurriculumItem`.
+   */
+  canRemoveItem(item: ItemDraft): boolean {
+    return item.id ? this.canDelete() : this.canModify();
+  }
+
+  private loadPermissions() {
+    // Answering with the previous освітня програма's level while the new answer is in flight would
+    // offer its controls over somebody else's план for a moment, so the old one is dropped first.
+    this.degreeProgramLevel.set(null);
+    if (!this.degreeProgramId) return;
+    this.auth.accessLevel('DEGREE_PROGRAM', this.degreeProgramId)
+      .subscribe((level) => this.degreeProgramLevel.set(level));
+  }
+
   private nextKey = 1;
   private initialized = false;
 
   ngOnInit() {
     this.initialized = true;
     this.settings.ensureLoaded();
-    if (this.degreeProgramId) this.load();
+    if (this.degreeProgramId) { this.load(); this.loadPermissions(); }
   }
 
   ngOnChanges() {
-    if (this.initialized && this.degreeProgramId) this.load();
+    if (this.initialized && this.degreeProgramId) { this.load(); this.loadPermissions(); }
   }
 
   // ── Loading ──────────────────────────────────────────────────────────────

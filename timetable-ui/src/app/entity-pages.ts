@@ -6,11 +6,12 @@ import { SearchSelect } from './search-select';
 import { MultiSelect } from './multi-select';
 import { DeptFacultySelect } from './dept-faculty-select';
 import { TimeSelect } from './time-select';
+import { NoAccessCard } from './access-gate';
 import { ENTITIES, EntityMeta } from './entities';
 
 // RouterLink is here for the «Відкрити →» link entity-page.html renders for entities
 // that declare a `detailRoute`.
-const IMPORTS = [FormsModule, RouterLink, SearchSelect, MultiSelect, DeptFacultySelect, TimeSelect];
+const IMPORTS = [FormsModule, RouterLink, SearchSelect, MultiSelect, DeptFacultySelect, TimeSelect, NoAccessCard];
 const meta = (name: string): EntityMeta => ENTITIES.find((e) => e.name === name)!;
 const TPL = './entity-page.html';
 
@@ -31,9 +32,18 @@ const TPL = './entity-page.html';
 @Component({ selector: 'app-class-start-time', templateUrl: TPL, imports: IMPORTS }) export class ClassStartTimePage extends BaseEntity { meta = meta('ClassStartTime'); }
 @Component({ selector: 'app-timetable-entry', templateUrl: TPL, imports: IMPORTS }) export class TimetableEntryPage extends BaseEntity { meta = meta('TimetableEntry'); }
 
-/** single key -> component, used to generate routes. */
-export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
-  { single: 'academicDegree', component: AcademicDegreePage },
+/**
+ * single key -> component, used to generate routes.
+ *
+ * `editorsOnly` marks the tables that are *only* a way to maintain reference data — five of the
+ * links under «Загальне» in the sidebar. Those hide themselves («Немає доступу») from an account that can
+ * neither add a row nor edit one it already holds, and the sidebar hides the link on the same
+ * answer. The rest stay readable: `/course`, `/lecturer` and `/timetable-entry` are also how
+ * somebody looks something up, and reading is open to any signed-in user by design — hiding them
+ * would be a different change, to a different rule.
+ */
+export const ENTITY_PAGES: { single: string; component: Type<BaseEntity>; editorsOnly?: true }[] = [
+  { single: 'academicDegree', component: AcademicDegreePage, editorsOnly: true },
   { single: 'faculty', component: FacultyPage },
   { single: 'department', component: DepartmentPage },
   { single: 'degreeProgram', component: DegreeProgramPage },
@@ -42,9 +52,9 @@ export const ENTITY_PAGES: { single: string; component: Type<BaseEntity> }[] = [
   { single: 'student', component: StudentPage },
   { single: 'academicGroup', component: AcademicGroupPage },
   { single: 'room', component: RoomPage },
-  { single: 'roomGroup', component: RoomGroupPage },
-  { single: 'abstractRoom', component: AbstractRoomPage },
-  { single: 'classStartTimeSet', component: ClassStartTimeSetPage },
-  { single: 'classStartTime', component: ClassStartTimePage },
+  { single: 'roomGroup', component: RoomGroupPage, editorsOnly: true },
+  { single: 'abstractRoom', component: AbstractRoomPage, editorsOnly: true },
+  { single: 'classStartTimeSet', component: ClassStartTimeSetPage, editorsOnly: true },
+  { single: 'classStartTime', component: ClassStartTimePage, editorsOnly: true },
   { single: 'timetableEntry', component: TimetableEntryPage }
 ];

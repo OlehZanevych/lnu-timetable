@@ -4,6 +4,10 @@ import { SearchSelect } from './search-select';
 import { SEMESTER_PARITY_OPTIONS } from './entities';
 import { GlobalPropertiesService, GlobalPropertyRow } from './global-properties.service';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { NoAccessCard } from './access-gate';
+import { globalNeed } from './access-need';
+import { allows } from './access-level';
 
 /**
  * What is known about a property beyond its name/type/value triple: how to label it, what it is
@@ -175,11 +179,21 @@ export interface RenderedProperty {
 @Component({
   selector: 'app-global-properties-page',
   templateUrl: './global-properties-page.html',
-  imports: [FormsModule, SearchSelect]
+  imports: [FormsModule, SearchSelect, NoAccessCard]
 })
 export class GlobalPropertiesPage implements OnInit {
   private gql = inject(GraphqlService);
   private settings = inject(GlobalPropertiesService);
+  private auth = inject(AuthService);
+
+  /**
+   * University-wide settings belong to no entity, so no grant on a факультет or a кафедра cascades
+   * into them: changing one needs GLOBAL at EDIT, which is what the service requires of
+   * `updateGlobalProperty` and what the sidebar hides this link on. The whole screen is the refusal
+   * rather than each row's Save button, because there is nothing else on it — every row is an input.
+   */
+  readonly need = globalNeed('EDIT');
+  readonly denied = computed(() => !allows(this.auth.globalLevel(), 'EDIT'));
 
   readonly semesterParityOptions = SEMESTER_PARITY_OPTIONS;
 

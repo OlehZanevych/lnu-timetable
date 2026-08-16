@@ -7,7 +7,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * GraphQL types, queries and mutations for the core organizational entities:
- * Building, BuildingTravelTime, Faculty, Department, DegreeProgram, Room, RoomGroup, AbstractRoom.
+ * Building, BuildingTravelTime, Faculty, Department, DegreeProgram, DegreeProgramSemester, Room,
+ * RoomGroup, AbstractRoom.
  */
 @Component
 public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
@@ -19,6 +20,7 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         configureFaculty(s);
         configureDepartment(s);
         configureDegreeProgram(s);
+        configureDegreeProgramSemester(s);
         configureRoom(s);
         configureRoomTimetableConstraint(s);
         configureRoomGroup(s);
@@ -161,20 +163,26 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
 
     private void configureDegreeProgram(SchemaDefinition s) {
         s.type(DegreeProgram.class)
-            .fields("code", "name", "degree")
-            .relation("faculty").relation("groups");
+            .fields("code", "name", "degree", "durationSemesters")
+            .relation("faculty").relation("groups").relation("semesters");
 
         s.query("degreeProgramConnection").entity(DegreeProgram.class).connection().orderBy("code").filter("facultyId", "faculty_id");
         s.query("degreeProgram").entity(DegreeProgram.class).findById();
 
         s.mutation("createDegreeProgram").entity(DegreeProgram.class).create()
-            .inputFields("code", "name", "degree", "facultyId")
+            .inputFields("code", "name", "degree", "durationSemesters", "facultyId")
+            .nestedList("semesters", DegreeProgramSemester.class, "degreeProgramId", "semester", "durationWeeks")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
 
         s.mutation("updateDegreeProgram").entity(DegreeProgram.class).update()
-            .inputFields("code", "name", "degree", "facultyId")
+            .inputFields("code", "name", "degree", "durationSemesters", "facultyId")
+            // The whole set of a programme's semester lengths travels with the programme: an item
+            // carrying an id updates that row, one without inserts, and a row the list no longer
+            // mentions is deleted. That is what lets one «Зберегти» on the «Семестри» tab settle a
+            // table of them, and it is the same shape CurriculumItem uses for its hours.
+            .nestedList("semesters", DegreeProgramSemester.class, "degreeProgramId", "semester", "durationWeeks")
             .errorStatus("RELATED_NOT_FOUND", "A referenced entity does not exist")
             .errorStatus("DEGREE_PROGRAM_NOT_FOUND", "Degree programme not found")
             .errorStatus("DUPLICATED_KEY", "A record with a duplicate unique value already exists")
@@ -183,6 +191,23 @@ public class OrganizationSchemaConfig implements GraphQLSchemaConfig {
         s.mutation("deleteDegreeProgram").entity(DegreeProgram.class).delete()
             .errorStatus("DEGREE_PROGRAM_NOT_FOUND", "Degree programme not found")
             .errorStatus("INTERNAL_SERVER_ERROR", "Unexpected server error");
+    }
+
+    // -------------------------------------------------------------------------
+    // DegreeProgramSemester
+    // -------------------------------------------------------------------------
+
+    /**
+     * A type and nothing else, like {@code CourseTag}: rows are created, updated and deleted as part
+     * of DegreeProgram's create/update mutations (the "semesters" nestedList above), and the type
+     * needs registering only so {@code DegreeProgram.semesters} has something to resolve to.
+     * <p>
+     * No connection query either. These rows are only ever read through the programme that owns
+     * them, and a university-wide list of «which semesters are shorter» is not a question any screen
+     * asks.
+     */
+    private void configureDegreeProgramSemester(SchemaDefinition s) {
+        s.type(DegreeProgramSemester.class).fields("semester", "durationWeeks");
     }
 
     // -------------------------------------------------------------------------

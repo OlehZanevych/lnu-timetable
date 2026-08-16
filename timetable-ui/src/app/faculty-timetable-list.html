@@ -16,8 +16,12 @@
                       name="semesterParity" [ngModelOptions]="{ standalone: true }" />
 </div>
 
-<!-- ── Automatic generation ────────────────────────────────────────────────── -->
+<!-- ── Automatic generation ──────────────────────────────────────────────────
+     Drawn only where the plan it produces could be written. The panel says nothing about the
+     розклад that the blocks below do not; all it offers is a two-minute search and the button that
+     applies its result to the whole факультет. -->
 
+@if (canEdit()) {
 <div class="card gen-panel">
   <div class="gen-header">
     <strong>Автоматичне формування розкладу</strong>
@@ -47,6 +51,7 @@
     записується, доки ви не натиснете «Застосувати».
   </p>
 </div>
+}
 
 @for (b of blocks(); track b.key) {
   <div class="card wci-item-card tt-block" [class.unscheduled]="b.dayOfWeek == null">
@@ -77,9 +82,21 @@
         }
       </div>
 
+      <!-- Without EDIT on the факультет the block states when and where it sits instead of offering
+           the four pickers that would change it. The pickers are the only place this board writes
+           the placement down, so a line of text takes their place rather than leaving a card that
+           names a discipline and says nothing about its пара. -->
+      @if (!canEdit()) {
+        <div class="tt-block-form">
+          <label>
+            <span>Заняття</span>
+            <span class="tt-block-place">{{ scheduledLabel(b) }}</span>
+          </label>
+        </div>
+      }
       <!-- form(b) both returns and (re)seeds the block's editable state, so the selection is
            bound through it rather than through formState directly. -->
-      @if (form(b); as f) {
+      @else if (form(b); as f) {
         <div class="tt-block-form">
           <label>
             <span>День тижня</span>
@@ -123,7 +140,7 @@
             <button type="button" [disabled]="!canSave(b)" (click)="save(b)">
               {{ b.entryId ? 'Зберегти' : 'Запланувати' }}
             </button>
-            @if (b.entryId) {
+            @if (b.entryId && canDelete()) {
               <button type="button" class="ghost danger" (click)="remove(b)">Скасувати</button>
             }
           </div>
@@ -349,7 +366,9 @@
               </details>
 
               <div class="actions">
-                <button type="button" [disabled]="planChangeCount() === 0" (click)="applyPlan()">
+                <!-- Unreachable without EDIT — the modal only opens from a panel that is not drawn
+                     — but stated here too, since this one button writes the whole факультет. -->
+                <button type="button" [disabled]="planChangeCount() === 0 || !canEdit()" (click)="applyPlan()">
                   Застосувати ({{ planChangeCount() }})
                 </button>
                 <button type="button" class="ghost" (click)="closeGeneration()">Скасувати</button>

@@ -2,6 +2,8 @@ import { Component, Input, OnChanges, OnInit, computed, inject, signal } from '@
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { GlobalPropertiesService } from './global-properties.service';
 import { SearchSelect, Option } from './search-select';
 import { MultiSelect } from './multi-select';
@@ -103,6 +105,7 @@ const toWorkingPlanItem = (item: CurriculumItemNode): WorkingPlanItemInput => ({
 })
 export class WorkingCurriculumList implements OnInit, OnChanges {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
   private settings = inject(GlobalPropertiesService);
 
   @Input() degreeProgramId!: string;
@@ -166,6 +169,37 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
   isElectiveContext = signal(false);
   electiveOptions = signal<Option[]>([]);
 
+  // ── Access ───────────────────────────────────────────────────────────────
+
+  /**
+   * This account's level on the освітня програма whose робочий навчальний план is on screen.
+   *
+   * A `WorkingCurriculumItem` names no освітня програма of its own: it hangs off a
+   * `CurriculumItemHours`, which hangs off a `CurriculumItem`, which is the one that belongs to the
+   * програма. The server's evaluator walks that chain — a grant on an ancestor covers everything
+   * beneath it — so the grant on the освітня програма is exactly what authorises these writes, and
+   * asking about it once answers for every позиція nested below.
+   */
+  private degreeProgramLevel = signal<AccessLevel | null>(null);
+
+  /** The level in force: the освітня програма's own, or a stronger university-wide grant. */
+  private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.degreeProgramLevel()));
+
+  /** Adding a позиція РНП and editing one both write, so both need «Редагування». */
+  canModify = computed(() => allows(this.effectiveLevel(), 'EDIT'));
+
+  /** Removing a позиція РНП is a deletion, and deletions need «Повний доступ». */
+  canDelete = computed(() => allows(this.effectiveLevel(), 'FULL'));
+
+  private loadPermissions() {
+    // Answering with the previous освітня програма's level while the new answer is in flight would
+    // offer its controls over somebody else's план for a moment, so the old one is dropped first.
+    this.degreeProgramLevel.set(null);
+    if (!this.degreeProgramId) return;
+    this.auth.accessLevel('DEGREE_PROGRAM', this.degreeProgramId)
+      .subscribe((level) => this.degreeProgramLevel.set(level));
+  }
+
   private activeHoursId: string | null = null;
   private initialized = false;
 
@@ -175,13 +209,14 @@ export class WorkingCurriculumList implements OnInit, OnChanges {
     this.loadFacultyOptions();
     this.loadDepartmentOptions();
     this.loadGroupOptions();
-    if (this.degreeProgramId) this.loadItems();
+    if (this.degreeProgramId) { this.loadItems(); this.loadPermissions(); }
   }
 
   ngOnChanges() {
     if (this.initialized && this.degreeProgramId) {
       this.loadItems();
       this.loadGroupOptions();
+      this.loadPermissions();
     }
   }
 

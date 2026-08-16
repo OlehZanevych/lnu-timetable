@@ -3,6 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { GraphqlService } from './graphql.service';
 import { SearchSelect, Option } from './search-select';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 
 interface Faculty {
   id: string;
@@ -21,8 +23,30 @@ interface Faculty {
 })
 export class FacultyHome {
   private gql = inject(GraphqlService);
+  private auth = inject(AuthService);
   private faculties = signal<Faculty[]>([]);
   error = signal('');
+
+  /** This account's level on each факультет it can reach; absent means none. */
+  private levels = signal<ReadonlyMap<string, AccessLevel>>(new Map());
+
+  /**
+   * A факультет hangs off a корпус, so creating one needs EDIT over some корпус — in practice a
+   * university-wide grant, since корпуси are only reachable that way. The same question the service
+   * asks of `createFaculty`, asked before the form is offered rather than after it is filled in.
+   */
+  canCreate(): boolean {
+    return this.auth.canCreateType('FACULTY');
+  }
+
+  canEdit(f: Faculty): boolean {
+    return allows(maxLevel(this.auth.globalLevel(), this.levels().get(String(f.id))), 'EDIT');
+  }
+
+  private loadPermissions(ids: string[]) {
+    if (this.auth.globalLevel() === 'MANAGE' || !ids.length) return;
+    this.auth.accessLevels('FACULTY', ids).subscribe((levels) => this.levels.set(levels));
+  }
 
   /** What the search box holds. A signal, because `visibleFaculties` is a computed over it. */
   filter = signal('');
@@ -72,7 +96,11 @@ export class FacultyHome {
   private loadFaculties() {
     const q = `query($limit: Int!) { faculties { facultyConnection(limit: $limit) { nodes { id name abbreviation building { id address } phone email website } } } }`;
     this.gql.request(q, { limit: 100 }).subscribe({
-      next: (d: any) => this.faculties.set(d.faculties.facultyConnection.nodes),
+      next: (d: any) => {
+        const list = d.faculties.facultyConnection.nodes;
+        this.faculties.set(list);
+        this.loadPermissions(list.map((f: Faculty) => String(f.id)));
+      },
       error: (e) => this.error.set(e.message)
     });
   }

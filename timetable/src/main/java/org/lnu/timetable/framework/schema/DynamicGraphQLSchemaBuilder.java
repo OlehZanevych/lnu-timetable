@@ -521,6 +521,17 @@ public class DynamicGraphQLSchemaBuilder {
                 GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("Group"))))))
             .field(newFieldDefinition().name("permissions").type(GraphQLNonNull.nonNull(
                 GraphQLList.list(GraphQLNonNull.nonNull(GraphQLTypeReference.typeRef("PermissionGrant"))))))
+            // The two answers a client needs before it can draw anything, and neither is derivable
+            // from `permissions` alone without the client re-implementing the cascade.
+            .field(newFieldDefinition().name("globalLevel").type(GraphQLTypeReference.typeRef("AccessLevel"))
+                .description("This account's university-wide level, or null. MANAGE is what isAdmin means; "
+                    + "EDIT or FULL is somebody trusted with everything except handing access out"))
+            .field(newFieldDefinition().name("creatableResourceTypes").type(GraphQLNonNull.nonNull(
+                    GraphQLList.list(GraphQLNonNull.nonNull(GraphQLString))))
+                .description("The entity types this account could create something of somewhere, worked out from "
+                    + "its grants and the cascade published by Query.accessModel. A type-level answer, so it says "
+                    + "'possible somewhere', not 'possible here' — enough to decide whether a button or a whole "
+                    + "screen is worth showing, while the write itself is still checked against the row it names"))
             .build();
         builtTypes.put("CurrentUser", currentUserType);
 

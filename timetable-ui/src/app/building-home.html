@@ -3,7 +3,9 @@
     <h2>Корпуси</h2>
     <p class="muted">Навчальні корпуси університету</p>
   </div>
-  <button type="button" (click)="openCreate()">+ Додати корпус</button>
+  @if (canCreate()) {
+    <button type="button" (click)="openCreate()">+ Додати корпус</button>
+  }
 </div>
 
 @if (error()) {
@@ -31,12 +33,16 @@
         </ul>
       </div>
       <div class="building-list-actions">
-        <button type="button" class="ghost" (click)="openEdit(b)">Редагувати</button>
+        @if (canEdit(b)) {
+          <button type="button" class="ghost" (click)="openEdit(b)">Редагувати</button>
+        }
         <a [routerLink]="['/building', b.id]" class="btn-link">Відкрити &#x2192;</a>
       </div>
     </li>
   } @empty {
-    <li class="building-list-empty muted">Корпусів ще немає &mdash; натисніть &laquo;Додати корпус&raquo;.</li>
+    <li class="building-list-empty muted">
+      Корпусів ще немає@if (canCreate()) { &mdash; натисніть &laquo;Додати корпус&raquo;}.
+    </li>
   }
 </ul>
 

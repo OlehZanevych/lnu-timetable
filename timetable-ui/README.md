@@ -154,6 +154,10 @@ src/app/
 ├── auth.guard.ts             # authGuard (must be signed in + password changed), adminGuard
 ├── resource-type.ts          # toResourceType(): entity name → backend permission resource type
 ├── access-level.ts           # AccessLevel: EDIT < FULL < MANAGE, the ordering, labels and hints
+├── access-need.ts            # AccessNeed: a screen's requirement stated as a value — one row,
+│                             #   university-wide, or «anywhere of a kind» (see Authentication)
+├── access-gate.ts            # AccessGate + NoAccessCard: renders content when the need is met and
+│                             #   «Немає доступу» when it is not
 ├── resource-access.ts/.html  # ResourceAccessPanel: who can reach one resource, and the form for
 │                             #   delegating it — the «Доступ» tab of a faculty and a department
 ├── login-page.ts/.html       # "/login"
@@ -181,6 +185,8 @@ src/app/
 ├── academic-group-page.ts/.html  # "/academic-group/:id/:section" — group detail (students)
 ├── department-list.ts/.html          # child-list widget: departments within a faculty
 ├── degree-program-list.ts/.html      # child-list widget: degree programmes within a faculty
+├── degree-program-semester-list.ts/.html  # programme tab: how many teaching weeks each semester
+│                                     #   runs for — "Тривалість семестрів" (see below)
 ├── academic-group-list.ts/.html      # child-list widget: academic groups within a programme
 ├── curriculum-editor.ts/.html        # programme tab: course-first inline curriculum editor —
 │                                     #   "Редагування планів" (see below)
@@ -274,7 +280,8 @@ the document:
 
 ```ts
 const q = `query($facultyId: ID, $limit: Int!) { degreePrograms {
-  degreeProgramConnection(limit: $limit, facultyId: $facultyId) { nodes { id code name degree } }
+  degreeProgramConnection(limit: $limit, facultyId: $facultyId) {
+    nodes { id code name degree durationSemesters } }
 } }`;
 this.gql.request(q, { facultyId: this.facultyId, limit: 200 });
 ```
@@ -633,7 +640,8 @@ default tab is `info`, which the bare path redirects to.
   below), lecturer workloads (`LecturerWorkloadList` — "Навантаження викладачів", see below), the
   department-wide summary (`DepartmentWorkloadSummary` — "Зведене навантаження") and the
   per-lecturer assessment (`LecturerWorkloadDetail` — "Оцінка навантаження", see below).
-- **`DegreeProgramDetailPage`** (`/degree-program/:id`): info, then **each plan twice — once to
+- **`DegreeProgramDetailPage`** (`/degree-program/:id`): info, **«Тривалість семестрів»**
+  (`DegreeProgramSemesterList` — see below), then **each plan twice — once to
   edit, once to read** — plus academic groups (`AcademicGroupList`). The curriculum is entered
   course-first (`CurriculumEditor`, "Редагування планів") and read as a table with its printable
   «Навчальний план» (`CurriculumItemList`, "Навчальні плани"); the working curriculum is entered by
@@ -654,12 +662,21 @@ The faculty page gained two tabs in the same round: «Групи аудитор�
 carrying both a faculty and a department, so presetting `facultyId` is what keeps a created row
 valid) and «Розклад факультету» under *Розклад*. The department page gained «Розклад кафедри».
 
-Both pages later gained one more, **«Доступ»**, which differs from every other tab in being
-*conditional*: it is filtered out of the navigation unless the account holds `MANAGE` on that
-faculty or department, and the panel it shows re-checks the same thing rather than trusting its
-host. See [Delegating access](#delegating-access-resourceaccesspanel). The department page's
+Both pages later gained one more, **«Доступ»**, the first tab to be *conditional*: it is filtered
+out of the navigation unless the account holds `MANAGE` on that faculty or department, and the panel
+it shows re-checks the same thing rather than trusting its host. See [Delegating
+access](#delegating-access-resourceaccesspanel). The department page's
 «✎ Редагувати» became conditional in the same round — it used to render for everybody and rely on
 the server to refuse, which it did, after the form had been filled in.
+
+It is no longer alone. Every tab whose whole purpose is entering data now comes and goes the same
+way — the four scheduling tabs of a факультет, the three writing tabs of a кафедра, and the two
+«Редагування…» tabs and «Тривалість семестрів» of an освітня програма — each on the kind of thing it
+maintains rather than on `MANAGE` over the page it sits in, and each with the same answer given
+again behind the tab, so that a pasted address is refused on the screen instead of quietly opening
+«Інформація». The tab lists above are therefore what somebody holding the rights for all of them
+sees; see [Which screens hide themselves](#which-screens-hide-themselves) for how the set is
+narrowed to one account.
 
 #### Editing a curriculum course-first (`CurriculumEditor`, degree programme "Редагування планів" tab)
 
@@ -708,6 +725,62 @@ two readings coincide exactly: all 664 electives have a parent, and nothing else
 Editable state is a signal per field (see the zoneless note above), which is also what makes
 sibling blocks re-render when a neighbour changes — a block reading `sibling.semester()` while
 computing its own dropdown options registers as a consumer of that signal.
+
+#### Semester lengths (`DegreeProgramSemesterList`, «Тривалість семестрів»)
+
+How many teaching weeks each semester of one освітня програма runs for.
+
+The розклад decides how many classes a week a plan position needs by dividing its hours by
+(weeks × class length), and the weeks in that division came from `semester_duration_weeks` — one
+number for the whole university. That is right for most of a degree and wrong at the end of one: the
+last semester of a master's programme is largely taken up by the final attestation and a work
+placement, so its teaching runs for fewer weeks, and planning it as sixteen puts *fewer* classes a
+week on the timetable than the plan's hours require.
+This tab is where that is said, per programme and per semester.
+
+**An empty cell is a value, not a gap.** It means «the usual length», and the placeholder shows what
+that number currently is, so nobody has to remember it. Clearing a cell deletes the stored row rather
+than storing a duplicate of the default, and the screen does not offer to fill every semester in:
+several hundred copies of one number cannot be corrected in one place, which is the whole point of
+the property they would be copies of.
+
+**The semesters listed are the ones the programme's own curriculum uses, not 1…n.** A master's
+programme in this database may number its semesters 9, 10, 11 — carrying on from the bachelor's
+degree it follows — while another restarts at 1, and a table offering 1, 2, 3 to the first would
+collect numbers that join to nothing. The list is the union of the plan's semesters and any already
+overridden, falling back to 1…`durationSemesters` only when both of those are empty. A stored
+override for a semester the plan no longer has is kept rather than dropped, so the next save cannot
+delete it silently.
+
+One «Зберегти» settles the whole table: it is one `updateDegreeProgram` carrying the semesters as a
+nested list, so a row with an id is updated, one without is inserted, and a row the list no longer
+mentions is deleted — which is what an emptied cell becomes. Saving row by row would leave a
+half-applied table behind whenever one of the calls failed. The programme's own fields travel with
+the mutation because the input payload requires them, and are sent back exactly as they were read, so
+this screen cannot quietly rename a programme. Every *other* writer of a degree programme omits the
+`semesters` field entirely, which the framework reads as «leave the child rows alone» — editing a
+programme's name from the faculty list does not disturb its semester lengths.
+
+**What reads it, so far: nothing.** «Формування розкладу» still divides by the
+`semester_duration_weeks` global property for every semester of every programme — this tab records
+the exception, and teaching the solver to read it is a separate change to
+`faculty-timetable-list.ts`'s block arithmetic (see the known limitations). Entering a length here
+today is correct and has no effect on a timetable yet.
+
+`durationSemesters` is `NOT NULL` in the database and `Int!` on `DegreeProgramInputPayload`, so all
+three forms that write a programme collect it: the generic table, `DegreeProgramList` on the faculty
+page, and this page's own «Редагувати». The two hand-written ones refuse an empty or non-positive box
+with a sentence before sending anything, because both ways of getting it wrong are answered badly
+further down. A zero or a negative reaches `degree_programs_duration_semesters_check` and comes back
+as `RELATED_NOT_FOUND` — the generic status every failed constraint arrives as here, which names the
+wrong problem entirely (see [Generic CRUD
+tables](#generic-crud-tables-entitiests--baseentity) for why a `CHECK` reads as a missing reference).
+An empty box is worse: `buildInput` omits an empty value, and a payload with no `durationSemesters`
+in it is refused by GraphQL validation before the resolver, in English and about a variable rather
+than about a field somebody left blank. The generic table catches the first of those through the
+`min: 1` on the field's metadata and not the second — `BaseEntity#validate` passes over a field that
+is empty, and nothing else in that form treats `required` as more than a star beside the label —
+which is the metadata-driven form's own long-standing shape rather than anything about this field.
 
 #### Curriculum items and working curriculum items (`DegreeProgramDetailPage`)
 
@@ -1026,8 +1099,10 @@ diagonal is not a cell — a database CHECK forbids a row from a building to its
   on *either* корпус, which is the same OR the server applies — so a deanery holding one building can
   correct the walks into and out of it without a grant over the university. Emptying a cell deletes
   a row, so it needs `FULL`; that is checked before the batch is sent, so the whole save is refused
-  together rather than half of it landing. An account that can edit no building at all sees the
-  matrix without the save bar.
+  together rather than half of it landing. An account that can edit no building at all is not shown
+  the matrix at all: the page is a grid of inputs and a save bar, and with nothing editable in it
+  there is no reading left to offer, so it answers «Немає доступу» instead and the sidebar drops the
+  link — see [Which screens hide themselves](#which-screens-hide-themselves).
 
 #### Getting to those pages (`.ent-link`)
 
@@ -1725,7 +1800,10 @@ corresponding `TimetableEntry`.
   requires — is `hours / (semester_duration_weeks × workload.durationHours)` (both the semester
   length and the per-class duration are configurable per-workload/global-property values, not
   hardcoded); a remainder of at least half a weekly class becomes one additional class held every
-  other week (`NUMERATOR`/`DENOMINATOR` week parity).
+  other week (`NUMERATOR`/`DENOMINATOR` week parity). The semester length in that division is the
+  one global property for every programme alike: the per-programme lengths entered on [«Тривалість
+  семестрів»](#semester-lengths-degreeprogramsemesterlist-тривалість-семестрів) are stored but not
+  read here yet, so a semester recorded as ten weeks is still planned as sixteen.
 - The **start-time dropdown is per block**, not global: `classStartTimeOptionsFor(block)` offers
   only the times of the `ClassStartTimeSet` the block's workload runs on, and the block header names
   that set ("Дзвінки: …"). A flat list would be wrong twice over now that ordinals restart within
@@ -1950,6 +2028,13 @@ is noticeable on the larger lists (a degree programme can have 200+ courses).
 | `/building` | `BuildingHome` | building tiles (this entity's table is a page of tiles, not a table) |
 | `/:single` | generic `entity-pages.ts` component | one per remaining entity, at the kebab-case of its `single` — see [Generic CRUD tables](#generic-crud-tables-entitiests--baseentity) |
 
+One piece of route `data` carries a permission decision: `gatePage`, set on the generic table routes
+whose entity `entity-pages.ts` marks `editorsOnly`. It is what tells `BaseEntity` that this table
+*is* the screen rather than a tab of one, and therefore that it should answer «Немає доступу» when
+the caller can neither add a row nor edit one — see [Which screens hide
+themselves](#which-screens-hide-themselves). The same components embedded in a faculty or department
+page carry no such data and stay readable.
+
 The four self-service routes carry no guard, and none may: a викладач with no account and a user who
 has forgotten their password are exactly the two people who cannot sign in first.
 The token is a **path segment** rather than a query parameter so that the service's
@@ -1960,10 +2045,14 @@ static-resource handler.
 The sidebar (`app.html`) links to the drill-down entry point ("🎓 Факультети") and — only when the
 signed-in account is linked to a lecturer or a student — to «📅 Мій кабінет»,
 then a flat "Загальне" group of generic-table links for entities with no dedicated page
-(`/building`, `/room-group`, `/class-start-time-set`, `/class-start-time`, `/academic-degree`) plus
-«Час переходу між корпусами» and the global settings page ("Глобальні властивості"), and — only for
-an administrator — an
-"Адміністрування" group holding the single "Користувачі та права" link. The top bar carries the
+(`/building`, `/room-group`, `/abstract-room`, `/class-start-time-set`, `/class-start-time`,
+`/academic-degree`) plus «Час переходу між корпусами» and the global settings page ("Глобальні
+властивості"), and — only for an administrator — an
+"Адміністрування" group holding the single "Користувачі та права" link.
+Every link in that group except «Корпуси» is hidden from an account the screen behind it would
+refuse, on exactly the answer that screen gives, so a visible link always opens something usable;
+«Корпуси» stays because it is also the way to a корпус and its аудиторії, and its own buttons are
+gated instead. The top bar carries the
 signed-in user's name, an «АДМІН» badge where it applies, and the password / sign-out controls.
 `CombinedGroup` has no sidebar link of its own — it's only reachable embedded in the Faculty page's
 "Об'єднані групи" tab (see above), not as a route of its own.
@@ -1993,7 +2082,7 @@ of an account. `FacultyPage` and `DepartmentDetailPage` moved the most: `Faculty
 every tab it can show — the department, degree programme and group lists, the room and course pages,
 the constraint editors and the timetable view — and it is not on the path to the one screen most
 people open the application for. Together the thirteen take the initial chunk from just over the
-1.00 MB error budget to **706 kB**.
+1.00 MB error budget to **738 kB**.
 
 The budget is worth stating plainly, because it is the thing that keeps forcing these decisions: the
 production build *fails* above 1.00 MB and warns above 500 kB. Anything added to a route that is
@@ -2105,9 +2194,12 @@ A single root-provided service, injected the same way `GraphqlService` is used e
   refresh doesn't sign the user out; `isAuthenticated` is just `token() !== null`. A stored token
   already past its `exp` never reaches the signal — see [When the session ends by
   itself](#when-the-session-ends-by-itself).
-- `currentUser` (signal) — the result of `Query.me` (profile, `isAdmin`, `groups`, and
-  `permissions`, each grant carrying the `level` it was made at), re-fetched via `refreshMe()` after
-  login and on app bootstrap when a token is already stored. Deliberately **not** decoded from the JWT itself — the token only carries a user
+- `currentUser` (signal) — the result of `Query.me` (profile, `isAdmin`, `groups`,
+  `permissions`, each grant carrying the `level` it was made at, and the two fields the service
+  works out from those grants — `globalLevel` and `creatableResourceTypes`, see [What the client
+  knows, and where it gets it](#what-the-client-knows-and-where-it-gets-it)), re-fetched via
+  `refreshMe()` after login and on app bootstrap when a token is already stored. Deliberately
+  **not** decoded from the JWT itself — the token only carries a user
   id — so a permission change or account deactivation is reflected the moment `refreshMe()` runs
   again, without needing a new token.
 - `login(email, password)` / `logout()` / `changePassword(current, new)` — thin wrappers around the
@@ -2130,7 +2222,16 @@ A single root-provided service, injected the same way `GraphqlService` is used e
   user cannot touch — which, on a faculty page seen by a visitor, is all of them.
 - `globalLevel` (computed) — the caller's university-wide level, if they hold a `GLOBAL` grant.
   `MANAGE` is what `isAdmin` means; `EDIT` or `FULL` is somebody trusted with everything except
-  handing the right away.
+  handing the right away. It is `CurrentUser.globalLevel` as the service answers it now; the old
+  scan of `permissions` for a `GLOBAL` row is kept behind it, so a client running against a service
+  that predates the field still gates as it did rather than treating everybody as holding nothing.
+- `canCreateType(type)` / `holdsGrantOfType(type)` / `canReachType(type)` — answered synchronously
+  off `me`, because a sidebar link cannot wait for a round trip to decide whether to exist — plus
+  `accessModel()`, the published cascade fetched at most once a session, `levelForNew(type, input)`
+  built on it, and `resolveNeed(need)`. These are the questions a screen asks *before* it draws
+  itself, as opposed to `accessLevels` above, which is about rows already loaded; see [What the
+  client knows, and where it gets it](#what-the-client-knows-and-where-it-gets-it) and
+  [Requirements as values](#requirements-as-values-access-needts-access-gatets).
 - `personLink` / `hasPersonLink` (computed) — `'lecturer' | 'student' | null`, from the
   `lecturerId`/`studentId` on `Query.me`. **Deliberately not a permission**: it decides only whether
   «Мій кабінет» has anything to show, and therefore whether its sidebar link appears. Everything a
@@ -2298,17 +2399,148 @@ pattern:
 2. `canEdit(row)` and `canDelete(row)` gate «Редагувати» and «Видалити» **separately** — the two
    buttons are no longer the same right, and this is the one place the split is visible to a user.
    Somebody who maintains a table every day sees «Редагувати» without «Видалити» beside it.
-3. A separate check gates «+ Додати»: for the generic tables, `BaseEntity.canShowCreate` is the same
-   coarse "holds any grant at all" heuristic as before (cheap, since the real check happens
-   server-side anyway); the drill-down list widgets do the precise thing instead — `DepartmentList`
-   asks for its own faculty's level and requires `EDIT` on it, since creating a `Department` needs
-   `EDIT` on the `Faculty` it would belong to, which is exactly the edge
-   `PermissionEvaluator#levelForNew` walks on the backend.
+3. A separate check gates «+ Додати», and it asks about the row the new one would hang off rather
+   than about the account in general. `DepartmentList` requires `EDIT` on its own faculty, since
+   creating a `Department` needs `EDIT` on the `Faculty` it would belong to — exactly the edge
+   `PermissionEvaluator#levelForNew` walks on the backend. `BaseEntity` does the same when it is
+   embedded under a parent, reading which of its `presets` name a permission parent off
+   `Query.accessModel` (below) rather than off a list kept here, and falls back to «could this
+   account create one of these anywhere» when the parent is chosen inside the form instead.
+
+   That replaced a heuristic worth naming, because its symptom is what this whole section was
+   rewritten for: «+ Додати» used to appear whenever the account held *any* grant at all. A викладач
+   whose grant was one кафедра was therefore offered «+ Додати корпус» on «Корпуси» — and a корпус
+   belongs to no кафедра, so the service refused it with «Creating a Building here requires EDIT
+   access.» The button was never the wrong colour; it was answering a different question than the
+   server was.
+
+#### What the client knows, and where it gets it
+
+Two things have to be true before a control can be hidden honestly: the client has to know what this
+account holds, and it has to know the shape of the hierarchy that turns a grant on a факультет into
+the right to add a discipline under one of its кафедри. The first has always been on `Query.me`. The
+second used to have nowhere to come from, which is why the guess above existed — the alternative was
+a copy of the cascade written in TypeScript, correct on the day it was written and silently wrong the
+first time an entity was added.
+
+Both are answered by the service now, from the annotations it authorizes writes with:
+
+| Where | What |
+|---|---|
+| `CurrentUser.globalLevel` | this account's university-wide level, or null — no longer scanned out of `permissions` by hand |
+| `CurrentUser.creatableResourceTypes` | the entity types it could create something of *somewhere*, worked out from its grants and the cascade |
+| `Query.accessModel` | the cascade itself: per resource type, its foreign-key parents (with the input field naming each), its join-table parents, and whether it is a `@PermissionRoot` that only a `GLOBAL` grant reaches |
+
+`accessModel` is constant for the lifetime of the service, so `AuthService` fetches it once and
+shares the one request; `me` was already fetched once, and the two new fields ride along on it. On
+top of them sit three questions the rest of the client asks in one line each:
+`canCreateType(type)`, `holdsGrantOfType(type)` and their union `canReachType(type)` — «is a screen
+about this kind of thing worth offering at all».
+
+`creatableResourceTypes` is a **type-level** answer: "possible somewhere", not "possible here". That
+is the right resolution for deciding whether to draw a button or a whole screen, and the wrong one
+for deciding whether a particular write will be accepted — which is why nothing in the client uses
+it for the latter, and why the row-level `accessLevels` call above still exists.
+
+#### Requirements as values (`access-need.ts`, `access-gate.ts`)
+
+Every permission question above is asked in the component that has it. That works for a button next
+to the row it belongs to, and stops working once the same answer has to be given twice — by a page
+and by the sidebar link that leads to it, or by a tab strip and by the body behind the tab. Written
+twice, they agree until one of them is edited.
+
+An `AccessNeed` is that requirement stated as a value, in one of three shapes:
+
+| Shape | Example | Asks |
+|---|---|---|
+| a row | `rowNeed('FACULTY', id)` | this account's level on that факультет, or on anything above it |
+| university-wide | `globalNeed()` | the `GLOBAL` level — `global_properties` belongs to no entity, so nothing cascades into it |
+| anywhere of a kind | `anywhereNeed('CLASS_START_TIME_SET')` | `canReachType` — something of this kind to add, or one already this account's to edit |
+
+`AuthService.resolveNeed` answers all three, and `<app-access-gate [need]="…">` renders its content
+when the answer is yes and `<app-no-access>` when it is no — nothing at all while the answer is in
+flight, because a screen that shows its controls and then withdraws them is worse than one that
+waits.
+
+**«Немає доступу» is a card where the page would have been, not a redirect.** A guard that bounces
+somebody to the faculty home answers a pasted `/faculty/3/timetable` with a screen they did not ask
+for and no reason given; the URL stays meaningful this way, and the card names the level that is
+missing, for the same reason the service's denial message does — somebody holding «Редагування» in
+front of a screen that needs «Повний доступ» learns what to ask their deanery for.
+
+One caution about binding it: `AccessGate` re-resolves whenever the bound need changes identity, so
+the need must be a stable reference — a `computed`, or a value cached per key. A getter that builds
+a fresh `rowNeed(...)` on every read never stops re-asking.
+
+#### Which screens hide themselves
+
+Three kinds, all gated through the same `AccessNeed`:
+
+- **Whole screens that exist only to enter data.** «Глобальні властивості» (`GLOBAL` at `EDIT`),
+  «Час переходу між корпусами» (`EDIT` on some корпус), and the reference-data tables marked
+  `editorsOnly` in `entity-pages.ts` — «Наукові ступені», «Набори часів занять», «Часи початку
+  занять», «Групи аудиторій», «Абстрактні аудиторії». A generic table refuses only when it is the
+  whole screen (`data.gatePage` on its route) *and* the caller can neither add a row nor edit one it
+  already holds; the same components embedded as a tab of a faculty or department page stay
+  readable, because reading is open to any signed-in user by design.
+- **Tabs of a drill-down page whose whole purpose is entering data** — «Призначення аудиторій»,
+  «Обмеження груп», «Обмеження аудиторій» and «Формування розкладу» on a факультет; «Обмеження
+  навантаження», «Обмеження розкладу» and «Навантаження викладачів» on a кафедра; the two
+  «Редагування…» tabs and «Тривалість семестрів» on an освітня програма. On the two pages that keep
+  a `SECTIONS` table — the факультет and the освітня програма — each such tab declares there *what
+  kind of thing it maintains* (`writes: 'TIMETABLE_ENTRY'`), and that one string is both what the
+  nav hides on and what the gate around the body resolves. The кафедра page writes its nav out by
+  hand and has no such table, so its three name the two types in the template instead: the block of
+  them appears for anybody who can reach a `LECTURER` **or** a `LECTURER_WORKLOAD`, while each body
+  is gated on the one it actually writes — which makes «Навантаження викладачів» the one tab that
+  can be offered and then refuse, to an account holding a викладач but no навантаження. The
+  read-only tabs beside all of them — «Розклад факультету», «Зведене навантаження», «Розклад
+  кафедри», the plan documents — are not touched.
+- **Sidebar links**, on the answer the screen behind each one would give, so a visible link always
+  opens something usable. «Час переходу між корпусами» is the one that asks a narrower question than
+  `canReachType` — `canCreateType('BUILDING_TRAVEL_TIME')`, since that matrix is edited per cell and
+  a cell is governed by the корпуси at its two ends, so a grant naming one travel-time row leaves
+  its holder nothing to do there.
+
+The tab rule deserves its reason. The obvious requirement — `EDIT` on the факультет the tab is shown
+under — is wrong, and wrong in the direction that matters: the rows behind those tabs live further
+down. «Формування розкладу» writes a `TimetableEntry`, which hangs off a навантаження and therefore
+off a кафедра, and a завідувач holding that кафедра has always been allowed to place their own
+classes. Asking about the факультет would have taken the screen away from the person whose work it
+is. Asking about the *kind* over-shows instead — that завідувач sees the tab on a факультет where
+nothing is theirs, and finds every control inside it inert — and over-showing is the error a
+convenience like this is allowed to make.
+
+**A tab that is hidden is not a tab that has been removed.** Its key stays in `SECTION_KEYS`, so
+`/faculty/3/timetable` still resolves and the body explains itself; dropping the key would make
+`sectionNav` fall back to «Інформація» and leave a pasted link looking merely broken.
+
+**And a tab that is offered is not necessarily a form.** Because the tabs are offered on the *kind*,
+somebody reaches «Формування розкладу» on a факультет where nothing is theirs, and the same is true
+of every widget inside a tab they do hold: each asks its own row-level question and, where the
+answer is no, renders what it knows instead of what it edits. Four shapes of that, and they are
+deliberately not the same shape, because what is lost by hiding an editor differs:
+`LecturerConstraintList` leaves its boxes in place and marks them `readonly`, since those numbers
+*are* the constraints and a scheduler needs to read them; `TimetableConstraintList` drops its rule
+grid entirely, because the chips on each card's header already say «Пн: з 09:00» and the grid is
+nothing but editors; `RoomAssignmentList` and `FacultyTimetableList` replace their pickers with one
+line naming where the class is held and when it sits (`placementLabel`, `scheduledLabel`), since the
+pickers were the only place either board stated that at all, and without the line a board that
+exists to answer "what has nobody assigned yet?" would answer nothing; and both automatic-generation
+panels are not drawn at all, a two-minute search whose only outcome is «Застосувати» being worse than
+useless to somebody who may not apply it. Each of them checks again in the handler and not only in
+the template, so a card made dirty by some other route stops before the request rather than after
+it — mostly with a sentence naming the level that is missing, in the same words the service would
+have answered with.
 
 A **detail page** does the same for a batch of one: `FacultyPage`, `DepartmentDetailPage`,
-`CourseDetailPage`, `LecturerDetailPage` and `RoomDetailPage` each call `auth.accessLevel(<TYPE>,
+`CourseDetailPage`, `LecturerDetailPage`, `RoomDetailPage`, `BuildingPage`,
+`DegreeProgramDetailPage` and `AcademicGroupDetailPage` each call `auth.accessLevel(<TYPE>,
 routeId)` in `ngOnInit` and derive `canModifyX` / `canDeleteX` / `canManageAccess` from it as
-computed signals. `CoursePage` composes three scopes, since a plan position can be reachable through
+computed signals — the last three joined the list when their «✎ Редагувати» stopped being drawn for
+everybody. `BuildingPage` asks twice, because its «Аудиторії» tab is a list: once about the корпус,
+and once, batched, about every аудиторія in it, since `Room` hangs off a факультет as well and a
+grant on either reaches it. `CoursePage` composes three scopes, since a plan position can be reachable through
 the discipline *or* through its degree programme, and a workload through the discipline *or* through
 the кафедра holding it: the level in force is the highest of them.
 
@@ -2416,11 +2648,22 @@ nothing was sent to.
 
 - **If it only needs a plain CRUD table**: append an `EntityMeta` to `ENTITIES` in
   `entities.ts`, add a one-line component to `entity-pages.ts`/`ENTITY_PAGES`, and link it
-  from `app.html`.
+  from `app.html`. Two of those three now carry a permission decision as well. If the table is
+  nothing but reference data somebody maintains — no reading anyone else needs — mark its
+  `ENTITY_PAGES` entry `editorsOnly: true`, which is what gives its route `data.gatePage` and lets
+  the screen answer «Немає доступу»; and wrap its sidebar link in `@if (auth.canReachType('…'))`,
+  so the link and the screen give the same answer. Neither is needed for a table people look things
+  up in — `/course` and `/lecturer` are deliberately readable by anyone signed in. Nothing else
+  about the create/edit/delete gating has to be written: `BaseEntity` derives it from the entity's
+  own metadata and the published cascade.
 - **If it needs a dedicated drill-down page or child-list widget** (like
   `WorkingCurriculumList`): write a standalone component with its own GraphQL
   query/mutations via `GraphqlService`, register its route in `app.routes.ts`, and embed it
-  where relevant (e.g. as a `@case` in a parent detail page's section switch).
+  where relevant (e.g. as a `@case` in a parent detail page's section switch). A widget that writes
+  asks `auth.accessLevel(<TYPE>, <the row those writes hang off>)` in `ngOnInit` and derives
+  `canEdit` / `canDelete` from it; a tab that exists only to write also declares `writes` in its
+  page's `SECTIONS` table and is wrapped in `<app-access-gate>` — see [Which screens hide
+  themselves](#which-screens-hide-themselves).
 
 ---
 
@@ -2560,8 +2803,19 @@ nothing was sent to.
   httpOnly cookie would be the safer default). There's also no proactive token-refresh or
   expiry countdown: a token that expires mid-session just starts failing requests with an auth
   error on the next mutation rather than warning ahead of time.
-- `BaseEntity.canShowCreate` is a coarse "has *any* permission at all" check, not a precise "can
-  create under this exact parent" check (unlike the drill-down widgets, which do check the exact
-  parent) — a user with only a narrow grant elsewhere in the system will still see the generic
-  tables' "+ Додати" button, and only find out via the server error that this particular create
-  isn't allowed.
+- Hiding a tab or a screen is decided at the level of the *kind* of thing it maintains, not the row
+  it is shown under (see [Which screens hide themselves](#which-screens-hide-themselves)), so it
+  over-shows: a завідувач кафедри sees «Формування розкладу» on every факультет, including those
+  where every control inside it is inert. The precise question — "does this account hold `EDIT` on
+  anything beneath *this* факультет" — is a downward walk over the whole subtree, which is the one
+  direction `PermissionEvaluator` deliberately does not go. Over-showing is the safe error here;
+  under-showing would hide somebody's own work from them.
+- The per-semester lengths entered on «Тривалість семестрів» are **stored but not yet used**. The
+  schedule builder still derives a workload's weekly block count from `hours / (semester_duration_weeks
+  × durationHours)` — one number for every programme — so a semester recorded as ten weeks is planned
+  as sixteen until that arithmetic is taught to look the override up. It needs the workload's own
+  semester and degree programme, which `faculty-timetable-list.ts` does not currently load.
+- Nothing re-asks after a grant changes. `AuthService` caches `me`, the access model and the
+  per-resource levels for the session, and `clearAccessCache()` is called after granting or revoking
+  from a «Доступ» panel — but a grant made by *somebody else* while a tab is open is not noticed
+  until the page is reloaded. The server is unaffected: it re-reads the grants on every request.

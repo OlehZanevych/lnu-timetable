@@ -13,13 +13,20 @@ import { TimetableView } from './timetable-view';
 import { sectionNav } from './section-route';
 import { AuthService } from './auth.service';
 import { AccessLevel, allows, maxLevel } from './access-level';
+import { AccessNeed, anywhereNeed } from './access-need';
+import { AccessGate } from './access-gate';
 import { ResourceAccessPanel } from './resource-access';
 
 type DeptSection = 'info' | 'lecturers' | 'combinedItems' | 'constraints'
   | 'timetableConstraints' | 'workloads' | 'workloadSummary' | 'workloadDetail' | 'timetable'
   | 'access';
 
-/** Which slugs `/department/:id/:section` recognises — see `section-route.ts`. */
+/**
+ * Which slugs `/department/:id/:section` recognises — see `section-route.ts`. All of them, including
+ * the three the nav hides from a reader who cannot edit the кафедра: `sectionNav` treats an
+ * unrecognised slug as no slug at all and opens «Інформація», so dropping them here would answer a
+ * pasted `/department/7/workloads` by quietly showing something else instead of by explaining.
+ */
 const SECTION_KEYS: DeptSection[] = ['info', 'lecturers', 'combinedItems', 'constraints',
   'timetableConstraints', 'workloads', 'workloadSummary', 'workloadDetail', 'timetable', 'access'];
 
@@ -37,7 +44,7 @@ interface Department {
   templateUrl: './department-page.html',
   imports: [RouterLink, FormsModule, LecturerPage, LecturerConstraintList, TimetableConstraintList,
             LecturerWorkloadList, DepartmentWorkloadSummary, LecturerWorkloadDetail,
-            CombinedWorkingCurriculumItemList, TimetableView, ResourceAccessPanel]
+            CombinedWorkingCurriculumItemList, TimetableView, ResourceAccessPanel, AccessGate]
 })
 export class DepartmentDetailPage implements OnInit {
   private route = inject(ActivatedRoute);
@@ -54,6 +61,33 @@ export class DepartmentDetailPage implements OnInit {
   private effectiveLevel = computed(() => maxLevel(this.auth.globalLevel(), this.departmentLevel()));
   canModifyDepartment = computed(() => allows(this.effectiveLevel(), 'EDIT'));
   canManageAccess = computed(() => allows(this.effectiveLevel(), 'MANAGE'));
+
+  /**
+   * What each of the three writing tabs is actually gated on: the kind of thing the tab maintains,
+   * rather than the кафедра it is shown under.
+   *
+   * The rows behind them hang below the кафедра — «Обмеження навантаження» and «Обмеження розкладу»
+   * update a викладач, «Навантаження викладачів» their навантаження — and a grant can name any of
+   * those directly. Asking about the кафедра would hide the screen from somebody the server would
+   * have let write, which is the one mistake a convenience like this must not make. It over-shows
+   * instead: the tab appears wherever this account could edit something of that kind, and every
+   * control inside is still gated on the row it writes.
+   */
+  private readonly sectionNeeds = new Map<string, AccessNeed>();
+
+  sectionNeed(writes: string): AccessNeed {
+    let need = this.sectionNeeds.get(writes);
+    if (!need) {
+      need = anywhereNeed(writes);
+      this.sectionNeeds.set(writes, need);
+    }
+    return need;
+  }
+
+  /** Whether a tab maintaining `writes` is worth offering at all — what the nav hides on. */
+  canReach(writes: string): boolean {
+    return this.auth.canReachType(writes);
+  }
 
   department = signal<Department | null>(null);
   error = signal('');

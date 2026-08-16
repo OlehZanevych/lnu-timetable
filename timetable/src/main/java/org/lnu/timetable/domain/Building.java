@@ -5,10 +5,13 @@ import org.lnu.timetable.framework.annotation.Description;
 import org.lnu.timetable.framework.annotation.GraphQLEntity;
 import org.lnu.timetable.framework.annotation.Nullable;
 import org.lnu.timetable.framework.annotation.OneToMany;
+import org.lnu.timetable.framework.annotation.PermissionRoot;
 
 import java.util.List;
 
 @Data
+@PermissionRoot("A корпус belongs to the university, not to a faculty: it holds rooms used by "
+    + "several of them, so there is no owner for a grant to cascade from")
 @GraphQLEntity(table = "buildings")
 public class Building {
 

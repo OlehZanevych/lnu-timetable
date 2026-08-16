@@ -28,7 +28,13 @@ public record EntityMetadata(
     /** FK-based permission ancestor edges declared via {@code @PermissionParent}. */
     List<PermissionParentEdge> permissionParents,
     /** Join-table-based permission ancestor edges declared via {@code @PermissionJoinParent}. */
-    List<PermissionJoinParentEdge> permissionJoinParents
+    List<PermissionJoinParentEdge> permissionJoinParents,
+    /**
+     * Declared {@code @PermissionRoot}: this entity has no owner, so only a {@code GLOBAL} grant
+     * reaches it. An entity declaring neither this nor a parent edge fails startup — see
+     * {@link EntityMetadataRegistry}.
+     */
+    boolean permissionRoot
 ) {
     public EntityFieldMetadata getField(String name) {
         return fields.get(name);

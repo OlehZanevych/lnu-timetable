@@ -8,7 +8,9 @@
       @if (b?.city) { <p class="muted">{{ b!.city }}</p> }
     </div>
     <div class="faculty-header-actions">
-      <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+      @if (canDeleteBuilding()) {
+        <button type="button" class="ghost danger" (click)="openDelete()">Видалити</button>
+      }
     </div>
   </div>
 </div>
@@ -43,7 +45,9 @@
       @if (b) {
         <div class="page-header">
           <h2>Інформація про корпус</h2>
-          <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          @if (canModifyBuilding()) {
+            <button type="button" (click)="openEdit()">&#x270E; Редагувати</button>
+          }
         </div>
         <div class="card info-card">
           <table class="info-table">
@@ -65,7 +69,9 @@
           <h2>Аудиторії</h2>
           @if (b?.rooms) { <p class="muted">{{ b!.rooms.length }} запис(ів)</p> }
         </div>
-        <button type="button" (click)="openCreateRoom()">+ Додати аудиторію</button>
+        @if (canCreateRoom()) {
+          <button type="button" (click)="openCreateRoom()">+ Додати аудиторію</button>
+        }
       </div>
 
       <div class="card">
@@ -90,12 +96,18 @@
                 <td>{{ room.faculty?.name || '&mdash;' }}</td>
                 <td class="row-actions">
                   <a class="open-link" [routerLink]="['/room', room.id]">Відкрити &rarr;</a>
-                  <button type="button" class="ghost" (click)="openEditRoom(room)">Редагувати</button>
-                  <button type="button" class="ghost danger" (click)="deleteRoom(room)">Видалити</button>
+                  @if (canEditRoom(room)) {
+                    <button type="button" class="ghost" (click)="openEditRoom(room)">Редагувати</button>
+                  }
+                  @if (canDeleteRoom(room)) {
+                    <button type="button" class="ghost danger" (click)="deleteRoom(room)">Видалити</button>
+                  }
                 </td>
               </tr>
             } @empty {
-              <tr><td colspan="6" class="muted">Аудиторій ще немає &mdash; натисніть &laquo;Додати аудиторію&raquo;.</td></tr>
+              <tr><td colspan="6" class="muted">
+                Аудиторій ще немає@if (canCreateRoom()) { &mdash; натисніть &laquo;Додати аудиторію&raquo;}.
+              </td></tr>
             }
           </tbody>
         </table>

@@ -46,9 +46,11 @@
           <span class="muted">без обмежень</span>
         }
       </div>
-      <button type="button" class="ghost" [disabled]="!rules.length || block.saving()" (click)="clear(block)">
-        Очистити
-      </button>
+      @if (canEdit()) {
+        <button type="button" class="ghost" [disabled]="!rules.length || block.saving()" (click)="clear(block)">
+          Очистити
+        </button>
+      }
     </div>
 
     @if (block.error()) { <p class="error">{{ block.error() }}</p> }
@@ -61,7 +63,11 @@
       </ul>
     }
 
-    @if (rules.length) {
+    <!-- The grid is nothing but editors — a day picker, a kind picker and a value — so without EDIT
+         it is dropped rather than shown greyed out. Nothing is lost by that: the chips in the header
+         above are a complete reading of each rule («Пн: з 09:00»), which is what somebody who may
+         look at a кафедра's розклад but not shape it came here for. -->
+    @if (rules.length && canEdit()) {
       <table class="tc-grid">
         <thead>
           <tr>
@@ -134,20 +140,22 @@
       </table>
     }
 
-    <div class="lc-actions">
-      <button type="button" class="ghost" [disabled]="block.saving()" (click)="addRule(block)">
-        &#x002B; Додати правило
-      </button>
-      <button type="button" [disabled]="!block.dirty() || block.saving() || issues.length" (click)="save(block)">
-        {{ block.saving() ? 'Збереження&hellip;' : 'Зберегти' }}
-      </button>
-      @if (block.dirty()) {
-        <button type="button" class="ghost" [disabled]="block.saving()" (click)="revert(block)">Скасувати</button>
-      }
-      @if (issues.length) {
-        <span class="muted lc-blocked">Збереження заблоковано до усунення помилок.</span>
-      }
-    </div>
+    @if (canEdit()) {
+      <div class="lc-actions">
+        <button type="button" class="ghost" [disabled]="block.saving()" (click)="addRule(block)">
+          &#x002B; Додати правило
+        </button>
+        <button type="button" [disabled]="!block.dirty() || block.saving() || issues.length" (click)="save(block)">
+          {{ block.saving() ? 'Збереження&hellip;' : 'Зберегти' }}
+        </button>
+        @if (block.dirty()) {
+          <button type="button" class="ghost" [disabled]="block.saving()" (click)="revert(block)">Скасувати</button>
+        }
+        @if (issues.length) {
+          <span class="muted lc-blocked">Збереження заблоковано до усунення помилок.</span>
+        }
+      </div>
+    }
   </div>
 } @empty {
   <p class="muted">

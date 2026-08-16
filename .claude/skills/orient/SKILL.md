@@ -46,9 +46,11 @@ work actually happens. Know which half you are in before changing anything.
   `npm run lint:graphql` enforces this and several traps around it — run it after touching any query.
 - **Authorization is entity-scoped and cascading**, at three ordered levels: `EDIT` < `FULL` <
   `MANAGE`. A grant names one resource (or `GLOBAL`) and covers everything below it via
-  `@PermissionParent`/`@PermissionJoinParent`. Create/update need `EDIT`, delete needs `FULL`,
-  delegation needs `MANAGE`. The client mirrors this in `access-level.ts`; UI gating is a
-  convenience, never the boundary.
+  `@PermissionParent`/`@PermissionJoinParent` — and every entity must declare one of those or
+  `@PermissionRoot`, or the service refuses to start. Create/update need `EDIT`, delete needs
+  `FULL`, delegation needs `MANAGE`. The client hides what a caller cannot use — down to whole pages
+  and tabs — reading the same cascade from `Query.accessModel` rather than a copy of it
+  (`access-need.ts`, `access-gate.ts`); UI gating is a convenience, never the boundary.
 - **A drill-down page's open tab is part of its URL** (`/faculty/:id/:section`), via
   `section-route.ts`. Tabs are addresses, not component state.
 - **`schema.sql` is always the current schema**; anything that has to carry an existing database

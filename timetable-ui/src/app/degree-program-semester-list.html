@@ -1,0 +1,79 @@
+<div class="page-header">
+  <div>
+    <h2>Тривалість семестрів</h2>
+    <p class="muted">
+      Скільки навчальних тижнів триває кожен семестр цієї освітньої програми. За цим числом
+      обчислюється, скільки занять на тиждень має бути в розкладі.
+    </p>
+  </div>
+</div>
+
+@if (error()) { <p class="error">{{ error() }}</p> }
+@if (saveError()) { <p class="error">{{ saveError() }}</p> }
+@if (saved()) { <p class="muted">Збережено.</p> }
+
+@if (loading()) {
+  <p class="muted">Завантаження&hellip;</p>
+} @else if (!rows().length) {
+  <p class="muted">
+    Немає жодного семестру: у програмі ще немає ні навчального плану, ні вказаної тривалості
+    навчання. Заповніть &laquo;Тривалість навчання&raquo; на вкладці &laquo;Інформація&raquo;.
+  </p>
+} @else {
+
+  <p class="muted dps-note">
+    Порожня комірка означає звичайну тривалість
+    @if (defaultWeeks()) { &mdash; <strong>{{ defaultWeeks() }}</strong> тиж. } @else { із глобальних властивостей }
+    &mdash; і саме так має бути для більшості семестрів. Заповнюйте лише ті, що відрізняються:
+    наприклад, останній семестр магістратури, більшу частину якого займають атестація та практика.
+    Семестри пронумеровані так, як їх нумерує навчальний план програми ({{ numbering() }}).
+  </p>
+
+  @if (canEdit()) {
+    <div class="card btt-bar">
+      <span [class.muted]="!changedCount()">
+        @if (changedCount()) { Незбережених змін: <strong>{{ changedCount() }}</strong> }
+        @else { Змін немає }
+      </span>
+      <span class="btt-bar-actions">
+        <button type="button" class="ghost" [disabled]="!changedCount() || saving()" (click)="revert()">
+          Скасувати
+        </button>
+        <button type="button" [disabled]="!changedCount() || saving()" (click)="save()">
+          @if (saving()) { Збереження&hellip; } @else { Зберегти }
+        </button>
+      </span>
+    </div>
+  }
+
+  <div class="card">
+    <table class="dps-table">
+      <thead>
+        <tr>
+          <th>Семестр</th>
+          <th>Тривалість, тижнів</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.semester) {
+          <tr [class.dirty]="row.weeks.trim() !== row.original">
+            <td>{{ row.semester }}</td>
+            <td>
+              <input type="text" inputmode="numeric" maxlength="2" class="dps-weeks"
+                     [disabled]="!canEdit() || saving()"
+                     [placeholder]="defaultWeeks() ? defaultWeeks() + '' : ''"
+                     [ngModel]="row.weeks" (ngModelChange)="onWeeksInput(row, $event)"
+                     [name]="'w-' + row.semester" [ngModelOptions]="{ standalone: true }" />
+            </td>
+            <td class="muted">
+              @if (!row.weeks.trim()) { звичайна тривалість }
+              @else if (row.id) { власна тривалість }
+              @else { нове значення }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}

@@ -1,7 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { GraphqlService } from './graphql.service';
+import { AuthService } from './auth.service';
+import { AccessLevel, allows, maxLevel } from './access-level';
 import { SearchSelect, Option } from './search-select';
 import { ROOM_KIND_OPTIONS, toOptions } from './entities';
 import { sectionNav } from './section-route';
@@ -38,6 +40,7 @@ export class BuildingPage implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private gql = inject(GraphqlService);
+  auth = inject(AuthService);
 
   readonly buildingId: string = this.route.snapshot.paramMap.get('id')!;
   readonly roomKindOptions = toOptions(ROOM_KIND_OPTIONS);
@@ -50,7 +53,39 @@ export class BuildingPage implements OnInit {
     () => ['/building', this.buildingId], () => SECTION_KEYS, () => 'info');
   readonly activeSection = this.nav.active;
 
+  /**
+   * This user's level on this корпус. Two signals rather than one boolean, exactly as `RoomDetailPage`
+   * keeps them, because the buttons they gate are no longer the same right: «Редагувати» needs EDIT,
+   * «Видалити» needs FULL.
+   */
+  buildingLevel = signal<AccessLevel | null>(null);
+  canModifyBuilding = computed(() => allows(maxLevel(this.auth.globalLevel(), this.buildingLevel()), 'EDIT'));
+  canDeleteBuilding = computed(() => allows(maxLevel(this.auth.globalLevel(), this.buildingLevel()), 'FULL'));
+
+  /**
+   * A new аудиторія opened from here is attached to this корпус, so the right it needs is EDIT on the
+   * building it lands in — the same rule the server applies to the parent of a created row.
+   */
+  canCreateRoom = this.canModifyBuilding;
+
+  /**
+   * The per-row level on each аудиторія of this корпус, batched into one `accessLevels` call once the
+   * rooms are known. A room cannot be judged by the корпус alone: `Room` declares both `Building` and
+   * `Faculty` as permission parents, so a faculty may hold an аудиторія in a корпус that is not theirs,
+   * while a grant on the корпус itself cascades into every room in it, whichever faculty owns them.
+   */
+  roomAccessById = signal<Map<string, AccessLevel>>(new Map());
+
   selectSection(key: BuildingSection) { this.nav.select(key); }
+
+  /** The strongest of the three grants that can reach one room: university-wide, the корпус, the row. */
+  private roomLevel(room: Room): AccessLevel | null {
+    return maxLevel(maxLevel(this.auth.globalLevel(), this.buildingLevel()),
+                    this.roomAccessById().get(String(room.id)));
+  }
+
+  canEditRoom(room: Room): boolean { return allows(this.roomLevel(room), 'EDIT'); }
+  canDeleteRoom(room: Room): boolean { return allows(this.roomLevel(room), 'FULL'); }
 
   // Edit building
   showEditForm = signal(false);
@@ -71,6 +106,7 @@ export class BuildingPage implements OnInit {
   ngOnInit() {
     this.loadBuilding();
     this.loadFaculties();
+    this.auth.accessLevel('BUILDING', this.buildingId).subscribe((level) => this.buildingLevel.set(level));
   }
 
   roomKindLabel(v: string | undefined): string {
@@ -85,9 +121,25 @@ export class BuildingPage implements OnInit {
       rooms { id number name capacity kind faculty { id name } }
     } } }`;
     this.gql.request(q, { id: this.buildingId }).subscribe({
-      next: (d: any) => this.building.set(d.buildings.building),
+      next: (d: any) => {
+        const b = d.buildings.building;
+        this.building.set(b);
+        this.loadRoomAccess(b?.rooms ?? []);
+      },
       error: (e) => this.error.set(e.message)
     });
+  }
+
+  /**
+   * One batched permission check for every room's «Редагувати» / «Видалити», the way `BaseEntity`
+   * asks for the rows of a table. A university-wide MANAGE grant already answers each of them, and
+   * anything weaker still has to ask, because a grant on an individual аудиторія can be stronger than
+   * both the global one and the one on this корпус.
+   */
+  private loadRoomAccess(rooms: Room[]) {
+    if (this.auth.globalLevel() === 'MANAGE' || rooms.length === 0) return;
+    this.auth.accessLevels('ROOM', rooms.map((r) => String(r.id)))
+      .subscribe({ next: (levels) => this.roomAccessById.set(levels), error: () => {} });
   }
 
   private loadFaculties() {
