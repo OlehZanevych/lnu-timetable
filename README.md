@@ -4,18 +4,33 @@ A system for building the course timetable of a faculty of **Ivan Franko Nationa
 Lviv** — from the curriculum, through each department's lecturer workloads, to the weekly schedule
 itself.
 
-It is two projects in one repository, talking to each other over GraphQL:
+It is three projects in one repository, talking to each other over GraphQL:
 
 | | | |
 |---|---|---|
 | [**`timetable/`**](./timetable/README.md) | the service | Spring Boot 4 · Java 25 · WebFlux · Spring for GraphQL · R2DBC / PostgreSQL |
 | [**`timetable-ui/`**](./timetable-ui/README.md) | the web client | Angular 21 · standalone components · signals · zoneless |
+| [**`timetable-generator/`**](./timetable-generator/README.md) | the desktop generator | Qt 6 · C++20 · nothing below the GUI but a compiler |
 
-Each has a README of its own, and each is worth reading before touching that half — they are the
+Each has a README of its own, and each is worth reading before touching that part — they are the
 design documents, not just setup notes. **Start with [`timetable/README.md`](./timetable/README.md)**
-if you are here for the data model or the API, and with
+if you are here for the data model or the API, with
 [`timetable-ui/README.md`](./timetable-ui/README.md) if you are here for the screens or the
-algorithms.
+algorithms, and with [`timetable-generator/README.md`](./timetable-generator/README.md) if you are
+here for the search that runs for an hour rather than for two minutes.
+
+The third one is the newest and needs a sentence of justification, because the first two already
+generate a timetable. They generate it *in a browser tab*, one faculty at a time, on a budget the
+panel caps at two minutes — and the browser solver converges: it returns the same schedule at nine
+minutes as at five, with 22.8 million moves in between buying nothing
+([`TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) §8). A deanery willing to leave
+a machine running overnight had nowhere to spend the time. `timetable-generator/` is where it spends
+it: the same nine Π terms, the same hard rules, the same independent validator, a search built out of
+large neighbourhoods that do not run out of moves, and the whole university schedulable at once
+rather than one faculty around the others. Measured against the browser solver on one host at one
+clock, thirty seconds each: a **perfect schedule** — no hard violations, no windows, no mixed days —
+at every size up to 1 600 class sessions, and soft 16 at 12 800 where the browser solver is at
+10 764. Given an hour instead of thirty seconds it reaches 8.
 
 ---
 
@@ -36,7 +51,10 @@ The work it supports runs in one direction, and each stage is the input to the n
    class session those workloads require. This too can be
    [**generated automatically**](./timetable-ui/TIMETABLE-GENERATION.md), respecting the scheduling
    constraints of lecturers, groups and rooms, and scheduling *around* the classes other faculties
-   have already placed in the same rooms and with the same people.
+   have already placed in the same rooms and with the same people — in the browser, on a budget of
+   up to two minutes, or in the
+   [**desktop generator**](./timetable-generator/README.md) for as long as a machine can be left
+   running, and there for every faculty at once.
 
 Two of those stages are entered from more than one direction, because the shape of the data and the
 shape of the work do not always agree.
@@ -116,6 +134,22 @@ npm start
 ```
 
 `npm start` proxies `/graphql` to `http://localhost:8080`, so the service has to be up first.
+
+The desktop generator is optional and needs **Qt 6** and **CMake** on top of the above. It talks to
+the same service over the same `/graphql`, signs in with the same account, and is not needed to run
+anything else:
+
+```bash
+# 4. desktop generator (optional)
+brew install qt cmake ninja
+cd ../timetable-generator
+cmake -S . -B build -G Ninja -DCMAKE_PREFIX_PATH="$(brew --prefix qt)" -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+open build/timetable-generator.app
+```
+
+`-DTG_BUILD_GUI=OFF` builds only the solver core and `timetable-solve`, the headless runner every
+measurement in its README is taken with — that half needs nothing but a C++20 compiler.
 `timetable/scripts/reset_db.sh` re-applies both SQL files in one command, which is the usual way to
 pick up a schema change on a database you do not mind losing — see the service README's *Known
 limitations* for why that step is manual.
@@ -270,6 +304,10 @@ self-service registration works from the first start rather than after an edit t
 | [`timetable-ui/TIMETABLE-GENERATION.md`](./timetable-ui/TIMETABLE-GENERATION.md) | the UCTP solver: objective function, data structures, per-phase pseudocode, every parameter, the worker portfolio, a traced example, complexity, and the code map |
 | [`timetable-ui/SOLVER-OPTIMISATION.md`](./timetable-ui/SOLVER-OPTIMISATION.md) | the study that produced the current solver — what was wrong with the old search, what replaced it, how it scales, and the seven mechanisms that were built and rejected on measurement |
 | [`timetable-ui/scripts/timetable-bench/README.md`](./timetable-ui/scripts/timetable-bench/README.md) | the benchmark behind the solver — why the instances are built backwards around a hidden feasible schedule, the independent scorer, and how to re-run the whole study |
+| [`timetable-generator/README.md`](./timetable-generator/README.md) | the C++ solver and its desktop application — why the browser solver's convergence is the reason it exists, the bitmask time algebra the objective is built from, the per-(entity, day) delta evaluation, the seven neighbourhoods and the bandit that weighs them by reward per unit of work, the exact-relaxation permutation operator and the conflict-graph clusters it aims at, the three-level escape that replaces a perturbation, the four generation options, and the measured results against the same benchmark and the same independent validator |
+| [`timetable-generator/ALGORITHM.md`](./timetable-generator/ALGORITHM.md) | the same search stated formally — sets, decision variables, the nine Π terms as numbered equations, the separability lemma the delta evaluation rests on, pseudocode for construction and every neighbourhood, the complexity of each, a parameter table saying how each default was chosen, and the invariants the code enforces |
+| [`timetable-generator/STUDY.md`](./timetable-generator/STUDY.md) | what was measured and what came out — the head-to-head, the ablation, what an hour buys, the run-to-run variance that invalidates single-run comparisons, and the six mechanisms that were built and rejected on measurement |
+| [`timetable-generator/WRITING.md`](./timetable-generator/WRITING.md) | for turning the above into an article — which claim rests on which experiment, what may not be claimed, the statistics the sample size does and does not support, related work to position against, and the commands that regenerate every number and figure |
 | [`timetable-ui/CURRICULUM-PDF.md`](./timetable-ui/CURRICULUM-PDF.md) | the printable curriculum — which of its parts are required by the Закон України «Про вищу освіту» and which are settled practice, the compliance checks it carries, and what the data model cannot yet fill in |
 | [`timetable-ui/WORKING-CURRICULUM-PDF.md`](./timetable-ui/WORKING-CURRICULUM-PDF.md) | the printable working curriculum — why it has no legal footing at all since 1993, what institutional practice actually puts in one, and how department teaching hours are projected from it |
 | [`timetable-ui/WORKLOAD-PDF.md`](./timetable-ui/WORKLOAD-PDF.md) | the printable workload sheet — what each part of the document answers to in Ukrainian practice, and the ДСТУ 4163:2020 layout rules |
@@ -279,7 +317,7 @@ self-service registration works from the first start rather than after an edit t
 
 ---
 
-## How the two halves divide the work
+## How the three parts divide the work
 
 Worth knowing before looking for something in the wrong project.
 
@@ -290,12 +328,27 @@ scheduling or workload logic: it has no scheduler, and it does not validate a `T
 against the rules that govern it. Its guarantees are structural — foreign keys, value ranges,
 uniqueness, cascades — plus authorization.
 
+One exception arrived with the desktop generator and is worth naming, because it is the first time
+the service has enforced anything about a schedule: `saveGeneratedTimetable` checks that a
+placement's bell belongs to its workload's own grid and that the caller may edit it.
+`schema.sql` states the first of those in a comment and leaves it to "the scheduler"; the mutation
+that a scheduler writes through is the one place it can be checked. The query beside it —
+`timetableGenerationInput` — is likewise not generable: a *class session* has no table at all, and
+the payload is a view across eleven tables with three different faculty paths through them.
+
 **The client holds the algorithms.** Both generators, all the workload arithmetic, the curriculum
 arithmetic and its statutory checks, the PDF engine and the Ukrainian collator are hand-written
 modules in `timetable-ui/src/app`, free of Angular, GraphQL and I/O, so each can be run and tested
 on plain objects. The timetable solver additionally
 runs in Web Workers — several at once on different seeds, best answer wins — because it is a search
 with a time budget rather than a computation.
+
+**The desktop generator holds a second, longer search over the same problem.** Not a rewrite of the
+browser one and not a replacement for it: the tab is where a deanery generates a розклад in a
+minute, and it stays there. `timetable-generator/` is for the case the tab cannot serve — an hour or
+a night rather than two minutes, and every faculty at once rather than one around the others. Its
+core is C++20 with no Qt in it at all, so the same code that runs behind the window runs headless
+under the benchmark, which is what lets its claims be checked rather than believed.
 
 That the algorithms are free of the framework is not a stylistic preference — it is what lets them be
 *measured*. `timetable-ui/scripts/workload-bench` runs the shipped workload generator, unmodified,
@@ -305,6 +358,9 @@ quadratic in the search and a class of constraint breach nobody had noticed.
 `timetable-ui/scripts/timetable-bench` now does the same for the timetable solver, on instances built
 around a hidden feasible schedule so that a perfect answer is known to exist; pointing it at the code
 found that the search was reaching a local optimum in its first iteration and never moving again.
+The C++ solver is measured against **that same harness and that same validator** — imported rather
+than copied, so a scorer that drifted would not quietly make the comparison flattering — which is the
+only reason the two sets of numbers can be put in one table.
 
 **The contract between them is the generated schema**, and the service README's *The query
 catalogue* is worth reading before adding a query — several connections carry `EXISTS`-subquery
@@ -343,19 +399,25 @@ lnu-timetable/
 │   │       └── migration/   Flyway migrations, applied at startup to a database
 │   │                        schema.sql has already created
 │   └── scripts/          reset/backup helpers, and the lnu.edu.ua import pipeline
-└── timetable-ui/         the Angular client
-    ├── src/app/          pages, child-list widgets, form controls, and the pure modules
-    ├── src/styles.css    every style in the app is global and lives here
-    ├── public/fonts/     Liberation Serif subsets, fetched on demand by the PDF export
-    └── scripts/
-        ├── check-graphql-variables.mjs  npm run lint:graphql — the one check that needs
-        │                                neither a service nor a browser
-        ├── workload-bench/  the benchmark for the workload generator: two Node scripts,
-        │                    48 generated department instances, and the measured
-        │                    before-and-after — see its own README
-        └── timetable-bench/ the benchmark for the timetable solver: instances built
-                             backwards around a hidden feasible schedule, an independent
-                             scorer, and the study behind SOLVER-OPTIMISATION.md
+├── timetable-ui/         the Angular client
+│   ├── src/app/          pages, child-list widgets, form controls, and the pure modules
+│   ├── src/styles.css    every style in the app is global and lives here
+│   ├── public/fonts/     Liberation Serif subsets, fetched on demand by the PDF export
+│   └── scripts/
+│       ├── check-graphql-variables.mjs  npm run lint:graphql — the one check that needs
+│       │                                neither a service nor a browser
+│       ├── workload-bench/  the benchmark for the workload generator: two Node scripts,
+│       │                    48 generated department instances, and the measured
+│       │                    before-and-after — see its own README
+│       └── timetable-bench/ the benchmark for the timetable solver: instances built
+│                            backwards around a hidden feasible schedule, an independent
+│                            scorer, and the study behind SOLVER-OPTIMISATION.md
+└── timetable-generator/  the desktop generator
+    ├── src/core/         the search: portable C++20, no Qt, no third-party dependency
+    ├── src/cli/          timetable-solve — the headless runner every measurement uses
+    ├── src/gui/          the Qt 6 application: sign in, choose, watch, save
+    └── bench/            the study — instance generation, runs, and independent scoring
+                          by timetable-bench's own validator, imported rather than copied
 ```
 
 ---
@@ -366,9 +428,9 @@ Local-development quality, and deliberately so in a few places the sub-READMEs e
 *Known limitations*: `schema.sql`/`data.sql` are still applied by hand (Flyway carries a database
 forward from there but does not create it), the
 JWT secret and database password checked into `application-loc.properties` are dev-only values and
-that profile is active inside the packaged jar too, the CORS filter allows any origin, and the
-client has no automated tests. Read those sections — and *Running it as a single jar* above, for
-what to override — before deploying any of this anywhere real.
+that profile is active inside the packaged jar too, the CORS filter allows any origin, and neither
+the client nor the desktop generator has automated tests. Read those sections — and *Running it as a
+single jar* above, for what to override — before deploying any of this anywhere real.
 On a host configured by `scripts/deploy/install-service.sh` one of them is answered: the service
 runs with that profile dropped and its own credentials, and the installer refuses a JWT secret that
 is the checked-in one. The rest still stand — it does not create the database and it does not touch

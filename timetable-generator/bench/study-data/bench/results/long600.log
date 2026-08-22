@@ -1,0 +1,10 @@
+{"arm": "kick", "seed": 11, "soft": 11, "f": 500, "hard": 0, "kicks": 188, "restarts": 0, "recomb": 0}
+{"arm": "fresh", "seed": 11, "soft": 13, "f": 820, "hard": 0, "kicks": 136, "restarts": 26, "recomb": 0}
+{"arm": "freshrec", "seed": 11, "soft": 12, "f": 640, "hard": 0, "kicks": 121, "restarts": 24, "recomb": 101}
+{"arm": "kick", "seed": 22, "soft": 15, "f": 900, "hard": 0, "kicks": 192, "restarts": 0, "recomb": 0}
+{"arm": "fresh", "seed": 22, "soft": 5, "f": 125, "hard": 0, "kicks": 139, "restarts": 24, "recomb": 0}
+{"arm": "freshrec", "seed": 22, "soft": 9, "f": 445, "hard": 0, "kicks": 108, "restarts": 21, "recomb": 120}
+{"arm": "kick", "seed": 33, "soft": 8, "f": 265, "hard": 0, "kicks": 183, "restarts": 0, "recomb": 0}
+{"arm": "fresh", "seed": 33, "soft": 4, "f": 65, "hard": 0, "kicks": 125, "restarts": 24, "recomb": 0}
+{"arm": "freshrec", "seed": 33, "soft": 5, "f": 100, "hard": 0, "kicks": 119, "restarts": 23, "recomb": 108}
+LONG-DONE

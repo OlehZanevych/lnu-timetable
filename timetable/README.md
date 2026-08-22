@@ -975,10 +975,16 @@ rules need (see above).
 `lecturerConnection(facultyId:)` exists for the same consumer: it reads every lecturer of a faculty
 together with their `timetableConstraints` in one request, rather than one request per department.
 
-The only client of all this today is the frontend's schedule generator
-([TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md)). The service itself neither
-schedules nor validates what a scheduler writes back — see [Known
-limitations](#known-limitations).
+The client of all this is the frontend's schedule generator
+([TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md)). The service still does not
+schedule — see [Known limitations](#known-limitations) — but it is no longer true that it never
+validates what a scheduler writes back: `saveGeneratedTimetable` checks each placement's bell against
+its workload's own grid and each placement against the caller's access, and reports per class what it
+refused. That mutation and the query beside it are
+[`TimetableGenerationSchema`](#the-parts-that-cannot-be-generated-handwrittenapi), which answers this
+same question in **one** request instead of the three aliases above, because a hand-written statement
+can simply write the `OR`. The three filters stay: they are what the tab uses, and the tab is not
+going anywhere.
 
 ### Inputs for automatic workload generation
 
@@ -1209,11 +1215,58 @@ depend on the order they happen to be visited in. And nothing here routes throug
 `requestRegistration` is *none*, and inheriting the generic "must be signed in" would make both
 unreachable.
 
-`SelfServiceSchema` and `AccessModelSchema` are the two implementations today, and the second is what
-the interface was for: `accessModel` arrived as a `@Component` and a constructor argument, with no
-parameter added to `buildSchema` and no edit to the framework at all. `GlobalProperty` and the auth
-surface were left where they are: moving working code to prove a point is how a refactor becomes a
-regression, and the interface's value is in what is added next, not in what is already correct.
+`SelfServiceSchema`, `AccessModelSchema`, `GroupInvitationSchema` and `TimetableGenerationSchema` are
+the implementations today, and the second is what the interface was for: `accessModel` arrived as a
+`@Component` and a constructor argument, with no parameter added to `buildSchema` and no edit to the
+framework at all. `GlobalProperty` and the auth surface were left where they are: moving working code
+to prove a point is how a refactor becomes a regression, and the interface's value is in what is
+added next, not in what is already correct.
+
+#### `TimetableGenerationSchema` — the whole problem in one request, and the answer back
+
+The fourth area, and the one that most clearly could not have been generated. Two fields:
+
+| | |
+|---|---|
+| `Query.timetableGenerationInput(facultyId, semesterParity)` | everything a solver needs, in one round trip: the class sessions to place, the timetable around them, the bells, the places, the directed walks between корпуси, and every scheduling rule that applies |
+| `Mutation.saveGeneratedTimetable(input)` | writes a generated timetable back, per class, reporting what it refused rather than failing the batch |
+
+Three reasons it is hand-written, and none of them is that the framework was inconvenient.
+
+**A class session has no table.** The thing being scheduled is not a row: how many class sessions a
+`lecturer_workloads` row requires is `hours ÷ (semester_duration_weeks × duration_hours)`, with a
+remainder of at least half becoming one biweekly class, and the answer is between zero and four.
+`TimetableGenerationAssembler` does that arithmetic, transcribed epsilon for epsilon from
+`buildBlocks`/`classCounts` in `faculty-timetable-list.ts` — the two must stay in step, or the tab and
+the desktop generator would schedule different timetables from one database.
+
+**The payload is a view, not a connection.** Eleven tables with three different faculty paths through
+them: a lecturer's faculty is reached through `departments`, an academic group's through
+`degree_programs`, a room's is a column. The client assembles the same thing from nine round trips
+plus a browser-side merge — the three aliased reads of `timetableEntryConnection` that exist because
+connection filters compose with AND and what is wanted is OR. Written by hand the OR is just an OR.
+That is a reasonable price for a page somebody is looking at and an unreasonable one for a search
+about to spend an hour on the answer.
+
+**`facultyId` is nullable, and that is the feature.** Named, it is one faculty scheduled around
+everybody else, exactly as the tab does it. Omitted, it is the university: every class in the
+half-year movable at once, which no per-faculty query can express and which is the whole reason the
+desktop generator exists.
+
+Authorization is stated in `TimetableGenerationDataFetchers` because nothing states it for a
+`HandWrittenApi` area. It is the same rule the generated mutations apply, read one level up: a
+placement needs `EDIT` over its `LecturerWorkload`, a deletion needs `FULL`. The query reports per
+class whether this caller may move it — the `locked` flag — and a class the caller may not move stays
+in the payload as an obstacle rather than being dropped, because dropping it would let the search
+place something else into a room the timetable still holds.
+
+One thing this area does that nothing else in the service ever has: it **validates a schedule**.
+`schema.sql` states two invariants in comments and leaves them to "the scheduler" — that
+`timetable_entries.class_start_time_id` belongs to the workload's own
+`class_start_time_set_id`, and that `room_id` is one the workload allows — because each is a
+set-membership test two joins from the row. The mutation a scheduler writes through is the one place
+they can be checked, and it checks the first of them. See
+[`timetable-generator/README.md`](../timetable-generator/README.md) for what is on the other side.
 
 ### Define an entity
 
@@ -2122,6 +2175,9 @@ timetable/
 │   ├── domain/       annotated POJOs, one per @GraphQLEntity table
 │   ├── framework/    the config-driven engine, plus HandWrittenApi — the plug-in point
 │   │                 for the parts of the API it cannot generate (see The framework above)
+│   ├── generation/   the whole solver input in one query, and the generated timetable
+│   │                 written back in one mutation — a HandWrittenApi area, because a
+│   │                 class session has no table (see TimetableGenerationSchema above)
 │   ├── security/     JWT + AccessLevel/PermissionEvaluator, and the one-time links behind
 │   │                 self-service registration (see Authentication & authorization)
 │   ├── mail/         MailService — those links, over SMTP; the only place this service
@@ -2264,16 +2320,19 @@ setup](#database-setup).
   same rules client-side and blocks the save — but a direct API caller gets a message that names
   the wrong problem. Distinguishing them would mean inspecting the Postgres `SQLSTATE`
   (`23514` check vs. `23503` foreign key) in that handler.
-- **Nothing checks a `TimetableEntry` against the rules that govern it.** Its room may be outside
+- **The *generated* mutations still check nothing about a `TimetableEntry`.** Its room may be outside
   the union its workload allows, its `class_start_time_id` may belong to a different set than the
   workload's, and it may sit inside an `UNAVAILABLE` window or past a `NOT_AFTER` — the database
   accepts all three. Every one of these is a condition one or two joins away (and the time rules
   additionally need a class *end* time, which is derived, not stored), so they belong to a scheduler
-  and to the UI. There is still no scheduler *in this service*: the one that exists lives in the
-  sibling frontend project (see
-  [TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md)), applies all of these rules as
-  hard filters, and this service only stores what it decides. An entry written by any other client —
-  or by the same tab's manual per-block form — is still accepted unchecked.
+  and to the UI. There is still no scheduler *in this service*: the two that exist live in the
+  sibling projects (see [TIMETABLE-GENERATION.md](../timetable-ui/TIMETABLE-GENERATION.md) and
+  [`timetable-generator/README.md`](../timetable-generator/README.md)), apply all of these rules as
+  hard filters, and this service only stores what they decide. One door is now narrower than the
+  others: `saveGeneratedTimetable` rejects a placement whose bell is outside its workload's grid, and
+  one the caller may not edit. Everything else — `createTimetableEntry`, `updateTimetableEntry`, the
+  tab's manual per-block form — is still accepted unchecked, and closing that gap means applying the
+  same two tests in `AuthorizingDataFetcherProvider`'s path rather than only in the hand-written one.
 - **`roomGroupConnection`'s and `classStartTimeSetConnection`'s `facultyId` filters match the column
   exactly**, so they return only that faculty's rows — not the university-wide ones (`faculty_id IS
   NULL`) a caller almost always wants as well. Clients that need both fetch unfiltered and narrow

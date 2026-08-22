@@ -1,0 +1,19 @@
+{"arm": "base", "seed": 11, "soft": 22, "f": 2000, "hard": 0, "kicks": 24, "recomb": 0}
+{"arm": "kick", "seed": 11, "soft": 16, "f": 1220, "hard": 0, "kicks": 51, "recomb": 0}
+{"arm": "pop", "seed": 11, "soft": 20, "f": 1595, "hard": 0, "kicks": 25, "recomb": 36}
+{"arm": "base", "seed": 22, "soft": 27, "f": 3095, "hard": 0, "kicks": 24, "recomb": 0}
+{"arm": "kick", "seed": 22, "soft": 20, "f": 1730, "hard": 0, "kicks": 52, "recomb": 0}
+{"arm": "pop", "seed": 22, "soft": 27, "f": 3095, "hard": 0, "kicks": 20, "recomb": 31}
+{"arm": "base", "seed": 33, "soft": 15, "f": 1000, "hard": 0, "kicks": 24, "recomb": 0}
+{"arm": "kick", "seed": 33, "soft": 14, "f": 905, "hard": 0, "kicks": 54, "recomb": 0}
+{"arm": "pop", "seed": 33, "soft": 16, "f": 1030, "hard": 0, "kicks": 26, "recomb": 28}
+{"arm": "base", "seed": 44, "soft": 23, "f": 2260, "hard": 0, "kicks": 24, "recomb": 0}
+{"arm": "kick", "seed": 44, "soft": 21, "f": 1960, "hard": 0, "kicks": 52, "recomb": 0}
+{"arm": "pop", "seed": 44, "soft": 27, "f": 2980, "hard": 0, "kicks": 19, "recomb": 31}
+{"arm": "base", "seed": 55, "soft": 41, "f": 6645, "hard": 0, "kicks": 24, "recomb": 0}
+{"arm": "kick", "seed": 55, "soft": 21, "f": 2605, "hard": 0, "kicks": 63, "recomb": 0}
+{"arm": "pop", "seed": 55, "soft": 21, "f": 2340, "hard": 0, "kicks": 19, "recomb": 36}
+{"arm": "base", "seed": 66, "soft": 27, "f": 2925, "hard": 0, "kicks": 25, "recomb": 0}
+{"arm": "kick", "seed": 66, "soft": 29, "f": 3365, "hard": 0, "kicks": 58, "recomb": 0}
+{"arm": "pop", "seed": 66, "soft": 29, "f": 3365, "hard": 0, "kicks": 30, "recomb": 28}
+ARMS-DONE

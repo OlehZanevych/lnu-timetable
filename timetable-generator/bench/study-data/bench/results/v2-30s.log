@@ -1,0 +1,15 @@
+cpp-v2-30s n03200-s1 t=30000ms → HARD=0 soft=6 f=160 ref=3144 feasible=true moves=4072448
+cpp-v2-30s n03200-s2 t=30000ms → HARD=0 soft=2 f=20 ref=3239 feasible=true moves=4032512
+cpp-v2-30s n03200-s3 t=30000ms → HARD=0 soft=5 f=125 ref=3110 feasible=true moves=4159488
+cpp-v2-30s n03200-s4 t=30000ms → HARD=0 soft=2 f=25 ref=3159 feasible=true moves=4155392
+cpp-v2-30s n03200-s5 t=30000ms → HARD=0 soft=3 f=40 ref=3153 feasible=true moves=4423680
+cpp-v2-30s n06400-s1 t=30000ms → HARD=0 soft=14 f=785 ref=6173 feasible=true moves=3501056
+cpp-v2-30s n06400-s2 t=30000ms → HARD=0 soft=16 f=1385 ref=6205 feasible=true moves=3543040
+cpp-v2-30s n06400-s3 t=30000ms → HARD=0 soft=5 f=325 ref=6126 feasible=true moves=3648512
+cpp-v2-30s n06400-s4 t=30000ms → HARD=0 soft=4 f=100 ref=6255 feasible=true moves=3641344
+cpp-v2-30s n06400-s5 t=30000ms → HARD=0 soft=4 f=65 ref=6238 feasible=true moves=3773440
+cpp-v2-30s n12800-s1 t=30000ms → HARD=0 soft=45 f=8045 ref=12464 feasible=true moves=2441216
+cpp-v2-30s n12800-s2 t=30000ms → HARD=0 soft=30 f=4280 ref=12513 feasible=true moves=2466816
+cpp-v2-30s n12800-s3 t=30000ms → HARD=0 soft=206 f=162305 ref=12340 feasible=true moves=1108992
+cpp-v2-30s n12800-s4 t=30000ms → HARD=0 soft=49 f=10565 ref=12521 feasible=true moves=1614848
+cpp-v2-30s n12800-s5 t=30000ms → HARD=0 soft=57 f=13415 ref=12418 feasible=true moves=1645568

@@ -1,0 +1,6 @@
+build/
+build-*/
+bench/instances*/
+bench/logs/
+*.o
+*.a

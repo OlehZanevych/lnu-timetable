@@ -1,0 +1,5 @@
+restart s1 -> hard 0 soft 32 f 4625 moves 21399552 perturb 49 deep 647
+restart s2 -> hard 0 soft 12 f 580 moves 21699584 perturb 51 deep 670
+norestart s1 -> hard 0 soft 37 f 5920 moves 22285312 perturb 23 deep 726
+norestart s2 -> hard 0 soft 18 f 1250 moves 22711296 perturb 24 deep 750
+AB-DONE

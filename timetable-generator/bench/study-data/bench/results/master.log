@@ -1,0 +1,204 @@
+### 0. feasibility regression on maximally-tight MAX_CLASSES_PER_DAY caps
+capped n03200-s1 t=30000ms → HARD=0 soft=4 f=65 ref=3144 feasible=true moves=4198400
+capped n03200-s2 t=30000ms → HARD=0 soft=2 f=20 ref=3239 feasible=true moves=4343808
+capped n03200-s3 t=30000ms → HARD=0 soft=3 f=40 ref=3110 feasible=true moves=4189184
+capped n06400-s1 t=30000ms → HARD=0 soft=17 f=1250 ref=6173 feasible=true moves=4338688
+skip n06400-s2 (no such instance)
+skip n06400-s3 (no such instance)
+### 1. two mechanisms that sound right and are not
+default n03200-s1 t=30000ms → HARD=0 soft=2 f=20 ref=3144 feasible=true moves=4728832
+default n03200-s2 t=30000ms → HARD=0 soft=2 f=25 ref=3239 feasible=true moves=4826112
+default n03200-s3 t=30000ms → HARD=0 soft=3 f=40 ref=3110 feasible=true moves=4922368
+default n03200-s4 t=30000ms → HARD=0 soft=3 f=85 ref=3159 feasible=true moves=4844544
+default n03200-s5 t=30000ms → HARD=0 soft=4 f=100 ref=3153 feasible=true moves=5095424
+default n06400-s1 t=30000ms → HARD=0 soft=9 f=430 ref=6173 feasible=true moves=4540416
+default n06400-s2 t=30000ms → HARD=0 soft=10 f=425 ref=6205 feasible=true moves=4692992
+default n06400-s3 t=30000ms → HARD=0 soft=5 f=125 ref=6126 feasible=true moves=5160960
+default n06400-s4 t=30000ms → HARD=0 soft=3 f=85 ref=6255 feasible=true moves=4948992
+default n06400-s5 t=30000ms → HARD=0 soft=2 f=25 ref=6238 feasible=true moves=5075968
+default n12800-s1 t=30000ms → HARD=0 soft=37 f=5920 ref=12464 feasible=true moves=3607552
+default n12800-s2 t=30000ms → HARD=0 soft=18 f=1250 ref=12513 feasible=true moves=3969024
+default n12800-s3 t=30000ms → HARD=0 soft=16 f=1030 ref=12340 feasible=true moves=3774464
+default n12800-s4 t=30000ms → HARD=0 soft=31 f=3855 ref=12521 feasible=true moves=3895296
+default n12800-s5 t=30000ms → HARD=0 soft=20 f=1475 ref=12418 feasible=true moves=3689472
+plus-dayfix n03200-s1 t=30000ms → HARD=0 soft=5 f=100 ref=3144 feasible=true moves=4308992
+plus-dayfix n03200-s2 t=30000ms → HARD=0 soft=0 f=0 ref=3239 feasible=true moves=3692799
+plus-dayfix n03200-s3 t=30000ms → HARD=0 soft=3 f=85 ref=3110 feasible=true moves=4292608
+plus-dayfix n03200-s4 t=30000ms → HARD=0 soft=5 f=200 ref=3159 feasible=true moves=4288512
+plus-dayfix n03200-s5 t=30000ms → HARD=0 soft=1 f=5 ref=3153 feasible=true moves=3847168
+plus-dayfix n06400-s1 t=30000ms → HARD=0 soft=7 f=365 ref=6173 feasible=true moves=4165632
+plus-dayfix n06400-s2 t=30000ms → HARD=0 soft=15 f=1125 ref=6205 feasible=true moves=3910656
+plus-dayfix n06400-s3 t=30000ms → HARD=0 soft=9 f=580 ref=6126 feasible=true moves=4156416
+plus-dayfix n06400-s4 t=30000ms → HARD=0 soft=7 f=200 ref=6255 feasible=true moves=4294656
+plus-dayfix n06400-s5 t=30000ms → HARD=0 soft=7 f=200 ref=6238 feasible=true moves=4116480
+plus-dayfix n12800-s1 t=30000ms → HARD=0 soft=39 f=5660 ref=12464 feasible=true moves=3283968
+plus-dayfix n12800-s2 t=30000ms → HARD=0 soft=19 f=1885 ref=12513 feasible=true moves=3292160
+plus-dayfix n12800-s3 t=30000ms → HARD=0 soft=27 f=2815 ref=12340 feasible=true moves=3444736
+plus-dayfix n12800-s4 t=30000ms → HARD=0 soft=33 f=4540 ref=12521 feasible=true moves=3266560
+plus-dayfix n12800-s5 t=30000ms → HARD=0 soft=22 f=2370 ref=12418 feasible=true moves=3333120
+plus-winfix n03200-s1 t=30000ms → HARD=0 soft=3 f=85 ref=3144 feasible=true moves=5450752
+plus-winfix n03200-s2 t=30000ms → HARD=0 soft=3 f=40 ref=3239 feasible=true moves=5685248
+plus-winfix n03200-s3 t=30000ms → HARD=0 soft=1 f=20 ref=3110 feasible=true moves=5848064
+plus-winfix n03200-s4 t=30000ms → HARD=0 soft=5 f=125 ref=3159 feasible=true moves=6355968
+plus-winfix n03200-s5 t=30000ms → HARD=0 soft=3 f=45 ref=3153 feasible=true moves=5915648
+plus-winfix n06400-s1 t=30000ms → HARD=0 soft=19 f=1600 ref=6173 feasible=true moves=5405696
+plus-winfix n06400-s2 t=30000ms → HARD=0 soft=6 f=180 ref=6205 feasible=true moves=5769216
+plus-winfix n06400-s3 t=30000ms → HARD=0 soft=10 f=400 ref=6126 feasible=true moves=5283840
+plus-winfix n06400-s4 t=30000ms → HARD=0 soft=11 f=500 ref=6255 feasible=true moves=5893120
+plus-winfix n06400-s5 t=30000ms → HARD=0 soft=6 f=145 ref=6238 feasible=true moves=5250048
+plus-winfix n12800-s1 t=30000ms → HARD=0 soft=26 f=2900 ref=12464 feasible=true moves=4685824
+plus-winfix n12800-s2 t=30000ms → HARD=0 soft=30 f=3515 ref=12513 feasible=true moves=4390912
+plus-winfix n12800-s3 t=30000ms → HARD=0 soft=16 f=1105 ref=12340 feasible=true moves=4768768
+plus-winfix n12800-s4 t=30000ms → HARD=0 soft=32 f=4070 ref=12521 feasible=true moves=4534272
+plus-winfix n12800-s5 t=30000ms → HARD=0 soft=26 f=3280 ref=12418 feasible=true moves=4197376
+cost-aware n03200-s1 t=30000ms → HARD=0 soft=4 f=185 ref=3144 feasible=true moves=11999232
+cost-aware n03200-s2 t=30000ms → HARD=0 soft=0 f=0 ref=3239 feasible=true moves=1767336
+cost-aware n03200-s3 t=30000ms → HARD=0 soft=6 f=230 ref=3110 feasible=true moves=13547520
+cost-aware n03200-s4 t=30000ms → HARD=0 soft=1 f=5 ref=3159 feasible=true moves=11960320
+cost-aware n03200-s5 t=30000ms → HARD=0 soft=4 f=100 ref=3153 feasible=true moves=13093888
+cost-aware n06400-s1 t=30000ms → HARD=0 soft=23 f=2750 ref=6173 feasible=true moves=11213824
+cost-aware n06400-s2 t=30000ms → HARD=0 soft=16 f=1030 ref=6205 feasible=true moves=11086848
+cost-aware n06400-s3 t=30000ms → HARD=0 soft=10 f=610 ref=6126 feasible=true moves=11918336
+cost-aware n06400-s4 t=30000ms → HARD=0 soft=9 f=610 ref=6255 feasible=true moves=11765760
+cost-aware n06400-s5 t=30000ms → HARD=0 soft=17 f=1420 ref=6238 feasible=true moves=12149760
+cost-aware n12800-s1 t=30000ms → HARD=0 soft=49 f=10255 ref=12464 feasible=true moves=9628672
+cost-aware n12800-s2 t=30000ms → HARD=0 soft=24 f=2435 ref=12513 feasible=true moves=9871360
+cost-aware n12800-s3 t=30000ms → HARD=0 soft=31 f=4255 ref=12340 feasible=true moves=9523200
+cost-aware n12800-s4 t=30000ms → HARD=0 soft=48 f=9170 ref=12521 feasible=true moves=9883648
+cost-aware n12800-s5 t=30000ms → HARD=0 soft=19 f=1565 ref=12418 feasible=true moves=9337856
+### 2. ablation
+full           n03200-s1 soft=    2 f=       20 hard=0 moves=9249792
+full           n03200-s2 soft=    2 f=       25 hard=0 moves=9310208
+full           n03200-s3 soft=    3 f=       40 hard=0 moves=9917440
+full           n06400-s1 soft=    9 f=      430 hard=0 moves=9876480
+full           n06400-s2 soft=   10 f=      425 hard=0 moves=9698304
+full           n06400-s3 soft=    9 f=      335 hard=0 moves=9610240
+full           n12800-s1 soft=   37 f=     5920 hard=0 moves=7409664
+full           n12800-s2 soft=   17 f=     1070 hard=0 moves=7361536
+full           n12800-s3 soft=   16 f=     1155 hard=0 moves=7197696
+no-kopt        n03200-s1 soft=    2 f=       20 hard=0 moves=9220096
+no-kopt        n03200-s2 soft=    2 f=       25 hard=0 moves=5735424
+no-kopt        n03200-s3 soft=    2 f=       25 hard=0 moves=8582144
+no-kopt        n06400-s1 soft=    9 f=      640 hard=0 moves=10145792
+no-kopt        n06400-s2 soft=    8 f=      260 hard=0 moves=9578496
+no-kopt        n06400-s3 soft=   13 f=      725 hard=0 moves=9701376
+no-kopt        n12800-s1 soft=   13 f=      725 hard=0 moves=7533568
+no-kopt        n12800-s2 soft=   25 f=     2590 hard=0 moves=7474176
+no-kopt        n12800-s3 soft=   17 f=     1135 hard=0 moves=7528448
+no-lns         n03200-s1 soft=    2 f=       20 hard=0 moves=17942528
+no-lns         n03200-s2 soft=    1 f=        5 hard=0 moves=18666496
+no-lns         n03200-s3 soft=    2 f=       20 hard=0 moves=18209792
+no-lns         n06400-s1 soft=   17 f=     1165 hard=0 moves=17386496
+no-lns         n06400-s2 soft=   12 f=      585 hard=0 moves=18055168
+no-lns         n06400-s3 soft=   10 f=      425 hard=0 moves=17949696
+no-lns         n12800-s1 soft=   36 f=     5555 hard=0 moves=13917184
+no-lns         n12800-s2 soft=   24 f=     2290 hard=0 moves=14228480
+no-lns         n12800-s3 soft=   24 f=     2560 hard=0 moves=14830592
+no-repack      n03200-s1 soft=    3 f=       45 hard=0 moves=10237952
+no-repack      n03200-s2 soft=    4 f=       65 hard=0 moves=9937920
+no-repack      n03200-s3 soft=    2 f=       25 hard=0 moves=9951232
+no-repack      n06400-s1 soft=   11 f=      485 hard=0 moves=9614336
+no-repack      n06400-s2 soft=   17 f=     1250 hard=0 moves=9590784
+no-repack      n06400-s3 soft=    9 f=      360 hard=0 moves=9581568
+no-repack      n12800-s1 soft=   33 f=     5380 hard=0 moves=6369280
+no-repack      n12800-s2 soft=   28 f=     3620 hard=0 moves=7693312
+no-repack      n12800-s3 soft=   26 f=     3100 hard=0 moves=7708672
+no-chain       n03200-s1 soft=    4 f=       65 hard=0 moves=8577024
+no-chain       n03200-s2 soft=    2 f=       25 hard=0 moves=8638464
+no-chain       n03200-s3 soft=    1 f=        5 hard=0 moves=8865792
+no-chain       n06400-s1 soft=   12 f=      710 hard=0 moves=8793088
+no-chain       n06400-s2 soft=    7 f=      200 hard=0 moves=9050112
+no-chain       n06400-s3 soft=   12 f=      745 hard=0 moves=8658944
+no-chain       n12800-s1 soft=   22 f=     2105 hard=0 moves=7001088
+no-chain       n12800-s2 soft=   29 f=     4130 hard=0 moves=6849536
+no-chain       n12800-s3 soft=   26 f=     2720 hard=0 moves=7036928
+no-kempe       n03200-s1 soft=    3 f=       40 hard=0 moves=8698880
+no-kempe       n03200-s2 soft=    2 f=       25 hard=0 moves=9174016
+no-kempe       n03200-s3 soft=    3 f=       40 hard=0 moves=8695808
+no-kempe       n06400-s1 soft=   10 f=      425 hard=0 moves=8527872
+no-kempe       n06400-s2 soft=    6 f=      160 hard=0 moves=8160256
+no-kempe       n06400-s3 soft=    8 f=      305 hard=0 moves=8696832
+no-kempe       n12800-s1 soft=   26 f=     2785 hard=0 moves=6717440
+no-kempe       n12800-s2 soft=   13 f=      965 hard=0 moves=7090176
+no-kempe       n12800-s3 soft=   22 f=     2635 hard=0 moves=7228416
+no-cluster     n03200-s1 soft=    1 f=        5 hard=0 moves=11550720
+no-cluster     n03200-s2 soft=    2 f=       20 hard=0 moves=11813888
+no-cluster     n03200-s3 soft=    1 f=       20 hard=0 moves=13449216
+no-cluster     n06400-s1 soft=   23 f=     2290 hard=0 moves=12253184
+no-cluster     n06400-s2 soft=    4 f=       65 hard=0 moves=11785216
+no-cluster     n06400-s3 soft=    9 f=      445 hard=0 moves=11358208
+no-cluster     n12800-s1 soft=   29 f=     3400 hard=0 moves=9419776
+no-cluster     n12800-s2 soft=   21 f=     1765 hard=0 moves=9035776
+no-cluster     n12800-s3 soft=   32 f=     4235 hard=0 moves=9221120
+plus-dayfix    n03200-s1 soft=    5 f=      100 hard=0 moves=8251392
+plus-dayfix    n03200-s2 soft=    1 f=        5 hard=0 moves=8202240
+plus-dayfix    n03200-s3 soft=    3 f=       85 hard=0 moves=8679424
+plus-dayfix    n06400-s1 soft=    7 f=      365 hard=0 moves=8460288
+plus-dayfix    n06400-s2 soft=   13 f=      725 hard=0 moves=7938048
+plus-dayfix    n06400-s3 soft=   14 f=      755 hard=0 moves=8146944
+plus-dayfix    n12800-s1 soft=   44 f=     7190 hard=0 moves=6517760
+plus-dayfix    n12800-s2 soft=   17 f=     1480 hard=0 moves=6882304
+plus-dayfix    n12800-s3 soft=   20 f=     2000 hard=0 moves=6871040
+plus-winfix    n03200-s1 soft=    4 f=       65 hard=0 moves=10928128
+plus-winfix    n03200-s2 soft=    2 f=       25 hard=0 moves=11105280
+plus-winfix    n03200-s3 soft=    2 f=       25 hard=0 moves=11407360
+plus-winfix    n06400-s1 soft=    8 f=      305 hard=0 moves=11366400
+plus-winfix    n06400-s2 soft=    8 f=      265 hard=0 moves=11219968
+plus-winfix    n06400-s3 soft=   10 f=      400 hard=0 moves=11162624
+plus-winfix    n12800-s1 soft=   24 f=     2980 hard=0 moves=9172992
+plus-winfix    n12800-s2 soft=   30 f=     3515 hard=0 moves=9630720
+plus-winfix    n12800-s3 soft=   18 f=     1345 hard=0 moves=8998912
+cost-aware     n03200-s1 soft=    3 f=       40 hard=0 moves=24165376
+cost-aware     n03200-s2 soft=    0 f=        0 hard=0 moves=1922377
+cost-aware     n03200-s3 soft=    4 f=      115 hard=0 moves=25198592
+cost-aware     n06400-s1 soft=   19 f=     1470 hard=0 moves=23734272
+cost-aware     n06400-s2 soft=   17 f=     1020 hard=0 moves=24190976
+cost-aware     n06400-s3 soft=   10 f=      610 hard=0 moves=24352768
+cost-aware     n12800-s1 soft=   49 f=    10255 hard=0 moves=18521088
+cost-aware     n12800-s2 soft=   24 f=     2435 hard=0 moves=18994176
+cost-aware     n12800-s3 soft=   31 f=     4255 hard=0 moves=18540544
+simple         n03200-s1 soft=   34 f=     5635 hard=0 moves=109629440
+simple         n03200-s2 soft=   45 f=     9140 hard=0 moves=105533440
+simple         n03200-s3 soft=   49 f=    19650 hard=0 moves=108438528
+simple         n06400-s1 soft=  102 f=    42040 hard=0 moves=93978624
+simple         n06400-s2 soft=  108 f=    46870 hard=0 moves=92279808
+simple         n06400-s3 soft=   89 f=    31790 hard=0 moves=90235904
+simple         n12800-s1 soft=  251 f=   255055 hard=0 moves=74114048
+simple         n12800-s2 soft=  293 f=   343165 hard=0 moves=72368128
+simple         n12800-s3 soft=  161 f=   102110 hard=0 moves=71093248
+### 3. head to head, same host, same clock
+ts-2w n00400-s1 30000ms → HARD=0 soft=2 f=25 moves=2101248 wall=30265ms
+ts-2w n00400-s2 30000ms → HARD=0 soft=8 f=840 moves=2130944 wall=30250ms
+ts-2w n00400-s3 30000ms → HARD=0 soft=2 f=80 moves=2216960 wall=30193ms
+ts-2w n00800-s1 30000ms → HARD=0 soft=15 f=1255 moves=1896448 wall=30268ms
+ts-2w n00800-s2 30000ms → HARD=0 soft=24 f=2380 moves=2324480 wall=30257ms
+ts-2w n00800-s3 30000ms → HARD=0 soft=16 f=1155 moves=2115584 wall=30246ms
+ts-2w n01600-s1 30000ms → HARD=0 soft=64 f=19105 moves=1651712 wall=30225ms
+bench/master.sh: line 45:  4696 Killed                  node bench/run-ts.mjs --instance "$f" --time 30000 --workers 2 --out "$R/headtohead.jsonl" --label ts-2w
+ts-2w n01600-s3 30000ms → HARD=0 soft=38 f=9475 moves=1394688 wall=30307ms
+ts-2w n03200-s1 30000ms → HARD=0 soft=771 f=2448000 moves=585728 wall=30477ms
+ts-2w n03200-s2 30000ms → HARD=0 soft=439 f=796040 moves=710656 wall=30515ms
+ts-2w n03200-s3 30000ms → HARD=0 soft=426 f=750530 moves=806912 wall=30462ms
+every worker failed
+every worker failed
+every worker failed
+every worker failed
+every worker failed
+every worker failed
+cpp-2t n00400-s1 t=30000ms → HARD=0 soft=0 f=0 ref=362 feasible=true moves=76949
+cpp-2t n00400-s2 t=30000ms → HARD=0 soft=0 f=0 ref=412 feasible=true moves=158298
+cpp-2t n00400-s3 t=30000ms → HARD=0 soft=0 f=0 ref=357 feasible=true moves=79533
+cpp-2t n00800-s1 t=30000ms → HARD=0 soft=0 f=0 ref=755 feasible=true moves=557692
+cpp-2t n00800-s2 t=30000ms → HARD=0 soft=0 f=0 ref=753 feasible=true moves=1376112
+cpp-2t n00800-s3 t=30000ms → HARD=0 soft=0 f=0 ref=753 feasible=true moves=770987
+cpp-2t n01600-s1 t=30000ms → HARD=0 soft=6 f=160 ref=1582 feasible=true moves=2670592
+cpp-2t n01600-s2 t=30000ms → HARD=0 soft=0 f=0 ref=1590 feasible=true moves=497123
+cpp-2t n01600-s3 t=30000ms → HARD=0 soft=0 f=0 ref=1567 feasible=true moves=429514
+cpp-2t n03200-s1 t=30000ms → HARD=0 soft=4 f=65 ref=3144 feasible=true moves=2111488
+cpp-2t n03200-s2 t=30000ms → HARD=0 soft=2 f=20 ref=3239 feasible=true moves=2233344
+cpp-2t n03200-s3 t=30000ms → HARD=0 soft=5 f=325 ref=3110 feasible=true moves=2319360
+cpp-2t n06400-s1 t=30000ms → HARD=0 soft=16 f=1220 ref=6173 feasible=true moves=2075648
+cpp-2t n06400-s2 t=30000ms → HARD=0 soft=12 f=875 ref=6205 feasible=true moves=2105344
+cpp-2t n06400-s3 t=30000ms → HARD=0 soft=10 f=625 ref=6126 feasible=true moves=2185216
+cpp-2t n12800-s1 t=30000ms → HARD=0 soft=68 f=16715 ref=12464 feasible=true moves=2068480
+### 4. budget ladder
