@@ -15,13 +15,18 @@ confirming it.
 ## What the project is
 
 A timetabling system for Ivan Franko National University of Lviv (LNU) — a dissertation project.
-Two halves in one repository, deployed as a single jar.
+Two halves in one repository, deployed as a single jar, plus a desktop application that talks to
+them over the same GraphQL API and ships separately.
 
 **`timetable/`** — Spring Boot 4.0.6, Java 25, WebFlux, Spring for GraphQL, R2DBC, PostgreSQL 15+
 (built with ICU, for the `ukrainian` collation).
 
 **`timetable-ui/`** — Angular 21, standalone components, signals, **zoneless**. Every style is
 global and lives in `src/styles.css`.
+
+**`timetable-generator/`** — Qt 6 and C++20. A second, much longer search over the same timetabling
+problem, for the case the browser tab cannot serve: an hour rather than two minutes, and every
+faculty at once rather than one around the others. Its core has no Qt in it and runs headless.
 
 ### The two ideas everything else follows from
 
@@ -80,7 +85,8 @@ grep -n "^## \|^### " timetable-ui/README.md
 | Login, registration, permissions, delegation | `timetable/README.md` → *Authentication & authorization*; then `timetable-ui/README.md` → *Authentication* |
 | A client page or widget | `timetable-ui/README.md` → *Two architectures, side by side* (find the page's own `####` subsection) |
 | Routing, tabs, URLs | `timetable-ui/README.md` → *Routes*, *The open tab is part of the URL* |
-| The timetable solver | `timetable-ui/TIMETABLE-GENERATION.md`, and `timetable-ui/SOLVER-OPTIMISATION.md` + `scripts/timetable-bench/README.md` for the measurements |
+| The timetable solver in the browser | `timetable-ui/TIMETABLE-GENERATION.md`, and `timetable-ui/SOLVER-OPTIMISATION.md` + `scripts/timetable-bench/README.md` for the measurements |
+| The desktop generator, its C++ search, or its study | `timetable-generator/README.md`; `ALGORITHM.md` beside it for the formal method, `STUDY.md` for the measurements, `WRITING.md` before writing any of it up |
 | Workload generation | `timetable-ui/WORKLOAD-GENERATION.md`, and `scripts/workload-bench/README.md` for the measurements |
 | A printable form | the matching `timetable-ui/*-PDF.md` |
 | Performance, batching, N+1 | `timetable/README.md` → *Avoiding N+1 queries* |

@@ -1,0 +1,7 @@
+stag20k-kick60 s1 -> hard 0 soft 36 f 5330 moves 21708800 kicks 68
+stag20k-kick60 s2 -> hard 0 soft 9 f 340 moves 22475776 kicks 78
+stag60k-kick60 s1 -> hard 0 soft 25 f 2725 moves 21544960 kicks 70
+stag60k-kick60 s2 -> hard 0 soft 11 f 500 moves 21293056 kicks 70
+stag5k-kick40 s1 -> hard 0 soft 12 f 745 moves 22647808 kicks 0
+stag5k-kick40 s2 -> hard 0 soft 6 f 160 moves 24359936 kicks 0
+KICK-DONE

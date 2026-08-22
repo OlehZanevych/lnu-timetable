@@ -1,0 +1,30 @@
+kept 18 typescript rows
+cpp-2t n00400-s1 t=30000ms → HARD=0 soft=0 f=0 ref=362 feasible=true moves=75933
+cpp-2t n00400-s2 t=30000ms → HARD=0 soft=0 f=0 ref=412 feasible=true moves=208949
+cpp-2t n00400-s3 t=30000ms → HARD=0 soft=0 f=0 ref=357 feasible=true moves=266412
+cpp-2t n00800-s1 t=30000ms → HARD=0 soft=0 f=0 ref=755 feasible=true moves=175687
+cpp-2t n00800-s2 t=30000ms → HARD=0 soft=0 f=0 ref=753 feasible=true moves=249198
+cpp-2t n00800-s3 t=30000ms → HARD=0 soft=0 f=0 ref=753 feasible=true moves=327125
+cpp-2t n01600-s1 t=30000ms → HARD=0 soft=0 f=0 ref=1582 feasible=true moves=5159565
+cpp-2t n01600-s2 t=30000ms → HARD=0 soft=0 f=0 ref=1590 feasible=true moves=3129196
+cpp-2t n01600-s3 t=30000ms → HARD=0 soft=0 f=0 ref=1567 feasible=true moves=1643437
+cpp-2t n03200-s1 t=30000ms → HARD=0 soft=2 f=20 ref=3144 feasible=true moves=5187584
+cpp-2t n03200-s2 t=30000ms → HARD=0 soft=1 f=5 ref=3239 feasible=true moves=4903936
+cpp-2t n03200-s3 t=30000ms → HARD=0 soft=1 f=5 ref=3110 feasible=true moves=5316608
+cpp-2t n06400-s1 t=30000ms → HARD=0 soft=14 f=1115 ref=6173 feasible=true moves=5179392
+cpp-2t n06400-s2 t=30000ms → HARD=0 soft=7 f=205 ref=6205 feasible=true moves=4770816
+cpp-2t n06400-s3 t=30000ms → HARD=0 soft=0 f=0 ref=6126 feasible=true moves=4466009
+cpp-2t n12800-s1 t=30000ms → HARD=0 soft=26 f=3065 ref=12464 feasible=true moves=3993600
+cpp-2t n12800-s2 t=30000ms → HARD=0 soft=15 f=1300 ref=12513 feasible=true moves=3602432
+cpp-2t n12800-s3 t=30000ms → HARD=0 soft=16 f=955 ref=12340 feasible=true moves=3877888
+### ladder n12800-s1
+ladder-12800 n12800-s1 60000ms → HARD=0 soft=26 f=3065 moves=7480320
+ladder-12800 n12800-s1 300000ms → HARD=0 soft=14 f=905 moves=37389312
+ladder-12800 n12800-s1 900000ms → HARD=0 soft=11 f=565 moves=111370240
+ladder-12800 n12800-s1 3600000ms → HARD=0 soft=8 f=305 moves=438171648
+### ladder tight n06400-s1
+ladder-tight6400 n06400-s1 60000ms → HARD=0 soft=15 f=1800 moves=8469504
+ladder-tight6400 n06400-s1 300000ms → HARD=0 soft=21 f=2030 moves=42072064
+ladder-tight6400 n06400-s1 900000ms → HARD=0 soft=18 f=1780 moves=127041536
+ladder-tight6400 n06400-s1 3600000ms → HARD=0 soft=10 f=800 moves=497760256
+FINAL2-DONE

@@ -1,0 +1,5 @@
+lahc5000 s1 -> hard 0 soft 3381 f 48773655 moves 25021440 perturb 0
+lahc5000 s2 -> hard 0 soft 2639 f 29679410 moves 25338880 perturb 0
+lahc50000 s1 -> hard 547 soft 7594 f 291107900 moves 28023808 perturb 0
+lahc50000 s2 -> hard 481 soft 6782 f 239618345 moves 27107328 perturb 0
+LAHC-DONE

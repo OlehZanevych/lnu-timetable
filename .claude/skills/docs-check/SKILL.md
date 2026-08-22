@@ -30,10 +30,15 @@ explain the same thing twice.
 |---|---|
 | Domain model, schema, migrations, GraphQL surface, framework, authorization | `timetable/README.md` |
 | Pages, components, routing, client state, permission-aware UI | `timetable-ui/README.md` |
-| The timetable solver | `timetable-ui/TIMETABLE-GENERATION.md` |
+| The timetable solver in the browser | `timetable-ui/TIMETABLE-GENERATION.md` |
 | The workload generator | `timetable-ui/WORKLOAD-GENERATION.md` |
+| The desktop generator: its C++ search, its Qt window, its GraphQL calls | `timetable-generator/README.md` |
+| That search stated formally — equations, pseudocode, complexity, parameters | `timetable-generator/ALGORITHM.md` |
+| Anything measured about it | `timetable-generator/STUDY.md` |
+| Advice for writing it up as an article — claims, statistics, related work | `timetable-generator/WRITING.md` |
 | A printable form | the matching `timetable-ui/*-PDF.md` |
-| The benchmark | `timetable-ui/scripts/workload-bench/README.md` |
+| The workload benchmark | `timetable-ui/scripts/workload-bench/README.md` |
+| The timetable benchmark — instances, the hidden schedule, the independent scorer | `timetable-ui/scripts/timetable-bench/README.md` |
 | Running it as a service, the systemd unit, the update job | `scripts/deploy/README.md` |
 
 The root `README.md` gets **one or two sentences and a link** — what the system now does, never how
@@ -62,6 +67,15 @@ updated. Verify each against the code, not against the surrounding text:
 - the migration list vs `db/migration/` — every `V*.sql` named, and what its backfill does
 - class/entity/route counts stated as words ("thirteen classes", "28 entities", "three of the five")
 - every `#anchor` cross-reference still resolves
+- **every measured figure, against the raw records in `timetable-generator/bench/study-data/`** —
+  results tables, budget ladders, throughput, and the ratios computed from them. Recompute; do not
+  trust the surrounding prose. Three figures once had their arrows reversed (a mechanism documented
+  as an improvement that the data says is a regression) precisely because nobody re-derived them.
+- the same figures where they are quoted a second time: `SearchOptions` in
+  `timetable-generator/src/core/search.hpp` carries the measurement that justifies each default, and
+  a number changed in `STUDY.md` has to change there too — and in the two documents that summarise it
+- placeholder rows left behind by an experiment that had not finished when the prose was written
+  ("*(see `budget.jsonl`)*", "TBD", an empty table cell)
 
 **Third — omissions that change what a reader would do.** New behaviour, new failure modes, a rule
 that now has an exception. Skip pure trivia (an accessor missing from a method table, an argument's
@@ -76,7 +90,10 @@ for vocabulary already used that way before this change:
 > аудиторія, гарант, завідувач, семестр, курс, освітня програма, спеціальність, група, лекція,
 > РНП, примітки
 
-Do not introduce new Ukrainian vocabulary — use English instead (*deanery*, not деканат). UI labels,
+Do not introduce new Ukrainian vocabulary — use English instead (*deanery*, not деканат). The list
+above is the operative enumeration and it wins over precedent: a word absent from it stays absent
+even if some older file already uses it bare. **Do not go back and rewrite the older file** — a
+document nothing else in the change touched is out of scope; say so in the report instead. UI labels,
 report names, document captions and database values stay Ukrainian inside « ». If a file contained no
 bare Ukrainian before the change, keep it that way. Proper nouns (ЛНУ, ФПМІ, street names) are fine
 anywhere.
@@ -144,6 +161,15 @@ cd timetable-ui && npx tsc -p tsconfig.app.json --noEmit
 cd timetable-ui && node scripts/check-graphql-variables.mjs
 cd timetable-ui && npx ng build --configuration production --no-progress   # must stay under 1.00 MB
 python3 -c "import xml.dom.minidom; xml.dom.minidom.parse('timetable/pom.xml')"
+
+# the C++ half, if it was touched — and its equivalent of a type check:
+cd timetable-generator && cmake --build build-cli
+build-cli/timetable-solve --instance \
+    ../timetable-ui/scripts/timetable-bench/instances/n06400-s1.json.gz --mode score-hidden
+#   the second command scores the archive's hidden schedule with the C++ evaluator; its `objective`
+#   must equal what timetable-bench's own validator reports, or every figure in STUDY.md is measuring
+#   something other than the documented objective. Note that `cmake` is not installed in the device
+#   VM — this one runs on the user's machine.
 ```
 
 Then confirm no cross-reference is broken (GitHub anchor rules: lowercase, drop punctuation other

@@ -1,0 +1,31 @@
+(node:16238) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16237) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ts-2w n06400-s1 30000ms → HARD=0 soft=1061 f=4589935 moves=1417216 wall=30350ms
+(node:16619) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16620) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ts-2w n06400-s2 30000ms → HARD=0 soft=861 f=3088975 moves=1338368 wall=30342ms
+(node:17004) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17003) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ts-2w n06400-s3 30000ms → HARD=0 soft=959 f=3789775 moves=1328128 wall=30372ms
+(node:17392) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17391) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ts-2w n12800-s1 30000ms → HARD=0 soft=10764 f=565923505 moves=963584 wall=30435ms
+(node:17413) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17414) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ts-2w n12800-s2 30000ms → HARD=0 soft=9501 f=432191975 moves=983040 wall=30443ms
+(node:17797) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:17796) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ts-2w n12800-s3 30000ms → HARD=0 soft=11160 f=617358080 moves=840704 wall=30440ms
+TS-HEADTOHEAD-DONE

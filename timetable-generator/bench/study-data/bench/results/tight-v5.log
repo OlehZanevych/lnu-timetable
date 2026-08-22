@@ -1,0 +1,3 @@
+tight-v5-60s n01600-s1 t=60000ms → HARD=0 soft=3 f=40 ref=1668 feasible=true moves=8848384
+tight-v5-60s n01600-s2 t=60000ms → HARD=0 soft=10 f=355 ref=1593 feasible=true moves=7558144
+tight-v5-60s n01600-s3 t=60000ms → HARD=0 soft=2 f=80 ref=1650 feasible=true moves=8332288

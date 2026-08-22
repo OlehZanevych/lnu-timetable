@@ -1,0 +1,9 @@
+tight-60s n01600-s1 t=60000ms → HARD=0 soft=1 f=5 ref=1668 feasible=true moves=8482816
+tight-60s n01600-s2 t=60000ms → HARD=0 soft=10 f=425 ref=1593 feasible=true moves=7970816
+tight-60s n01600-s3 t=60000ms → HARD=0 soft=3 f=45 ref=1650 feasible=true moves=8353792
+tight-60s n03200-s1 t=60000ms → HARD=0 soft=8 f=235 ref=3500 feasible=true moves=7020544
+tight-60s n03200-s2 t=60000ms → HARD=0 soft=6 f=225 ref=3399 feasible=true moves=7160832
+tight-60s n03200-s3 t=60000ms → HARD=0 soft=11 f=1325 ref=3299 feasible=true moves=6961152
+tight-60s n06400-s1 t=60000ms → HARD=0 soft=33 f=4805 ref=6646 feasible=true moves=6522880
+tight-60s n06400-s2 t=60000ms → HARD=0 soft=19 f=1375 ref=6559 feasible=true moves=5730304
+tight-60s n06400-s3 t=60000ms → HARD=0 soft=24 f=2630 ref=6644 feasible=true moves=6305792
