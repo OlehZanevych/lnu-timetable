@@ -410,9 +410,13 @@ The slot is then written back. Two remarks that a paper should make, because bot
 
 - The implementation lowers a slot but does not raise it unless `lahcCanonical` is set. Burke and
   Bykov's original rule writes the current cost unconditionally. The difference is immaterial in
-  practice, because **either way the bar collapses**: once the search stops descending, every slot
-  holds the incumbent's cost and (18) admits only equal-or-better candidates. LAHC at convergence
-  *is* a hill climb that accepts plateau moves.
+  practice, because **either way the bar collapses**. Precisely: *if the current cost stays equal to
+  $c^\ast$ from move $k_0$ onward*, then for every $k \ge k_0 + \ell$ each slot holds exactly
+  $c^\ast$ — cells are only ever lowered, and only to the current cost — so (18) reduces to
+  $\mathrm{cost}(\sigma') \le c^\ast$. A plateau $\ell$ moves old is **absorbing**: the search
+  can leave it only by a strict improvement, never by accepting a worsening move. The hypothesis is
+  the operational definition of stagnation, not an assumption about the future; the content is that
+  stagnation self-locks, and that a longer history postpones the lock without preventing it.
 - $\ell$ is the dominant parameter and its optimum is **small and does not grow with $n$**.
   $\ell = 5\,000$ measures at soft 3 381 against $\ell = 100$'s 32; $\ell = 50\,000$ does not reach
   feasibility in three minutes. A history filled at construction scale ($\tilde f \approx 8\times10^7$)
@@ -543,9 +547,16 @@ Three properties decide whether it is worth anything, and each is a paragraph in
   The relaxation ignores the residual coupling among the $k$ — two of them sent to placements that
   clash with each other are priced as if the other were absent — which is what the pairwise
   refinement at line 12 repairs, under the true objective, in $O(k^2)$ per round.
-- **The members must share something.** By Lemma 1 the objective is separable over $(e,d)$, so
-  exchanging two classes with no entity and no day in common **cannot change any $\Pi_i$**. Members
-  are therefore drawn from a few gappy buckets (65 %) or from one cluster (35 %), never uniformly.
+- **The members must share something.** This is often stated as "permuting two classes that share
+  no entity and no day cannot change any $\Pi_i$", and that statement is **false**: a class keeps
+  *its own* entities and carries them into the new day, so buckets that held no member of $M$ still
+  change. The true statement is more useful. If no bucket holds two members of $M$ — before or
+  after — then by Lemma 1 the change in $f$ is the **sum of the individual relocation deltas**.
+  Three things follow: the cost matrix (line 5) is exact rather than relaxed, the pairwise
+  refinement has nothing to repair, and the resulting schedule is reachable by $k$ independent
+  `move` candidates. So an unrelated set buys an $O(k^3)$ solve for something the cheapest operator
+  already reaches. Members are therefore drawn from a few gappy buckets (65 %) or from one cluster
+  (35 %), never uniformly.
 - **The identity must be detected.** The relaxation very often returns everybody to where they were,
   and putting them back is a candidate that costs exactly zero and is therefore *accepted* by (18).
   Before the check at line 9, 99.96 % of this operator's candidates were accepted and 0.8 % improved
@@ -561,7 +572,9 @@ member could come to clash with another; §7.
 
 #### 3.4.7 repack
 
-One (entity, day) bucket lifted out, greedily re-placed, then pairwise-refined. The cheapest of the
+Up to 16 classes of one (entity, day) bucket lifted out, greedily re-placed, then pairwise-refined.
+(The cap is `selectVictims(kRuinEntityDay, 16, …)`; a bucket with more movable classes than that is
+sampled, not emptied.) The cheapest of the
 large neighbourhoods and, with `ruin`, the one the bandit spends most of the budget on.
 
 #### 3.4.8 dayfix, winfix — off by default
@@ -587,7 +600,8 @@ spectacular.
 
 Note what (19)–(20) do *not* do: they allocate *draws* in proportion to reward-per-work, not
 *budget*. Allocating budget instead (`costAwareSelection`, i.e. dividing $w_o$ by the operator's mean
-work at selection time) triples the candidate count and **loses**, because a large neighbourhood's
+work at selection time) more than doubles the candidate count (5.0 M → 11.8 M at $n = 6\,400$ in
+thirty seconds) and **loses**, because a large neighbourhood's
 worth is not its immediate gain per bucket touched — it is reaching states the cheap moves cannot
 reach at all, and a rate divides that away. §7.
 
@@ -713,6 +727,29 @@ reinsert. It is the only operator here that can produce a schedule neither paren
 **It is off by default because it measures worse** (§7), which is a negative result worth reporting
 rather than hiding: with two workers that adopt one another's elites, the pool holds two schedules in
 one basin, and a child of two near-identical parents is a repair bill with no new material in it.
+
+### 3.9 Budget independence (the anytime property)
+
+Nothing in the search consumes the *remaining* budget. The acceptance criterion is a fixed-length
+history rather than a temperature schedule; the bandit's segments are counted in candidates; all
+three levels of §3.7 fire on move counters. The deadline appears only in the stopping test. So for a
+**single worker**, the distribution of the incumbent at time $t$ of a run of length $T > t$ is the
+distribution of the final incumbent of a run of length $t$ at the same seed.
+
+Two caveats, both of them reasons to *test* the property rather than assert it:
+
+- `deepPhase` and `ilsCycle` check the deadline internally, so a truncated deep phase near the end
+  of a run returns "not improved" and cascades into a kick. The last seconds of a run therefore do
+  depend on when it ends.
+- With more than one worker, incumbents reach the shared pool through `publish()`, which fires on a
+  **wall-clock** interval (`logEveryMs`). Cooperation is thus clock-driven, and the property does
+  not hold exactly for a multi-threaded run.
+
+The practical value is twofold. For a user, the run can be stopped at any moment and returns the
+best schedule found, not a partial state. For an experiment, a budget ladder — quality at 1, 5, 15,
+30 and 60 minutes — can be read off the trajectory of *one* hour-long run per seed instead of
+running five separate series. The thesis tests this with two workers (the worst case for the
+property) and a refutation criterion named before the measurement.
 
 ---
 

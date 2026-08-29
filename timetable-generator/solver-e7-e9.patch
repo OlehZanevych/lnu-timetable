@@ -1,0 +1,727 @@
+diff --git a/src/cli/main.cpp b/src/cli/main.cpp
+index 57adbf4..882b45e 100644
+--- a/src/cli/main.cpp
++++ b/src/cli/main.cpp
+@@ -68,6 +68,13 @@ void usage() {
+                "  --surge              aim the same machinery at hard violations, not windows\n"
+                "  --switch-policy N    0 fresh | 1 biased restart | 2 distant elite | 3 mix\n"
+                "  --restart-adaptive   restart on observed basin ripening time, not a fixed count\n"
++               "  --room-sample N      rooms examined per slot when a class has many (default 96)\n"
++               "  --room-scan-full-below N   scan every room below this domain size (default 256)\n"
++               "  --room-travel-budget N     rooms per slot priced for travel (default 6)\n"
++               "  --room-building-first      scan provably journey-free rooms first\n"
++               "  --room-free-mask N         0 walk | 1 mask fast path | 2 mask only\n"
++               "  --hoist-day-caps           test MAX_CLASSES_PER_DAY once per slot, not per room\n"
++               "  --cap-cache                answer MAX_CLASSES_PER_DAY from cached bucket counts\n"
+                "  --kopt-extra N       free placements added to the permutation pool (0 = pure permutation)\n"
+                "  --kopt-k N           widest permutation the deep phase escalates to\n"
+                "  --quiet\n");
+@@ -139,6 +146,13 @@ int main(int argc, char** argv) {
+     else if (s == "--flat-phase") a.opts.useFlatPhase = true;
+     else if (s == "--flat-moves") a.opts.flatMoves = std::stoll(next());
+     else if (s == "--repair-descent") a.opts.repairDescent = std::stoi(next());
++    else if (s == "--room-sample") a.opts.roomSample = std::stoi(next());
++    else if (s == "--room-scan-full-below") a.opts.roomScanFullBelow = std::stoi(next());
++    else if (s == "--room-travel-budget") a.opts.roomTravelBudget = std::stoi(next());
++    else if (s == "--room-building-first") a.opts.roomBuildingFirst = true;
++    else if (s == "--room-free-mask") a.opts.roomFreeMask = std::stoi(next());
++    else if (s == "--hoist-day-caps") a.opts.hoistDayCaps = true;
++    else if (s == "--cap-cache") a.opts.capCache = true;
+     else if (s == "--hard-repair-after") a.opts.hardRepairAfter = std::stoll(next());
+     else if (s == "--hard-repair-kicks") a.opts.hardRepairKicks = std::stoi(next());
+     else if (s == "--repair-budget-ms") a.opts.repairBudgetMs = std::stoll(next());
+diff --git a/src/core/search.cpp b/src/core/search.cpp
+index 1438d73..3a93f4e 100644
+--- a/src/core/search.cpp
++++ b/src/core/search.cpp
+@@ -212,6 +212,7 @@ class Worker {
+   Worker(Shared& sh, int id)
+       : sh_(sh), p_(*sh.p), o_(sh.o), id_(id), st_(*sh.p),
+         rng_(sh.o.seed + static_cast<uint64_t>(id) * 7919ULL) {
++    st_.setCapCache(o_.capCache);
+     ops_.resize(kOpCount);
+     for (int k = 0; k < kOpCount; ++k) {
+       ops_[static_cast<size_t>(k)].name = kOpNames[k];
+@@ -250,6 +251,13 @@ class Worker {
+   bool rebuildRegion();
+   /// `constructTournament` constructions, scored, best kept.
+   void constructBest();
++  /// What a room costs the scan, and whether it is free at all, by the cheapest route
++  /// `roomFreeMask` allows. Both agree with `State::roomClashesAt` when the flag is off.
++  double roomCost(int i, int day, const Mask& mask, int par, int r) const;
++  bool roomFree(int i, int day, const Mask& mask, int par, int r) const;
++  int verifyRoom(int i, int day, const Mask& mask, int par, int r) const;
++  mutable int64_t roomMaskChecks_ = 0;
++  mutable int64_t roomMaskMismatch_ = 0;
+   /// The greedy placement scan. When `outSecond` is non-null the scan also reports the best score
+   /// among placements *other than* the one it returns — the runner-up — which is what regret
+   /// insertion needs. Tracking it costs a weaker prune (the bound becomes the second-best rather
+@@ -468,6 +476,38 @@ class Worker {
+ 
+ // ── construction ────────────────────────────────────────────────────────────
+ 
++// What a room costs a scan, by the cheapest route the options allow. See
++// `SearchOptions::roomFreeMask`: level 1 is exactly `roomClashesAt` with the walk skipped whenever
++// the mask can already prove the room free, level 2 never walks.
++double Worker::roomCost(int i, int day, const Mask& mask, int par, int r) const {
++  if (o_.roomFreeMask == 3) return static_cast<double>(verifyRoom(i, day, mask, par, r)) * kClashBig;
++  if (o_.roomFreeMask == 0) {
++    return static_cast<double>(st_.roomClashesAt(i, day, mask, par, r)) * kClashBig;
++  }
++  if (st_.roomFreeAt(i, day, mask, par, r)) return 0.0;
++  if (o_.roomFreeMask >= 2) return kClashBig;
++  return static_cast<double>(st_.roomClashesAt(i, day, mask, par, r)) * kClashBig;
++}
++
++bool Worker::roomFree(int i, int day, const Mask& mask, int par, int r) const {
++  if (o_.roomFreeMask == 3) return verifyRoom(i, day, mask, par, r) == 0;
++  return o_.roomFreeMask != 0 ? st_.roomFreeAt(i, day, mask, par, r)
++                              : st_.roomClashesAt(i, day, mask, par, r) == 0;
++}
++
++// `--room-free-mask 3`: answer from the walk, as the shipped code does, but check the mask against
++// it on every single query. The claim that level 1 is behaviour-identical rests on
++// `roomFreeAt(...) == (roomClashesAt(...) == 0)` holding for every input the search actually
++// reaches, and this is the only way to establish that over hundreds of millions of them rather than
++// over a handful chosen by hand. A run that reports zero mismatches is the proof.
++int Worker::verifyRoom(int i, int day, const Mask& mask, int par, int r) const {
++  const int walked = st_.roomClashesAt(i, day, mask, par, r);
++  const bool masked = st_.roomFreeAt(i, day, mask, par, r);
++  ++roomMaskChecks_;
++  if (masked != (walked == 0)) ++roomMaskMismatch_;
++  return walked;
++}
++
+ bool Worker::scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outScore,
+                       double* outSecond) {
+   const Gene& g = st_.gene(i);
+@@ -496,39 +536,72 @@ bool Worker::scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outS
+     if (peopleClash >= bound) continue;
+     const double wcost = st_.windowCostOfAdding(i, day, par, mask);
+     if (peopleClash + wcost >= bound) continue;
++    // MAX_CLASSES_PER_DAY for this class's own lecturers and groups does not depend on the room, so
++    // it is answered once here rather than once per candidate room. When it fails the whole slot
++    // fails, whatever room is tried. See `State::peopleCapsAllow`.
++    if (o_.hoistDayCaps && !st_.peopleCapsAllow(i, day, par)) continue;
+ 
+     const int roomStart = rng_.belowI(g.roomCount);
+-    int travelBudget = 6;
+-    for (int m = 0; m < roomLimit; ++m) {
+-      const double bnd = wantSecond ? second : best;
+-      const int r = rooms[(roomStart + m) % g.roomCount];
+-      if (!st_.placementAllowed(i, day, ti, par, r)) continue;
+-      double sc = peopleClash + static_cast<double>(st_.roomClashesAt(i, day, mask, par, r)) * kClashBig + wcost;
+-      // Anti-backbone: while a construction is being steered away from a trap the last basin was
+-      // certified stuck in, the placements that made that trap cost extra. A preference, never a
+-      // prohibition — a class with nowhere else to go still goes there.
+-      if (antiActive_ && !antiOn_.empty() && antiOn_[static_cast<size_t>(i)]) {
+-        const Spot& av = antiSpots_[static_cast<size_t>(i)];
+-        if (av.day == day && av.timeIdx == ti && av.room == r && av.parity == par) {
+-          sc += o_.antiBackbonePenalty;
++    int travelBudget = o_.roomTravelBudget;
++
++    // Rooms that provably need no journey, first. Only when exactly one building is already in use
++    // by this class's own people that day — then a room in it is travel-free against all of them,
++    // and the travel budget need not be spent on it at all. See `SearchOptions::roomBuildingFirst`.
++    uint64_t homeBit = 0;
++    bool homePure = false;
++    if (o_.roomBuildingFirst && g.placeKind == kPlaceRoom) {
++      bool pure = false;
++      const uint64_t used = st_.buildingsOn(i, day, par, &pure);
++      // Order by the mask whenever it names exactly one building; skip the travel evaluation only
++      // when nothing online or abstract shares the day, since those are a journey from every room.
++      if (used != 0 && (used & (used - 1)) == 0) { homeBit = used; homePure = pure; }
++    }
++    const int passes = homeBit ? 2 : 1;
++    for (int pass = 0; pass < passes; ++pass) {
++      // The second pass exists only to rescue a slot the first could not place well.
++      if (pass == 1 && bestSlot >= 0 && best <= 0) break;
++      int seen = 0;
++      for (int m = 0; m < g.roomCount && seen < roomLimit; ++m) {
++        const double bnd = wantSecond ? second : best;
++        const int r = rooms[(roomStart + m) % g.roomCount];
++        bool travelFree = false;
++        if (homeBit) {
++          const int bl = p_.buildingFor(g, r);
++          const bool in = bl >= 0 && bl < 64 && ((homeBit >> bl) & 1u) != 0;
++          if (pass == 0 ? !in : in) continue;
++          travelFree = in && homePure;
++        }
++        ++seen;
++        if (o_.hoistDayCaps ? !st_.roomAllows(i, day, ti, par, r)
++                            : !st_.placementAllowed(i, day, ti, par, r)) continue;
++        double sc = peopleClash + roomCost(i, day, mask, par, r) + wcost;
++        // Anti-backbone: while a construction is being steered away from a trap the last basin was
++        // certified stuck in, the placements that made that trap cost extra. A preference, never a
++        // prohibition — a class with nowhere else to go still goes there.
++        if (antiActive_ && !antiOn_.empty() && antiOn_[static_cast<size_t>(i)]) {
++          const Spot& av = antiSpots_[static_cast<size_t>(i)];
++          if (av.day == day && av.timeIdx == ti && av.room == r && av.parity == par) {
++            sc += o_.antiBackbonePenalty;
++          }
+         }
+-      }
+-      if (sc >= bnd) continue;
+-      if (p_.travelKnown && travelBudget > 0) {
+-        --travelBudget;
+-        sc += static_cast<double>(st_.travelCostOfAdding(i, day, mask, par, r)) * kTravelBig;
+         if (sc >= bnd) continue;
++        if (p_.travelKnown && !travelFree && travelBudget > 0) {
++          --travelBudget;
++          sc += static_cast<double>(st_.travelCostOfAdding(i, day, mask, par, r)) * kTravelBig;
++          if (sc >= bnd) continue;
++        }
++        if (sc < best) {
++          second = best;
++          best = sc;
++          bestSlot = s;
++          bestRoom = r;
++        } else if (sc < second) {
++          second = sc;
++        }
++        // A perfect placement ends the scan, as before — and when a runner-up is wanted, only once
++        // the runner-up is perfect too, since a zero-cost alternative is what makes the regret zero.
++        if (best <= 0 && (!wantSecond || second <= 0)) break;
+       }
+-      if (sc < best) {
+-        second = best;
+-        best = sc;
+-        bestSlot = s;
+-        bestRoom = r;
+-      } else if (sc < second) {
+-        second = sc;
+-      }
+-      // A perfect placement ends the scan, as before — and when a runner-up is wanted, only once
+-      // the runner-up is perfect too, since a zero-cost alternative is what makes the regret zero.
+       if (best <= 0 && (!wantSecond || second <= 0)) break;
+     }
+     if (best <= 0 && (!wantSecond || second <= 0)) break;
+@@ -1349,7 +1422,7 @@ bool Worker::opCloseWindow() {
+   for (int r = 0; r < limit; ++r) {
+     const int cand = rooms[(rstart + r) % g.roomCount];
+     if (!st_.placementAllowed(i, day, ti, par, cand)) continue;
+-    if (st_.roomClashesAt(i, day, mask, par, cand) == 0) { room = cand; break; }
++    if (roomFree(i, day, mask, par, cand)) { room = cand; break; }
+     if (room == -2) room = cand;
+   }
+   if (room == -2) return false;
+@@ -1411,7 +1484,7 @@ bool Worker::opDayRepack() {
+       for (int r = 0; r < limit; ++r) {
+         const int cand = rooms[(start + r) % g.roomCount];
+         if (!st_.placementAllowed(i, day, ti, par, cand)) continue;
+-        const double rc = static_cast<double>(st_.roomClashesAt(i, day, mask, par, cand)) * kClashBig;
++        const double rc = roomCost(i, day, mask, par, cand);
+         if (rc < roomPenalty) { roomPenalty = rc; room = cand; }
+         if (rc <= 0) break;
+       }
+@@ -1554,7 +1627,7 @@ bool Worker::opRematch() {
+     if (cand < 0) continue;
+     if (std::find(roomPool_.begin(), roomPool_.end(), cand) != roomPool_.end()) continue;
+     const Mask mask = p_.maskAt(ti, go.durSlot);
+-    if (st_.roomClashesAt(owner, day, mask, par, cand) != 0) continue;
++    if (!roomFree(owner, day, mask, par, cand)) continue;
+     roomPool_.push_back(cand);
+   }
+ 
+@@ -1579,7 +1652,7 @@ bool Worker::opRematch() {
+       const int room = roomPool_[static_cast<size_t>(q)];
+       if (!hasRoom(g, room)) continue;
+       if (!st_.placementAllowed(i, day, ti, par, room)) continue;
+-      double c = static_cast<double>(st_.roomClashesAt(i, day, mask, par, room)) * kClashBig;
++      double c = roomCost(i, day, mask, par, room);
+       if (p_.travelKnown) {
+         c += static_cast<double>(st_.travelCostOfAdding(i, day, mask, par, room)) * kTravelBig;
+       }
+@@ -1759,7 +1832,7 @@ bool Worker::opCompaction(size_t forced) {
+     for (int r = 0; r < limit; ++r) {
+       const int cand = rooms[(rstart + r) % g.roomCount];
+       if (!st_.placementAllowed(m, day, bestTi, g.parity, cand)) continue;
+-      if (st_.roomClashesAt(m, day, mask, g.parity, cand) != 0) continue;
++      if (!roomFree(m, day, mask, g.parity, cand)) continue;
+       room = cand;
+       haveRoom = true;
+       break;
+@@ -1824,7 +1897,7 @@ bool Worker::permute(const std::vector<int>& members) {
+     for (int rr = 0; rr < limit; ++rr) {
+       const int cand = p_.roomsOf(go)[(rstart + rr) % go.roomCount];
+       if (!st_.placementAllowed(owner, day, ti, par, cand)) continue;
+-      if (st_.roomClashesAt(owner, day, mask, par, cand) != 0) continue;
++      if (!roomFree(owner, day, mask, par, cand)) continue;
+       if (st_.peopleClashesAt(owner, day, mask, par) != 0) break;
+       room = cand;
+       ok = true;
+@@ -2186,7 +2259,7 @@ int Worker::daySolveExact(size_t bid) {
+       for (int r = 0; r < limit; ++r) {
+         const int cand = rooms[(start + r) % g.roomCount];
+         if (!st_.placementAllowed(i, d, ti, g.parity, cand)) continue;
+-        const double rc = static_cast<double>(st_.roomClashesAt(i, d, mask, g.parity, cand)) * kClashBig;
++        const double rc = roomCost(i, d, mask, g.parity, cand);
+         if (rc < roomPenalty) { roomPenalty = rc; room = cand; }
+         if (rc <= 0) break;
+       }
+@@ -2330,7 +2403,7 @@ int Worker::ejectSearch(size_t bid) {
+       for (int r = 0; r < limit; ++r) {
+         const int cand = rooms[(rs + r) % g.roomCount];
+         if (!st_.placementAllowed(cls, d, ti, g.parity, cand)) continue;
+-        if (st_.roomClashesAt(cls, d, mask, g.parity, cand) != 0) continue;
++        if (!roomFree(cls, d, mask, g.parity, cand)) continue;
+         room = cand;
+         break;
+       }
+@@ -2638,7 +2711,7 @@ int Worker::jointSolve(size_t bidA, size_t bidB) {
+       for (int r = 0; r < limit; ++r) {
+         const int cand = rooms[(start + r) % g.roomCount];
+         if (!st_.placementAllowed(i, d, ti, g.parity, cand)) continue;
+-        const double rc = static_cast<double>(st_.roomClashesAt(i, d, mask, g.parity, cand)) * kClashBig;
++        const double rc = roomCost(i, d, mask, g.parity, cand);
+         if (rc < roomPenalty) { roomPenalty = rc; room = cand; }
+         if (rc <= 0) break;
+       }
+@@ -3730,6 +3803,8 @@ void Worker::run() {
+ 
+   publish("end");
+   rep_.moves = moves_;
++  rep_.roomMaskChecks = roomMaskChecks_;
++  rep_.roomMaskMismatch = roomMaskMismatch_;
+   rep_.hard = bestHard_;
+   rep_.objective = bestObjective_;
+   rep_.operators = ops_;
+@@ -3848,6 +3923,8 @@ Json SearchResult::summary() const {
+     j.set("adoptions", Json{static_cast<long long>(w.adoptions)});
+     j.set("hardRepairs", Json{static_cast<long long>(w.hardRepairs)});
+     j.set("defectsCleared", Json{static_cast<long long>(w.defectsCleared)});
++    j.set("roomMaskChecks", Json{static_cast<long long>(w.roomMaskChecks)});
++    j.set("roomMaskMismatch", Json{static_cast<long long>(w.roomMaskMismatch)});
+     j.set("defectsCertified", Json{static_cast<long long>(w.defectsCertified)});
+     j.set("basinSwitches", Json{static_cast<long long>(w.basinSwitches)});
+     j.set("regionRebuilds", Json{static_cast<long long>(w.regionRebuilds)});
+diff --git a/src/core/search.hpp b/src/core/search.hpp
+index e1128ce..c343f68 100644
+--- a/src/core/search.hpp
++++ b/src/core/search.hpp
+@@ -301,9 +301,83 @@ struct SearchOptions {
+   int64_t restartAfter = 1200000;
+ 
+   // Room scanning
++  /// How many rooms `scanBest` examines per slot when a class's room domain is larger than
++  /// `roomScanFullBelow`, and the threshold itself.
++  ///
++  /// These were inherited from the TypeScript solver's tuning, where a faculty had a few dozen
++  /// rooms. They bind hard on a class that names **no** room at all: its domain is every room the
++  /// faculty owns — 582 on a n = 12 288 university — so the scan sees 16 % of its options, and the
++  /// campaign's instance characterisation found that instances with more such classes are markedly
++  /// worse (CAMPAIGN-LOG.md §6k). Raising them costs throughput per candidate; whether the trade
++  /// pays is measured rather than assumed.
+   int roomSample = 96;
+   int roomScanFullBelow = 256;
+ 
++  /// How many rooms per slot `scanBest` prices for travel before it stops paying for the exact
++  /// O(bucket) journey check and scores the rest as though the journey were free.
++  ///
++  /// Six was fine while a room domain meant "a handful of rooms in one корпус", where the omitted
++  /// rooms were in that корпус too and the omission was worth nothing. It is not fine on a class
++  /// that names no room: the domain is every room the faculty owns, spread over every корпус, so 90
++  /// of the 96 sampled rooms are scored travel-free and the operator proposes journeys the
++  /// acceptance test then rejects. Exposed so that "the budget is the problem" can be separated from
++  /// "the sample is the problem" — see `roomBuildingFirst`, which fixes the same thing without
++  /// paying for it.
++  int roomTravelBudget = 6;
++
++  /// Scan the rooms that need no journey first, when it can be proved cheaply that they need none.
++  ///
++  /// `State::buildingsOn` gives, in one pass per slot, the set of buildings this class's own
++  /// lecturers and groups already occupy that day. When that set is a **single** building, every
++  /// room in it has `journeyMinutes == 0` against every one of those classes, so such a room is
++  /// travel-free by construction — no per-room travel evaluation needed, and no travel violation
++  /// possible from this placement. The scan therefore spends its whole `roomSample` budget on those
++  /// rooms and only falls through to the rest if they yielded nothing usable.
++  ///
++  /// Deliberately narrow. With two or more buildings already in use, "same building as something"
++  /// no longer implies "no journey", and the filter is not applied at all rather than applied on a
++  /// premise that does not hold. Off by default until measured.
++  bool roomBuildingFirst = false;
++
++  /// Answer "is this room free?" from the room bucket's occupancy mask instead of walking the
++  /// room's day. 0 off, 1 fast path, 2 fast path and no walk at all.
++  ///
++  /// Level 1 is **behaviour-identical**: `State::roomFreeAt` agrees with `roomClashesAt(...) == 0`
++  /// on every input, so a free room skips the walk and a busy one is still counted exactly. Any
++  /// difference in the result is a difference in how many candidates the same search got through.
++  ///
++  /// Level 2 drops the count and charges one clash for any busy room. That is not identical — a
++  /// doubly-booked room now looks as bad as a singly-booked one — but no walk is ever performed, so
++  /// a 582-room domain becomes as cheap to scan per room as a five-room one. The point of measuring
++  /// both is that the first isolates throughput from every other effect, and the second says whether
++  /// the exact count was ever worth what it cost. See CAMPAIGN-LOG.md §6k and §6l.
++  int roomFreeMask = 0;
++
++  /// Ask MAX_CLASSES_PER_DAY once per slot in `scanBest` instead of once per candidate room.
++  ///
++  /// `placementAllowed` is two tests joined by an AND, and only one of them mentions the room. The
++  /// other walks this class's lecturers' and groups' day buckets and returns the same answer for
++  /// every room in the slot — 96 times per slot at the shipped `roomSample`. The people-clash and
++  /// window costs are already hoisted out of that loop for exactly this reason; this test was
++  /// overlooked because it lived behind one predicate with a room argument.
++  ///
++  /// Behaviour-identical by construction: `placementAllowed(i, d, t, p, r)` is
++  /// `roomAllows(i, d, t, p, r) && peopleCapsAllow(i, d, p)`, and a slot whose caps fail fails for
++  /// every room in it. A flag only so that the throughput it buys can be attributed to it.
++  bool hoistDayCaps = false;
++
++  /// Answer MAX_CLASSES_PER_DAY from cached per-week bucket counts instead of walking the bucket.
++  ///
++  /// The third and last O(bucket) cost in a room scan. `roomFreeAt` removed the clash walk and
++  /// `hoistDayCaps` removed the people caps from the loop, but a *room's own* cap still had to know
++  /// how many classes that room holds that day, and that is per room by nature. `recompute` already
++  /// walks each bucket, so the count comes for free there; see `State::setCapCache`.
++  ///
++  /// Behaviour-identical, with the same self-exclusion the mask needs — the cached count includes
++  /// this class when it already sits in the bucket, and `State::inBucket` decides that from the
++  /// class's own placement rather than by searching.
++  bool capCache = false;
++
+   bool keepExisting = false;         // only schedule what has no placement yet
+   int logEveryMs = 250;
+   bool cooperate = true;             // share elites between workers
+@@ -353,6 +427,10 @@ struct WorkerReport {
+   int64_t adoptions = 0;
+   int64_t hardRepairs = 0;
+   int64_t defectsCleared = 0;
++  /// `--room-free-mask 3` only: room queries answered, and how many the O(1) mask answered
++  /// differently from the walk. A verification run is sound exactly when the second is zero.
++  int64_t roomMaskChecks = 0;
++  int64_t roomMaskMismatch = 0;
+   int64_t defectsCertified = 0;
+   int64_t basinSwitches = 0;
+   int64_t regionRebuilds = 0;
+diff --git a/src/core/state.cpp b/src/core/state.cpp
+index d9f39f6..8ebb2dd 100644
+--- a/src/core/state.cpp
++++ b/src/core/state.cpp
+@@ -71,6 +71,14 @@ BucketStat State::recompute(size_t bid) const {
+   const std::vector<int32_t>& b = buckets_[bid];
+   if (b.empty()) return out;
+ 
++  // Per-week membership counts, for the MAX_CLASSES_PER_DAY test. Maintained for every family
++  // because the bucket is being walked here regardless; read only when `capCache_` is on.
++  for (int32_t idx : b) {
++    const uint8_t pj = genes_[static_cast<size_t>(idx)].parity;
++    if (pj == kWeekly || pj == kNumerator) ++out.cntNum;
++    if (pj == kWeekly || pj == kDenominator) ++out.cntDen;
++  }
++
+   if (bid >= absBase_) {
+     const int a = static_cast<int>((bid - absBase_) / kDayStride);
+     const int cap = p_.abstractCapacity[static_cast<size_t>(a)];
+@@ -130,7 +138,22 @@ BucketStat State::recompute(size_t bid) const {
+     }
+   }
+ 
+-  if (isRoom) return out;
++  if (isRoom) {
++    // Rooms have no window term, but they get the same occupancy masks the people families keep,
++    // because a mask is what turns "is this room free?" from a walk of the room's day into one AND.
++    // `BucketStat` already carries the two fields, and `addStat` ignores them, so this is free in
++    // both memory and objective terms. See `State::roomFreeAt`.
++    for (int week = 1; week <= 2; ++week) {
++      Mask occ;
++      for (int32_t idx : b) {
++        const Gene& g = genes_[static_cast<size_t>(idx)];
++        if (!inWeek(g.parity, week)) continue;
++        occ |= g.mask;
++      }
++      if (week == 1) out.occNum = occ; else out.occDen = occ;
++    }
++    return out;
++  }
+ 
+   // Π₇/Π₈ — a вікно is a whole пара the entity was free for. The union of the day's occupied
+   // elementary intervals, spanned from first to last, minus what is occupied, intersected with the
+@@ -221,45 +244,82 @@ void State::rebuild() {
+   dirty_.clear();
+ }
+ 
+-bool State::placementAllowed(int i, int day, int timeIdx, int parity, int room) const {
+-  const Gene& g = genes_[static_cast<size_t>(i)];
+-  const int start = p_.times[static_cast<size_t>(timeIdx)].startMinutes;
+-  const int end = start + g.durationMinutes;
+-  if (room >= 0 && !p_.roomRules[static_cast<size_t>(room) * kDayStride + day].allows(start, end)) return false;
+-
+-  // MAX_CLASSES_PER_DAY counts per calendar week, not per row: WEEKLY falls in both and
+-  // NUMERATOR/DENOMINATOR in one each, so the cap must hold for (WEEKLY + NUMERATOR) and for
+-  // (WEEKLY + DENOMINATOR) separately.
+-  const auto exceeds = [&](const std::vector<int32_t>& bucket, int cap) {
+-    if (cap < 0) return false;
+-    int num = (parity == kWeekly || parity == kNumerator) ? 1 : 0;
+-    int den = (parity == kWeekly || parity == kDenominator) ? 1 : 0;
+-    for (int32_t j : bucket) {
+-      if (j == i) continue;
+-      const uint8_t pj = genes_[static_cast<size_t>(j)].parity;
+-      if (pj == kWeekly || pj == kNumerator) ++num;
+-      if (pj == kWeekly || pj == kDenominator) ++den;
++// MAX_CLASSES_PER_DAY counts per calendar week, not per row: WEEKLY falls in both and
++// NUMERATOR/DENOMINATOR in one each, so the cap must hold for (WEEKLY + NUMERATOR) and for
++// (WEEKLY + DENOMINATOR) separately.
++bool State::inBucket(int self, size_t bid) const {
++  const Gene& g = genes_[static_cast<size_t>(self)];
++  if (g.day < 0) return false;
++  const int day = static_cast<int>(bid % kDayStride);
++  if (day != g.day) return false;
++  if (bid >= absBase_) return g.abstractRoom >= 0 && bid == absBucketId(g.abstractRoom, day);
++  if (bid >= roomBase_) return g.room >= 0 && bid == roomBucketId(g.room, day);
++  if (bid >= grpBase_) {
++    for (int k = 0; k < g.grpCount; ++k) {
++      if (bid == grpBucketId(p_.grpPool[static_cast<size_t>(g.grpFrom + k)], day)) return true;
++    }
++    return false;
++  }
++  for (int k = 0; k < g.lecCount; ++k) {
++    if (bid == lecBucketId(p_.lecPool[static_cast<size_t>(g.lecFrom + k)], day)) return true;
++  }
++  return false;
++}
++
++bool State::capExceeded(int self, int parity, size_t bid, int cap) const {
++  if (cap < 0) return false;
++  int num = (parity == kWeekly || parity == kNumerator) ? 1 : 0;
++  int den = (parity == kWeekly || parity == kDenominator) ? 1 : 0;
++  if (capCache_) {
++    const BucketStat& s = stats_[bid];
++    num += s.cntNum;
++    den += s.cntDen;
++    // The cached counts include `self` when it is already in this bucket; the walk excluded it, so
++    // subtract it back out to keep the two answers identical.
++    if (inBucket(self, bid)) {
++      const uint8_t ps = genes_[static_cast<size_t>(self)].parity;
++      if (ps == kWeekly || ps == kNumerator) --num;
++      if (ps == kWeekly || ps == kDenominator) --den;
+     }
+     return num > cap || den > cap;
+-  };
++  }
++  for (int32_t j : buckets_[bid]) {
++    if (j == self) continue;
++    const uint8_t pj = genes_[static_cast<size_t>(j)].parity;
++    if (pj == kWeekly || pj == kNumerator) ++num;
++    if (pj == kWeekly || pj == kDenominator) ++den;
++  }
++  return num > cap || den > cap;
++}
+ 
++bool State::peopleCapsAllow(int i, int day, int parity) const {
++  const Gene& g = genes_[static_cast<size_t>(i)];
+   for (int k = 0; k < g.lecCount; ++k) {
+     const int l = p_.lecPool[static_cast<size_t>(g.lecFrom + k)];
+     const int cap = p_.lecturerRules[static_cast<size_t>(l) * kDayStride + day].maxPerDay;
+-    if (cap >= 0 && exceeds(buckets_[lecBucketId(l, day)], cap)) return false;
++    if (cap >= 0 && capExceeded(i, parity, lecBucketId(l, day), cap)) return false;
+   }
+   for (int k = 0; k < g.grpCount; ++k) {
+     const int gr = p_.grpPool[static_cast<size_t>(g.grpFrom + k)];
+     const int cap = p_.groupRules[static_cast<size_t>(gr) * kDayStride + day].maxPerDay;
+-    if (cap >= 0 && exceeds(buckets_[grpBucketId(gr, day)], cap)) return false;
+-  }
+-  if (room >= 0) {
+-    const int cap = p_.roomRules[static_cast<size_t>(room) * kDayStride + day].maxPerDay;
+-    if (cap >= 0 && exceeds(buckets_[roomBucketId(room, day)], cap)) return false;
++    if (cap >= 0 && capExceeded(i, parity, grpBucketId(gr, day), cap)) return false;
+   }
+   return true;
+ }
+ 
++bool State::roomAllows(int i, int day, int timeIdx, int parity, int room) const {
++  if (room < 0) return true;
++  const Gene& g = genes_[static_cast<size_t>(i)];
++  const int start = p_.times[static_cast<size_t>(timeIdx)].startMinutes;
++  const DayRules& rule = p_.roomRules[static_cast<size_t>(room) * kDayStride + day];
++  if (!rule.allows(start, start + g.durationMinutes)) return false;
++  return !capExceeded(i, parity, roomBucketId(room, day), rule.maxPerDay);
++}
++
++bool State::placementAllowed(int i, int day, int timeIdx, int parity, int room) const {
++  return roomAllows(i, day, timeIdx, parity, room) && peopleCapsAllow(i, day, parity);
++}
++
+ /// x^α for the comfort terms. α = 2 is the shipped value and takes the fast path.
+ double State::softPow(double x) const {
+   if (w_.softAlpha == 2.0) return x * x;
+@@ -370,6 +430,22 @@ int State::roomClashesAt(int self, int day, const Mask& mask, int parity, int ro
+   return n;
+ }
+ 
++bool State::roomFreeAt(int self, int day, const Mask& mask, int parity, int room) const {
++  if (room < 0) return true;
++  const BucketStat& s = stats_[roomBucketId(room, day)];
++  Mask occ;
++  if (parity == kNumerator) occ = s.occNum;
++  else if (parity == kDenominator) occ = s.occDen;
++  else occ = s.occNum | s.occDen;
++  if (!occ.intersects(mask)) return true;
++  // The union cannot have `self` subtracted from it, so the one case the mask cannot decide is the
++  // room this class already sits in — where the whole overlap may be its own. One room in the domain
++  // at most, so the exact walk here costs nothing next to the ones it replaces everywhere else.
++  const Gene& g = genes_[static_cast<size_t>(self)];
++  if (g.day == day && g.room == room) return roomClashesAt(self, day, mask, parity, room) == 0;
++  return false;
++}
++
+ double State::windowCostOfAdding(int i, int day, int parity, const Mask& mask) const {
+   const Gene& g = genes_[static_cast<size_t>(i)];
+   double add = 0;
+@@ -420,6 +496,33 @@ int State::travelCostOfAdding(int i, int day, const Mask& mask, int parity, int
+   return n;
+ }
+ 
++uint64_t State::buildingsOn(int i, int day, int parity, bool* allInBuilding) const {
++  if (allInBuilding) *allInBuilding = false;
++  if (!p_.travelKnown || p_.nBuildings <= 0 || p_.nBuildings > 64) return 0;
++  uint64_t bits = 0;
++  bool pure = true;
++  const Gene& g = genes_[static_cast<size_t>(i)];
++  const auto scan = [&](const std::vector<int32_t>& b) {
++    for (int32_t j : b) {
++      if (j == i) continue;
++      const Gene& o = genes_[static_cast<size_t>(j)];
++      if (!weeksOverlap(static_cast<uint8_t>(parity), o.parity)) continue;
++      // Anything not in a real building is the same journey from every room, so it cannot rank
++      // rooms and stays out of the mask — but it does mean the masked building is not journey-free.
++      if (o.building < 0 || o.building >= 64) { pure = false; continue; }
++      bits |= (uint64_t{1} << o.building);
++    }
++  };
++  for (int k = 0; k < g.lecCount; ++k) {
++    scan(buckets_[lecBucketId(p_.lecPool[static_cast<size_t>(g.lecFrom + k)], day)]);
++  }
++  for (int k = 0; k < g.grpCount; ++k) {
++    scan(buckets_[grpBucketId(p_.grpPool[static_cast<size_t>(g.grpFrom + k)], day)]);
++  }
++  if (allInBuilding) *allInBuilding = pure;
++  return bits;
++}
++
+ int State::occupantOf(int self, int day, const Mask& mask, int parity, int room) const {
+   if (room < 0) return -1;
+   for (int32_t j : buckets_[roomBucketId(room, day)]) {
+diff --git a/src/core/state.hpp b/src/core/state.hpp
+index c0ac82e..c81e62e 100644
+--- a/src/core/state.hpp
++++ b/src/core/state.hpp
+@@ -77,6 +77,10 @@ struct BucketStat {
+   int32_t mixNum = 0;
+   int32_t mixDen = 0;
+   int32_t overflow = 0;
++  /// Classes in the bucket in each calendar week. Only maintained — and only read — when
++  /// `State::capCache` is on; see `capExceeded`.
++  int32_t cntNum = 0;
++  int32_t cntDen = 0;
+   Mask occNum;
+   Mask occDen;
+ };
+@@ -123,6 +127,19 @@ class State {
+   // ── hard rules that are not clashes ──────────────────────────────────────
+   /// Room time rules and MAX_CLASSES_PER_DAY. The domains carry everything else.
+   bool placementAllowed(int i, int day, int timeIdx, int parity, int room) const;
++  /// The two halves of `placementAllowed`, separately, because only one of them depends on the room.
++  ///
++  /// `peopleCapsAllow` is MAX_CLASSES_PER_DAY for this class's lecturers and groups: it walks their
++  /// day buckets and is a function of (class, day, parity) **alone**. A room scan re-asked it once
++  /// per candidate room — 96 identical answers per slot at the shipped `roomSample`, and 582 if the
++  /// sample were removed — which is the same mistake the people-clash and window costs are already
++  /// hoisted out of the loop to avoid. `roomAllows` is the part that actually varies: the room's own
++  /// availability window and its own per-day cap.
++  ///
++  /// `placementAllowed` remains their conjunction and is unchanged for every caller that has no room
++  /// loop to hoist out of.
++  bool peopleCapsAllow(int i, int day, int parity) const;
++  bool roomAllows(int i, int day, int timeIdx, int parity, int room) const;
+ 
+   // ── objective ─────────────────────────────────────────────────────────────
+   /// The smooth surrogate the search descends: Σ βᵢ·Πᵢ², with the averaged terms unrounded.
+@@ -151,6 +168,21 @@ class State {
+   const Weights& weights() const { return w_; }
+   Weights& mutableWeights() { return w_; }
+ 
++  /// Answer MAX_CLASSES_PER_DAY from the cached per-week bucket counts rather than by walking the
++  /// bucket.
++  ///
++  /// The cap test is the last O(bucket) cost left in a room scan once `roomFreeAt` has replaced the
++  /// clash walk and the people half has been hoisted out of the loop: a room's own cap still needs
++  /// to know how many classes that room holds that day. The count is derivable during `recompute`,
++  /// which already walks the bucket, so caching it moves the work from once-per-query to
++  /// once-per-change.
++  ///
++  /// Exact, with the same self-exclusion care the mask needs: the cached count includes this class
++  /// when it already sits in the bucket, so the caller subtracts it. Off by default; the counts are
++  /// maintained either way, which costs one increment per class per recompute.
++  void setCapCache(bool on) { capCache_ = on; }
++  bool capCache() const { return capCache_; }
++
+   /// Buckets recomputed since the state was built — a free, monotone proxy for how much work a
+   /// candidate cost, which is what the operator bandit divides its reward by.
+   uint64_t work() const { return work_; }
+@@ -202,6 +234,18 @@ class State {
+   int peopleClashesAt(int i, int day, const Mask& mask, int parity) const;
+   /// Clashes with whatever is already in `room` at (day, mask, parity).
+   int roomClashesAt(int self, int day, const Mask& mask, int parity, int room) const;
++  /// Whether `room` is free for gene `self` at (day, mask, parity) — the same question
++  /// `roomClashesAt(...) == 0` answers, in O(1) instead of O(the room's day).
++  ///
++  /// Room buckets carry the occupancy masks the people families already had (see `recompute`), so a
++  /// free room is one AND away. Exact, not approximate: the answer agrees with `roomClashesAt` on
++  /// every input, and the single case a union of masks cannot settle — the room this class is
++  /// already in, where the overlap may be entirely its own — falls back to the walk.
++  ///
++  /// This is the cost that made large room domains expensive. A class naming no room has 582 of
++  /// them, and pricing each one meant walking its day; that is why `roomSample` exists and why
++  /// CAMPAIGN-LOG.md §6k found the residual scaling with domain size.
++  bool roomFreeAt(int self, int day, const Mask& mask, int parity, int room) const;
+   /// What placing gene `i` at (day, parity, mask) would add to the weighted window cost — exact,
+   /// computed from the cached per-bucket occupancy masks in O(lecturers + groups).
+   double windowCostOfAdding(int i, int day, int parity, const Mask& mask) const;
+@@ -209,6 +253,38 @@ class State {
+   /// (day, mask, parity) in `room`.
+   int travelCostOfAdding(int i, int day, const Mask& mask, int parity, int room) const;
+ 
++  /// The set of buildings gene `i`'s own lecturers and groups already occupy on `day`, as a bitmask
++  /// over building indices, for use as a *cheap* stand-in for `travelCostOfAdding` inside a room
++  /// scan.
++  ///
++  /// The exact travel cost is O(bucket) **per room**, which is why `scanBest` prices only the first
++  /// few rooms of a slot for travel (`roomTravelBudget`). That budget is harmless when a class names
++  /// five rooms in one корпус and actively misleading when it names none at all and its domain is
++  /// every room the faculty owns, spread over every корпус: the rooms past the budget are scored as
++  /// though the journey were free. This mask is computed **once per slot**, at the same O(lecturers
++  /// + groups) cost the people-clash hoist already pays, and a room whose building is in it needs no
++  /// journey from anything already scheduled that day.
++  ///
++  /// The mask covers only occupants that sit in a real building. An online class is
++  /// `universityCommuteMinutes` from every room and an abstract-nowhere one
++  /// `abstractRoomTravelMinutes` from every room — the same journey whichever room is picked, so
++  /// they cannot *rank* rooms and are left out of the mask. They do, however, mean a room in the
++  /// masked building is no longer journey-**free**, which is a different claim and the one that
++  /// licenses skipping the travel evaluation. `*allInBuilding`, when asked for, reports whether
++  /// every occupant was in a real building, so a caller can order by the mask (always sound) and
++  /// skip travel pricing only when it is (sound only then).
++  ///
++  /// Returns 0 when nothing of this class's is scheduled that day. Only buildings below 64 are
++  /// represented; a faculty with more would silently lose the tail, so the mask is abandoned in that
++  /// case rather than quietly narrowed.
++  uint64_t buildingsOn(int i, int day, int parity, bool* allInBuilding = nullptr) const;
++
++  /// Whether adding one class of `parity` to `bucket` would break a MAX_CLASSES_PER_DAY cap.
++  bool capExceeded(int self, int parity, size_t bid, int cap) const;
++  /// Whether gene `self` is currently a member of bucket `bid`, decided from its own placement
++  /// rather than by searching the bucket.
++  bool inBucket(int self, size_t bid) const;
++
+   int windowsOf(const Mask& occ) const {
+     return occ.empty() ? 0 : (occ.span() & ~occ & p_.bellStartTicks).popcount();
+   }
+@@ -256,6 +332,7 @@ class State {
+   std::vector<size_t> dirty_;
+   std::vector<uint8_t> isDirty_;
+   Counters c_;
++  bool capCache_ = false;
+   Weights w_;
+   uint64_t work_ = 0;
+   int unplaced_ = 0;

@@ -1,0 +1,2490 @@
+diff --git a/src/cli/main.cpp b/src/cli/main.cpp
+index ebd8d78..57adbf4 100644
+--- a/src/cli/main.cpp
++++ b/src/cli/main.cpp
+@@ -57,6 +57,17 @@ void usage() {
+                "  --no-restart         perturb the working state instead of kicking the incumbent\n"
+                "  --kick-min N --kick-max N   adaptive kick strength, in classes\n"
+                "  --stagnation N       moves without a new incumbent before a kick\n"
++               "  --repair-order N     0 random (shipped) | 1 most-constrained-first | 2 regret-2\n"
++               "  --repair-anchored    apply --repair-order only to kick/deep-phase repairs\n"
++               "  --regret-noise X     jitter on the regret value, keeping the repair diversified\n"
++               "  --kick-weighted      draw the kick's selector by the residual's composition\n"
++               "  --parity-moves       biweekly parity flips/exchanges in the deep phase\n"
++               "  --compaction         left-shift a day's tail across a вікно, in the deep phase\n"
++               "  --rematch            exact room re-matching at one instant, in the deep phase\n"
++               "  --hard-repair        the defect-focused exact repair when the search is stuck\n"
++               "  --surge              aim the same machinery at hard violations, not windows\n"
++               "  --switch-policy N    0 fresh | 1 biased restart | 2 distant elite | 3 mix\n"
++               "  --restart-adaptive   restart on observed basin ripening time, not a fixed count\n"
+                "  --kopt-extra N       free placements added to the permutation pool (0 = pure permutation)\n"
+                "  --kopt-k N           widest permutation the deep phase escalates to\n"
+                "  --quiet\n");
+@@ -108,6 +119,40 @@ int main(int argc, char** argv) {
+     else if (s == "--kick-min") a.opts.kickMin = std::stoi(next());
+     else if (s == "--kick-max") a.opts.kickMax = std::stoi(next());
+     else if (s == "--stagnation") a.opts.stagnationMoves = std::stoll(next());
++    else if (s == "--repair-order") a.opts.repairOrder = std::stoi(next());
++    else if (s == "--repair-anchored") a.opts.repairAnchoredOnly = true;
++    else if (s == "--regret-noise") a.opts.regretNoise = std::stod(next());
++    else if (s == "--kick-weighted") a.opts.kickWeighted = true;
++    else if (s == "--actionable-windows") a.opts.actionableWindows = true;
++    else if (s == "--parity-moves") a.opts.useParityMoves = true;
++    else if (s == "--compaction") a.opts.useCompaction = true;
++    else if (s == "--rematch") a.opts.useRematch = true;
++    else if (s == "--hard-repair") a.opts.useHardRepair = true;
++    else if (s == "--surge") a.opts.useSurge = true;
++    else if (s == "--repair-verbose") a.opts.repairVerbose = true;
++    else if (s == "--no-force-close") a.opts.useForceClose = false;
++    else if (s == "--no-joint-repair") a.opts.useJointRepair = false;
++    else if (s == "--joint-k") a.opts.jointK = std::stoi(next());
++    else if (s == "--deep-extras") a.opts.deepExtras = true;
++    else if (s == "--soft-alpha") a.opts.softAlpha = std::stod(next());
++    else if (s == "--soft-equal") a.opts.softEqualWeights = true;
++    else if (s == "--flat-phase") a.opts.useFlatPhase = true;
++    else if (s == "--flat-moves") a.opts.flatMoves = std::stoll(next());
++    else if (s == "--repair-descent") a.opts.repairDescent = std::stoi(next());
++    else if (s == "--hard-repair-after") a.opts.hardRepairAfter = std::stoll(next());
++    else if (s == "--hard-repair-kicks") a.opts.hardRepairKicks = std::stoi(next());
++    else if (s == "--repair-budget-ms") a.opts.repairBudgetMs = std::stoll(next());
++    else if (s == "--repair-defects") a.opts.repairDefects = std::stoi(next());
++    else if (s == "--repair-depth") a.opts.repairDepth = std::stoi(next());
++    else if (s == "--repair-branch") a.opts.repairBranch = std::stoi(next());
++    else if (s == "--repair-eject-depth") a.opts.repairEjectDepth = std::stoi(next());
++    else if (s == "--repair-nodes") a.opts.repairNodes = std::stoll(next());
++    else if (s == "--switch-policy") a.opts.switchPolicy = std::stoi(next());
++    else if (s == "--anti-backbone") a.opts.antiBackbonePenalty = std::stod(next());
++    else if (s == "--restart-adaptive") a.opts.restartAdaptive = true;
++    else if (s == "--ripen-factor") a.opts.ripenFactor = std::stod(next());
++    else if (s == "--construct-tournament") a.opts.constructTournament = std::stoi(next());
++    else if (s == "--rematch-cap") a.opts.rematchCap = std::stoi(next());
+     else if (s == "--kopt-extra") a.opts.koptExtra = std::stoi(next());
+     else if (s == "--kopt-k") a.opts.koptK = std::stoi(next());
+     else if (s == "--simple") {
+diff --git a/src/core/search.cpp b/src/core/search.cpp
+index 5c1a511..1438d73 100644
+--- a/src/core/search.cpp
++++ b/src/core/search.cpp
+@@ -27,6 +27,7 @@
+ #include <fstream>
+ #include <memory>
+ #include <mutex>
++#include <limits>
+ #include <numeric>
+ #include <thread>
+ 
+@@ -245,7 +246,16 @@ class Worker {
+  private:
+   // ── construction ─────────────────────────────────────────────────────────
+   void construct();
+-  bool scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outScore);
++  void constructOrder(std::vector<int>& order);
++  bool rebuildRegion();
++  /// `constructTournament` constructions, scored, best kept.
++  void constructBest();
++  /// The greedy placement scan. When `outSecond` is non-null the scan also reports the best score
++  /// among placements *other than* the one it returns — the runner-up — which is what regret
++  /// insertion needs. Tracking it costs a weaker prune (the bound becomes the second-best rather
++  /// than the best) and forgoes the `best <= 0` early exit unless the runner-up is perfect too.
++  bool scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outScore,
++                double* outSecond = nullptr);
+ 
+   // ── candidate application ────────────────────────────────────────────────
+   void beginCandidate() { jr_.clear(); workAtStart_ = st_.work(); }
+@@ -261,7 +271,8 @@ class Worker {
+   }
+ 
+   double cost() const {
+-    return static_cast<double>(st_.hard()) * hardWeight_ + st_.surrogate() +
++    const double soft = flatUntil_ > moves_ ? st_.flatSurrogate() : st_.surrogate();
++    return static_cast<double>(st_.hard()) * hardWeight_ + soft +
+            static_cast<double>(st_.unplacedMovable()) * hardWeight_ * 8.0;
+   }
+   bool acceptTest(double c);
+@@ -277,6 +288,30 @@ class Worker {
+   bool opRepack();
+   bool opDayRepack();
+   bool opCloseWindow();
++  bool opParityMove();
++  static constexpr size_t kNoBucket = static_cast<size_t>(-1);
++  bool opCompaction(size_t forced = kNoBucket);
++  bool opRematch();
++
++  // ── the hard repair (STAGNATION-ESCAPE.md) ───────────────────────────────
++  enum RepairOutcome { kRepairResumed = 0, kRepairExhausted = 1, kRepairUnproven = 2 };
++  int hardRepair();
++  /// Exact assignment of up to `repairDepth` classes of one (entity, day) over their candidate
++  /// placements — including placements on *other* days, which is what makes it more than the
++  /// rejected `dayfix`. Returns 1 improved, 0 proven-no-improvement, -1 truncated.
++  int daySolveExact(size_t bid);
++  /// A bounded ejection search rooted at the classes of one defect: unlike `opChain` it tries
++  /// several placements at every link and backtracks. Same return convention.
++  int ejectSearch(size_t bid);
++  /// Close the вікно whatever it costs, then repair the damage; keep only the pair.
++  int forceCloseRepair(size_t bid);
++  size_t coupledDefect(size_t bidA) const;
++  int jointSolve(size_t bidA, size_t bidB);
++  /// One strict-descent attempt at an operator that journals its own candidate.
++  bool tryStrict(bool applied, double before);
++  void onBasinExhausted();
++  bool adoptDistant();
++  bool ledgerHas(size_t bid) const;
+ 
+   // ── escalation and bookkeeping ───────────────────────────────────────────
+   bool deepPhase();
+@@ -309,6 +344,10 @@ class Worker {
+   bool hasRoom(const Gene& g, int room) const;
+   void selectVictims(int selector, int size, std::vector<int>& out);
+   bool recreate(const std::vector<int>& victims);
++  bool recreateRegret(const std::vector<int>& victims);
++  /// Whether two classes share a lecturer or a group — the relation that decides whether placing
++  /// one can have changed the other's best option.
++  bool sharesEntity(int a, int b) const;
+   bool permute(const std::vector<int>& members);
+   bool refinePairs(const std::vector<int>& members, int rounds);
+ 
+@@ -329,8 +368,11 @@ class Worker {
+   double t0_ = 1;
+ 
+   std::vector<Spot> bestSpots_;
++  std::vector<Spot> tournamentSpots_;
++  std::vector<Spot> forceSnapshot_;
+   std::vector<Spot> anchorSpots_;
+   std::vector<int> focus_;
++  double focusShare_ = 0;
+   std::vector<Spot> parentSpots_;
+   std::vector<int> grafted_;
+   Counters bestCounters_;
+@@ -350,10 +392,37 @@ class Worker {
+   /// last time something was tried about it.
+   int64_t lastIncumbentMove_ = 0;
+   int64_t adoptBlockUntil_ = 0;
++  /// While `moves_ < flatUntil_` the walk descends the flattened objective (§ flatSurrogate).
++  int64_t flatUntil_ = 0;
+   int64_t listAge_ = 0;
+   std::vector<int> hot_;
+   std::vector<int> warm_;
+ 
++  // ── hard-repair state ────────────────────────────────────────────────────
++  /// Defects certified locally irreducible *in this basin*. A certificate is relative to the
++  /// frozen complement, so it dies with the basin — `basinId_` is what kills it.
++  std::vector<size_t> ledger_;
++  uint64_t basinId_ = 0;
++  int failedMaxKicks_ = 0;
++  int emptyDeepPhases_ = 0;
++  int64_t hardRepairBlockUntil_ = 0;
++  Clock::time_point repairDeadline_;
++  /// The placements the abandoned incumbent gave to the classes of its certified defects: what the
++  /// next construction is steered away from.
++  std::vector<Spot> antiSpots_;
++  std::vector<uint8_t> antiOn_;
++  bool antiActive_ = false;
++  /// Per-policy payoff, for the ε-greedy switch: mean incumbent objective of the basins each
++  /// policy started, and how many it has started.
++  double switchGain_[4]{};
++  int switchUses_[4]{};
++  int lastSwitchPolicy_ = -1;
++  double basinStartObjective_ = 0;
++  /// Moves from a construction to its last incumbent improvement, per finished basin — what the
++  /// adaptive restart reads its ripening time off.
++  std::vector<int64_t> ripen_;
++  int64_t basinStartMove_ = 0;
++
+   std::vector<std::pair<int, Spot>> jr_;
+   uint64_t workAtStart_ = 0;
+ 
+@@ -377,9 +446,20 @@ class Worker {
+   WorkerReport rep_;
+   std::vector<OperatorReport> ops_;
+ 
++  /// True while a repair is anchored to the incumbent (kick, deep phase, graft repair)
++  /// rather than drawn by the bandit. `repairAnchoredOnly` reads it.
++  bool anchoredRepair_ = false;
++
+   std::vector<int> victims_, scratch_, members_;
++  // Regret-insertion scratch, kept as members so a repair allocates nothing.
++  std::vector<int> jointMembers_;
++  std::vector<int> regretSlot_, regretRoom_;
++  std::vector<double> regretVal_, regretScore_;
++  std::vector<uint8_t> regretDone_, regretStale_;
+   std::vector<size_t> worstBuckets_;
++  std::vector<size_t> scratchBuckets_;
+   std::vector<Spot> spotPool_;
++  std::vector<int> roomPool_;
+   std::vector<double> costMatrix_;
+   std::vector<int> assign_;
+   Clock::time_point lastPublish_;
+@@ -388,13 +468,16 @@ class Worker {
+ 
+ // ── construction ────────────────────────────────────────────────────────────
+ 
+-bool Worker::scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outScore) {
++bool Worker::scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outScore,
++                      double* outSecond) {
+   const Gene& g = st_.gene(i);
+   if (g.slotCount == 0 || g.roomCount == 0) return false;
+   const int* slots = p_.slotsOf(g);
+   const int* rooms = p_.roomsOf(g);
+ 
+   double best = kImpossible;
++  double second = kImpossible;
++  const bool wantSecond = outSecond != nullptr;
+   int bestSlot = -1, bestRoom = -1;
+ 
+   const int slotStart = rng_.belowI(g.slotCount);
+@@ -402,55 +485,107 @@ bool Worker::scanBest(int i, bool wide, int& outSlot, int& outRoom, double& outS
+                             ? g.roomCount
+                             : std::min(g.roomCount, o_.roomSample);
+   for (int k = 0; k < g.slotCount; ++k) {
++    // The prune bound is the runner-up when one is wanted, so that a candidate worse than the best
++    // but better than the current runner-up is still seen. Everything worse than the runner-up is
++    // as prunable as before.
++    const double bound = wantSecond ? second : best;
+     const int s = slots[(slotStart + k) % g.slotCount];
+     const int day = slotDay(s), ti = slotTime(s), par = slotParity(s);
+     const Mask mask = p_.maskAt(ti, g.durSlot);
+     const double peopleClash = static_cast<double>(st_.peopleClashesAt(i, day, mask, par)) * kClashBig;
+-    if (peopleClash >= best) continue;
++    if (peopleClash >= bound) continue;
+     const double wcost = st_.windowCostOfAdding(i, day, par, mask);
+-    if (peopleClash + wcost >= best) continue;
++    if (peopleClash + wcost >= bound) continue;
+ 
+     const int roomStart = rng_.belowI(g.roomCount);
+     int travelBudget = 6;
+     for (int m = 0; m < roomLimit; ++m) {
++      const double bnd = wantSecond ? second : best;
+       const int r = rooms[(roomStart + m) % g.roomCount];
+       if (!st_.placementAllowed(i, day, ti, par, r)) continue;
+       double sc = peopleClash + static_cast<double>(st_.roomClashesAt(i, day, mask, par, r)) * kClashBig + wcost;
+-      if (sc >= best) continue;
++      // Anti-backbone: while a construction is being steered away from a trap the last basin was
++      // certified stuck in, the placements that made that trap cost extra. A preference, never a
++      // prohibition — a class with nowhere else to go still goes there.
++      if (antiActive_ && !antiOn_.empty() && antiOn_[static_cast<size_t>(i)]) {
++        const Spot& av = antiSpots_[static_cast<size_t>(i)];
++        if (av.day == day && av.timeIdx == ti && av.room == r && av.parity == par) {
++          sc += o_.antiBackbonePenalty;
++        }
++      }
++      if (sc >= bnd) continue;
+       if (p_.travelKnown && travelBudget > 0) {
+         --travelBudget;
+         sc += static_cast<double>(st_.travelCostOfAdding(i, day, mask, par, r)) * kTravelBig;
+-        if (sc >= best) continue;
++        if (sc >= bnd) continue;
+       }
+-      best = sc;
+-      bestSlot = s;
+-      bestRoom = r;
+-      if (best <= 0) { outSlot = bestSlot; outRoom = bestRoom; outScore = best; return true; }
++      if (sc < best) {
++        second = best;
++        best = sc;
++        bestSlot = s;
++        bestRoom = r;
++      } else if (sc < second) {
++        second = sc;
++      }
++      // A perfect placement ends the scan, as before — and when a runner-up is wanted, only once
++      // the runner-up is perfect too, since a zero-cost alternative is what makes the regret zero.
++      if (best <= 0 && (!wantSecond || second <= 0)) break;
+     }
++    if (best <= 0 && (!wantSecond || second <= 0)) break;
+   }
+   if (bestSlot < 0) return false;
+   outSlot = bestSlot;
+   outRoom = bestRoom;
+   outScore = best;
++  if (wantSecond) *outSecond = second;
+   return true;
+ }
+ 
+-void Worker::construct() {
+-  std::vector<int> order = p_.movable;
+-  if (!o_.keepExisting) {
+-    for (int i : order) st_.placeRaw(i, -1, -1, st_.gene(i).parity, -1);
+-    st_.flush();
++/// Build several constructions and keep the best one.
++///
++/// Which basin the construction lands in matters more than anything the local search does
++/// afterwards — that is the finding the whole restart mechanism rests on. A tournament is the
++/// cheapest possible way to act on it: the constructions are independent draws from exactly the
++/// distribution whose spread was measured, and taking the best of three costs two extra
++/// constructions against the minutes of descent that follow.
++void Worker::constructBest() {
++  const int rounds = std::max(1, o_.constructTournament);
++  if (rounds == 1) { construct(); return; }
++  double bestScore = 0;
++  int64_t bestUnp = 0, bestHard = 0;
++  bool have = false;
++  for (int r = 0; r < rounds; ++r) {
++    if (r > 0) {
++      for (int i : p_.movable) st_.placeRaw(i, -1, -1, st_.gene(i).parity, -1);
++      st_.flush();
++    }
++    construct();
++    st_.rebuild();
++    const int64_t unp = st_.unplacedMovable();
++    const int64_t hard = st_.hard();
++    const double sc = st_.surrogate();
++    if (!have || Shared::better(unp, hard, sc, bestUnp, bestHard, bestScore)) {
++      have = true;
++      bestUnp = unp;
++      bestHard = hard;
++      bestScore = sc;
++      st_.snapshotInto(tournamentSpots_);
++    }
++    if (Clock::now() >= sh_.deadline) break;
+   }
++  if (have) st_.restore(tournamentSpots_);
++}
++
++/// Place a given set of classes, most-constrained-first, around whatever else is already down.
++/// This is the construction's own body: `construct()` calls it with every movable class and an
++/// empty timetable, and `rebuildRegion()` calls it with the stuck part of one and the rest frozen.
++void Worker::constructOrder(std::vector<int>& order) {
+   // Break ties at random rather than by index. The difficulty key is coarse — thousands of classes
+   // share the same (slots × rooms) — so a fixed order makes every construction the same
+-  // construction, and a restart that lands where the last one did is not a restart. Shuffling first
+-  // and sorting *stably* keeps "most constrained first" while making the result genuinely different
+-  // each time.
++  // construction, and a restart that lands where the last one did is not a restart.
+   for (size_t i = order.size(); i > 1; --i) {
+     std::swap(order[i - 1], order[static_cast<size_t>(rng_.belowI(static_cast<int>(i)))]);
+   }
+-  // Most constrained first: the class with the fewest ways to be placed goes down while the
+-  // timetable is still empty enough to take it.
+   std::stable_sort(order.begin(), order.end(), [this](int a, int b) {
+     const Gene& ga = st_.gene(a);
+     const Gene& gb = st_.gene(b);
+@@ -470,6 +605,88 @@ void Worker::construct() {
+   }
+ }
+ 
++/// Rebuild the part of the timetable that has been *proved* stuck, and keep the rest.
++///
++/// This is the heavy procedure the certified-exhausted state calls for, and it sits between the two
++/// things the search could already do. A kick displaces up to `kickMax` classes drawn by a selector
++/// and repairs them greedily — too small and too random to leave a basin the hard repair has just
++/// certified finished. A fresh restart throws away the entire timetable — including the ninety-odd
++/// per cent of it that is already gap-free and cost minutes to reach — and pays for the whole thing
++/// again on the strength of a lottery.
++///
++/// What the certificate makes possible is the middle: the ledger names exactly which (entity, day)
++/// buckets cannot be repaired in place, so the classes that interact with them can be lifted out
++/// wholesale — the clusters they belong to, not a sample — and rebuilt from nothing, most
++/// constrained first, around a frozen remainder. The result is a genuinely different arrangement of
++/// the stuck region and an untouched one everywhere else.
++bool Worker::rebuildRegion() {
++  if (ledger_.empty() || p_.movable.empty()) return false;
++  // The region: the certified buckets' own classes, then the clusters those classes belong to —
++  // classes that share a lecturer or a group have to be re-rolled together or the rebuild is just
++  // the same conflicts in a new order.
++  std::vector<uint8_t> inRegion(st_.genes().size(), 0);
++  victims_.clear();
++  for (size_t bid : ledger_) {
++    st_.bucketMembers(bid, scratch_);
++    for (int m : scratch_) {
++      if (inRegion[static_cast<size_t>(m)]) continue;
++      inRegion[static_cast<size_t>(m)] = 1;
++      victims_.push_back(m);
++    }
++  }
++  const size_t seeds = victims_.size();
++  const size_t cap = std::max<size_t>(64, p_.movable.size() / 4);
++  if (o_.useClusters && !sh_.clusters.empty()) {
++    for (size_t q = 0; q < seeds && victims_.size() < cap; ++q) {
++      const int cid = sh_.clusterOf[static_cast<size_t>(victims_[q])];
++      if (cid < 0) continue;
++      for (int m : sh_.clusters[static_cast<size_t>(cid)]) {
++        if (victims_.size() >= cap) break;
++        if (inRegion[static_cast<size_t>(m)]) continue;
++        inRegion[static_cast<size_t>(m)] = 1;
++        victims_.push_back(m);
++      }
++    }
++  }
++  if (victims_.size() < 8) return false;
++  ++rep_.regionRebuilds;
++  rep_.regionClasses += static_cast<int64_t>(victims_.size());
++
++  for (int v : victims_) st_.placeRaw(v, -1, -1, st_.gene(v).parity, -1);
++  st_.flush();
++  constructOrder(victims_);
++  st_.rebuild();
++  // A rebuild that could not put every class back is worse than the timetable it replaced, and the
++  // objective is silent about a missing class (§1.6) — so the incumbent is restored outright.
++  if (st_.unplacedMovable() > bestUnplaced_) {
++    st_.restore(bestSpots_);
++    st_.rebuild();
++    return false;
++  }
++  acceptedCost_ = cost();
++  std::fill(history_.begin(), history_.end(), acceptedCost_);
++  dlasMax_ = acceptedCost_;
++  if (useSa_) temperature_ = t0_ * 0.5;
++  sinceBest_ = 0;
++  gainSinceKick_ = false;
++  ledger_.clear();
++  failedMaxKicks_ = 0;
++  emptyDeepPhases_ = 0;
++  hardRepairBlockUntil_ = moves_ + o_.hardRepairAfter / 2;
++  noteIncumbent();
++  refreshLists();
++  return true;
++}
++
++void Worker::construct() {
++  std::vector<int> order = p_.movable;
++  if (!o_.keepExisting) {
++    for (int i : order) st_.placeRaw(i, -1, -1, st_.gene(i).parity, -1);
++    st_.flush();
++  }
++  constructOrder(order);
++}
++
+ // ── acceptance ──────────────────────────────────────────────────────────────
+ 
+ bool Worker::acceptTest(double c) {
+@@ -540,6 +757,9 @@ bool Worker::noteIncumbent() {
+   st_.snapshotInto(bestSpots_);
+   lastIncumbentMove_ = moves_;
+   gainSinceKick_ = true;
++  // The evidence that the stochastic escape had saturated is void the moment it stops being true.
++  failedMaxKicks_ = 0;
++  emptyDeepPhases_ = 0;
+   return true;
+ }
+ 
+@@ -565,7 +785,7 @@ int Worker::pickGene() {
+   // During an ILS descent the only part of the timetable that has changed is what the kick broke,
+   // and everything else is still at a local optimum. Drawing uniformly there wastes the descent on
+   // re-proposing moves that were already refused; drawing from the broken set is the repair.
+-  if (!focus_.empty() && rng_.chance(o_.ilsFocus)) {
++  if (!focus_.empty() && rng_.chance(focusShare_ > 0 ? focusShare_ : o_.ilsFocus)) {
+     return focus_[static_cast<size_t>(rng_.belowI(static_cast<int>(focus_.size())))];
+   }
+   if (st_.hard() > 0 && !hot_.empty() && rng_.chance(o_.hotShare)) {
+@@ -599,7 +819,7 @@ void Worker::refreshLists() {
+   st_.collectWarm(warm_);
+   // A full pass over every (entity, day) — 30 000 buckets at n = 12 800 — so it is amortised over
+   // the refresh interval exactly as the hot list is, and never paid per candidate.
+-  st_.worstWindowBuckets(worstBuckets_, 256);
++  st_.worstWindowBuckets(worstBuckets_, 256, o_.actionableWindows);
+   listAge_ = 0;
+ }
+ 
+@@ -867,11 +1087,147 @@ bool Worker::allLegal(const std::vector<int>& members) const {
+   return true;
+ }
+ 
++bool Worker::sharesEntity(int a, int b) const {
++  const Gene& ga = st_.gene(a);
++  const Gene& gb = st_.gene(b);
++  for (int x = 0; x < ga.lecCount; ++x) {
++    const int l = p_.lecPool[static_cast<size_t>(ga.lecFrom + x)];
++    for (int y = 0; y < gb.lecCount; ++y) {
++      if (l == p_.lecPool[static_cast<size_t>(gb.lecFrom + y)]) return true;
++    }
++  }
++  for (int x = 0; x < ga.grpCount; ++x) {
++    const int g = p_.grpPool[static_cast<size_t>(ga.grpFrom + x)];
++    for (int y = 0; y < gb.grpCount; ++y) {
++      if (g == p_.grpPool[static_cast<size_t>(gb.grpFrom + y)]) return true;
++    }
++  }
++  return false;
++}
++
++/// Regret-k reinsertion.
++///
++/// The shipped `recreate` puts the victims back in random order, each at its own best remaining
++/// placement. That is a greedy insertion, and a greedy insertion has to commit the first class
++/// before it has seen the last one's options — which is precisely the criticism the k-opt operator
++/// was built to answer for a *permutation*, left unanswered for the *repair* that produces most of
++/// this solver's improvement.
++///
++/// Regret insertion asks a different question each round: not "where does this class most want to
++/// go" but "which class would lose the most by not going now". The loss is the gap between its best
++/// remaining placement and its runner-up: a class with one clash-free slot left has an enormous
++/// regret and goes first; a class with fifty equally good slots waits, because waiting costs it
++/// nothing. Ropke and Pisinger's result for vehicle routing is that this dominates greedy insertion
++/// almost everywhere, and the structure of the argument does not depend on the domain.
++///
++/// The order is otherwise deterministic, and the shipped operator's *diversification* was its
++/// random order — so the regret value carries a multiplicative jitter, which randomises which class
++/// goes next without ever changing where a class goes.
++bool Worker::recreateRegret(const std::vector<int>& victims) {
++  const int k = static_cast<int>(victims.size());
++  regretSlot_.assign(static_cast<size_t>(k), -1);
++  regretRoom_.assign(static_cast<size_t>(k), -1);
++  regretVal_.assign(static_cast<size_t>(k), 0.0);
++  regretScore_.assign(static_cast<size_t>(k), 0.0);
++  regretDone_.assign(static_cast<size_t>(k), 0);
++  regretStale_.assign(static_cast<size_t>(k), 1);
++
++  const auto evaluate = [&](int idx) {
++    const int v = victims[static_cast<size_t>(idx)];
++    int s = -1, r = -1;
++    double sc = 0, second = kImpossible;
++    if (!scanBest(v, /*wide=*/false, s, r, sc, &second) &&
++        !scanBest(v, /*wide=*/true, s, r, sc, &second)) {
++      regretSlot_[static_cast<size_t>(idx)] = -1;
++      // Nothing admissible: maximal urgency, so that it is dealt with (and restored to where it
++      // was) before the others crowd it out further.
++      regretVal_[static_cast<size_t>(idx)] = kImpossible;
++      regretScore_[static_cast<size_t>(idx)] = kImpossible;
++    } else {
++      regretSlot_[static_cast<size_t>(idx)] = s;
++      regretRoom_[static_cast<size_t>(idx)] = r;
++      regretScore_[static_cast<size_t>(idx)] = sc;
++      const double gap = (second >= kImpossible) ? kImpossible * 0.5 : (second - sc);
++      regretVal_[static_cast<size_t>(idx)] = gap;
++    }
++    regretStale_[static_cast<size_t>(idx)] = 0;
++  };
++
++  bool all = true;
++  for (int round = 0; round < k; ++round) {
++    int pick = -1;
++    double pickRegret = -1, pickScore = 0;
++    for (int idx = 0; idx < k; ++idx) {
++      if (regretDone_[static_cast<size_t>(idx)]) continue;
++      if (regretStale_[static_cast<size_t>(idx)]) evaluate(idx);
++      double reg = regretVal_[static_cast<size_t>(idx)];
++      if (o_.regretNoise > 0 && reg < kImpossible * 0.25) {
++        reg *= 1.0 + o_.regretNoise * (2.0 * rng_.unit() - 1.0);
++      }
++      // Most to lose first; a tie goes to the class whose own best placement is worse, which is the
++      // one with least room to manoeuvre later.
++      if (reg > pickRegret ||
++          (reg == pickRegret && regretScore_[static_cast<size_t>(idx)] > pickScore)) {
++        pick = idx;
++        pickRegret = reg;
++        pickScore = regretScore_[static_cast<size_t>(idx)];
++      }
++    }
++    if (pick < 0) break;
++    regretDone_[static_cast<size_t>(pick)] = 1;
++    const int v = victims[static_cast<size_t>(pick)];
++    const int s = regretSlot_[static_cast<size_t>(pick)];
++    if (s < 0) {
++      // Nothing admissible is left for it now that the others are back. Put it where it was: a
++      // class the recreate could not fit must not be silently dropped, because f(σ) does not charge
++      // for a missing class and the search would learn to empty the timetable.
++      all = false;
++      for (auto it = jr_.rbegin(); it != jr_.rend(); ++it) {
++        if (it->first == v) { st_.placeRaw(v, it->second); break; }
++      }
++      st_.flush();
++      continue;
++    }
++    st_.placeRaw(v, slotDay(s), slotTime(s), slotParity(s), regretRoom_[static_cast<size_t>(pick)]);
++    st_.flush();
++    // Only the classes this placement could have changed the answer for are re-evaluated: those
++    // that share a lecturer or a group with it, and those whose own best pick was the very room and
++    // day just taken. Re-evaluating all k every round would make the operator quadratic in scans.
++    const int placedDay = slotDay(s);
++    const int placedRoom = regretRoom_[static_cast<size_t>(pick)];
++    for (int idx = 0; idx < k; ++idx) {
++      if (regretDone_[static_cast<size_t>(idx)] || regretStale_[static_cast<size_t>(idx)]) continue;
++      const int other = victims[static_cast<size_t>(idx)];
++      const int oSlot = regretSlot_[static_cast<size_t>(idx)];
++      const bool sameSpot = oSlot >= 0 && slotDay(oSlot) == placedDay &&
++                            regretRoom_[static_cast<size_t>(idx)] == placedRoom;
++      if (sameSpot || sharesEntity(v, other)) regretStale_[static_cast<size_t>(idx)] = 1;
++    }
++  }
++  return all;
++}
++
+ bool Worker::recreate(const std::vector<int>& victims) {
++  const int order = (o_.repairAnchoredOnly && !anchoredRepair_) ? 0 : o_.repairOrder;
++  if (order == 2 && victims.size() >= 3) return recreateRegret(victims);
+   scratch_ = victims;
+   for (int k = static_cast<int>(scratch_.size()) - 1; k > 0; --k) {
+     std::swap(scratch_[static_cast<size_t>(k)], scratch_[static_cast<size_t>(rng_.belowI(k + 1))]);
+   }
++  if (order == 1) {
++    // Most constrained first, the construction's own key (§3.2): the class with the fewest ways to
++    // be placed goes down while the day it is going into is still empty enough to take it. The
++    // shuffle above survives as the tie-break, because the key is coarse and a deterministic order
++    // would cost the operator its diversification.
++    std::stable_sort(scratch_.begin(), scratch_.end(), [this](int a, int b) {
++      const Gene& ga = st_.gene(a);
++      const Gene& gb = st_.gene(b);
++      const int64_t da = static_cast<int64_t>(ga.slotCount) * ga.roomCount;
++      const int64_t db = static_cast<int64_t>(gb.slotCount) * gb.roomCount;
++      if (da != db) return da < db;
++      return (ga.lecCount + ga.grpCount) > (gb.lecCount + gb.grpCount);
++    });
++  }
+   bool all = true;
+   for (int v : scratch_) {
+     int s = -1, r = -1;
+@@ -1132,6 +1488,295 @@ bool Worker::opDayRepack() {
+   return true;
+ }
+ 
++/// Rooms as a matching rather than as a search dimension.
++///
++/// Lach and Lübbecke's observation about this problem family is that once the times are fixed, the
++/// room assignment is a *bipartite matching* and can be solved exactly; treating rooms as one more
++/// coordinate of a random draw multiplies the neighbourhood for something a polynomial algorithm
++/// answers outright. This solver draws (slot, room) pairs everywhere, and `README.md`'s own known
++/// limitations name the gap.
++///
++/// This is the safe half of closing it. Take one (day, time, parity) — the instant that a room
++/// conflict or a travel violation lives at — collect every movable class sitting there, and
++/// re-assign them over the rooms they hold *plus* a sample of currently-free eligible rooms, by
++/// exact linear assignment under room clashes and travel. Nothing outside that instant can be
++/// disturbed: the classes do not move in time, so not one of Π₁, Π₂, Π₇, Π₈ or Π₉ can change, and
++/// the only terms in play are exactly the two the matching prices.
++bool Worker::opRematch() {
++  // A seed instant: prefer one that is actually guilty.
++  int seed = -1;
++  if (st_.hard() > 0 && !hot_.empty()) {
++    seed = hot_[static_cast<size_t>(rng_.belowI(static_cast<int>(hot_.size())))];
++  } else {
++    seed = pickGene();
++  }
++  if (seed < 0) return false;
++  const Gene& gs = st_.gene(seed);
++  if (gs.day < 0 || gs.timeIdx < 0 || gs.placeKind != kPlaceRoom || gs.room < 0) return false;
++  const int day = gs.day, ti = gs.timeIdx;
++  const uint8_t par = gs.parity;
++
++  // Everybody at that instant, in the same week pattern, that is in an ordinary room and movable.
++  // They are found through their own entities as well as through the room, so that a class sitting
++  // in a *different* room at the same instant is still a candidate to trade with.
++  members_.clear();
++  scratch_.clear();
++  for (int k = 0; k < gs.lecCount; ++k) {
++    for (int32_t q : st_.lecBucket(p_.lecPool[static_cast<size_t>(gs.lecFrom + k)], day)) scratch_.push_back(q);
++  }
++  for (int k = 0; k < gs.grpCount; ++k) {
++    for (int32_t q : st_.grpBucket(p_.grpPool[static_cast<size_t>(gs.grpFrom + k)], day)) scratch_.push_back(q);
++  }
++  for (int32_t q : st_.roomBucket(gs.room, day)) scratch_.push_back(q);
++  scratch_.push_back(seed);
++  std::sort(scratch_.begin(), scratch_.end());
++  scratch_.erase(std::unique(scratch_.begin(), scratch_.end()), scratch_.end());
++  for (int q : scratch_) {
++    const Gene& g = st_.gene(q);
++    if (!g.movable || g.day != day || g.timeIdx != ti || g.parity != par) continue;
++    if (g.placeKind != kPlaceRoom || g.room < 0) continue;
++    members_.push_back(q);
++    if (static_cast<int>(members_.size()) >= o_.rematchCap) break;
++  }
++  if (members_.size() < 2) return false;
++
++  const int k = static_cast<int>(members_.size());
++  // The pool: the rooms they hold, plus free eligible rooms drawn from their domains.
++  spotPool_.clear();
++  roomPool_.clear();
++  for (int m : members_) roomPool_.push_back(st_.gene(m).room);
++  const int wanted = std::min(k, 8);
++  for (int e = 0; e < wanted * 3 && static_cast<int>(roomPool_.size()) < k + wanted; ++e) {
++    const int owner = members_[static_cast<size_t>(rng_.belowI(k))];
++    const Gene& go = st_.gene(owner);
++    if (go.roomCount <= 0) continue;
++    const int cand = p_.roomsOf(go)[rng_.belowI(go.roomCount)];
++    if (cand < 0) continue;
++    if (std::find(roomPool_.begin(), roomPool_.end(), cand) != roomPool_.end()) continue;
++    const Mask mask = p_.maskAt(ti, go.durSlot);
++    if (st_.roomClashesAt(owner, day, mask, par, cand) != 0) continue;
++    roomPool_.push_back(cand);
++  }
++
++  beginCandidate();
++  for (int m : members_) moveTo(m, day, ti, par, -1);
++  settle();
++
++  const int cols = static_cast<int>(roomPool_.size());
++  const int n = std::max(k, cols);
++  costMatrix_.assign(static_cast<size_t>(n) * static_cast<size_t>(n), 0.0);
++  for (int r = 0; r < n; ++r) {
++    for (int q = 0; q < n; ++q) {
++      costMatrix_[static_cast<size_t>(r) * static_cast<size_t>(n) + static_cast<size_t>(q)] =
++          (r < k && q < cols) ? kImpossible : 0.0;
++    }
++  }
++  for (int r = 0; r < k; ++r) {
++    const int i = members_[static_cast<size_t>(r)];
++    const Gene& g = st_.gene(i);
++    const Mask mask = p_.maskAt(ti, g.durSlot);
++    for (int q = 0; q < cols; ++q) {
++      const int room = roomPool_[static_cast<size_t>(q)];
++      if (!hasRoom(g, room)) continue;
++      if (!st_.placementAllowed(i, day, ti, par, room)) continue;
++      double c = static_cast<double>(st_.roomClashesAt(i, day, mask, par, room)) * kClashBig;
++      if (p_.travelKnown) {
++        c += static_cast<double>(st_.travelCostOfAdding(i, day, mask, par, room)) * kTravelBig;
++      }
++      costMatrix_[static_cast<size_t>(r) * static_cast<size_t>(n) + static_cast<size_t>(q)] = c;
++    }
++  }
++  hungarian(costMatrix_, n, assign_);
++  bool identity = true;
++  for (int r = 0; r < k; ++r) {
++    const int q = assign_[static_cast<size_t>(r)];
++    if (q < 0 || q >= cols ||
++        costMatrix_[static_cast<size_t>(r) * static_cast<size_t>(n) + static_cast<size_t>(q)] >= kImpossible) {
++      undo();
++      return false;
++    }
++    if (roomPool_[static_cast<size_t>(q)] != st_.gene(members_[static_cast<size_t>(r)]).room) identity = false;
++  }
++  // Everybody is lifted out of their room, so "identity" is against the rooms they came from,
++  // recorded in the pool's first k entries.
++  identity = true;
++  for (int r = 0; r < k; ++r) {
++    if (assign_[static_cast<size_t>(r)] != r) { identity = false; break; }
++  }
++  if (identity) { undo(); return false; }
++  for (int r = 0; r < k; ++r) {
++    st_.placeRaw(members_[static_cast<size_t>(r)], day, ti, par,
++                 roomPool_[static_cast<size_t>(assign_[static_cast<size_t>(r)])]);
++  }
++  settle();
++  if (!allLegal(members_)) { undo(); return false; }
++  return true;
++}
++
++/// Parity moves: the residue the two-week average leaves behind.
++///
++/// Π₇ and Π₈ are averaged over the numerator and the denominator week (A §1.4, eq. 10), so a
++/// biweekly class contributes a window to one week and nothing to the other. The surviving cost of
++/// a converged run is therefore full of *half* windows — a gap that exists in one calendar week
++/// only — and the move that closes one is not a relocation at all: it is the same class, at the
++/// same time, in the other week. Nothing in the shipped portfolio proposes that, because every
++/// operator draws a placement from the domain and parity travels with the class rather than with
++/// the placement.
++///
++/// Two forms. A *flip* sends one biweekly class to its twin slot in the other week; an *exchange*
++/// swaps the weeks of two biweekly classes in the same bucket, which is the form that keeps the
++/// day's load balanced and is usually the one that is admissible.
++bool Worker::opParityMove() {
++  if (worstBuckets_.empty()) return false;
++  const size_t bid = worstBuckets_[static_cast<size_t>(rng_.belowI(static_cast<int>(worstBuckets_.size())))];
++  const int day = State::bucketDay(bid);
++  st_.bucketMembers(bid, members_);
++  if (members_.empty()) return false;
++
++  // The biweekly members, split by which week they are taught in.
++  scratch_.clear();
++  for (int m : members_) {
++    const Gene& g = st_.gene(m);
++    if (g.day == day && (g.parity == kNumerator || g.parity == kDenominator)) scratch_.push_back(m);
++  }
++  if (scratch_.empty()) return false;
++
++  const int i = scratch_[static_cast<size_t>(rng_.belowI(static_cast<int>(scratch_.size())))];
++  const Gene& gi = st_.gene(i);
++  const int otherPar = gi.parity == kNumerator ? kDenominator : kNumerator;
++  const int twin = packSlot(gi.day, gi.timeIdx, otherPar);
++  const bool canFlip = hasSlot(gi, twin);
++
++  // An exchange partner: a biweekly class of this bucket in the *other* week, each of whose slot
++  // stays where it is while the two weeks trade.
++  int j = -1;
++  if (rng_.chance(0.5) || !canFlip) {
++    for (int q = 0; q < static_cast<int>(scratch_.size()); ++q) {
++      const int cand = scratch_[static_cast<size_t>((rng_.belowI(static_cast<int>(scratch_.size())) + q) %
++                                                    static_cast<int>(scratch_.size()))];
++      if (cand == i) continue;
++      const Gene& gc = st_.gene(cand);
++      if (gc.parity == gi.parity) continue;
++      if (!hasSlot(gc, packSlot(gc.day, gc.timeIdx, gi.parity))) continue;
++      if (!hasSlot(gi, packSlot(gi.day, gi.timeIdx, gc.parity))) continue;
++      j = cand;
++      break;
++    }
++  }
++  if (j < 0 && !canFlip) return false;
++
++  beginCandidate();
++  if (j >= 0) {
++    const Gene& gj = st_.gene(j);
++    const int pi = gi.parity, pj = gj.parity;
++    const int di = gi.day, ti = gi.timeIdx, ri = gi.room;
++    const int dj = gj.day, tj = gj.timeIdx, rj = gj.room;
++    moveTo(i, di, ti, pj, ri);
++    moveTo(j, dj, tj, pi, rj);
++  } else {
++    moveTo(i, gi.day, gi.timeIdx, otherPar, gi.room);
++  }
++  settle();
++  members_.clear();
++  members_.push_back(i);
++  if (j >= 0) members_.push_back(j);
++  if (!allLegal(members_)) { undo(); return false; }
++  return true;
++}
++
++/// The compaction sweep: close a вікно by moving the block on one side of it, as one candidate.
++///
++/// `winfix` (§3.4.8, off by default and measured worse) proposed the same repair one class at a
++/// time, and lost. The reason it lost is not that the target was wrong — it is the only move family
++/// that closes a gap by construction — but that a single class pulled into a hole usually collides
++/// with the class already sitting after it, so the arrangement that actually removes the window is
++/// *every* class after the hole shifted left by one пара at once. Every intermediate state of that
++/// rearrangement is worse than both ends, which is exactly the valley a single-class neighbourhood
++/// cannot cross and a joint candidate does not have to.
++///
++/// So: take an (entity, day, week) that has a hole, walk its classes in time order, and give each
++/// one the earliest admissible slot that does not start before the previous one ended. One
++/// candidate, one acceptance test, one `allLegal`.
++bool Worker::opCompaction(size_t forced) {
++  if (forced == kNoBucket && worstBuckets_.empty()) return false;
++  const size_t bid = forced != kNoBucket
++                         ? forced
++                         : worstBuckets_[static_cast<size_t>(rng_.belowI(static_cast<int>(worstBuckets_.size())))];
++  const int day = State::bucketDay(bid);
++  int week = rng_.chance(0.5) ? 1 : 2;
++  Mask holes = st_.holesOf(bid, week);
++  if (holes.empty()) {
++    week = week == 1 ? 2 : 1;
++    holes = st_.holesOf(bid, week);
++    if (holes.empty()) return false;
++  }
++  const int holeMinute = p_.ticks[static_cast<size_t>(holes.lowest())];
++
++  st_.bucketMembers(bid, members_);
++  // Everything of this bucket that is taught in this week, in time order.
++  scratch_.clear();
++  for (int m : members_) {
++    const Gene& g = st_.gene(m);
++    if (g.day != day || !inWeek(g.parity, week)) continue;
++    scratch_.push_back(m);
++  }
++  if (scratch_.size() < 2) return false;
++  std::sort(scratch_.begin(), scratch_.end(), [this](int a, int b) {
++    return st_.gene(a).start < st_.gene(b).start;
++  });
++
++  beginCandidate();
++  int cursor = holeMinute;   // the earliest minute the tail may now start at
++  bool moved = false;
++  for (int m : scratch_) {
++    const Gene& g = st_.gene(m);
++    if (g.start < holeMinute) continue;          // in front of the hole: it stays where it is
++    // The earliest slot on this day, in this class's own domain and its own parity, that starts no
++    // earlier than the cursor.
++    const int* slots = p_.slotsOf(g);
++    int bestTi = -1, bestStart = std::numeric_limits<int>::max();
++    for (int q = 0; q < g.slotCount; ++q) {
++      const int sl = slots[q];
++      if (slotDay(sl) != day || slotParity(sl) != g.parity) continue;
++      const int ti = slotTime(sl);
++      const int st = p_.times[static_cast<size_t>(ti)].startMinutes;
++      if (st < cursor || st >= bestStart) continue;
++      bestTi = ti;
++      bestStart = st;
++    }
++    if (bestTi < 0 || bestStart >= g.start) {
++      // Nothing earlier is available for it; it anchors the rest of the sweep where it already is.
++      cursor = g.end;
++      continue;
++    }
++    // A room for it at the new time: the first admissible one that is free, else leave it.
++    const Mask mask = p_.maskAt(bestTi, g.durSlot);
++    const int* rooms = p_.roomsOf(g);
++    const int limit = std::min(g.roomCount, o_.roomSample);
++    const int rstart = rng_.belowI(std::max(1, g.roomCount));
++    int room = -1;
++    bool haveRoom = false;
++    for (int r = 0; r < limit; ++r) {
++      const int cand = rooms[(rstart + r) % g.roomCount];
++      if (!st_.placementAllowed(m, day, bestTi, g.parity, cand)) continue;
++      if (st_.roomClashesAt(m, day, mask, g.parity, cand) != 0) continue;
++      room = cand;
++      haveRoom = true;
++      break;
++    }
++    if (!haveRoom) { cursor = g.end; continue; }
++    const int par = g.parity;
++    moveTo(m, day, bestTi, par, room);
++    settle();
++    moved = true;
++    cursor = bestStart + st_.gene(m).durationMinutes;
++  }
++  if (!moved) { undo(); return false; }
++  settle();
++  if (!allLegal(scratch_)) { undo(); return false; }
++  return true;
++}
++
+ bool Worker::permute(const std::vector<int>& members) {
+   const int k = static_cast<int>(members.size());
+   if (k < 2) return false;
+@@ -1340,6 +1985,8 @@ bool Worker::opKopt() {
+ 
+ bool Worker::deepPhase() {
+   ++rep_.deepPhases;
++  anchoredRepair_ = true;
++  struct AnchorGuard { bool* f; ~AnchorGuard() { *f = false; } } guard{&anchoredRepair_};
+   refreshLists();
+   bool improved = false;
+   const double startCost = cost();
+@@ -1349,13 +1996,29 @@ bool Worker::deepPhase() {
+   // repeating the same one.
+   koptWidth_ = std::min(o_.koptK, koptWidth_ + 4);
+ 
++  // The rotation the phase cycles through. The three shipped members are the wide permutation, a
++  // worst-window ruin-and-recreate and a repack; a campaign mechanism that is *matched to the
++  // residual* joins them here rather than in the bandit, because a portfolio that already contains
++  // large neighbourhoods has no spare draws (STUDY.md §3) — but a phase that only runs when
++  // everything else has failed is not taking a draw from anything.
++  int rotation = 3;
++  const int parityPick = (o_.deepExtras && o_.useParityMoves) ? rotation++ : -1;
++  const int compactPick = (o_.deepExtras && o_.useCompaction) ? rotation++ : -1;
++  const int rematchPick = (o_.deepExtras && o_.useRematch) ? rotation++ : -1;
++
+   const int attempts = 24;
+   for (int a = 0; a < attempts; ++a) {
+     if (Clock::now() >= sh_.deadline) break;
+     const double before = cost();
+     bool applied = false;
+-    const int pick = a % 3;
+-    if (pick == 0 && o_.useKopt) {
++    const int pick = a % rotation;
++    if (pick == parityPick) {
++      applied = opParityMove();
++    } else if (pick == compactPick) {
++      applied = opCompaction();
++    } else if (pick == rematchPick) {
++      applied = opRematch();
++    } else if (pick == 0 && o_.useKopt) {
+       selectVictims(kRuinCluster, koptWidth_, members_);
+       applied = members_.size() >= 3 && permute(members_);
+     } else if (pick == 1 && o_.useLns) {
+@@ -1395,6 +2058,918 @@ bool Worker::deepPhase() {
+   return cost() < startCost;
+ }
+ 
++// ── the hard repair ─────────────────────────────────────────────────────────
++//
++// What a long budget is really short of. The acceptance bar collapses onto the incumbent about a
++// hundred moves after the last improvement and a plateau that old is *absorbing* — only a strict
++// improvement leaves it — and widening the bar does not merely lose quality, it prevents the search
++// converging at all (STUDY.md §9.3). So the tail is short of attempts, and the shipped ladder
++// answers that with three stochastic rungs. Every one of them draws: a kick breaks a related set
++// and hopes, a deep phase draws clusters and hopes. When what is left is five lecturers and three
++// groups with one idle пара each, hoping is a poor use of forty minutes: the same few buckets come
++// up again and again, and nothing ever concludes that a particular window cannot be closed at all.
++//
++// This rung concludes. It takes one defect at a time, freezes everything except a bounded
++// neighbourhood of it, and searches that neighbourhood *exhaustively*. Either it removes the defect
++// — which the stochastic operators had failed to do for hundreds of thousands of moves — or it
++// comes back having proved that nothing inside the neighbourhood can, which is a fact worth having:
++// it is what lets the search stop grinding on that defect, and, once every defect has been so
++// certified, what lets it abandon the whole timetable *knowing* rather than on a timer.
++
++bool Worker::ledgerHas(size_t bid) const {
++  return std::find(ledger_.begin(), ledger_.end(), bid) != ledger_.end();
++}
++
++bool Worker::tryStrict(bool applied, double before) {
++  if (!applied) return false;
++  if (cost() < before - 1e-9) { jr_.clear(); return true; }
++  undo();
++  return false;
++}
++
++/// Exact assignment over one (entity, day), with the option of leaving the day.
++///
++/// `dayfix` (§3.4.8) enumerated every arrangement of one day's classes *within* that day and was
++/// measured worse — but it was measured as a member of the bandit's portfolio, where its draws came
++/// out of `repack` and `ruin`, and it could only rearrange, never evict. Both faults are addressed
++/// here: it runs only in the hard repair, where it takes a draw from nothing at all, and each class
++/// carries candidates on *other* days too, so "this window closes only if that class leaves
++/// Tuesday" is inside the search rather than left to a lucky draw elsewhere.
++int Worker::daySolveExact(size_t bid) {
++  const int day = State::bucketDay(bid);
++  st_.bucketMembers(bid, members_);
++  if (members_.size() < 2) {
++    if (o_.repairVerbose) std::fprintf(stderr, "   daySolve: only %zu movable members\n", members_.size());
++    return 0;
++  }
++
++  // Prefer the classes adjacent to the day's holes: those are the ones whose movement can change
++  // the span, and the exact search can only afford a handful.
++  const Mask holes = st_.holesOf(bid, 1) | st_.holesOf(bid, 2);
++  const int holeMinute = holes.empty() ? -1 : p_.ticks[static_cast<size_t>(holes.lowest())];
++  std::stable_sort(members_.begin(), members_.end(), [this, holeMinute](int a, int b) {
++    if (holeMinute < 0) return false;
++    const int da = std::abs(st_.gene(a).start - holeMinute);
++    const int db = std::abs(st_.gene(b).start - holeMinute);
++    return da < db;
++  });
++  int k = std::min<int>(o_.repairDepth, static_cast<int>(members_.size()));
++  members_.resize(static_cast<size_t>(k));
++
++  // A вікно is closed in one of two ways: the day's own classes close up over it, or a class of the
++  // same entity arrives from another day of the week. Everything above can only do the first, which
++  // is why an exact search over one bucket kept coming back with "nothing to be done" — the move
++  // that would have helped was not in its universe. So: up to two *pullers*, classes of this entity
++  // sitting on other days whose own domain contains a slot starting exactly at the hole.
++  if (holeMinute >= 0 && k < o_.repairDepth + 2) {
++    st_.entityElsewhere(bid, scratch_);
++    int added = 0;
++    const int startAt = scratch_.empty() ? 0 : rng_.belowI(static_cast<int>(scratch_.size()));
++    for (int q = 0; q < static_cast<int>(scratch_.size()) && added < 2; ++q) {
++      const int cand = scratch_[static_cast<size_t>((startAt + q) % static_cast<int>(scratch_.size()))];
++      if (std::find(members_.begin(), members_.end(), cand) != members_.end()) continue;
++      const Gene& gc = st_.gene(cand);
++      bool reaches = false;
++      const int* cs = p_.slotsOf(gc);
++      for (int z = 0; z < gc.slotCount && !reaches; ++z) {
++        const int sl = cs[z];
++        if (slotDay(sl) != day || slotParity(sl) != gc.parity) continue;
++        if (p_.times[static_cast<size_t>(slotTime(sl))].startMinutes == holeMinute) reaches = true;
++      }
++      if (!reaches) continue;
++      members_.push_back(cand);
++      ++added;
++    }
++    k = static_cast<int>(members_.size());
++  }
++
++  const int B = std::max(2, o_.repairBranch);
++  std::vector<Spot> original(static_cast<size_t>(k));
++  for (int m = 0; m < k; ++m) original[static_cast<size_t>(m)] = st_.spotOf(members_[static_cast<size_t>(m)]);
++  const double before = cost();
++
++  // Price the candidates with the whole set *lifted out*, exactly as the permutation operator does.
++  // Built against the live state instead, a candidate that wants a slot one of the other members is
++  // currently sitting in reads as a clash and is filtered out before the search ever sees it — which
++  // removes precisely the joint rearrangements this operator exists to find, and is why an earlier
++  // version of it reported no improvement on forty-two consecutive defects.
++  beginCandidate();
++  for (int m = 0; m < k; ++m) moveTo(members_[static_cast<size_t>(m)], -1, -1, st_.gene(members_[static_cast<size_t>(m)]).parity, -1);
++  settle();
++
++  std::vector<std::vector<std::pair<int, int>>> cands(static_cast<size_t>(k));  // (slot, room)
++  for (int m = 0; m < k; ++m) {
++    const int i = members_[static_cast<size_t>(m)];
++    const Gene& g = st_.gene(i);
++    std::vector<std::pair<double, std::pair<int, int>>> scored;
++    const int* slots = p_.slotsOf(g);
++    // The candidate scan is bounded and polls the clock. An exact search whose *setup* can outrun
++    // the budget is not anytime, and the budget independence of §3.9 is a property the whole
++    // measurement design rests on: a run must stop when it is told to.
++    const int scanLimit = std::min(g.slotCount, o_.repairScanSlots);
++    const int scanFrom = rng_.belowI(std::max(1, g.slotCount));
++    for (int qq = 0; qq < scanLimit; ++qq) {
++      if ((qq & 31) == 0 && Clock::now() >= repairDeadline_) { undo(); return -1; }
++      const int q = (scanFrom + qq) % g.slotCount;
++      const int s = slots[q];
++      if (slotParity(s) != g.parity) continue;
++      const int d = slotDay(s), ti = slotTime(s);
++      const Mask mask = p_.maskAt(ti, g.durSlot);
++      const double people = static_cast<double>(st_.peopleClashesAt(i, d, mask, g.parity)) * kClashBig;
++      if (people >= kClashBig) continue;   // a placement that double-books somebody is never wanted
++      const double win = st_.windowCostOfAdding(i, d, g.parity, mask);
++      int room = -1;
++      double roomPenalty = kImpossible;
++      const int* rooms = p_.roomsOf(g);
++      const int limit = std::min(g.roomCount, o_.repairScanRooms);
++      const int start = rng_.belowI(std::max(1, g.roomCount));
++      for (int r = 0; r < limit; ++r) {
++        const int cand = rooms[(start + r) % g.roomCount];
++        if (!st_.placementAllowed(i, d, ti, g.parity, cand)) continue;
++        const double rc = static_cast<double>(st_.roomClashesAt(i, d, mask, g.parity, cand)) * kClashBig;
++        if (rc < roomPenalty) { roomPenalty = rc; room = cand; }
++        if (rc <= 0) break;
++      }
++      if (room == -1 && g.roomCount > 0 && p_.roomsOf(g)[0] >= 0) continue;
++      if (roomPenalty >= kClashBig) continue;
++      // Off-day candidates are charged a small preference against, so that the search prefers to
++      // solve the day if it can and evicts only when eviction genuinely pays.
++      const double away = (d == day) ? 0.0 : 1.0;
++      scored.emplace_back(people + roomPenalty + win + away, std::make_pair(s, room));
++    }
++    if (scored.empty()) { undo(); return 0; }
++    std::sort(scored.begin(), scored.end(),
++              [](const auto& a, const auto& b) { return a.first < b.first; });
++    // The class's current placement is always a candidate, or the search could not return the
++    // identity and "no improvement" would be unprovable.
++    const Spot& was = original[static_cast<size_t>(m)];
++    const int cur = packSlot(was.day, was.timeIdx, was.parity);
++    auto& list = cands[static_cast<size_t>(m)];
++    list.emplace_back(cur, was.room);
++    for (const auto& sc : scored) {
++      if (static_cast<int>(list.size()) >= B) break;
++      if (sc.second.first == cur && sc.second.second == was.room) continue;
++      list.push_back(sc.second);
++    }
++  }
++
++  // Fewest candidates first: the standard variable order, and it makes the prune bite earliest.
++  std::vector<int> order(static_cast<size_t>(k));
++  for (int m = 0; m < k; ++m) order[static_cast<size_t>(m)] = m;
++  std::stable_sort(order.begin(), order.end(), [&cands](int a, int b) {
++    return cands[static_cast<size_t>(a)].size() < cands[static_cast<size_t>(b)].size();
++  });
++
++  double best = before;
++  std::vector<std::pair<int, int>> bestPick(static_cast<size_t>(k));
++  std::vector<std::pair<int, int>> pick(static_cast<size_t>(k));
++  bool found = false;
++  int64_t nodes = 0;
++  bool truncated = false;
++  const auto deadline = repairDeadline_;
++
++  const std::function<void(int)> dfs = [&](int depth) {
++    if (truncated) return;
++    if (++nodes > o_.repairNodes) { truncated = true; return; }
++    if ((nodes & 255) == 0 && Clock::now() >= deadline) { truncated = true; return; }
++    if (depth == k) {
++      for (int m = 0; m < k; ++m) {
++        const auto& c = pick[static_cast<size_t>(m)];
++        st_.placeRaw(members_[static_cast<size_t>(m)], slotDay(c.first), slotTime(c.first),
++                     slotParity(c.first), c.second);
++      }
++      st_.flush();
++      bool legal = true;
++      for (int m = 0; m < k && legal; ++m) {
++        const int i = members_[static_cast<size_t>(m)];
++        const Gene& g = st_.gene(i);
++        legal = g.day >= 0 && st_.placementAllowed(i, g.day, g.timeIdx, g.parity, g.room);
++      }
++      if (legal) {
++        const double c = cost();
++        if (c < best - 1e-9) { best = c; bestPick = pick; found = true; }
++      }
++      for (int m = 0; m < k; ++m) {
++        st_.placeRaw(members_[static_cast<size_t>(m)], -1, -1, st_.gene(members_[static_cast<size_t>(m)]).parity, -1);
++      }
++      st_.flush();
++      return;
++    }
++    const int m = order[static_cast<size_t>(depth)];
++    for (const auto& c : cands[static_cast<size_t>(m)]) {
++      pick[static_cast<size_t>(m)] = c;
++      dfs(depth + 1);
++      if (truncated) return;
++    }
++  };
++  dfs(0);
++  if (o_.repairVerbose) {
++    size_t total = 1;
++    for (int m = 0; m < k; ++m) total *= std::max<size_t>(1, cands[static_cast<size_t>(m)].size());
++    std::fprintf(stderr, "   daySolve: k=%d leaves<=%zu nodes=%lld found=%d best=%.0f before=%.0f\n",
++                 k, total, static_cast<long long>(nodes), found ? 1 : 0, best, before);
++  }
++
++  if (!found) { undo(); return truncated ? -1 : 0; }
++
++  for (int m = 0; m < k; ++m) {
++    const auto& c = bestPick[static_cast<size_t>(m)];
++    moveTo(members_[static_cast<size_t>(m)], slotDay(c.first), slotTime(c.first), slotParity(c.first),
++           c.second);
++  }
++  settle();
++  if (!allLegal(members_)) { undo(); return truncated ? -1 : 0; }
++  if (cost() >= before - 1e-9) { undo(); return truncated ? -1 : 0; }
++  jr_.clear();
++  return 1;
++}
++
++/// A bounded ejection search over one defect.
++///
++/// `opChain` (§3.4.3) already displaces: it moves a class, then sends whoever is now double-booked
++/// where *that* class would choose, to depth three. What it never does is *reconsider* — one
++/// placement per link, no backtracking — so a chain that would have paid two links further on is
++/// indistinguishable from one that never had a chance. Here every link tries several placements and
++/// the search backtracks, which is the difference between a heuristic chain and a Lin–Kernighan
++/// one, and it is affordable because it runs a few hundred times in a run rather than a few hundred
++/// thousand times a second.
++int Worker::ejectSearch(size_t bid) {
++  st_.bucketMembers(bid, members_);
++  if (members_.empty()) return 0;
++  const double before = cost();
++  int64_t nodes = 0;
++  bool truncated = false;
++  std::vector<int> inChain;
++
++  const std::function<bool(int, int)> descend = [&](int cls, int depth) -> bool {
++    if (truncated) return false;
++    if (depth > o_.repairEjectDepth) return false;
++    if (++nodes > o_.repairNodes / 4) { truncated = true; return false; }
++    if ((nodes & 63) == 0 && Clock::now() >= repairDeadline_) { truncated = true; return false; }
++    const Gene& g = st_.gene(cls);
++    if (g.slotCount == 0) return false;
++    // A few placements for this link, best-first by the same probe the construction uses.
++    std::vector<std::pair<double, std::pair<int, int>>> options;
++    const int* slots = p_.slotsOf(g);
++    const int startSlot = rng_.belowI(g.slotCount);
++    const int ejectLimit = std::min(g.slotCount, o_.repairScanSlots);
++    for (int q = 0; q < ejectLimit && static_cast<int>(options.size()) < o_.repairBranch * 3; ++q) {
++      if ((q & 31) == 0 && Clock::now() >= repairDeadline_) { truncated = true; return false; }
++      const int s = slots[(startSlot + q) % g.slotCount];
++      if (slotParity(s) != g.parity) continue;
++      const int d = slotDay(s), ti = slotTime(s);
++      if (d == g.day && ti == g.timeIdx) continue;
++      const Mask mask = p_.maskAt(ti, g.durSlot);
++      const int people = st_.peopleClashesAt(cls, d, mask, g.parity);
++      if (people > 1) continue;   // one class in the way is an ejection; two is a mess
++      const double win = st_.windowCostOfAdding(cls, d, g.parity, mask);
++      int room = -1;
++      const int* rooms = p_.roomsOf(g);
++      const int limit = std::min(g.roomCount, o_.repairScanRooms);
++      const int rs = rng_.belowI(std::max(1, g.roomCount));
++      for (int r = 0; r < limit; ++r) {
++        const int cand = rooms[(rs + r) % g.roomCount];
++        if (!st_.placementAllowed(cls, d, ti, g.parity, cand)) continue;
++        if (st_.roomClashesAt(cls, d, mask, g.parity, cand) != 0) continue;
++        room = cand;
++        break;
++      }
++      if (room < 0 && g.roomCount > 0 && p_.roomsOf(g)[0] >= 0) continue;
++      options.emplace_back(win + people * 1000.0, std::make_pair(s, room));
++    }
++    std::sort(options.begin(), options.end(),
++              [](const auto& a, const auto& b) { return a.first < b.first; });
++    const int tries = std::min<int>(o_.repairBranch, static_cast<int>(options.size()));
++    for (int t = 0; t < tries; ++t) {
++      const int s = options[static_cast<size_t>(t)].second.first;
++      const int room = options[static_cast<size_t>(t)].second.second;
++      const int d = slotDay(s), ti = slotTime(s);
++      const Mask mask = p_.maskAt(ti, st_.gene(cls).durSlot);
++      const size_t mark = jr_.size();
++      // Whoever is in the way is the next link.
++      const int victim = st_.occupantOf(cls, d, mask, st_.gene(cls).parity, room);
++      int peopleVictim = -1;
++      if (victim < 0) {
++        // A people clash rather than a room clash: find the class it is with.
++        const Gene& gc = st_.gene(cls);
++        for (int kk = 0; kk < gc.lecCount && peopleVictim < 0; ++kk) {
++          for (int32_t z : st_.lecBucket(p_.lecPool[static_cast<size_t>(gc.lecFrom + kk)], d)) {
++            const Gene& gz = st_.gene(z);
++            if (z != cls && gz.movable && weeksOverlap(gc.parity, gz.parity) && mask.intersects(gz.mask)) {
++              peopleVictim = z;
++              break;
++            }
++          }
++        }
++        for (int kk = 0; kk < gc.grpCount && peopleVictim < 0; ++kk) {
++          for (int32_t z : st_.grpBucket(p_.grpPool[static_cast<size_t>(gc.grpFrom + kk)], d)) {
++            const Gene& gz = st_.gene(z);
++            if (z != cls && gz.movable && weeksOverlap(gc.parity, gz.parity) && mask.intersects(gz.mask)) {
++              peopleVictim = z;
++              break;
++            }
++          }
++        }
++      }
++      moveTo(cls, d, ti, st_.gene(cls).parity, room);
++      settle();
++      if (std::find(inChain.begin(), inChain.end(), cls) == inChain.end()) inChain.push_back(cls);
++      const int next = victim >= 0 ? victim : peopleVictim;
++      bool ok = false;
++      // The set-valued rule again (§1.3): every class the chain has moved has to be legal against
++      // the state the *whole* chain leaves behind, and the chain is `inChain` — the defect's own
++      // bucket members are not the set that moved.
++      if (cost() < before - 1e-9 && allLegal(inChain) && st_.gene(cls).day >= 0) {
++        ok = true;
++      } else if (next >= 0 && std::find(inChain.begin(), inChain.end(), next) == inChain.end()) {
++        inChain.push_back(next);
++        ok = descend(next, depth + 1);
++        if (!ok) inChain.pop_back();
++      }
++      if (ok) return true;
++      // Backtrack this link.
++      while (jr_.size() > mark) {
++        st_.placeRaw(jr_.back().first, jr_.back().second);
++        jr_.pop_back();
++      }
++      st_.flush();
++      if (truncated) return false;
++    }
++    return false;
++  };
++
++  beginCandidate();
++  bool improved = false;
++  const int roots = std::min<int>(3, static_cast<int>(members_.size()));
++  for (int r = 0; r < roots && !improved && !truncated; ++r) {
++    inChain.clear();
++    inChain.push_back(members_[static_cast<size_t>(r)]);
++    improved = descend(members_[static_cast<size_t>(r)], 1);
++  }
++  if (improved && cost() < before - 1e-9) { jr_.clear(); return 1; }
++  undo();
++  return truncated ? -1 : 0;
++}
++
++/// Force the defect out, then pay for the damage.
++///
++/// The diagnostic that produced this operator is worth stating, because it is the sharpest thing
++/// the campaign found. Once the hard repair was aimed at *actionable* defects, its exact day-slice
++/// search explored up to forty-six thousand complete arrangements of six classes — including
++/// pulling a class in from another day — and returned `best == before` **exactly**, defect after
++/// defect. The incumbent is not stuck for want of search: it is a genuine strict local optimum.
++///
++/// The reason is the quadratic objective. Closing one lecturer window when there are twenty-six of
++/// them is worth β₇(26² − 25²) = 255; the rearrangement that closes it almost always opens a group
++/// window, and the first group window among twelve costs β₈(12² − 11²) = 460. Every single-defect
++/// repair is a trade that loses. The residual is an equilibrium, and no procedure that requires
++/// each step to improve can leave one.
++///
++/// So this one does not require it. It closes the вікно *unconditionally* — the compaction sweep,
++/// applied whatever it costs — and then spends a bounded descent repairing whatever that broke,
++/// with the search's own portfolio aimed by `focus_` at the classes the forced move disturbed.
++/// Only the pair is judged: if the timetable that comes out the other side is better than the one
++/// that went in, it is kept, and if not, nothing happened. It is the compound move — worse, then
++/// better — that a plateau-locked search cannot construct out of single steps.
++int Worker::forceCloseRepair(size_t bid) {
++  const double before = cost();
++  // An explicit snapshot, not the journal. Every operator opens its own candidate with
++  // `beginCandidate`, which *clears* the journal — so a compound move that spans several operator
++  // calls cannot be rolled back through it, and an earlier version of this routine silently left
++  // the forced move applied whenever the repair failed. A snapshot is a few hundred kilobytes and
++  // this runs a handful of times a second at most.
++  st_.snapshotInto(forceSnapshot_);
++  if (!opCompaction(bid)) { st_.restore(forceSnapshot_); return 0; }
++  jr_.clear();
++
++  // 2. Aim the descent at what the force disturbed: the classes it moved, and everything that
++  //    shares a lecturer or a group with them.
++  focus_.clear();
++  for (int i : p_.movable) {
++    const Spot& was = forceSnapshot_[static_cast<size_t>(i)];
++    const Gene& g = st_.gene(i);
++    if (g.day != was.day || g.timeIdx != was.timeIdx || g.room != was.room || g.parity != was.parity) {
++      focus_.push_back(i);
++    }
++  }
++  if (focus_.empty()) { st_.restore(forceSnapshot_); return 0; }
++  const size_t direct = focus_.size();
++  for (size_t q = 0; q < direct && focus_.size() < 512; ++q) {
++    const int m = focus_[q];
++    const Gene& g = st_.gene(m);
++    for (int kk = 0; kk < g.lecCount && focus_.size() < 512; ++kk) {
++      for (int d : p_.days) {
++        for (int32_t z : st_.lecBucket(p_.lecPool[static_cast<size_t>(g.lecFrom + kk)], d)) {
++          if (st_.gene(z).movable && focus_.size() < 512) focus_.push_back(z);
++        }
++      }
++    }
++    for (int kk = 0; kk < g.grpCount && focus_.size() < 512; ++kk) {
++      for (int d : p_.days) {
++        for (int32_t z : st_.grpBucket(p_.grpPool[static_cast<size_t>(g.grpFrom + kk)], d)) {
++          if (st_.gene(z).movable && focus_.size() < 512) focus_.push_back(z);
++        }
++      }
++    }
++  }
++  std::sort(focus_.begin(), focus_.end());
++  focus_.erase(std::unique(focus_.begin(), focus_.end()), focus_.end());
++
++  // 3. A bounded descent over the damage. Equal-cost moves are admitted deliberately: plateau drift
++  //    is most of what there is to do on a surface whose objective is a sum of squares of small
++  //    integers, and a descent that refuses it cannot cross from one arrangement to the next.
++  const double savedFocus = focusShare_;
++  focusShare_ = 0.85;
++  double cur = cost();
++  for (int m = 0; m < o_.repairDescent; ++m) {
++    if ((m & 127) == 0 && Clock::now() >= repairDeadline_) break;
++    const int op = pickOperator();
++    if (!applyOperator(op)) continue;
++    const double after = cost();
++    if (after <= cur + 1e-9) {
++      cur = after;
++      jr_.clear();
++    } else {
++      undo();
++    }
++  }
++  focusShare_ = savedFocus;
++  focus_.clear();
++
++  if (cost() < before - 1e-9) { jr_.clear(); return 1; }
++  st_.restore(forceSnapshot_);
++  jr_.clear();
++  return 0;
++}
++
++/// The defect coupled to this one: the bucket that the move repairing this one would disturb.
++///
++/// Two (entity, day) buckets are coupled when a class sits in both — a lecturer's Tuesday and the
++/// group's Tuesday that the same lecture serves. That is exactly the relation the endgame turns on:
++/// the rearrangement that closes the lecturer's вікно moves a class that the group also has, and the
++/// group's day pays for it. Coupling is therefore the right thing to search *jointly* over.
++size_t Worker::coupledDefect(size_t bidA) const {
++  st_.bucketMembers(bidA, const_cast<std::vector<int>&>(members_));
++  size_t best = State::kNoBucketId;
++  int bestScore = 0;
++  std::vector<size_t> bs;
++  std::vector<std::pair<size_t, int>> shared;   // candidate bucket -> classes in common with A
++  for (int m : members_) {
++    const Gene& g = st_.gene(m);
++    if (g.day < 0) continue;
++    st_.entityBuckets(m, g.day, bs);
++    for (size_t bid : bs) {
++      if (bid == bidA) continue;
++      bool seen = false;
++      for (auto& e : shared) {
++        if (e.first == bid) { ++e.second; seen = true; break; }
++      }
++      if (!seen) shared.emplace_back(bid, 1);
++    }
++  }
++  for (const auto& e : shared) {
++    if (st_.movableCountIn(e.first) < 2) continue;   // nothing there this run may move
++    // Coupling strength first, existing windows only as a tie-break. The partner worth searching
++    // jointly is the bucket that would *acquire* the вікно, not one that already has one: the whole
++    // reason the single-defect search refuses to close A is that the class it must move is one B
++    // also holds, and B's day is currently tidy. Requiring B to be damaged already excluded exactly
++    // the partner the mechanism exists for.
++    const int w = st_.windowsIn(e.first);
++    const int score = e.second * 10 + (st_.isGroupBucket(e.first) ? w * 4 : w);
++    if (score > bestScore) { bestScore = score; best = e.first; }
++  }
++  return best;
++}
++
++/// Solve two coupled defects **together**.
++///
++/// This is the mechanism the campaign's own diagnosis asked for and nothing else in the ladder
++/// provides. Every other subsolver repairs one defect and is judged on the total, so it meets the
++/// arithmetic of §3.2 head on: closing a lecturer window is worth β₇(26²−25²) = 255, the
++/// rearrangement that closes it opens a group window costing β₈(12²−11²) = 460, and the move is
++/// refused. The refusal is correct — that exchange really is a loss — but it is the *pair* that
++/// should have been searched, not the single defect: the arrangement in which the lecturer's вікно
++/// closes and the group's day closes up behind it costs nothing and is invisible to a search that
++/// can only see one of the two.
++///
++/// So the member set spans both buckets, both days, and both entities' pullers, and the exhaustive
++/// search prices the whole rearrangement at once. It is small — at most `jointK` classes — because
++/// the leaf count is the product of the branch factors, and it is bounded by a node budget so that
++/// it stays anytime.
++int Worker::jointSolve(size_t bidA, size_t bidB) {
++  const int dayA = State::bucketDay(bidA);
++  const int dayB = State::bucketDay(bidB);
++  const Mask holesA = st_.holesOf(bidA, 1) | st_.holesOf(bidA, 2);
++  const Mask holesB = st_.holesOf(bidB, 1) | st_.holesOf(bidB, 2);
++  const int holeMinuteA = holesA.empty() ? -1 : p_.ticks[static_cast<size_t>(holesA.lowest())];
++  const int holeMinuteB = holesB.empty() ? -1 : p_.ticks[static_cast<size_t>(holesB.lowest())];
++
++  // Members: the classes nearest each hole, from both buckets, plus one puller apiece.
++  jointMembers_.clear();
++  const auto take = [&](size_t bid, int day, int holeMinute, int want) {
++    st_.bucketMembers(bid, scratch_);
++    std::stable_sort(scratch_.begin(), scratch_.end(), [this, holeMinute](int a, int b) {
++      if (holeMinute < 0) return false;
++      return std::abs(st_.gene(a).start - holeMinute) < std::abs(st_.gene(b).start - holeMinute);
++    });
++    int added = 0;
++    for (int m : scratch_) {
++      if (added >= want) break;
++      if (st_.gene(m).day < 0) continue;
++      if (std::find(jointMembers_.begin(), jointMembers_.end(), m) != jointMembers_.end()) continue;
++      jointMembers_.push_back(m);
++      ++added;
++    }
++    // One class of this entity from another day that can reach the hole: the вікно that closes by
++    // something arriving, rather than by the day closing up.
++    if (holeMinute < 0 || static_cast<int>(jointMembers_.size()) >= o_.jointK) return;
++    st_.entityElsewhere(bid, scratch_);
++    for (int cand : scratch_) {
++      if (std::find(jointMembers_.begin(), jointMembers_.end(), cand) != jointMembers_.end()) continue;
++      const Gene& gc = st_.gene(cand);
++      const int* cs = p_.slotsOf(gc);
++      for (int z = 0; z < gc.slotCount; ++z) {
++        const int sl = cs[z];
++        if (slotDay(sl) != day || slotParity(sl) != gc.parity) continue;
++        if (p_.times[static_cast<size_t>(slotTime(sl))].startMinutes != holeMinute) continue;
++        jointMembers_.push_back(cand);
++        return;
++      }
++    }
++  };
++  take(bidA, dayA, holeMinuteA, (o_.jointK + 1) / 2);
++  take(bidB, dayB, holeMinuteB, o_.jointK - static_cast<int>(jointMembers_.size()));
++  if (jointMembers_.size() < 3) return 0;
++  const int k = static_cast<int>(jointMembers_.size());
++
++  std::vector<Spot> original(static_cast<size_t>(k));
++  for (int m = 0; m < k; ++m) original[static_cast<size_t>(m)] = st_.spotOf(jointMembers_[static_cast<size_t>(m)]);
++  const double before = cost();
++
++  beginCandidate();
++  for (int m = 0; m < k; ++m) {
++    moveTo(jointMembers_[static_cast<size_t>(m)], -1, -1,
++           st_.gene(jointMembers_[static_cast<size_t>(m)]).parity, -1);
++  }
++  settle();
++
++  const int B = std::max(2, o_.repairBranch);
++  std::vector<std::vector<std::pair<int, int>>> cands(static_cast<size_t>(k));
++  for (int m = 0; m < k; ++m) {
++    const int i = jointMembers_[static_cast<size_t>(m)];
++    const Gene& g = st_.gene(i);
++    std::vector<std::pair<double, std::pair<int, int>>> scored;
++    const int* slots = p_.slotsOf(g);
++    const int scanLimit = std::min(g.slotCount, o_.repairScanSlots);
++    const int scanFrom = rng_.belowI(std::max(1, g.slotCount));
++    for (int qq = 0; qq < scanLimit; ++qq) {
++      if ((qq & 31) == 0 && Clock::now() >= repairDeadline_) { undo(); return -1; }
++      const int sl = slots[(scanFrom + qq) % g.slotCount];
++      if (slotParity(sl) != g.parity) continue;
++      const int d = slotDay(sl), ti = slotTime(sl);
++      const Mask mask = p_.maskAt(ti, g.durSlot);
++      if (st_.peopleClashesAt(i, d, mask, g.parity) != 0) continue;
++      const double win = st_.windowCostOfAdding(i, d, g.parity, mask);
++      int room = -1;
++      double roomPenalty = kImpossible;
++      const int* rooms = p_.roomsOf(g);
++      const int limit = std::min(g.roomCount, o_.repairScanRooms);
++      const int start = rng_.belowI(std::max(1, g.roomCount));
++      for (int r = 0; r < limit; ++r) {
++        const int cand = rooms[(start + r) % g.roomCount];
++        if (!st_.placementAllowed(i, d, ti, g.parity, cand)) continue;
++        const double rc = static_cast<double>(st_.roomClashesAt(i, d, mask, g.parity, cand)) * kClashBig;
++        if (rc < roomPenalty) { roomPenalty = rc; room = cand; }
++        if (rc <= 0) break;
++      }
++      if (roomPenalty >= kClashBig) continue;
++      // A placement that lands exactly on one of the two holes is what the joint search is for, so
++      // it is preferred into the candidate list rather than left to compete on the probe alone.
++      const int startMin = p_.times[static_cast<size_t>(ti)].startMinutes;
++      const bool fillsHole = (d == dayA && startMin == holeMinuteA) || (d == dayB && startMin == holeMinuteB);
++      scored.emplace_back(win + roomPenalty - (fillsHole ? 1e6 : 0.0), std::make_pair(sl, room));
++    }
++    if (scored.empty()) { undo(); return 0; }
++    std::sort(scored.begin(), scored.end(),
++              [](const auto& a, const auto& b) { return a.first < b.first; });
++    const Spot& was = original[static_cast<size_t>(m)];
++    const int cur = packSlot(was.day, was.timeIdx, was.parity);
++    auto& list = cands[static_cast<size_t>(m)];
++    list.emplace_back(cur, was.room);
++    for (const auto& sc : scored) {
++      if (static_cast<int>(list.size()) >= B) break;
++      if (sc.second.first == cur && sc.second.second == was.room) continue;
++      list.push_back(sc.second);
++    }
++  }
++
++  std::vector<int> order(static_cast<size_t>(k));
++  for (int m = 0; m < k; ++m) order[static_cast<size_t>(m)] = m;
++  std::stable_sort(order.begin(), order.end(), [&cands](int a, int b) {
++    return cands[static_cast<size_t>(a)].size() < cands[static_cast<size_t>(b)].size();
++  });
++
++  double best = before;
++  std::vector<std::pair<int, int>> bestPick(static_cast<size_t>(k)), pick(static_cast<size_t>(k));
++  bool found = false, truncated = false;
++  int64_t nodes = 0;
++  const std::function<void(int)> dfs = [&](int depth) {
++    if (truncated) return;
++    if (++nodes > o_.repairNodes) { truncated = true; return; }
++    if ((nodes & 255) == 0 && Clock::now() >= repairDeadline_) { truncated = true; return; }
++    if (depth == k) {
++      for (int m = 0; m < k; ++m) {
++        const auto& c = pick[static_cast<size_t>(m)];
++        st_.placeRaw(jointMembers_[static_cast<size_t>(m)], slotDay(c.first), slotTime(c.first),
++                     slotParity(c.first), c.second);
++      }
++      st_.flush();
++      bool legal = true;
++      for (int m = 0; m < k && legal; ++m) {
++        const int i = jointMembers_[static_cast<size_t>(m)];
++        const Gene& g = st_.gene(i);
++        legal = g.day >= 0 && st_.placementAllowed(i, g.day, g.timeIdx, g.parity, g.room);
++      }
++      if (legal) {
++        const double c = cost();
++        if (c < best - 1e-9) { best = c; bestPick = pick; found = true; }
++      }
++      for (int m = 0; m < k; ++m) {
++        st_.placeRaw(jointMembers_[static_cast<size_t>(m)], -1, -1,
++                     st_.gene(jointMembers_[static_cast<size_t>(m)]).parity, -1);
++      }
++      st_.flush();
++      return;
++    }
++    const int m = order[static_cast<size_t>(depth)];
++    for (const auto& c : cands[static_cast<size_t>(m)]) {
++      pick[static_cast<size_t>(m)] = c;
++      dfs(depth + 1);
++      if (truncated) return;
++    }
++  };
++  dfs(0);
++
++  if (!found) { undo(); return truncated ? -1 : 0; }
++  for (int m = 0; m < k; ++m) {
++    const auto& c = bestPick[static_cast<size_t>(m)];
++    moveTo(jointMembers_[static_cast<size_t>(m)], slotDay(c.first), slotTime(c.first),
++           slotParity(c.first), c.second);
++  }
++  settle();
++  if (!allLegal(jointMembers_)) { undo(); return truncated ? -1 : 0; }
++  if (cost() >= before - 1e-9) { undo(); return truncated ? -1 : 0; }
++  jr_.clear();
++  return 1;
++}
++
++int Worker::hardRepair() {
++  if (!haveBest_ || p_.movable.empty()) return kRepairUnproven;
++  ++rep_.hardRepairs;
++  repairDeadline_ = std::min(sh_.deadline, Clock::now() + std::chrono::milliseconds(o_.repairBudgetMs));
++  anchoredRepair_ = true;
++  struct AnchorGuard { bool* f; ~AnchorGuard() { *f = false; } } guard{&anchoredRepair_};
++
++  // Always from the incumbent: a repair anchored to the working state repairs a timetable nobody
++  // is going to keep. This is the same lesson as `kickFromBest` and it is worth restating, because
++  // it is the single change that unfroze the tail in the first place (STUDY.md §6a).
++  st_.restore(bestSpots_);
++  refreshLists();
++
++  // The defects, worst first — the buckets the objective is actually charging for.
++  std::vector<size_t> defects;
++  if (st_.hard() > 0 && o_.useSurge) {
++    // Feasibility surge: the defects are the conflicts, not the windows.
++    st_.conflictBuckets(defects, static_cast<size_t>(o_.repairDefects) * 3);
++  } else {
++    // The hard repair always wants *actionable* defects, whatever the rest of the search is
++    // configured to do: certifying a bucket whose gap is held open by classes this run may not move
++    // is a true statement about a fact nobody can change, and spending the ledger on it makes the
++    // basin look exhausted when it is not.
++    st_.worstWindowBuckets(scratchBuckets_, static_cast<size_t>(o_.repairDefects) * 3, true);
++    defects = scratchBuckets_;
++  }
++  if (defects.empty()) return kRepairUnproven;
++
++  int examined = 0, certified = 0;
++  bool improvedAny = false;
++  bool anyTruncated = false;
++  for (size_t bid : defects) {
++    if (examined >= o_.repairDefects) break;
++    if (Clock::now() >= repairDeadline_) { anyTruncated = true; break; }
++    if (ledgerHas(bid)) continue;   // already proved: do not grind the same "no" for twenty minutes
++    ++examined;
++
++    bool improved = false;
++    bool complete = true;
++    if (o_.repairVerbose) {
++      st_.bucketMembers(bid, scratch_);
++      const Mask h1 = st_.holesOf(bid, 1), h2 = st_.holesOf(bid, 2);
++      std::fprintf(stderr, "[defect bid=%zu day=%d members=%zu holes=%d/%d cost=%.0f soft=%lld]\n",
++                   bid, State::bucketDay(bid), scratch_.size(), h1.popcount(), h2.popcount(),
++                   cost(),
++                   static_cast<long long>((st_.counters().lecWinHalves + st_.counters().grpWinHalves) / 2));
++    }
++    // The ladder, cheapest decisive first. Each runs under strict descent on the true acceptance
++    // cost and leaves no trace when it fails.
++    {
++      const double before = cost();
++      if (o_.useRematch) {
++        ++rep_.repairTried[0];
++        if (tryStrict(opRematch(), before)) { improved = true; ++rep_.repairWon[0]; }
++      }
++    }
++    if (!improved && Clock::now() < repairDeadline_) {
++      ++rep_.repairTried[1];
++      const double dsBefore = cost();
++      const int r = daySolveExact(bid);
++      if (o_.repairVerbose) {
++        std::fprintf(stderr, "   daySolve -> %d  cost %.0f -> %.0f\n", r, dsBefore, cost());
++      }
++      if (r == 1) { improved = true; ++rep_.repairWon[1]; }
++      else if (r < 0) { complete = false; ++rep_.repairCut[1]; }
++    }
++    if (!improved && Clock::now() < repairDeadline_) {
++      const double before = cost();
++      st_.bucketMembers(bid, victims_);
++      if (victims_.size() >= 3) {
++        // The widest permutation the operator can do, aimed straight at this bucket.
++        members_ = victims_;
++        if (static_cast<int>(members_.size()) > o_.koptK) members_.resize(static_cast<size_t>(o_.koptK));
++        ++rep_.repairTried[2];
++        if (tryStrict(permute(members_), before)) { improved = true; ++rep_.repairWon[2]; }
++      }
++    }
++    if (!improved && o_.useJointRepair && Clock::now() < repairDeadline_) {
++      const size_t bidB = coupledDefect(bid);
++      if (bidB != State::kNoBucketId) {
++        ++rep_.repairTried[6];
++        const double jBefore = cost();
++        const int r = jointSolve(bid, bidB);
++        if (r == 1) { improved = true; ++rep_.repairWon[6]; }
++        else if (r < 0) { complete = false; ++rep_.repairCut[6]; }
++        if (o_.repairVerbose) {
++          std::fprintf(stderr, "   joint(%zu,%zu) -> %d  cost %.0f -> %.0f\n", bid, bidB, r, jBefore,
++                       cost());
++        }
++      }
++    }
++    if (!improved && Clock::now() < repairDeadline_) {
++      const double before = cost();
++      ++rep_.repairTried[3];
++      if (tryStrict(opCompaction(bid), before)) { improved = true; ++rep_.repairWon[3]; }
++    }
++    // The compound move: everything above requires its own step to pay, and on a plateau that is an
++    // equilibrium no single step does. This one is allowed to make the timetable worse and then
++    // repair it, and only the pair is judged.
++    if (!improved && o_.useForceClose && Clock::now() < repairDeadline_) {
++      ++rep_.repairTried[5];
++      const double fcBefore = cost();
++      if (forceCloseRepair(bid) == 1) { improved = true; ++rep_.repairWon[5]; }
++      if (o_.repairVerbose) {
++        std::fprintf(stderr, "   forceClose -> %d  cost %.0f -> %.0f\n", improved ? 1 : 0, fcBefore,
++                     cost());
++      }
++    }
++    if (!improved && Clock::now() < repairDeadline_) {
++      ++rep_.repairTried[4];
++      const double ejBefore = cost();
++      const int r = ejectSearch(bid);
++      if (o_.repairVerbose) std::fprintf(stderr, "   eject -> %d  cost %.0f -> %.0f\n", r, ejBefore, cost());
++      if (r == 1) { improved = true; ++rep_.repairWon[4]; }
++      else if (r < 0) { complete = false; ++rep_.repairCut[4]; }
++    }
++
++    if (!improved && Clock::now() >= repairDeadline_) complete = false;
++    if (improved) {
++      improvedAny = true;
++      ++rep_.defectsCleared;
++      if (noteIncumbent()) sinceBest_ = 0;
++      // The complement is no longer what the certificates were relative to.
++      ledger_.clear();
++      break;
++    }
++    if (complete) {
++      ledger_.push_back(bid);
++      ++certified;
++      ++rep_.defectsCertified;
++      // Certified irreducible under the true objective is exactly the condition the flattened one
++      // is for: there is no improving step, so give the walk a stretch in which the exchange that
++      // would close this вікно is not a losing trade, and let f(σ) judge what comes back.
++      if (o_.useFlatPhase && flatUntil_ <= moves_) {
++        flatUntil_ = moves_ + o_.flatMoves;
++        ++rep_.flatPhases;
++      }
++
++      if (static_cast<int>(ledger_.size()) > 64) ledger_.erase(ledger_.begin());
++    } else {
++      anyTruncated = true;
++    }
++  }
++
++  acceptedCost_ = cost();
++  std::fill(history_.begin(), history_.end(), acceptedCost_);
++  dlasMax_ = acceptedCost_;
++  if (improvedAny) { sinceBest_ = 0; return kRepairResumed; }
++
++  // Exhausted only if every defect the enumeration could see has been certified, and nothing was
++  // cut short. "Locally irreducible" is all this claims — irreducible within the neighbourhood cap
++  // and the subsolver family — and that is exactly enough for what it is used for.
++  if (!anyTruncated && examined > 0 && certified == examined) {
++    bool all = true;
++    for (size_t bid : defects) {
++      if (!ledgerHas(bid)) { all = false; break; }
++    }
++    if (all) return kRepairExhausted;
++  }
++  return kRepairUnproven;
++}
++
++/// Take the most distant elite in the pool rather than the best one.
++///
++/// `adoptElite` converges the workers: it takes the shared best whenever that is meaningfully
++/// better, which is the right move while the search is still descending and the wrong one when it
++/// is stuck, because the shared best is usually a near-copy of what this worker already has. When
++/// a basin has been *certified* finished, what is wanted is elsewhere — the pool member furthest
++/// away — even at some cost in quality, since a fresh construction pays far more than that for the
++/// same diversity.
++bool Worker::adoptDistant() {
++  std::vector<Spot> take;
++  {
++    std::lock_guard<std::mutex> lk(sh_.mu);
++    if (sh_.pool.size() < 2) return false;
++    int bestIdx = -1;
++    int64_t bestDist = -1;
++    for (size_t i = 0; i < sh_.pool.size(); ++i) {
++      const auto& e = sh_.pool[i];
++      if (e.unplaced > bestUnplaced_) continue;
++      if (e.objective > bestObjective_ * 1.10 + 1.0) continue;   // not so much worse it undoes the run
++      const int64_t d = Shared::distance(e.spots, bestSpots_);
++      if (d > bestDist) { bestDist = d; bestIdx = static_cast<int>(i); }
++    }
++    const int64_t minDist =
++        std::max<int64_t>(4, static_cast<int64_t>(static_cast<double>(p_.movable.size()) * o_.poolMinDist));
++    if (bestIdx < 0 || bestDist < minDist) return false;
++    take = sh_.pool[static_cast<size_t>(bestIdx)].spots;
++  }
++  st_.restore(take);
++  acceptedCost_ = cost();
++  std::fill(history_.begin(), history_.end(), acceptedCost_);
++  dlasMax_ = acceptedCost_;
++  haveBest_ = false;
++  noteIncumbent();
++  sinceBest_ = 0;
++  ledger_.clear();
++  ++rep_.adoptions;
++  refreshLists();
++  return true;
++}
++
++/// The basin is finished, and this time that is a conclusion rather than a timeout.
++void Worker::onBasinExhausted() {
++  ++rep_.basinSwitches;
++  int policy = o_.switchPolicy;
++  if (policy == 3) {
++    // ε-greedy between "steer the next construction away" and "go and stand somewhere else".
++    if (switchUses_[1] < 2) policy = 1;
++    else if (switchUses_[2] < 2) policy = 2;
++    else if (rng_.chance(0.2)) policy = 1 + rng_.belowI(2);
++    else policy = (switchGain_[1] / std::max(1, switchUses_[1]) <=
++                   switchGain_[2] / std::max(1, switchUses_[2])) ? 1 : 2;
++    if (o_.switchPolicy == 3 && !ledger_.empty() && rng_.chance(0.34)) policy = 4;
++  }
++  lastSwitchPolicy_ = policy;
++  if (policy >= 1) ++switchUses_[policy];
++
++  // Policy 4 is the middle path the certificate makes possible: rebuild only the region that was
++  // proved stuck, and keep the rest of the timetable. Falls back to the biased restart when the
++  // region is too small to be worth it.
++  if (policy == 4) {
++    if (rebuildRegion()) return;
++    policy = 1;
++  }
++  if (policy == 2 && adoptDistant()) return;
++
++  // A biased restart: remember what the certified defects were sitting on, so the construction that
++  // follows does not walk straight back into them. Nothing is forbidden — the penalty is a
++  // preference inside `scanBest`, and a class with nowhere else to go still goes there.
++  if (policy == 1) {
++    antiOn_.assign(st_.genes().size(), 0);
++    antiSpots_.assign(st_.genes().size(), Spot{});
++    for (size_t bid : ledger_) {
++      st_.bucketMembers(bid, scratch_);
++      for (int m : scratch_) {
++        antiOn_[static_cast<size_t>(m)] = 1;
++        antiSpots_[static_cast<size_t>(m)] = bestSpots_.empty() ? st_.spotOf(m)
++                                                               : bestSpots_[static_cast<size_t>(m)];
++      }
++    }
++    antiActive_ = true;
++  }
++  restartFresh();
++  antiActive_ = false;
++}
++
+ void Worker::perturb() {
+   if (p_.movable.empty()) return;
+   ++rep_.perturbations;
+@@ -1429,13 +3004,32 @@ void Worker::perturb() {
+ /// different day, whereas the same number of unrelated classes is repaired back to almost exactly
+ /// where they were and costs the climb for nothing.
+ int Worker::kick(int size) {
++  anchoredRepair_ = true;
++  struct AnchorGuard { bool* f; ~AnchorGuard() { *f = false; } } guard{&anchoredRepair_};
+   static const int kSelectors[4] = {kRuinRelated, kRuinEntityDay, kRuinWorstWindow, kRuinCluster};
+   int taken = 0;
+   // A large kick is assembled from several small related sets rather than one enormous one: one
+   // cluster of three hundred classes is most of a faculty, and recreating it greedily is a
+   // reconstruction, not a kick.
+   for (int round = 0; taken < size && round < 12; ++round) {
+-    const int sel = kSelectors[rng_.belowI(4)];
++    // Weighted by what the residual actually is, rather than uniform. While hard violations remain
++    // the useful sets are the related and the cluster ones — a conflict is repaired by rearranging
++    // the people it involves; once the residual is windows, the gappy buckets are the only place
++    // an improvement can come from, and drawing anywhere else is a kick spent on a part of the
++    // timetable that is already right.
++    int sel;
++    if (o_.kickWeighted) {
++      static const double kHardW[4] = {3.0, 1.0, 0.5, 2.0};   // related, entityDay, worstWindow, cluster
++      static const double kSoftW[4] = {1.5, 1.5, 3.0, 1.0};
++      const double* w = st_.hard() > 0 ? kHardW : kSoftW;
++      double total = w[0] + w[1] + w[2] + w[3];
++      double pick = rng_.unit() * total;
++      int idx = 3;
++      for (int q = 0; q < 4; ++q) { pick -= w[q]; if (pick <= 0) { idx = q; break; } }
++      sel = kSelectors[idx];
++    } else {
++      sel = kSelectors[rng_.belowI(4)];
++    }
+     selectVictims(sel, std::min(size - taken, o_.lnsMax), victims_);
+     if (victims_.size() < 2) continue;
+     beginCandidate();
+@@ -1657,6 +3251,8 @@ void Worker::ilsLoop() {
+ /// together they are not. Both are repaired the same way — lift the offenders and let the greedy
+ /// insertion put them somewhere the combined timetable allows.
+ bool Worker::repairAfterGraft(const std::vector<int>& grafted) {
++  anchoredRepair_ = true;
++  struct AnchorGuard { bool* f; ~AnchorGuard() { *f = false; } } guard{&anchoredRepair_};
+   for (int round = 0; round < 4; ++round) {
+     victims_.clear();
+     for (int i : grafted) {
+@@ -1789,6 +3385,19 @@ void Worker::restartFresh() {
+     }
+   }
+   ++rep_.restarts;
++  // What this basin was worth, credited to whichever switch policy started it, and how long it took
++  // to ripen — the two series the adaptive restart and the ε-greedy switch read.
++  if (lastSwitchPolicy_ >= 0 && lastSwitchPolicy_ < 4 && haveBest_) {
++    switchGain_[lastSwitchPolicy_] += bestObjective_;
++  }
++  if (lastIncumbentMove_ > basinStartMove_) ripen_.push_back(lastIncumbentMove_ - basinStartMove_);
++  if (ripen_.size() > 32) ripen_.erase(ripen_.begin());
++  basinStartMove_ = moves_;
++  ++basinId_;
++  ledger_.clear();
++  failedMaxKicks_ = 0;
++  emptyDeepPhases_ = 0;
++  hardRepairBlockUntil_ = moves_ + o_.hardRepairAfter;
+   // Empty the movable part first. `construct()` skips a class that already has a placement when
+   // `keepExisting` is set — which is right at the start of such a run, where the placed classes are
+   // the ones being kept and are frozen anyway, and wrong here, where every movable class has a
+@@ -1803,7 +3412,7 @@ void Worker::restartFresh() {
+   adoptBlockUntil_ = moves_ + o_.restartAfter;
+   haveBest_ = false;
+   bestSpots_.clear();
+-  construct();
++  constructBest();
+   st_.rebuild();
+   acceptedCost_ = cost();
+   std::fill(history_.begin(), history_.end(), acceptedCost_);
+@@ -1888,7 +3497,7 @@ void Worker::publish(const char* phase) {
+ 
+ void Worker::run() {
+   rep_.worker = id_;
+-  construct();
++  constructBest();
+   if (p_.movable.empty()) {
+     // Nothing to place. The timetable it already has is the answer.
+     st_.rebuild();
+@@ -1901,6 +3510,14 @@ void Worker::run() {
+   }
+   st_.rebuild();
+ 
++  {
++    Weights& w = st_.mutableWeights();
++    w.softAlpha = o_.softAlpha;
++    if (o_.softEqualWeights) {
++      const double flat = (w.lecturerWindows + w.groupWindows + w.mixedOnlineDays) / 3.0;
++      w.lecturerWindows = w.groupWindows = w.mixedOnlineDays = flat;
++    }
++  }
+   const double s0 = st_.surrogate();
+   hardWeight_ = o_.hardWeight > 0 ? o_.hardWeight : std::max(1e6, s0 * 0.02);
+   t0_ = std::max(1.0, s0 * o_.saT0Factor);
+@@ -2022,6 +3639,15 @@ void Worker::run() {
+ 
+     if (listAge_ >= o_.hotRefresh) refreshLists();
+ 
++    // Leaving the flattened stretch: the acceptance bar describes a different objective, so it is
++    // refilled at the true one. The incumbent was never chosen on the flattened value.
++    if (flatUntil_ > 0 && moves_ == flatUntil_) {
++      acceptedCost_ = cost();
++      std::fill(history_.begin(), history_.end(), acceptedCost_);
++      dlasMax_ = acceptedCost_;
++      noteIncumbent();
++    }
++
+     if (sinceBest_ >= o_.deepEvery && sinceDeep >= o_.deepEvery) {
+       sinceDeep = 0;
+       // The walk's job is to reach a feasible timetable and polish it until it stops paying. From
+@@ -2029,8 +3655,54 @@ void Worker::run() {
+       // the same walk, and at an hour that is nearly the whole budget.
+       if (o_.useIls && bestHard_ == 0 && haveBest_ && moves_ - lastIncumbentMove_ >= o_.ilsAfter) { ilsLoop(); break; }
+       const bool paid = deepPhase();
++      if (paid) emptyDeepPhases_ = 0; else ++emptyDeepPhases_;
+       if (!paid && sinceBest_ >= o_.stagnationMoves) {
+-        if (o_.restartAfter > 0 && moves_ - lastIncumbentMove_ >= o_.restartAfter) restartFresh();
++        const int64_t stuck = moves_ - lastIncumbentMove_;
++
++        // ── the hard repair, between the kick and the restart ───────────────
++        // The kick is cheap and usually enough; the restart throws away a basin that may still hold
++        // an improvement no stochastic draw was ever going to find. This rung is what runs when the
++        // kick has demonstrably saturated and before the basin is given up — and it is the only one
++        // that can *conclude* anything.
++        // A stretch on the flattened objective needs the same evidence the hard repair does, and not
++        // the hard repair itself: repeated kicks that produced nothing mean the walk is sitting in
++        // the equilibrium the flattening exists to dissolve.
++        if (o_.useFlatPhase && !o_.useHardRepair && failedMaxKicks_ >= 2 && flatUntil_ <= moves_) {
++          flatUntil_ = moves_ + o_.flatMoves;
++          ++rep_.flatPhases;
++          acceptedCost_ = cost();
++          std::fill(history_.begin(), history_.end(), acceptedCost_);
++          dlasMax_ = acceptedCost_;
++        }
++        bool handled = false;
++        if (o_.useHardRepair && stuck >= o_.hardRepairAfter &&
++            failedMaxKicks_ >= o_.hardRepairKicks && emptyDeepPhases_ >= 2 &&
++            moves_ >= hardRepairBlockUntil_) {
++          const int r = hardRepair();
++          hardRepairBlockUntil_ = moves_ + o_.hardRepairAfter / 2;
++          if (r == kRepairResumed) {
++            handled = true;
++          } else if (r == kRepairExhausted) {
++            onBasinExhausted();
++            handled = true;
++          }
++        }
++
++        // The fresh restart's threshold: one fixed move count by default, or the observed ripening
++        // time of this worker's past basins when `restartAdaptive` is on. The floor keeps a short
++        // budget behaving exactly as it does today.
++        int64_t restartAt = o_.restartAfter;
++        if (o_.restartAdaptive && ripen_.size() >= 3) {
++          std::vector<int64_t> r = ripen_;
++          std::sort(r.begin(), r.end());
++          const int64_t medianRipen = r[r.size() / 2];
++          restartAt = std::clamp<int64_t>(
++              static_cast<int64_t>(static_cast<double>(medianRipen) * o_.ripenFactor),
++              o_.restartAfter / 2, o_.restartAfter * 3);
++        }
++
++        if (handled) { /* the hard repair dealt with it */ }
++        else if (o_.restartAfter > 0 && stuck >= restartAt) restartFresh();
+         else if (o_.useRecombine && rng_.chance(o_.recombineRate) && recombine()) { sinceAdopt = 0; }
+         else if (o_.cooperate && sinceAdopt > o_.stagnationMoves) { adoptElite(); sinceAdopt = 0; }
+         else if (o_.restartFromBest) {
+@@ -2039,6 +3711,11 @@ void Worker::run() {
+           // radius; a cycle that produced nothing means look further out.
+           kickSize_ = gainSinceKick_ ? o_.kickMin
+                                      : std::min(o_.kickMax, kickSize_ + kickSize_ / 2 + o_.kickMin);
++          // Consecutive kicks that produced nothing are the evidence the hard repair waits for:
++          // the stochastic escape is saturated rather than merely unlucky. (Counting only kicks at
++          // *full* strength was the first rule and it never fired: the strength ladder needs seven
++          // straight failures to reach `kickMax`, and any incumbent along the way resets it.)
++          if (!gainSinceKick_) ++failedMaxKicks_;
+           kickFromBest();
+         } else {
+           perturb();
+@@ -2169,6 +3846,27 @@ Json SearchResult::summary() const {
+     j.set("recombinations", Json{static_cast<long long>(w.recombinations)});
+     j.set("restarts", Json{static_cast<long long>(w.restarts)});
+     j.set("adoptions", Json{static_cast<long long>(w.adoptions)});
++    j.set("hardRepairs", Json{static_cast<long long>(w.hardRepairs)});
++    j.set("defectsCleared", Json{static_cast<long long>(w.defectsCleared)});
++    j.set("defectsCertified", Json{static_cast<long long>(w.defectsCertified)});
++    j.set("basinSwitches", Json{static_cast<long long>(w.basinSwitches)});
++    j.set("regionRebuilds", Json{static_cast<long long>(w.regionRebuilds)});
++    j.set("flatPhases", Json{static_cast<long long>(w.flatPhases)});
++    j.set("regionClasses", Json{static_cast<long long>(w.regionClasses)});
++    {
++      static const char* kSub[7] = {"rematch", "daySolve", "permute", "compaction", "eject",
++                                    "forceClose", "joint"};
++      Json rs = Json::array({});
++      for (int q = 0; q < 7; ++q) {
++        Json e = Json::object();
++        e.set("name", Json{std::string(kSub[q])});
++        e.set("tried", Json{static_cast<long long>(w.repairTried[q])});
++        e.set("won", Json{static_cast<long long>(w.repairWon[q])});
++        e.set("cut", Json{static_cast<long long>(w.repairCut[q])});
++        rs.push(std::move(e));
++      }
++      j.set("repairSubsolvers", std::move(rs));
++    }
+     Json ops = Json::array({});
+     for (const auto& op : w.operators) {
+       Json jo = Json::object();
+diff --git a/src/core/search.hpp b/src/core/search.hpp
+index 68761db..e1128ce 100644
+--- a/src/core/search.hpp
++++ b/src/core/search.hpp
+@@ -92,6 +92,151 @@ struct SearchOptions {
+   int lnsMin = 6;
+   int lnsMax = 40;
+ 
++  // ── campaign mechanisms (OPTIMIZATION-IDEAS.md) ───────────────────────────
++  /// The order `recreate` puts the victims back in. Every large neighbourhood repairs through that
++  /// one routine, so this is the highest-leverage single knob in the search.
++  ///
++  ///   0  random   — the shipped behaviour: a shuffle, then greedy insertion.
++  ///   1  tight    — most-constrained-first (|S(c)|·|R(c)| ascending, shuffled then stably sorted,
++  ///                 exactly the construction's key). Costs nothing at all: the counts are static.
++  ///   2  regret   — regret-2: place first whichever class would lose the most by waiting, the gap
++  ///                 between its best remaining placement and its runner-up. Ropke and Pisinger's
++  ///                 upgrade to greedy insertion. Expensive here, because the runner-up has to be
++  ///                 tracked through `scanBest`, which weakens its prune.
++  int repairOrder = 0;
++  /// Apply `repairOrder` only where the repair is anchored to the incumbent — the kick, the deep
++  /// phase, the graft repair — and leave the bandit's own `ruin`/`repack` on the shipped random
++  /// greedy. The point is throughput: those two take tens of thousands of draws a second and pay
++  /// for a better repair with candidates, while a kick happens a few hundred times in a whole run
++  /// and is where the quality of the repair actually decides something.
++  bool repairAnchoredOnly = false;
++  /// Multiplicative jitter on the regret value (not on the placement score): the shipped operator's
++  /// diversification is its random insertion order, and a deterministic order would remove it.
++  double regretNoise = 0.10;
++  /// Draw the kick's victim selector by what the incumbent's residual actually is, rather than
++  /// uniformly from the four.
++  bool kickWeighted = false;
++  /// Restrict the worst-window bucket list to buckets that hold at least two movable classes.
++  ///
++  /// A вікно is a gap *between* two classes. A bucket holding one movable class has its gap held
++  /// open by classes this run may not move — the fixed entries of the faculties it is scheduling
++  /// around — so no draw aimed at it can close anything, however the operator behaves. Diagnosing
++  /// the hard repair found the list to be dominated by exactly those buckets: they are the entities
++  /// nothing has managed to tidy, which is precisely why they rise to the top of a list sorted by
++  /// window count. Every mechanism that reads the list is affected — the `worstWindow` ruin
++  /// selector, the permutation's member draw, the kick, and the hard repair's defect enumeration.
++  bool actionableWindows = false;
++  /// Parity moves in the deep phase: flip one biweekly class between numerator and denominator, or
++  /// exchange the parities of two. Π₇/Π₈ are averaged over the two weeks, so a half-window often
++  /// survives only because a biweekly class sits in the wrong one.
++  bool useParityMoves = false;
++  /// The compaction sweep in the deep phase: take one (entity, day, week) that has a вікно and
++  /// left-shift the whole tail after the hole as ONE candidate. A gap is closed by moving the block
++  /// on one side of it across; single-class moves have to cross a worse-before-better valley to do
++  /// the same thing, which is why `winfix` failed as a bandit member.
++  bool useCompaction = false;
++  /// Exact room re-matching in the deep phase: one (day, time, parity) instant, every movable class
++  /// at it, re-assigned over the rooms they hold plus free eligible ones by linear assignment.
++  bool useRematch = false;
++  /// Most classes admitted to one re-matching instant.
++  int rematchCap = 24;
++
++  // ── the hard repair, and what to do when it says the basin is finished ─────
++  // STAGNATION-ESCAPE.md. The ordinary escape ladder is entirely stochastic: a kick breaks a
++  // related set and hopes the greedy repair lands elsewhere, a deep phase draws clusters and hopes
++  // the permutation finds the exchange. When the residual is eight windows among twelve thousand
++  // classes, the same few buckets are re-sampled for minutes on end, nothing ever *concludes* that
++  // a window cannot be closed, and the only exit is a restart timer. This is the missing rung: a
++  // procedure that is exhaustive within a bounded neighbourhood of one defect, slow per attempt and
++  // allowed to be, because it runs only when the cheap attempts are provably not paying.
++  bool useHardRepair = false;
++  /// The feasibility surge: the same machinery aimed at hard violations instead of windows.
++  bool useSurge = false;
++  /// The compound move: close the вікно unconditionally, then spend `repairDescent` candidates
++  /// repairing what that broke, and keep the pair only if the timetable improved overall. The one
++  /// procedure in the ladder that does not require its own first step to pay.
++  /// Search two *coupled* defects at once — the lecturer's day and the group's day that the same
++  /// class sits in. The campaign's diagnosis (CAMPAIGN-LOG.md §3.2) says the endgame is locked
++  /// because the move that closes one вікно opens another and is correctly refused; the pair is what
++  /// should have been searched. This is that search.
++  bool useJointRepair = true;
++  /// Classes assigned simultaneously. The leaf count is the product of the branch factors, so this
++  /// is small on purpose and bounded by `repairNodes` on top.
++  int jointK = 6;
++  bool useForceClose = true;
++  int repairDescent = 4000;
++  /// Put the campaign operators into the deep-phase rotation as well as the hard-repair ladder.
++  ///
++  /// **Off by default, and measured.** They were introduced as rotation members precisely so they
++  /// would not take draws from the bandit, and at 60 s on a tight n = 12 800 instance they trended
++  /// better for it (parity −12 %, compaction −10 %, weighted kick −9 %, six paired seeds). At 300 s
++  /// they do not: the rotation's twenty-four attempts are split five or six ways instead of three,
++  /// and the three they are split from — the wide permutation, the worst-window ruin and the repack
++  /// — are the ones carrying the improvement. It is STUDY.md §3's finding one level up, and the
++  /// conclusion is the same: an operator matched to the residual belongs *after* the proven ones
++  /// have come back empty, not beside them.
++  bool deepExtras = false;
++  /// Spend `flatMoves` candidates on the flattened objective whenever the hard repair certifies a
++  /// defect irreducible — the direct answer to what the exact search proved about the endgame.
++  ///
++  /// The incumbent is never chosen on the flattened objective; only the walk is, and only for a
++  /// bounded stretch. What the stretch is for is to let the search cross an exchange that the true
++  /// objective forbids in both directions, and arrive somewhere the true objective likes better
++  /// than where it started.
++  /// α for the comfort terms, and whether β₇ = β₈ = β₉. Both change what the search optimises; the
++  /// result is scored by the unchanged validator, so the question they answer is whether the
++  /// shipped objective is what stands between a deanery and a gap-free week.
++  double softAlpha = 2.0;
++  bool softEqualWeights = false;
++  bool useFlatPhase = false;
++  int64_t flatMoves = 200000;
++  /// Print, per defect, what the hard repair saw and what each subsolver returned.
++  bool repairVerbose = false;
++  /// Moves without a new incumbent before the hard repair may fire. Deliberately far beyond
++  /// anything a thirty-second run reaches, so short budgets are byte-for-byte unaffected.
++  int64_t hardRepairAfter = 240000;
++  /// Consecutive kicks at full strength that must have failed first — the evidence that the
++  /// stochastic escape is saturated rather than merely unlucky.
++  int hardRepairKicks = 3;
++  /// Wall-clock ceiling on one invocation. Polled between nodes; a truncated subsolver certifies
++  /// nothing and the ladder falls through to the ordinary rungs.
++  int64_t repairBudgetMs = 2000;
++  int repairDefects = 6;      // defects examined per invocation
++  int repairDepth = 4;        // classes the exact day-slice solver assigns simultaneously
++  int repairBranch = 6;       // candidate placements per class
++  int repairEjectDepth = 5;   // links in the bounded ejection search
++  int64_t repairNodes = 60000;  // node ceiling for one exact solve
++  int repairScanSlots = 96;     // domain slots examined when building a candidate list
++  int repairScanRooms = 24;     // rooms examined per slot when building one
++  /// What to do when every remaining defect has been certified locally irreducible — the
++  /// proof-backed form of "this timetable cannot be improved".
++  ///   0  fresh   — the shipped restart, as a control
++  ///   1  biased  — a fresh construction that is *steered away* from the certified trap
++  ///   2  adopt   — take the most distant elite in the pool instead of rebuilding
++  ///   3  mix     — ε-greedy between 1, 2 and 4 by which has paid better so far
++  ///   4  region  — rebuild only the part of the timetable that was certified stuck,
++  ///                keeping the rest: the middle path between a kick and a restart, and
++  ///                the one the certificate is what makes possible
++  int switchPolicy = 1;
++  /// What a certified (class, placement) pair costs in the next construction's scan. In units of
++  /// the group-window weight, which is the scale `scanBest`'s window term already speaks in.
++  double antiBackbonePenalty = 40.0;
++  /// Fire the fresh restart on the observed ripening time of past basins rather than on one fixed
++  /// move count. `restartAfter` remains the floor, halved, so short budgets cannot restart earlier
++  /// than they do today.
++  bool restartAdaptive = false;
++  double ripenFactor = 1.5;
++  /// How many constructions to build and score before keeping one, at the start of the run and at
++  /// every fresh restart. 1 is the shipped behaviour.
++  ///
++  /// The single largest lever measured anywhere in this study is the basin lottery: the same binary
++  /// on the same instance with six different PRNG seeds returns soft 11 to 29 (STUDY.md §6a). The
++  /// restart mechanism answers that by *sampling* the distribution repeatedly; a tournament answers
++  /// it by sampling it more cheaply still — three constructions cost three times a construction,
++  /// which is a few seconds, against the minutes the local search then spends descending whichever
++  /// one it was given.
++  int constructTournament = 1;
++
+   // Escape
+   int64_t stagnationMoves = 60000;   // before a perturbation
+   int64_t deepEvery = 20000;         // moves between deep-phase attempts once converging
+@@ -206,6 +351,19 @@ struct WorkerReport {
+   int64_t recombinations = 0;
+   int64_t restarts = 0;
+   int64_t adoptions = 0;
++  int64_t hardRepairs = 0;
++  int64_t defectsCleared = 0;
++  int64_t defectsCertified = 0;
++  int64_t basinSwitches = 0;
++  int64_t regionRebuilds = 0;
++  int64_t flatPhases = 0;
++  int64_t regionClasses = 0;
++  /// Per-subsolver attempts and wins inside the hard repair — rematch, exact day slice, wide
++  /// permutation, compaction, ejection — plus how often each was cut short by the budget. The
++  /// campaign reads these to tell "the mechanism found nothing" from "the mechanism never ran".
++  int64_t repairTried[7]{};
++  int64_t repairWon[7]{};
++  int64_t repairCut[7]{};
+   std::vector<OperatorReport> operators;
+ };
+ 
+diff --git a/src/core/state.cpp b/src/core/state.cpp
+index b5b8341..d9f39f6 100644
+--- a/src/core/state.cpp
++++ b/src/core/state.cpp
+@@ -260,6 +260,13 @@ bool State::placementAllowed(int i, int day, int timeIdx, int parity, int room)
+   return true;
+ }
+ 
++/// x^α for the comfort terms. α = 2 is the shipped value and takes the fast path.
++double State::softPow(double x) const {
++  if (w_.softAlpha == 2.0) return x * x;
++  if (w_.softAlpha == 1.0) return x;
++  return std::pow(x, w_.softAlpha);
++}
++
+ double State::surrogate() const {
+   const auto sq = [](double x) { return x * x; };
+   return w_.lecturerConflicts * sq(static_cast<double>(c_.lecConflicts)) +
+@@ -268,9 +275,26 @@ double State::surrogate() const {
+          w_.groupTravel * sq(static_cast<double>(c_.grpTravel)) +
+          w_.lecturerTravel * sq(static_cast<double>(c_.lecTravel)) +
+          w_.abstractRoomOverflow * sq(static_cast<double>(c_.absOverflow)) +
+-         w_.lecturerWindows * sq(static_cast<double>(c_.lecWinHalves) / 2.0) +
+-         w_.groupWindows * sq(static_cast<double>(c_.grpWinHalves) / 2.0) +
+-         w_.mixedOnlineDays * sq(static_cast<double>(c_.mixedHalves) / 2.0);
++         w_.lecturerWindows * softPow(static_cast<double>(c_.lecWinHalves) / 2.0) +
++         w_.groupWindows * softPow(static_cast<double>(c_.grpWinHalves) / 2.0) +
++         w_.mixedOnlineDays * softPow(static_cast<double>(c_.mixedHalves) / 2.0);
++}
++
++double State::flatSurrogate() const {
++  const auto sq = [](double x) { return x * x; };
++  // Feasibility is not up for trade: Π₁…Π₆ keep their weights and their exponent. Only the three
++  // comfort terms are flattened, and they are flattened *together* — one weight, exponent one — so
++  // that an exchange between a lecturer window and a group window costs nothing and the search can
++  // walk across it.
++  const double flat = (w_.lecturerWindows + w_.groupWindows + w_.mixedOnlineDays) / 3.0;
++  return w_.lecturerConflicts * sq(static_cast<double>(c_.lecConflicts)) +
++         w_.groupConflicts * sq(static_cast<double>(c_.grpConflicts)) +
++         w_.roomConflicts * sq(static_cast<double>(c_.roomConflicts)) +
++         w_.groupTravel * sq(static_cast<double>(c_.grpTravel)) +
++         w_.lecturerTravel * sq(static_cast<double>(c_.lecTravel)) +
++         w_.abstractRoomOverflow * sq(static_cast<double>(c_.absOverflow)) +
++         flat * (static_cast<double>(c_.lecWinHalves) + static_cast<double>(c_.grpWinHalves) +
++                 static_cast<double>(c_.mixedHalves)) / 2.0;
+ }
+ 
+ double State::objective() const {
+@@ -284,7 +308,8 @@ double State::objective() const {
+          w_.groupTravel * sq(static_cast<double>(c_.grpTravel)) +
+          w_.lecturerTravel * sq(static_cast<double>(c_.lecTravel)) +
+          w_.abstractRoomOverflow * sq(static_cast<double>(c_.absOverflow)) +
+-         w_.lecturerWindows * sq(lw) + w_.groupWindows * sq(gw) + w_.mixedOnlineDays * sq(mx);
++         w_.lecturerWindows * softPow(lw) + w_.groupWindows * softPow(gw) +
++         w_.mixedOnlineDays * softPow(mx);
+ }
+ 
+ void State::collectHot(std::vector<int>& out) const {
+@@ -422,13 +447,22 @@ void State::collectWarm(std::vector<int>& out) const {
+   out.erase(std::unique(out.begin(), out.end()), out.end());
+ }
+ 
+-void State::worstWindowBuckets(std::vector<size_t>& out, size_t limit) const {
++int State::movableCountIn(size_t bid) const {
++  int n = 0;
++  for (int32_t j : buckets_[bid]) {
++    if (genes_[static_cast<size_t>(j)].movable) ++n;
++  }
++  return n;
++}
++
++void State::worstWindowBuckets(std::vector<size_t>& out, size_t limit, bool requireActionable) const {
+   out.clear();
+   std::vector<std::pair<int, size_t>> scored;
+   for (size_t bid = 0; bid < roomBase_; ++bid) {
+     const BucketStat& s = stats_[bid];
+     const int w = s.winNum + s.winDen;
+     if (w == 0) continue;
++    if (requireActionable && movableCountIn(bid) < 2) continue;
+     // A group window is worth four lecturer windows in β, so the list is ordered by what the
+     // objective actually charges rather than by the raw count.
+     const int weighted = bid >= grpBase_ ? w * 4 : w;
+@@ -438,6 +472,19 @@ void State::worstWindowBuckets(std::vector<size_t>& out, size_t limit) const {
+   for (size_t k = 0; k < scored.size() && k < limit; ++k) out.push_back(scored[k].second);
+ }
+ 
++void State::conflictBuckets(std::vector<size_t>& out, size_t limit) const {
++  out.clear();
++  std::vector<std::pair<int, size_t>> scored;
++  for (size_t bid = 0; bid < buckets_.size(); ++bid) {
++    const BucketStat& s = stats_[bid];
++    const int v = s.conflicts + s.travel + s.overflow;
++    if (v == 0) continue;
++    scored.emplace_back(-v, bid);
++  }
++  std::sort(scored.begin(), scored.end());
++  for (size_t k = 0; k < scored.size() && k < limit; ++k) out.push_back(scored[k].second);
++}
++
+ void State::bucketMembers(size_t bid, std::vector<int>& out) const {
+   out.clear();
+   for (int32_t j : buckets_[bid]) {
+@@ -445,6 +492,34 @@ void State::bucketMembers(size_t bid, std::vector<int>& out) const {
+   }
+ }
+ 
++void State::entityBuckets(int gene, int day, std::vector<size_t>& out) const {
++  out.clear();
++  if (day < 0) return;
++  const Gene& g = genes_[static_cast<size_t>(gene)];
++  for (int k = 0; k < g.lecCount; ++k) {
++    out.push_back(lecBucketId(p_.lecPool[static_cast<size_t>(g.lecFrom + k)], day));
++  }
++  for (int k = 0; k < g.grpCount; ++k) {
++    out.push_back(grpBucketId(p_.grpPool[static_cast<size_t>(g.grpFrom + k)], day));
++  }
++}
++
++void State::entityElsewhere(size_t bid, std::vector<int>& out) const {
++  out.clear();
++  if (bid >= roomBase_) return;   // rooms and abstract places have no window term
++  const size_t base = bid < grpBase_ ? lecBase_ : grpBase_;
++  const size_t entity = (bid - base) / kDayStride;
++  const int here = static_cast<int>(bid % kDayStride);
++  for (int d = 1; d < kDayStride; ++d) {
++    if (d == here) continue;
++    const size_t other = base + entity * kDayStride + static_cast<size_t>(d);
++    if (other >= buckets_.size()) continue;
++    for (int32_t j : buckets_[other]) {
++      if (genes_[static_cast<size_t>(j)].movable) out.push_back(j);
++    }
++  }
++}
++
+ void State::snapshotInto(std::vector<Spot>& out) const {
+   out.resize(genes_.size());
+   for (size_t i = 0; i < genes_.size(); ++i) out[i] = spotOf(static_cast<int>(i));
+diff --git a/src/core/state.hpp b/src/core/state.hpp
+index c7cbae6..c0ac82e 100644
+--- a/src/core/state.hpp
++++ b/src/core/state.hpp
+@@ -22,6 +22,18 @@ namespace tg {
+ 
+ /// β from TIMETABLE-GENERATION.md §1.2. α is 2 for every term.
+ struct Weights {
++  /// The exponent α of (12), for the three *comfort* terms only. The hard terms keep α = 2 always:
++  /// they are not what the endgame trades against, and lowering their exponent would weaken the
++  /// pressure towards feasibility.
++  ///
++  /// Exposed because the campaign's exact search proved the endgame is limited by the objective
++  /// rather than by the search (CAMPAIGN-LOG.md §3.2): with Π₇ ≈ 26 and Π₈ ≈ 12, closing a lecturer
++  /// window is worth β₇(26²−25²) = 255 and opening the group window that closes it costs
++  /// β₈(12²−11²) = 460, so the trade loses in both directions and the residual is an equilibrium.
++  /// Whether a different α — or equal comfort weights — leaves a deanery with fewer вікна *in total*
++  /// is a question about the model, and it is answered by scoring the result with the unchanged
++  /// validator.
++  double softAlpha = 2.0;
+   double lecturerConflicts = 150;
+   double groupConflicts = 100;
+   double roomConflicts = 50;
+@@ -115,6 +127,18 @@ class State {
+   // ── objective ─────────────────────────────────────────────────────────────
+   /// The smooth surrogate the search descends: Σ βᵢ·Πᵢ², with the averaged terms unrounded.
+   double surrogate() const;
++  double softPow(double x) const;
++  /// The *flattened* surrogate: the hard terms unchanged, the three comfort terms given one common
++  /// weight and exponent one.
++  ///
++  /// It exists because of what the campaign's exact search proved about the endgame. With Π₇ ≈ 26
++  /// and Π₈ ≈ 12, the true objective prices closing one lecturer window at β₇(26²−25²) = 255 and
++  /// opening one group window at β₈(12²−11²) = 460, so the exchange that closes a вікно loses, and
++  /// loses whichever direction it is attempted in. The residual is an equilibrium and no procedure
++  /// that requires each step to improve can leave it. Under (13) flattened, that same exchange is a
++  /// wash — the equilibrium becomes a plateau, and a plateau is something this search knows how to
++  /// drift along. What decides the incumbent is never this: it is always f(σ).
++  double flatSurrogate() const;
+   /// Πᵢ..Π₆ summed — the terms a schedule has to satisfy to be usable at all.
+   int64_t hard() const { return c_.hard(); }
+   /// Movable classes with no placement at all. Nothing in f(σ) counts a missing class — the
+@@ -125,6 +149,7 @@ class State {
+   double objective() const;
+ 
+   const Weights& weights() const { return w_; }
++  Weights& mutableWeights() { return w_; }
+ 
+   /// Buckets recomputed since the state was built — a free, monotone proxy for how much work a
+   /// candidate cost, which is what the operator bandit divides its reward by.
+@@ -138,11 +163,36 @@ class State {
+   /// polishing the 95%% of the timetable that is already gap-free.
+   void collectWarm(std::vector<int>& out) const;
+   /// The (entity, day) buckets with the largest window cost, as bucket ids.
+-  void worstWindowBuckets(std::vector<size_t>& out, size_t limit) const;
++  ///
++  /// `requireActionable` skips buckets holding fewer than two *movable* classes. A вікно is a gap
++  /// between two classes, so a bucket with one movable class has its gap held open by classes this
++  /// run may not touch — another faculty's fixed entries — and no operator aimed at it can ever
++  /// close it. Without the filter those buckets dominate the list, because they are exactly the
++  /// entities whose days nothing has been able to tidy.
++  void worstWindowBuckets(std::vector<size_t>& out, size_t limit, bool requireActionable = false) const;
++  /// How many movable classes a bucket holds.
++  int movableCountIn(size_t bid) const;
++  bool isGroupBucket(size_t bid) const { return bid >= grpBase_ && bid < roomBase_; }
++  /// The (entity, day) buckets carrying a hard violation — a conflict, a travel breach or an
++  /// abstract-room overflow — worst first. What the feasibility surge aims at, where
++  /// `worstWindowBuckets` is what the ordinary hard repair aims at.
++  void conflictBuckets(std::vector<size_t>& out, size_t limit) const;
+   /// The movable members of one bucket, by id.
+   void bucketMembers(size_t bid, std::vector<int>& out) const;
++  /// The window count a bucket carries, over both calendar weeks.
++  int windowsIn(size_t bid) const { return stats_[bid].winNum + stats_[bid].winDen; }
++  /// The (entity, day) buckets a class belongs to on a given day — its lecturers' and its groups'.
++  /// What "coupled defect" means: two buckets are coupled when a class sits in both, so the move
++  /// that repairs one is the move that disturbs the other.
++  void entityBuckets(int gene, int day, std::vector<size_t>& out) const;
++  /// The movable classes of the *same entity* as this bucket, on every other day. What a window in
++  /// this bucket can be filled from: a вікно is closed either by the day's own classes closing up
++  /// or by a class of that entity arriving from elsewhere in the week, and the second of those is
++  /// invisible to anything that looks only inside the bucket.
++  void entityElsewhere(size_t bid, std::vector<int>& out) const;
+   /// Which day a bucket id belongs to. The stride is 8 so that a day (1…7) indexes a row directly.
+   static int bucketDay(size_t bid) { return static_cast<int>(bid % kDayStride); }
++  static constexpr size_t kNoBucketId = static_cast<size_t>(-1);
+   /// How many clashes gene `i` would have at (day, mask, parity, room) — self excluded.
+   int clashCountAt(int i, int day, const Mask& mask, int parity, int room) const;
+   /// The first movable gene contesting `room` at (day, mask, parity), or -1.
