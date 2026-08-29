@@ -566,3 +566,46 @@ bench/arms.sh     bench/instances/n12800-s1.json.gz 180000    # base vs kick vs 
 # maximally tight set-constraints, for the feasibility regression
 node bench/tighten.mjs bench/instances/n03200-s1.json.gz bench/instances-cap/n03200-s1.json.gz
 ```
+
+---
+
+## 9. Re-measured for the dissertation, and what did not reproduce
+
+Everything above is a **tuning log**: a record of what was tried during development, at whatever
+budget and replicate count the question of the moment needed. That is the right kind of document to
+have while building a solver and the wrong kind to draw conclusions from, for a reason this project
+found the hard way — see §6a on variance.
+
+The dissertation therefore re-measured the whole thing under a design fixed **in advance**: six
+experiments, an independent validator on every row, randomised run order from a recorded seed, and
+a sample size taken from a bootstrap power calculation over a separately measured spread. Scripts:
+`scripts/cpp-*.mjs` in the thesis repository. Three of its outcomes should be read back into this
+file by anyone using it.
+
+**1. The variance is the resolution limit, and it must be measured at the budget you are comparing
+at.** Twelve seeds of the shipped configuration on `n12800-s1` at 180 s span a factor of 3.2 in soft
+cost. At 60 s the same configuration has barely restarted (0–2 fresh constructions per run) while at
+180 s it restarts four to six times, so the two budgets do not even exercise the same machinery, and
+a band read at one is not a band for the other.
+
+**2. Several of the negative results above do not reproduce at 60 s with three seeds.** `dayfix`
+(median soft 18) and `winfix` (16) both measure *better* than the shipped configuration (21) on that
+design; so do `no-kopt` (14) and `kopt-extra` (15). None of these differences is outside the spread.
+The honest reading is not that the earlier measurements were wrong — they were taken at 30 s over
+five seeds and reported as such — but that **a 15-arm ablation at three seeds separates only the
+mechanisms that break the search by an order of magnitude**, and the rest of its ordering is noise.
+The mechanisms stay off because a wider measurement put them there, not because this one did.
+
+**3. The acceptance-history result is stronger than reported above.** `--lahc 5000` and
+`--lahc 50000` do not merely lose quality at 60 s on `n12800-s1`: they do not reach **feasibility**,
+with median hard violations of 236 and 762 respectively. A wider acceptance bar does not fail to
+rescue a converged search; it prevents the search converging at all. That is the load-bearing
+observation behind the three-level escape, and it now has two independent measurements behind it,
+one per realisation.
+
+The comparison against the shipped TypeScript solver, under identical conditions (same archived
+bytes, same 30 s, **one worker each**, both scored by the independent validator), gives on
+`n12800`: soft 7 781 against 33, with a candidate-rate ratio of only 1.6. The quality ratio is two
+orders of magnitude larger than the throughput ratio, which is the argument that the advantage comes
+from the mechanisms rather than from the move rate — but no experiment here separates the compressed
+tick axis from the change of runtime, and the claim should not be made as though one did.
