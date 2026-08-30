@@ -50,7 +50,18 @@ public class PermissionTypeGraph {
      * a client work out the level a create would need from the values it is about to send, exactly as
      * {@code PermissionEvaluator#levelForNew} does from the values it received.
      */
-    public record ParentEdge(String resourceType, String field, boolean nullable) {}
+    public record ParentEdge(
+        String resourceType,
+        String field,
+        boolean nullable,
+        /**
+         * Whether attaching along this edge requires authority over the destination — see
+         * {@code @PermissionParent#authority()}. Published so that the client's mirror of the create
+         * rule can be the same rule: a client that only knew the edges would predict a create the
+         * server refuses, which is the failure this graph exists to prevent.
+         */
+        boolean authority
+    ) {}
 
     /** One resource type, and the types a grant could cascade into it from. */
     public record Node(
@@ -73,7 +84,8 @@ public class PermissionTypeGraph {
             List<ParentEdge> parents = new ArrayList<>();
             for (PermissionParentEdge edge : md.permissionParents()) {
                 parents.add(new ParentEdge(resourceTypeOf(registry, edge.parentEntity()),
-                    CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, edge.joinColumn()), edge.nullable()));
+                    CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, edge.joinColumn()),
+                    edge.nullable(), edge.authority()));
             }
             List<String> joinParents = new ArrayList<>();
             for (PermissionJoinParentEdge edge : md.permissionJoinParents()) {

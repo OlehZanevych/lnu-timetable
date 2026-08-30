@@ -8,5 +8,7 @@ public record PermissionJoinParentEdge(
     Class<?> parentEntity,
     String joinTable,
     String selfColumn,
-    String parentColumn
+    String parentColumn,
+    /** See {@code @PermissionParent#authority()}; mutations only. */
+    boolean authority
 ) {}

@@ -1106,7 +1106,7 @@ entity a "modify" grant cascades down from. The resulting graph:
 | `LecturerWorkloadCandidate` | `LecturerWorkload` |
 | `LecturerWorkloadCandidateConstraint` | `LecturerWorkloadCandidate` |
 | `LecturerWorkloadStudent`, `LecturerWorkloadOnlineClass` | `LecturerWorkload` |
-| `TimetableEntry` | `LecturerWorkload`, `Room` |
+| `TimetableEntry` | `LecturerWorkload`, `Room`† |
 | `BuildingTravelTime` | `Building` at *either* end (`from_building_id`, `to_building_id`) |
 | `Building`, `AcademicDegree` | *(nothing — both declare `@PermissionRoot`; only a `GLOBAL` grant reaches them, at `EDIT` to create or change one and `FULL` to delete it)* |
 
@@ -1114,6 +1114,12 @@ entity a "modify" grant cascades down from. The resulting graph:
 to modify a room, or the list of rooms in a group, must not confer the right to modify every
 workload that happens to be allowed to use it. Its `ClassStartTimeSet` is left out for the same
 reason.
+
+`TimetableEntry`'s room is the other answer to the same tension. There the edge is wanted — whoever
+administers a корпус should be able to reach the classes held in its аудиторії — and only its
+*mutation* meaning is wrong, since a кафедра's timetabler books shared lecture halls all day and
+administers none of them. That edge is declared `authority = false` rather than dropped, so the
+cascade keeps it and the attachment rule does not.
 
 **An entity that declares nothing at all does not start.** "Nothing is above this" and "the edge was
 forgotten" used to be the same state — the absence of an annotation — and they have opposite
@@ -1127,7 +1133,10 @@ refused just as loudly: a root has no owner and an entity with an owner inherits
 together describe nothing the cascade could act on.
 
 `?` marks a `nullable = true` edge (the FK may be unset, in which case that path just doesn't
-apply). Following these edges upward from any row yields the full set of resources whose grant
+apply). `†` marks an `authority = false` edge: it cascades like any other, but a mutation that
+points it somewhere new is not required to hold `EDIT` on the destination, because the parent is a
+resource the row uses rather than an owner it belongs to. See [Authorizing a
+write](#authorizing-a-write). Following these edges upward from any row yields the full set of resources whose grant
 would cover it — e.g. a grant on a `Faculty` covers its `Department`s, `DegreeProgram`s, `Room`s,
 `Course`s, and — by walking further — every `Lecturer`, `AcademicGroup`, `CurriculumItem`,
 `WorkingCurriculumItem`, `LecturerWorkload` and `TimetableEntry` beneath them, exactly matching the
@@ -1663,7 +1672,7 @@ the classification because it never states one.
 | `AuthExceptionResolver` | maps `GraphQlAuthException` to a real GraphQL error with `extensions.code`, instead of the `INTERNAL_ERROR` mask Spring applies to anything no resolver claims |
 | `JwtService` | issues and parses the HS256 tokens, which carry only the user id; `parse` returns a `TokenResult` that distinguishes expiry from every other failure |
 | `Principal` | record — id, email, first/last name, `mustChangePassword`, and the person link (`lecturerId`/`studentId`), resolved fresh per request like everything else here |
-| `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field, `EDIT` on every `create`/`update` and `FULL` on every `delete`, and — through `authenticated()` / `globalSettingMutation()` — the same two rules on the hand-rolled `GlobalProperty` fields |
+| `AuthorizingDataFetcherProvider` | wraps `DynamicDataFetchers` and is what the schema builder actually receives; enforces "signed in" on every generated field, `EDIT` on every `create`/`update` and `FULL` on every `delete`, and — through `authenticated()` / `globalSettingMutation()` — the same two rules on the hand-rolled `GlobalProperty` fields. For a write that moves a row between scopes it applies the three checks of [Authorizing a write](#authorizing-a-write) rather than one, and returns a different refusal for each so that a caller who *can* edit the row is not told they cannot |
 | `AccessLevel` | the three ordered levels — `EDIT` < `FULL` < `MANAGE` — mirroring the `access_level` PostgreSQL enum |
 | `PermissionService` | the factory for a request's `PermissionEvaluator` |
 | `PermissionEvaluator` | the decision point, one per request: grants loaded once, ancestry walked set-at-a-time, results memoised. Deliberately not thread-safe — GraphQL resolves fields concurrently, and the memo is only sound because a request's fields share one instance rather than racing several |
@@ -1679,7 +1688,7 @@ the classification because it never states one.
 | `GroupInvitationRepository` | the SQL behind `group_invitations`. Writes `expires_at` as `now() + make_interval(mins => :ttl)` so that both sides of the table's lifetime `CHECK` come from one clock |
 | `GroupInvitationDataFetchers` | the six fetchers behind the invitation links, and the one place that decides what redeeming one is worth: a single `user_groups` row, never an account and never a grant |
 | `GroupInvitationSchema` | their GraphQL surface, a `HandWrittenApi` like `SelfServiceSchema` |
-| `AccessModelSchema` | one query, `accessModel`: the permission cascade by resource type, so the client can decide what to draw from the graph this service enforces rather than from a copy of it. A `HandWrittenApi` for the same reason `SelfServiceSchema` is one — it is not a row keyed by an id — and it answers from `PermissionTypeGraph`, which is built once at startup |
+| `AccessModelSchema` | one query, `accessModel`: the permission cascade by resource type — including each edge's `isAuthority`, so that the client's mirror of the create rule can be the same rule rather than an older one — letting the client decide what to draw from the graph this service enforces rather than from a copy of it. A `HandWrittenApi` for the same reason `SelfServiceSchema` is one — it is not a row keyed by an id — and it answers from `PermissionTypeGraph`, which is built once at startup |
 | `SecurityBeansConfig` | one bean: the BCrypt `PasswordEncoder` |
 | `GraphQlAuthException` | reported as a GraphQL error inside a 200 response, matching how the rest of this API reports problems |
 
@@ -1750,7 +1759,13 @@ covers an ancestor reached through a many-to-many join table (e.g. a `LecturerWo
 covered by a grant on any `Lecturer` assigned to it). Either may be repeated
 (`@PermissionParents`/`@PermissionJoinParents`) when an entity has more than one path to an
 ancestor — coverage through *any one* declared path is enough, and the effective level is the
-highest any of them yields. See [Permission cascade annotations on domain
+highest any of them yields.
+
+Both take one attribute that has nothing to do with coverage. `authority` (default `true`) says
+whether *attaching* along the edge requires authority over the destination — whether pointing it at
+a new row hands the row to that row's administrators. It changes nothing about reading, about
+effective levels or about the walk; it is read only when a write moves a row, and
+[Authorizing a write](#authorizing-a-write) is where it is used. See [Permission cascade annotations on domain
 entities](#permission-cascade-annotations-on-domain-entities) above for the full graph as actually
 declared across the domain model.
 
@@ -1787,7 +1802,10 @@ Its surface:
 |---|---|
 | `levelsFor(entityClass, ids)` | the caller's level on each of many rows, resolved together |
 | `levelFor(entityClass, id)` / `allows(entityClass, id, required)` | the same for one row |
-| `levelForNew(entityClass, input)` | the level over a row that does not exist yet — the highest held over any parent named in the proposed input. Only `@PermissionParent` foreign keys count: nothing points at the row yet, so a `@PermissionJoinParent` path cannot apply, and a `LecturerWorkload` is created through its working-curriculum item rather than through the lecturer who will teach it. An entity created with none of its optional parent references set has no covering scope at all, so only a `GLOBAL` grant creates it: a `Room` belonging to no building and no faculty is a university-wide object |
+| `levelForNew(entityClass, input)` | the level over a row that does not exist yet — the highest held over any parent named in the proposed input. It is half of the create rule, not all of it: `allowsIntroducedScopes` below is the other half. Only `@PermissionParent` foreign keys count: nothing points at the row yet, so a `@PermissionJoinParent` path cannot apply, and a `LecturerWorkload` is created through its working-curriculum item rather than through the lecturer who will teach it. An entity created with none of its optional parent references set has no covering scope at all, so only a `GLOBAL` grant creates it: a `Room` belonging to no building and no faculty is a university-wide object |
+| `levelAfterUpdate(entityClass, id, input, joinLists)` | the level over an existing row **as a proposed update would leave it**: each permission-bearing foreign key takes its value from `input` where the input names it (an explicit null clearing the edge) and its stored value otherwise, and each join-table parent takes the membership the mutation reconciles or, where it does not, the one the row already has. The post-state counterpart of `allows`, which sees only the pre-state |
+| `movesScope(entityClass, input, managedJoinTables)` | whether an update touches anything that can move the row between scopes. False for an update of ordinary fields, whose post-state parents equal its pre-state ones — which is what keeps the second check off the common path rather than costing every write two extra statements |
+| `allowsIntroducedScopes(entityClass, id, input, joinLists, required)` | whether the caller holds `required` on **every** authority-bearing scope the write introduces — each destination separately, since each confers its own authority. Values equal to the ones already stored introduce nothing, so a client that sends a whole object back on save is not refused for restating a parent it did not change; edges declared `authority = false` are exempt |
 | `levelForResource(resourceType, resourceId)` | the same by grant-shaped name, including `GLOBAL` |
 | `coveringRefs(resourceType, resourceId)` | every node a grant could sit on and still cover this row — what the admin UI lists *effective* access from |
 | `holdsManageAbove(resourceType, resourceId)` | whether the caller's `MANAGE` comes from a **strict** ancestor — the revoke rule below |
@@ -1796,6 +1814,52 @@ Its surface:
 
 Each mutation names the level it needs, in one `switch` in `AuthorizingDataFetcherProvider`:
 `create` and `update` need `EDIT`, `delete` needs `FULL`. Reads still need only a signed-in caller.
+
+### Authorizing a write
+
+*Which* row that level is required on is a second question, and for anything that changes a
+permission-bearing relationship it has three answers rather than one. Checking only the row as it
+stands authorizes the act of touching it and says nothing about where the write puts it — and in a
+cascade where authority flows down structural edges, rewriting such an edge **is** a move between
+scopes. A кафедра-level administrator could take a row out of the кафедра they administer and attach it
+to one they have no rights over, because the check ran before the move and the move was what the
+check should have been about.
+
+An update is therefore authorized against all three of:
+
+| Check | Question | Method |
+|---|---|---|
+| pre-state | may this caller touch this row as it stands? | `allows(entityClass, id, required)` |
+| post-state | does the row still sit somewhere they administer once the write lands? | `levelAfterUpdate(...)` |
+| introduced scopes | may they hand it to every new owner the write names? | `allowsIntroducedScopes(...)` |
+
+The first two are PostgreSQL row-level security's `USING` and `WITH CHECK` under different names:
+is the existing row allowed, and is the resulting row allowed. Both ask the ordinary *any-path*
+question, because that is the policy — a write that leaves the row inside at least one scope the
+caller administers is permitted, which is what keeps a class bookable into a shared lecture hall
+when the workload edge still covers it.
+
+The third asks a different question and takes the opposite quantifier. Adding an authority-bearing
+relationship is not a reference: the administrators of the new parent acquire authority over the
+row, handed to them by somebody who was in no position to grant it. So *every* introduced
+authority-bearing destination has to be one the caller may attach to — a scope they do not
+administer is not made acceptable by one they do. `authority = false` on the edge is what exempts a
+shared resource from this, and the default is `true`, so an edge nobody has thought about is treated
+as conferring ownership and a forgotten attribute produces a refusal rather than a silent transfer.
+
+Only writes that name such an edge pay for any of it. `movesScope` is false for an update of
+ordinary fields, whose post-state parents equal its pre-state ones, and an unchanged value is not an
+introduction — which matters more than it sounds, since a client that sends a whole object back on
+save restates every field, and a check that could not tell a restatement from a change would refuse
+most saves in the system.
+
+A create is the same rule with an empty pre-state: the first check is vacuous, the second is
+`levelForNew`, and the third applies to every authority-bearing parent the input names, since for a
+new row all of them are introduced. A delete has no post-state and needs only `FULL` on the row.
+
+The three refusals say different things, because the caller's position differs in each: «you need
+`EDIT` here», «this change would move it outside everything you administer», and «this would attach
+it to something you do not administer, which would give its administrators access to it».
 
 ### Delegation, and who can take access away
 
@@ -2011,7 +2075,7 @@ disagree by a millisecond.
 | `grantPermission(granteeType, userId\|groupId, resourceType, resourceId, level)` | mutation | needs `MANAGE` on the resource; `resourceId` is omitted only for `GLOBAL`. Re-granting an existing scope moves its level and answers `isSuccess: true` with `errorStatus: UPDATED`. Refusals: `FORBIDDEN` (no `MANAGE` there, or no access at all), `LEVEL_ABOVE_OWN`, `INVALID_GRANTEE` (neither or both of user/group, or an id naming nobody), `UNKNOWN_RESOURCE_TYPE`, `UNKNOWN_ACCESS_LEVEL` |
 | `revokePermission(permissionId)` | mutation | needs `MANAGE` from a **strict ancestor** of the grant's resource, or that the caller made it (`granted_by`) — that second branch is checked first and needs no level at all. Refusals: `FORBIDDEN`, `PERMISSION_NOT_FOUND` |
 | `accessLevels(resourceType, resourceIds)` | query | `[ResourceAccess!]!` — `{ id, level }` per reachable id, which is what the frontend uses to decide which buttons to show. Ids the caller cannot reach are omitted rather than returned with a null level. Replaces `canModifyResources`, whose yes/no answer could not say whether the Delete button next to Edit belonged there |
-| `accessModel` | query | `[ResourceTypeAccess!]!` — the permission cascade by entity type: each type's foreign-key parents (with the input field naming each), its join-table parents, and whether it is a `@PermissionRoot`. Derived from the annotations at startup, so it is constant for the lifetime of the service and a client fetches it once. What lets the frontend answer "could this account create one of these" and "which of the values I am about to send names a scope" without keeping its own copy of the hierarchy |
+| `accessModel` | query | `[ResourceTypeAccess!]!` — the permission cascade by entity type: each type's foreign-key parents (with the input field naming each, whether it may be unset, and whether attaching along it needs `EDIT` on the destination), its join-table parents, and whether it is a `@PermissionRoot`. Derived from the annotations at startup, so it is constant for the lifetime of the service and a client fetches it once. What lets the frontend answer "could this account create one of these" and "which of the values I am about to send names a scope" without keeping its own copy of the hierarchy |
 | `grantsForResource(resourceType, resourceId, includeInherited)` | query | who can reach a resource and at what level; needs `MANAGE` on it. `includeInherited` defaults to true, adding grants held on ancestors and university-wide grants, each marked `inherited: true` — "who can edit this кафедра" is answered wrongly by a list that omits the deanery above it. Ordered direct-first, then strongest level first within each group |
 | `requestRegistration(email)` | mutation | **unauthenticated**. Asks for a registration link. `LINK_SENT` (with `role`), `ALREADY_REGISTERED`, `PERSON_ALREADY_LINKED`, `NOT_ELIGIBLE`, `TOO_MANY_REQUESTS`, `MAIL_FAILED` — see above |
 | `requestPasswordReset(email)` | mutation | **unauthenticated**. `LINK_SENT`, `UNKNOWN_EMAIL`, `ACCOUNT_DISABLED`, `TOO_MANY_REQUESTS`, `MAIL_FAILED` |
@@ -2148,7 +2212,10 @@ schema and the queries you send are unchanged; only the number of SQL round trip
 
 1. Create the annotated POJO in `org.lnu.timetable.domain`, and say who owns it: a
    `@PermissionParent`/`@PermissionJoinParent` for each way a grant should cascade into it, or
-   `@PermissionRoot` if it genuinely belongs to the university rather than to anything. This is not
+   `@PermissionRoot` if it genuinely belongs to the university rather than to anything. Where such
+   an edge points at a *shared resource* the row merely uses rather than an owner it belongs to,
+   add `authority = false` — the default treats it as ownership, which is the safe way round but
+   will refuse writes that ought to be ordinary. This is not
    optional — an entity declaring neither fails startup, because the two used to be indistinguishable
    and one of them is a bug nothing reports (see [Permission cascade
    annotations](#permission-cascade-annotations-on-domain-entities)).

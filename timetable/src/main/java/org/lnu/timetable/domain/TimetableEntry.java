@@ -17,7 +17,12 @@ import org.lnu.timetable.framework.annotation.PgEnum;
 @PermissionParent(value = LecturerWorkload.class, joinColumn = "workload_id")
 // Nullable since V7: an entry need not have a room. The workload edge above is unconditional, so a
 // roomless entry is still covered by a grant — this path simply does not apply to it.
-@PermissionParent(value = Room.class, joinColumn = "room_id", nullable = true)
+//
+// authority = false: the edge exists so that whoever administers a room can reach the classes held
+// in it, NOT so that scheduling a class into a room requires administering the room. A кафедра's
+// timetabler books shared lecture halls all day and administers none of them; the workload edge
+// above is the one that says who owns this entry.
+@PermissionParent(value = Room.class, joinColumn = "room_id", nullable = true, authority = false)
 public class TimetableEntry {
 
     private Long id;
