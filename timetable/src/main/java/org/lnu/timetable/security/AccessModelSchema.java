@@ -63,6 +63,12 @@ public class AccessModelSchema implements HandWrittenApi {
                 .description("The input field carrying this parent's id — faculty_id is sent as facultyId"))
             .field(newFieldDefinition().name("isNullable").type(GraphQLNonNull.nonNull(GraphQLBoolean))
                 .description("Whether the column may be unset, in which case this path simply does not apply"))
+            .field(newFieldDefinition().name("isAuthority").type(GraphQLNonNull.nonNull(GraphQLBoolean))
+                .description("Whether attaching along this edge requires EDIT on the destination. True for an "
+                    + "edge that confers ownership — moving a DegreeProgram to another Faculty hands it to that "
+                    + "faculty. False for a shared resource the row merely references: a TimetableEntry names a "
+                    + "Room so that the building's administrator can reach the class, not so that scheduling into "
+                    + "the room requires administering it"))
             .build());
 
         types.object(newObject().name("ResourceTypeAccess")
@@ -75,8 +81,8 @@ public class AccessModelSchema implements HandWrittenApi {
                 .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(
                     GraphQLTypeReference.typeRef("ResourceParent")))))
                 .description("Foreign keys on this entity's own table. These are the only edges a create can use: "
-                    + "nothing points at a row that does not exist yet, so creating one needs EDIT on a parent "
-                    + "named in the input"))
+                    + "nothing points at a row that does not exist yet. Creating a row needs EDIT on some parent "
+                    + "named in the input, and on EVERY named parent whose edge carries authority"))
             .field(newFieldDefinition().name("joinParentResourceTypes")
                 .type(GraphQLNonNull.nonNull(GraphQLList.list(GraphQLNonNull.nonNull(GraphQLString))))
                 .description("Types reached through a join table. They cover rows that already exist — a grant on "
@@ -119,6 +125,7 @@ public class AccessModelSchema implements HandWrittenApi {
                     pm.put("resourceType", parent.resourceType());
                     pm.put("field", parent.field());
                     pm.put("isNullable", parent.nullable());
+                    pm.put("isAuthority", parent.authority());
                     return pm;
                 }).toList());
                 m.put("joinParentResourceTypes", node.joinParentTypes());

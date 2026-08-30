@@ -83,7 +83,10 @@ Alongside it: JWT sign-in with entity-scoped, cascading permissions, at three or
 full (which adds deletion) and manage (which adds the right to hand the same access to somebody
 else, so a deanery delegates a кафедра itself rather than queuing behind an administrator), with the
 client hiding what a given account cannot use — down to whole pages and tabs — from the same cascade
-the service enforces, published rather than copied;
+the service enforces, published rather than copied. A write that moves a row between scopes is
+checked where it lands as well as where it started, so nobody can push a row into a кафедра they do
+not administer: see [Authorizing a
+write](./timetable/README.md#authorizing-a-write);
 **invitation links into a group** — membership is how access travels here, so putting an account
 into a group is the act that hands it whatever that group can reach; a link does that act once for
 however many people follow it, lives between five minutes and thirty days, and is revoked by

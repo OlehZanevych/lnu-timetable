@@ -231,12 +231,213 @@ public class PermissionEvaluator {
 
         Map<Class<?>, Set<Long>> parentsByClass = new LinkedHashMap<>();
         for (PermissionParentEdge edge : md.permissionParents()) {
-            String field = CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, edge.joinColumn());
-            Long parentId = coerceId(input.get(field));
+            Long parentId = coerceId(input.get(fieldFor(edge.joinColumn())));
             if (parentId != null) {
                 parentsByClass.computeIfAbsent(edge.parentEntity(), k -> new LinkedHashSet<>()).add(parentId);
             }
         }
+        return levelOverParents(parentsByClass);
+    }
+
+    /**
+     * The level the caller would have over an <em>existing</em> row once a proposed update has been
+     * applied to it — the post-state counterpart of {@link #allows}, which sees only the pre-state.
+     *
+     * <h2>Why both are needed</h2>
+     * Authorizing an update against the row as it stands answers "may this caller touch this row?"
+     * and stops there. It does not answer "may the row end up where this update puts it?", and for a
+     * cascade in which authority flows down structural edges those are different questions: an
+     * update that rewrites a permission-bearing foreign key <em>moves the row to another scope</em>.
+     * A кафедра-level методист could take a row out of the кафедра they administer and attach it to
+     * one they have no rights over, because the check ran before the move and the move is what the
+     * check should have been about. Requiring the level on the pre-state <em>and</em> on the
+     * post-state is the same split PostgreSQL row-level security makes between {@code USING} (is the
+     * existing row allowed?) and {@code WITH CHECK} (is the resulting row allowed?).
+     *
+     * <h2>What "post-state" means here</h2>
+     * The row's parents after the write: each permission-bearing foreign key takes its value from
+     * {@code input} when the field is present (including an explicit null, which clears the edge)
+     * and its current value otherwise, and each join-table parent takes the list the mutation
+     * reconciles when it manages that join table, or its current membership when it does not. The
+     * level over that parent set is then the ordinary any-path maximum, so a write that leaves the
+     * row inside at least one scope the caller controls stays permitted. That is deliberate: a
+     * timetable entry names a room, and rooms are shared, so scheduling a class into a room one does
+     * not administer must not require authority over the room when authority over the workload is
+     * already there.
+     *
+     * @param joinListsByTable post-state membership for the join tables the mutation manages, keyed
+     *                         by join-table name; tables absent from the map keep what they have
+     */
+    public Mono<AccessLevel> levelAfterUpdate(Class<?> entityClass, Long id, Map<String, Object> input,
+                                              Map<String, Collection<Long>> joinListsByTable) {
+        EntityMetadata md = registry.getMetadata(entityClass);
+        if (md == null || id == null) return Mono.empty();
+
+        List<PermissionParentEdge> fkEdges = md.permissionParents();
+        List<PermissionJoinParentEdge> joinEdges = md.permissionJoinParents();
+
+        // Foreign-key parents: the columns the update does not mention have to be read, because the
+        // row keeps them and they still carry authority.
+        List<String> unchanged = fkEdges.stream()
+            .filter(e -> !input.containsKey(fieldFor(e.joinColumn())))
+            .map(PermissionParentEdge::joinColumn)
+            .toList();
+        Map<String, Class<?>> parentByColumn = new LinkedHashMap<>();
+        for (PermissionParentEdge edge : fkEdges) parentByColumn.put(edge.joinColumn(), edge.parentEntity());
+
+        Mono<Map<Class<?>, Set<Long>>> fromForeignKeys = graphRepo
+            .fetchForeignKeys(md.tableName(), md.keyColumn(), unchanged, List.of(id))
+            .collectList()
+            .defaultIfEmpty(List.of())
+            .map(current -> {
+                Map<Class<?>, Set<Long>> parents = new LinkedHashMap<>();
+                for (PermissionParentEdge edge : fkEdges) {
+                    String field = fieldFor(edge.joinColumn());
+                    if (input.containsKey(field)) {
+                        Long proposed = coerceId(input.get(field));   // null clears the edge
+                        if (proposed != null) add(parents, edge.parentEntity(), proposed);
+                    }
+                }
+                for (PermissionGraphRepository.FkEdge fk : current) {
+                    Class<?> parentClass = parentByColumn.get(fk.column());
+                    if (parentClass != null) add(parents, parentClass, fk.parentId());
+                }
+                return parents;
+            });
+
+        Mono<Map<Class<?>, Set<Long>>> fromJoinTables = Flux.fromIterable(joinEdges)
+            .flatMap(edge -> {
+                Collection<Long> proposed = joinListsByTable.get(edge.joinTable());
+                Flux<Long> ids = proposed != null
+                    ? Flux.fromIterable(proposed)
+                    : graphRepo.fetchJoinParents(edge.joinTable(), edge.selfColumn(), edge.parentColumn(), List.of(id))
+                        .map(PermissionGraphRepository.JoinEdge::parentId);
+                Class<?> parentClass = edge.parentEntity();
+                return ids.map(parentId -> Map.<Class<?>, Long>entry(parentClass, parentId));
+            })
+            .collectList()
+            .map(entries -> {
+                Map<Class<?>, Set<Long>> parents = new LinkedHashMap<>();
+                for (Map.Entry<Class<?>, Long> e : entries) add(parents, e.getKey(), e.getValue());
+                return parents;
+            });
+
+        return Mono.zip(fromForeignKeys, fromJoinTables).flatMap(both -> {
+            Map<Class<?>, Set<Long>> parents = new LinkedHashMap<>(both.getT1());
+            both.getT2().forEach((k, v) -> parents.computeIfAbsent(k, x -> new LinkedHashSet<>()).addAll(v));
+            return levelOverParents(parents);
+        });
+    }
+
+    /**
+     * Does this update touch anything that carries authority? Only a write that rewrites a
+     * permission-bearing foreign key, or reconciles a join table that is a permission parent, can
+     * move the row between scopes; every other update leaves the post-state parents equal to the
+     * pre-state ones, and checking them again would be two extra round trips to reach a conclusion
+     * already reached.
+     */
+    public boolean movesScope(Class<?> entityClass, Map<String, Object> input, Set<String> managedJoinTables) {
+        EntityMetadata md = registry.getMetadata(entityClass);
+        if (md == null) return false;
+        for (PermissionParentEdge edge : md.permissionParents()) {
+            if (input.containsKey(fieldFor(edge.joinColumn()))) return true;
+        }
+        for (PermissionJoinParentEdge edge : md.permissionJoinParents()) {
+            if (managedJoinTables.contains(edge.joinTable())) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Does the caller hold {@code required} on every authority-bearing scope this write would
+     * <em>introduce</em>?
+     *
+     * <h2>Why the post-state level is not enough</h2>
+     * {@link #levelAfterUpdate} asks whether the row still sits somewhere the caller administers,
+     * which stops a write that moves a row out of their reach. It does not stop the opposite:
+     * pointing an additional authority-bearing edge at a scope the caller does not control while
+     * keeping one they do. The row stays covered through the old path, so the any-path rule is
+     * satisfied — but the administrators of the new parent have just acquired authority over it,
+     * and the caller was in no position to hand it to them. Adding a relationship is a grant of
+     * access to somebody else's scope, and it has to be authorized as one.
+     *
+     * <h2>Why "every", here, and "any" everywhere else</h2>
+     * Coverage of an existing row through any one path is the policy and stays the policy. This is
+     * a different question — not "may this row be touched?" but "may this row be put here?" — and
+     * for it the answer has to hold for each destination separately, since each one confers its own
+     * authority. Edges declared {@code authority = false} are exempt, because they confer a path
+     * downward without meaning ownership: a shared lecture hall is the example, and requiring
+     * authority over it would stop a timetabler scheduling into it.
+     *
+     * @return true when nothing authority-bearing is introduced, or the caller holds the level on
+     *         everything that is
+     */
+    public Mono<Boolean> allowsIntroducedScopes(Class<?> entityClass, Long id, Map<String, Object> input,
+                                                Map<String, Collection<Long>> joinListsByTable,
+                                                AccessLevel required) {
+        EntityMetadata md = registry.getMetadata(entityClass);
+        if (md == null) return Mono.just(true);
+
+        // Foreign keys: only a value the input names, only when it differs from the stored one.
+        List<PermissionParentEdge> named = md.permissionParents().stream()
+            .filter(e -> e.authority())
+            .filter(e -> input.containsKey(fieldFor(e.joinColumn())))
+            .toList();
+        List<PermissionJoinParentEdge> namedJoins = md.permissionJoinParents().stream()
+            .filter(e -> e.authority())
+            .filter(e -> joinListsByTable.containsKey(e.joinTable()))
+            .toList();
+        if (named.isEmpty() && namedJoins.isEmpty()) return Mono.just(true);
+
+        Mono<Map<String, Long>> currentFk = (id == null || named.isEmpty())
+            ? Mono.just(Map.of())
+            : graphRepo.fetchForeignKeys(md.tableName(), md.keyColumn(),
+                    named.stream().map(PermissionParentEdge::joinColumn).toList(), List.of(id))
+                .collectMap(PermissionGraphRepository.FkEdge::column,
+                    PermissionGraphRepository.FkEdge::parentId)
+                .defaultIfEmpty(Map.of());
+
+        Mono<Map<String, Set<Long>>> currentJoins = (id == null || namedJoins.isEmpty())
+            ? Mono.just(Map.of())
+            : Flux.fromIterable(namedJoins)
+                .flatMap(e -> graphRepo
+                    .fetchJoinParents(e.joinTable(), e.selfColumn(), e.parentColumn(), List.of(id))
+                    .map(j -> Map.entry(e.joinTable(), j.parentId())))
+                .collectList()
+                .map(entries -> {
+                    Map<String, Set<Long>> byTable = new LinkedHashMap<>();
+                    for (Map.Entry<String, Long> e : entries) {
+                        byTable.computeIfAbsent(e.getKey(), k -> new LinkedHashSet<>()).add(e.getValue());
+                    }
+                    return byTable;
+                });
+
+        return Mono.zip(currentFk, currentJoins).flatMap(now -> {
+            Map<Class<?>, Set<Long>> introduced = new LinkedHashMap<>();
+            for (PermissionParentEdge e : named) {
+                Long proposed = coerceId(input.get(fieldFor(e.joinColumn())));
+                if (proposed == null) continue;                       // clearing introduces nothing
+                if (proposed.equals(now.getT1().get(e.joinColumn()))) continue;   // unchanged
+                add(introduced, e.parentEntity(), proposed);
+            }
+            for (PermissionJoinParentEdge e : namedJoins) {
+                Set<Long> before = now.getT2().getOrDefault(e.joinTable(), Set.of());
+                for (Long proposed : joinListsByTable.getOrDefault(e.joinTable(), List.of())) {
+                    if (proposed == null || before.contains(proposed)) continue;
+                    add(introduced, e.parentEntity(), proposed);
+                }
+            }
+            if (introduced.isEmpty()) return Mono.just(true);
+            return Flux.fromIterable(introduced.entrySet())
+                .flatMap(entry -> levelsFor(entry.getKey(), entry.getValue())
+                    .map(levels -> entry.getValue().stream()
+                        .allMatch(pid -> AccessLevel.allows(levels.get(pid), required))))
+                .all(ok -> ok);
+        });
+    }
+
+    /** The highest level the caller holds over any of these parents, or their GLOBAL grant alone. */
+    private Mono<AccessLevel> levelOverParents(Map<Class<?>, Set<Long>> parentsByClass) {
         if (parentsByClass.isEmpty()) {
             return grants.flatMap(g -> g.global() == null ? Mono.empty() : Mono.just(g.global()));
         }
@@ -244,6 +445,15 @@ public class PermissionEvaluator {
             .flatMap(e -> levelsFor(e.getKey(), e.getValue()))
             .flatMapIterable(Map::values)
             .reduce(AccessLevel::max);
+    }
+
+    private static void add(Map<Class<?>, Set<Long>> parents, Class<?> parentClass, Long parentId) {
+        parents.computeIfAbsent(parentClass, k -> new LinkedHashSet<>()).add(parentId);
+    }
+
+    /** The GraphQL input field that carries a column: {@code faculty_id} is written {@code facultyId}. */
+    private static String fieldFor(String column) {
+        return CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, column);
     }
 
     /**

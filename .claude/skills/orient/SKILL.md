@@ -5,8 +5,8 @@ description: Get oriented in the lnu-timetable project by reading its Markdown d
 
 # Orientation (lnu-timetable)
 
-The project's documentation is ~10,600 lines across fourteen Markdown files. Reading it end to end is
-both slow and unnecessary: most of it is depth on subsystems a given task never touches. Read the
+The project's documentation is ~16,900 lines across twenty-four Markdown files. Reading it end to end
+is both slow and unnecessary: most of it is depth on subsystems a given task never touches. Read the
 **map** in full, then only the **sections your task lands in**.
 
 This section is the substitute for a first pass. Take it as given and do not spend a read
@@ -54,7 +54,10 @@ work actually happens. Know which half you are in before changing anything.
   `MANAGE`. A grant names one resource (or `GLOBAL`) and covers everything below it via
   `@PermissionParent`/`@PermissionJoinParent` — and every entity must declare one of those or
   `@PermissionRoot`, or the service refuses to start. Create/update need `EDIT`, delete needs
-  `FULL`, delegation needs `MANAGE`. The client hides what a caller cannot use — down to whole pages
+  `FULL`, delegation needs `MANAGE`. A write that changes a permission-bearing relationship is
+  checked three times, not once — on the row as it stands, on the row the write would produce, and
+  on every authority-bearing scope it attaches the row to — so changing mutation code means reading
+  «Authorizing a write» in `timetable/README.md` first. The client hides what a caller cannot use — down to whole pages
   and tabs — reading the same cascade from `Query.accessModel` rather than a copy of it
   (`access-need.ts`, `access-gate.ts`); UI gating is a convenience, never the boundary.
 - **A drill-down page's open tab is part of its URL** (`/faculty/:id/:section`), via
@@ -68,7 +71,7 @@ work actually happens. Know which half you are in before changing anything.
 
 ## How to read
 
-**Always, in full:** the root `README.md` (~320 lines). It is the map — what the system does, how
+**Always, in full:** the root `README.md` (~460 lines). It is the map — what the system does, how
 the halves divide, the repository layout, and a table pointing at every other document.
 
 **Then, selectively.** Get a heading map first and read only what you need:
@@ -95,7 +98,9 @@ grep -n "^## \|^### " timetable-ui/README.md
 **Do not bulk-read the topic files** (`TIMETABLE-GENERATION.md`, `SOLVER-OPTIMISATION.md`,
 `WORKLOAD-GENERATION.md`, the four
 `*-PDF.md`) unless the task is that topic. Between them they are ~3,900 lines of depth that no
-unrelated change needs.
+unrelated change needs. The generator's working notes (`CAMPAIGN-LOG.md`, `FINDINGS.md`,
+`OPTIMIZATION-IDEAS.md`, `EXPERIMENT-PROTOCOL.md`, `STAGNATION-ESCAPE.md`, `campaign-queue.md`) are
+not routed to on purpose: they are a running record, not orientation.
 
 **Read the *Known limitations* section** of whichever README you are working in before proposing a
 change in that area — several apparent bugs are documented decisions, and a few are known gaps
@@ -128,6 +133,10 @@ cd timetable-ui && node scripts/check-graphql-variables.mjs
 cd timetable-ui && npx ng build --configuration production --no-progress   # initial bundle < 1.00 MB
 ```
 
+The production build clears `dist/` first, which fails on the mounted path because the device VM
+cannot unlink; pass `--output-path` to a scratch directory outside the mount instead of concluding
+the build is broken.
+
 PostgreSQL 16 *is* available in the sandbox, so a migration can be rehearsed for real against a
 throwaway database — do that rather than reasoning about SQL in the abstract. Stage `schema.sql` and
 `data.sql` with `device_stage_files` and load both; an 8 MB dump copies in seconds.
@@ -136,15 +145,25 @@ The Java can be **type-checked** here even though it cannot be built, which is w
 claiming a change compiles: the sandbox has `javac` 21, and `timetable/target/timetable-0.0.1-SNAPSHOT.jar`
 (when a build exists) carries every dependency under `BOOT-INF/lib`. Copy the sources into the
 sandbox, unpack those jars onto the classpath, and `javac -proc:none -encoding UTF-8` the whole of
-`security/`, `framework/` and `mail/`. The same classpath will even run
+`security/`, `framework/` and `mail/`. Lombok is `provided` and so is *not* in that jar — a two-line
+source-retention stub for `@Data` and `@AllArgsConstructor` is enough, because nothing outside
+`domain/` depends on the generated accessors. The same classpath will run
 `DynamicGraphQLSchemaBuilder.buildSchema(...)` and print the SDL, which is how a new `HandWrittenApi`
-is checked without a database. What this does not cover: anything needing a Java 25 language feature
-(none is used today), the Maven build itself, and every test that needs Postgres or Spring.
+is checked without a database, and it will run a JUnit test's methods reflectively against a stubbed
+`@Test`/`Assertions` if the real JUnit jars are absent. What this does not cover: anything needing a
+Java 25 language feature (none is used today), the Maven build itself, and every test that needs
+Postgres or Spring.
+
+Mind the checkout you are in. A sandbox copy of the repository can be stale or partial — one was
+missing a whole package, which silently changed a source metric — so verify it against the device
+before deriving anything from it, and treat the device tree as the one that counts.
 
 ## Maintenance
 
-This file lives at `.claude/skills/orient/SKILL.md` and is versioned with the project. `/docs-check`
-is responsible for keeping it current: it adds a row to the routing table when a document a task
+This file lives at `.claude/skills/orient/SKILL.md`, is versioned with the project, and is the
+source of truth. An account-level copy of it exists so that the same orientation applies outside a
+checkout; inside the repository this one wins, and when this one changes the account copy has to be
+re-saved from it. `/docs-check` is responsible for keeping this one current: it adds a row to the routing table when a document a task
 could route to is added, fixes the row when one is renamed or removed, and corrects the architecture
 summary above when something structural changes. It deliberately does *not* update this file for
 ordinary documentation edits — this is a map, and a map that grows with the territory stops being one.

@@ -58,6 +58,15 @@ export interface ResourceParent {
   /** The input field carrying this parent's id: `faculty_id` is sent as `facultyId`. */
   field: string;
   isNullable: boolean;
+  /**
+   * Whether attaching along this edge needs `EDIT` on the destination. An ownership edge does — a
+   * programme moved to another факультет is handed to it — and a shared reference does not: a
+   * timetable entry names a room so that the building's administrator can reach the class, not so
+   * that booking the room requires administering it. Optional so that a client running against a
+   * service that predates the field falls back to the old any-parent rule rather than refusing
+   * everything.
+   */
+  isAuthority?: boolean;
 }
 
 /** One entity type of the published cascade. */
@@ -656,7 +665,7 @@ export class AuthService {
 
   accessModel(): Observable<ResourceTypeAccess[]> {
     if (!this.accessModelRequest) {
-      const q = `{ accessModel { resourceType isRoot joinParentResourceTypes parents { resourceType field isNullable } } }`;
+      const q = `{ accessModel { resourceType isRoot joinParentResourceTypes parents { resourceType field isNullable isAuthority } } }`;
       this.accessModelRequest = this.gql.request<{ accessModel: ResourceTypeAccess[] }>(q).pipe(
         map((d) => d.accessModel),
         // A `shareReplay` that has seen an error replays *the error* to everyone who asks afterwards,
@@ -671,26 +680,38 @@ export class AuthService {
   }
 
   /**
-   * The level this account would have over a row of `resourceType` created with `input` — the highest
-   * it holds over any parent the new row names.
+   * The level this account would have over a row of `resourceType` created with `input`.
    *
-   * This is `PermissionEvaluator#levelForNew` on the client, reading the same graph off
-   * `Query.accessModel` rather than re-stating it: the fields that count are exactly the entity's
-   * foreign-key parents, because nothing points at a row that does not exist yet. An input naming
-   * none of them has no covering scope, so only a `GLOBAL` grant creates it — which is why a Room
-   * belonging to no building and no faculty is a university-wide object on both sides.
+   * This is `PermissionEvaluator#levelForNew` plus `allowsIntroducedScopes` on the client, reading
+   * the same graph off `Query.accessModel` rather than re-stating it: the fields that count are
+   * exactly the entity's foreign-key parents, because nothing points at a row that does not exist
+   * yet. An input naming none of them has no covering scope, so only a `GLOBAL` grant creates it —
+   * which is why a Room belonging to no building and no faculty is a university-wide object on both
+   * sides.
+   *
+   * Two rules, because the server applies two. The row must be covered by SOME named parent, which
+   * is the maximum below; and every named parent whose edge carries authority must be one this
+   * account may attach to, which is the floor. Answering with the maximum alone predicted creates
+   * the server refuses — a form that enabled its save button and then failed on submit — and
+   * answering with the floor alone would refuse a class booked into a shared lecture hall.
    */
   levelForNew(resourceType: string, input: Record<string, unknown>): Observable<AccessLevel | null> {
     return this.accessModel().pipe(
       switchMap((model) => {
         const node = model.find((n) => n.resourceType === resourceType);
         const named = (node?.parents ?? [])
-          .map((parent) => ({ type: parent.resourceType, id: input[parent.field] }))
+          .map((parent) => ({ type: parent.resourceType, id: input[parent.field], authority: parent.isAuthority }))
           .filter((p) => p.id !== undefined && p.id !== null && p.id !== '')
-          .map((p) => ({ type: p.type, id: String(p.id) }));
+          .map((p) => ({ type: p.type, id: String(p.id), authority: p.authority }));
         if (named.length === 0) return of(this.globalLevel());
         return forkJoin(named.map((p) => this.accessLevel(p.type, p.id))).pipe(
-          map((levels) => levels.reduce<AccessLevel | null>((best, l) => maxLevel(best, l), this.globalLevel()))
+          map((levels) => {
+            const covering = levels.reduce<AccessLevel | null>((best, l) => maxLevel(best, l), this.globalLevel());
+            // `isAuthority` absent means an older service that does not enforce the second rule.
+            const attachable = named.every((p, i) =>
+              p.authority !== true || allows(maxLevel(levels[i], this.globalLevel()), 'EDIT'));
+            return attachable ? covering : null;
+          })
         );
       })
     );

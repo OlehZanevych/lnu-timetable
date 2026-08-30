@@ -41,4 +41,28 @@ public @interface PermissionParent {
      * simply doesn't apply to rows where it's unset — other declared parents, if any, still do).
      */
     boolean nullable() default false;
+
+    /**
+     * Whether this edge carries <em>authority</em>, meaning that a write which points it at a new
+     * row must be authorized against that row.
+     *
+     * <p>Every permission edge grants the parent's administrators a path down to the child; that is
+     * what the annotation is for, and it is the same in both cases. What differs is what
+     * <em>attaching</em> along the edge means. Moving a DegreeProgram to another Faculty hands it
+     * to that faculty's administration: it is a change of who owns the row, and a caller who does
+     * not administer the destination must not be able to make it. Pointing a TimetableEntry at
+     * another Room is not that. The room is a shared resource the class merely occupies, and the
+     * edge exists so that a building administrator can reach the classes held in their rooms —
+     * requiring authority over the room to schedule into it would stop a кафедра's timetabler
+     * booking a lecture hall, which is the ordinary case rather than an abuse.
+     *
+     * <p>The default is {@code true}, which is the safe answer: an edge nobody has thought about
+     * is treated as conferring ownership, so the mistake a forgotten annotation makes is a refusal
+     * rather than a silent transfer. Setting it to {@code false} is a statement about the domain —
+     * "this parent is a resource, not an owner" — and should be made deliberately.
+     *
+     * <p>It affects mutations only. Read-side cascade, effective levels and the traversal are
+     * identical for both kinds of edge.
+     */
+    boolean authority() default true;
 }

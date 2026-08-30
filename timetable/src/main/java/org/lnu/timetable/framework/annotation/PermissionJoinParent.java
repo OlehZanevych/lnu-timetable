@@ -43,4 +43,12 @@ public @interface PermissionJoinParent {
      * The column in the join table referencing the ancestor entity's id.
      */
     String parentColumn();
+
+    /**
+     * Whether this edge carries authority, in the sense of
+     * {@link PermissionParent#authority()}: a mutation that links this row to a new parent through
+     * the join table must be authorized against that parent. Defaults to {@code true}, the safe
+     * answer; affects mutations only.
+     */
+    boolean authority() default true;
 }

@@ -2251,7 +2251,10 @@ A single root-provided service, injected the same way `GraphqlService` is used e
 - `canCreateType(type)` / `holdsGrantOfType(type)` / `canReachType(type)` — answered synchronously
   off `me`, because a sidebar link cannot wait for a round trip to decide whether to exist — plus
   `accessModel()`, the published cascade fetched at most once a session, `levelForNew(type, input)`
-  built on it, and `resolveNeed(need)`. These are the questions a screen asks *before* it draws
+  built on it — which answers with the highest level any named parent yields, and with `null` when
+  a named parent's edge carries authority the account does not hold, because the service applies
+  both rules and a form that predicted only the first enabled a save button the service then
+  refused — and `resolveNeed(need)`. These are the questions a screen asks *before* it draws
   itself, as opposed to `accessLevels` above, which is about rows already loaded; see [What the
   client knows, and where it gets it](#what-the-client-knows-and-where-it-gets-it) and
   [Requirements as values](#requirements-as-values-access-needts-access-gatets).
@@ -2452,7 +2455,7 @@ Both are answered by the service now, from the annotations it authorizes writes 
 |---|---|
 | `CurrentUser.globalLevel` | this account's university-wide level, or null — no longer scanned out of `permissions` by hand |
 | `CurrentUser.creatableResourceTypes` | the entity types it could create something of *somewhere*, worked out from its grants and the cascade |
-| `Query.accessModel` | the cascade itself: per resource type, its foreign-key parents (with the input field naming each), its join-table parents, and whether it is a `@PermissionRoot` that only a `GLOBAL` grant reaches |
+| `Query.accessModel` | the cascade itself: per resource type, its foreign-key parents (with the input field naming each, whether it may be unset, and whether attaching along it needs `EDIT` on the destination), its join-table parents, and whether it is a `@PermissionRoot` that only a `GLOBAL` grant reaches |
 
 `accessModel` is constant for the lifetime of the service, so `AuthService` fetches it once and
 shares the one request; `me` was already fetched once, and the two new fields ride along on it. On

@@ -138,12 +138,13 @@ public class EntityMetadataRegistry {
 
         List<PermissionParentEdge> permissionParents = new ArrayList<>();
         for (PermissionParent pp : entityClass.getAnnotationsByType(PermissionParent.class)) {
-            permissionParents.add(new PermissionParentEdge(pp.value(), pp.joinColumn(), pp.nullable()));
+            permissionParents.add(new PermissionParentEdge(
+                pp.value(), pp.joinColumn(), pp.nullable(), pp.authority()));
         }
         List<PermissionJoinParentEdge> permissionJoinParents = new ArrayList<>();
         for (PermissionJoinParent pjp : entityClass.getAnnotationsByType(PermissionJoinParent.class)) {
             permissionJoinParents.add(new PermissionJoinParentEdge(
-                pjp.value(), pjp.joinTable(), pjp.selfColumn(), pjp.parentColumn()));
+                pjp.value(), pjp.joinTable(), pjp.selfColumn(), pjp.parentColumn(), pjp.authority()));
         }
 
         // "Nothing is above this" and "the edge was forgotten" used to look identical from here, and
