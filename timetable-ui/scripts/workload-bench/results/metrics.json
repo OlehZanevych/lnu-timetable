@@ -9,60 +9,60 @@
     "generator": "src/app/workload-generator.ts"
   },
   "environment": {
-    "node": "v22.22.3",
+    "node": "v22.22.2",
     "platform": "linux",
-    "arch": "arm64",
-    "cpu": "unknown",
-    "cores": 4,
-    "totalMemoryMB": 3904
+    "arch": "x64",
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+    "cores": 2,
+    "totalMemoryMB": 8024
   },
   "summary": {
     "datasets": 48,
     "ceilingViolationsBySearch": 0,
-    "ceilingViolationsByIndividual": 155,
-    "ceilingViolationsPreExisting": 0,
+    "ceilingViolationsByIndividual": 0,
+    "ceilingViolationsPreExisting": 4,
     "structuralErrors": 0,
     "determinismFailures": 0,
     "phaseShare": [
       {
         "phase": "greedy",
-        "ms": 228.06900000000002
+        "ms": 760.2550000000001
       },
       {
         "phase": "improve",
-        "ms": 128.232
+        "ms": 467.816
       },
       {
         "phase": "setup",
-        "ms": 95.99699999999999
+        "ms": 350.13699999999994
       },
       {
         "phase": "repair",
-        "ms": 88.34600000000002
+        "ms": 319.01099999999997
       },
       {
         "phase": "individual",
-        "ms": 28.002000000000006
+        "ms": 100.792
       },
       {
         "phase": "report",
-        "ms": 8.591000000000001
+        "ms": 34.56099999999999
       }
     ],
-    "totalMs": 559.027
+    "totalMs": 1940.847
   },
   "scaling": [
     {
       "scenario": "baseline",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 0.842,
-        "r2": 0.9855,
+        "alpha": 1.009,
+        "r2": 0.9815,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 0.797,
-        "r2": 0.9656,
+        "alpha": 0.959,
+        "r2": 0.9717,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -71,18 +71,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 0.892,
-        "r2": 0.9394,
+        "alpha": 1.042,
+        "r2": 0.9464,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 0.922,
-        "r2": 0.8376,
+        "alpha": 0.981,
+        "r2": 0.8673,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 0.818,
-        "r2": 0.9527,
+        "alpha": 0.854,
+        "r2": 0.9713,
         "n": 6
       }
     },
@@ -90,13 +90,13 @@
       "scenario": "dense-candidates",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 0.948,
-        "r2": 0.9909,
+        "alpha": 1.023,
+        "r2": 0.98,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 0.973,
-        "r2": 0.995,
+        "alpha": 1.05,
+        "r2": 0.9844,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -105,18 +105,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.051,
-        "r2": 0.9956,
+        "alpha": 1.126,
+        "r2": 0.9787,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 1.148,
-        "r2": 0.9817,
+        "alpha": 0.97,
+        "r2": 0.8179,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 0.727,
-        "r2": 0.9253,
+        "alpha": 0.957,
+        "r2": 0.9567,
         "n": 6
       }
     },
@@ -124,33 +124,33 @@
       "scenario": "gaps-mode",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 1.068,
-        "r2": 0.9761,
+        "alpha": 1.034,
+        "r2": 0.9443,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 0.969,
-        "r2": 0.9466,
+        "alpha": 0.954,
+        "r2": 0.9471,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
-        "alpha": 1.116,
-        "r2": 0.9924,
+        "alpha": 1.115,
+        "r2": 0.9928,
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.203,
-        "r2": 0.9956,
+        "alpha": 1.173,
+        "r2": 0.9681,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 0.99,
-        "r2": 0.8867,
+        "alpha": 1.099,
+        "r2": 0.9681,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 1.192,
-        "r2": 0.9974,
+        "alpha": 1.195,
+        "r2": 0.9576,
         "n": 6
       }
     },
@@ -158,13 +158,13 @@
       "scenario": "oversubscribed",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 1.046,
-        "r2": 0.9956,
+        "alpha": 1.144,
+        "r2": 0.9922,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 1.043,
-        "r2": 0.9954,
+        "alpha": 1.142,
+        "r2": 0.9935,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -173,18 +173,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.173,
-        "r2": 0.9995,
+        "alpha": 0.892,
+        "r2": 0.9511,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 1.107,
-        "r2": 0.9986,
+        "alpha": 1.221,
+        "r2": 0.9955,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 0.962,
-        "r2": 0.9778,
+        "alpha": 1.068,
+        "r2": 0.9849,
         "n": 6
       }
     },
@@ -192,13 +192,13 @@
       "scenario": "sparse-candidates",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 1.038,
-        "r2": 0.9783,
+        "alpha": 1.133,
+        "r2": 0.9896,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 0.931,
-        "r2": 0.9627,
+        "alpha": 1.018,
+        "r2": 0.9779,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -207,18 +207,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.142,
-        "r2": 0.9912,
+        "alpha": 1.15,
+        "r2": 0.9955,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 0.998,
-        "r2": 0.9675,
+        "alpha": 0.987,
+        "r2": 0.9781,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 1.116,
-        "r2": 0.9879,
+        "alpha": 1.299,
+        "r2": 0.9669,
         "n": 6
       }
     },
@@ -226,13 +226,13 @@
       "scenario": "tight-ceilings",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 0.998,
-        "r2": 0.9539,
+        "alpha": 1.059,
+        "r2": 0.9652,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 1.001,
-        "r2": 0.9736,
+        "alpha": 1.061,
+        "r2": 0.981,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -241,18 +241,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.165,
-        "r2": 0.9915,
+        "alpha": 1.212,
+        "r2": 0.9922,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 0.43,
-        "r2": 0.7006,
+        "alpha": 0.469,
+        "r2": 0.9666,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 0.919,
-        "r2": 0.9158,
+        "alpha": 0.991,
+        "r2": 0.9486,
         "n": 6
       }
     },
@@ -260,13 +260,13 @@
       "scenario": "tight-floors",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 1.02,
-        "r2": 0.9907,
+        "alpha": 1.086,
+        "r2": 0.9802,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 1.032,
-        "r2": 0.9962,
+        "alpha": 1.1,
+        "r2": 0.9898,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -275,18 +275,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.211,
-        "r2": 0.9981,
+        "alpha": 1.166,
+        "r2": 0.9936,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 0.944,
-        "r2": 0.9611,
+        "alpha": 1.125,
+        "r2": 0.9807,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 0.943,
-        "r2": 0.9765,
+        "alpha": 1.042,
+        "r2": 0.9821,
         "n": 6
       }
     },
@@ -294,13 +294,13 @@
       "scenario": "unconstrained",
       "points": 6,
       "alphaTimeVsLecturers": {
-        "alpha": 0.994,
-        "r2": 0.9933,
+        "alpha": 1.113,
+        "r2": 0.9952,
         "n": 6
       },
       "alphaTimeVsSlots": {
-        "alpha": 1.008,
-        "r2": 0.9939,
+        "alpha": 1.128,
+        "r2": 0.9943,
         "n": 6
       },
       "alphaCanTakeVsSlots": {
@@ -309,18 +309,18 @@
         "n": 6
       },
       "alphaGreedyVsSlots": {
-        "alpha": 1.133,
-        "r2": 0.996,
+        "alpha": 1.251,
+        "r2": 0.9935,
         "n": 6
       },
       "alphaRepairVsSlots": {
-        "alpha": 0.418,
-        "r2": 0.9029,
+        "alpha": 0.468,
+        "r2": 0.7974,
         "n": 6
       },
       "alphaImproveVsSlots": {
-        "alpha": 1.113,
-        "r2": 0.9559,
+        "alpha": 1.166,
+        "r2": 0.9523,
         "n": 6
       }
     }
@@ -340,19 +340,19 @@
       "students": 247,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 4.7,
-      "msMean": 1.482,
-      "msMin": 1.482,
-      "msMax": 2.646,
-      "msSd": 0.446,
+      "msMean": 3.03,
+      "msMin": 3.03,
+      "msMax": 4.525,
+      "msSd": 0.484,
       "repeats": 5,
-      "msSetup": 0.315,
-      "msGreedy": 0.546,
-      "msRepair": 0.149,
-      "msImprove": 0.344,
-      "msIndividual": 0.191,
-      "msReport": 0.058,
-      "usPerSlot": 13.112,
-      "slotsPerSecond": 76268,
+      "msSetup": 0.665,
+      "msGreedy": 1.143,
+      "msRepair": 0.318,
+      "msImprove": 0.972,
+      "msIndividual": 0.448,
+      "msReport": 0.121,
+      "usPerSlot": 26.811,
+      "slotsPerSecond": 37298,
       "opsCanTake": 3229,
       "opsFeasibleScan": 2664,
       "opsFeasibleCandidates": 417,
@@ -402,7 +402,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.855,
+      "msArithmeticMean": 3.753,
       "planFingerprint": "231f66b8"
     },
     {
@@ -419,19 +419,19 @@
       "students": 148,
       "demandRatio": 0.91,
       "constraintsPerLecturer": 5.5,
-      "msMean": 2.642,
-      "msMin": 2.642,
-      "msMax": 4.451,
-      "msSd": 0.572,
+      "msMean": 8.475,
+      "msMin": 8.475,
+      "msMax": 19.924,
+      "msSd": 4.386,
       "repeats": 5,
-      "msSetup": 0.687,
-      "msGreedy": 0.801,
-      "msRepair": 0.443,
-      "msImprove": 1.378,
-      "msIndividual": 0.128,
-      "msReport": 0.085,
-      "usPerSlot": 16.306,
-      "slotsPerSecond": 61329,
+      "msSetup": 1.228,
+      "msGreedy": 1.534,
+      "msRepair": 5.016,
+      "msImprove": 2.721,
+      "msIndividual": 0.189,
+      "msReport": 0.154,
+      "usPerSlot": 52.312,
+      "slotsPerSecond": 19116,
       "opsCanTake": 12479,
       "opsFeasibleScan": 10056,
       "opsFeasibleCandidates": 1173,
@@ -481,7 +481,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 3.535,
+      "msArithmeticMean": 12.79,
       "planFingerprint": "11f2a11b"
     },
     {
@@ -498,58 +498,58 @@
       "students": 370,
       "demandRatio": 0.84,
       "constraintsPerLecturer": 4.7,
-      "msMean": 0.528,
-      "msMin": 0.528,
-      "msMax": 2.761,
-      "msSd": 0.85,
+      "msMean": 1.493,
+      "msMin": 1.493,
+      "msMax": 6.098,
+      "msSd": 1.749,
       "repeats": 5,
-      "msSetup": 0.248,
-      "msGreedy": 0.051,
-      "msRepair": 0.074,
-      "msImprove": 0.036,
-      "msIndividual": 0.206,
-      "msReport": 0.061,
-      "usPerSlot": 9.965,
-      "slotsPerSecond": 100355,
-      "opsCanTake": 675,
-      "opsFeasibleScan": 449,
+      "msSetup": 0.469,
+      "msGreedy": 0.128,
+      "msRepair": 0.119,
+      "msImprove": 0.14,
+      "msIndividual": 0.741,
+      "msReport": 0.163,
+      "usPerSlot": 28.173,
+      "slotsPerSecond": 35495,
+      "opsCanTake": 683,
+      "opsFeasibleScan": 447,
       "opsFeasibleCandidates": 154,
-      "opsLoadAdd": 221,
-      "opsLoadRemove": 113,
-      "opsDeficitEvaluations": 166,
+      "opsLoadAdd": 230,
+      "opsLoadRemove": 122,
+      "opsDeficitEvaluations": 158,
       "opsDeficitLecturerScans": 10,
       "repairPasses": 4,
       "repairProbes": 54,
       "repairMoves": 1,
-      "improvePasses": 110,
-      "improveProbes": 13,
+      "improvePasses": 124,
+      "improveProbes": 21,
       "improveMoves": 1,
-      "canTakePerSlot": 12.74,
+      "canTakePerSlot": 12.89,
       "slotsFilled": 52,
       "fillRate": 0.9811,
-      "totalDesirability": 4374,
+      "totalDesirability": 4358,
       "desirabilityBound": 4588,
-      "optimalityGap": 0.0466,
-      "meanDesirability": 84.12,
+      "optimalityGap": 0.0501,
+      "meanDesirability": 83.81,
       "boundSlots": 53,
       "structuralErrors": 0,
-      "ceilingViolations": 2,
+      "ceilingViolations": 0,
       "ceilingViolationsBySearch": 0,
-      "ceilingViolationsByIndividual": 2,
+      "ceilingViolationsByIndividual": 0,
       "ceilingViolationsPreExisting": 0,
-      "ceilingOverrunHours": 118,
+      "ceilingOverrunHours": 0,
       "floorViolations": 3,
       "floorShortfall": 3,
       "lecturersBelowFloor": 3,
       "hoursMean": 499.8,
-      "hoursSd": 97.53,
-      "hoursCv": 0.195,
-      "hoursMin": 358,
-      "hoursMax": 664,
-      "hoursGini": 0.11,
-      "coursesMean": 5.4,
+      "hoursSd": 78.16,
+      "hoursCv": 0.156,
+      "hoursMin": 378,
+      "hoursMax": 598,
+      "hoursGini": 0.089,
+      "coursesMean": 5.5,
       "coursesMax": 9,
-      "utilisationMean": 0.872,
+      "utilisationMean": 0.874,
       "lecturersWithNoWork": 0,
       "studentsPlaced": 370,
       "studentsTotal": 370,
@@ -560,8 +560,8 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.186,
-      "planFingerprint": "245dff69"
+      "msArithmeticMean": 2.953,
+      "planFingerprint": "04b1f87a"
     },
     {
       "dataset": "oversubscribed-10",
@@ -577,19 +577,19 @@
       "students": 270,
       "demandRatio": 1.36,
       "constraintsPerLecturer": 8.5,
-      "msMean": 1.759,
-      "msMin": 1.759,
-      "msMax": 2.547,
-      "msSd": 0.286,
+      "msMean": 4.654,
+      "msMin": 4.654,
+      "msMax": 12.345,
+      "msSd": 2.698,
       "repeats": 5,
-      "msSetup": 0.533,
-      "msGreedy": 0.563,
-      "msRepair": 0.119,
-      "msImprove": 0.423,
-      "msIndividual": 0.116,
-      "msReport": 0.105,
-      "usPerSlot": 7.038,
-      "slotsPerSecond": 142096,
+      "msSetup": 1.028,
+      "msGreedy": 5.687,
+      "msRepair": 0.396,
+      "msImprove": 1.131,
+      "msIndividual": 0.328,
+      "msReport": 0.219,
+      "usPerSlot": 18.616,
+      "slotsPerSecond": 53718,
       "opsCanTake": 11726,
       "opsFeasibleScan": 9992,
       "opsFeasibleCandidates": 849,
@@ -639,7 +639,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.99,
+      "msArithmeticMean": 8.191,
       "planFingerprint": "6534683a"
     },
     {
@@ -656,19 +656,19 @@
       "students": 303,
       "demandRatio": 0.84,
       "constraintsPerLecturer": 3.7,
-      "msMean": 0.406,
-      "msMin": 0.406,
-      "msMax": 0.454,
-      "msSd": 0.019,
+      "msMean": 1.036,
+      "msMin": 1.036,
+      "msMax": 1.153,
+      "msSd": 0.052,
       "repeats": 5,
-      "msSetup": 0.158,
-      "msGreedy": 0.083,
-      "msRepair": 0.014,
-      "msImprove": 0.032,
-      "msIndividual": 0.093,
-      "msReport": 0.056,
-      "usPerSlot": 3.83,
-      "slotsPerSecond": 261110,
+      "msSetup": 0.332,
+      "msGreedy": 0.231,
+      "msRepair": 0.045,
+      "msImprove": 0.1,
+      "msIndividual": 0.226,
+      "msReport": 0.102,
+      "usPerSlot": 9.774,
+      "slotsPerSecond": 102310,
       "opsCanTake": 1461,
       "opsFeasibleScan": 1240,
       "opsFeasibleCandidates": 179,
@@ -718,7 +718,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 1,
-      "msArithmeticMean": 0.434,
+      "msArithmeticMean": 1.082,
       "planFingerprint": "2e30df10"
     },
     {
@@ -735,19 +735,19 @@
       "students": 139,
       "demandRatio": 0.99,
       "constraintsPerLecturer": 7.9,
-      "msMean": 1.615,
-      "msMin": 1.615,
-      "msMax": 2.15,
-      "msSd": 0.192,
+      "msMean": 4.584,
+      "msMin": 4.584,
+      "msMax": 4.835,
+      "msSd": 0.089,
       "repeats": 5,
-      "msSetup": 0.411,
-      "msGreedy": 0.418,
-      "msRepair": 0.002,
-      "msImprove": 0.723,
-      "msIndividual": 0.062,
-      "msReport": 0.072,
-      "usPerSlot": 8.366,
-      "slotsPerSecond": 119529,
+      "msSetup": 0.88,
+      "msGreedy": 1.216,
+      "msRepair": 0.007,
+      "msImprove": 2.257,
+      "msIndividual": 0.157,
+      "msReport": 0.145,
+      "usPerSlot": 23.753,
+      "slotsPerSecond": 42100,
       "opsCanTake": 9223,
       "opsFeasibleScan": 7609,
       "opsFeasibleCandidates": 698,
@@ -797,7 +797,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.782,
+      "msArithmeticMean": 4.684,
       "planFingerprint": "918321d3"
     },
     {
@@ -814,19 +814,19 @@
       "students": 87,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 5.9,
-      "msMean": 1.44,
-      "msMin": 1.44,
-      "msMax": 2.208,
-      "msSd": 0.292,
+      "msMean": 4.18,
+      "msMin": 4.18,
+      "msMax": 8.259,
+      "msSd": 1.527,
       "repeats": 5,
-      "msSetup": 0.138,
-      "msGreedy": 0.222,
-      "msRepair": 0.92,
-      "msImprove": 0.255,
-      "msIndividual": 0.029,
-      "msReport": 0.032,
-      "usPerSlot": 8.419,
-      "slotsPerSecond": 118778,
+      "msSetup": 0.836,
+      "msGreedy": 0.865,
+      "msRepair": 1.737,
+      "msImprove": 0.898,
+      "msIndividual": 0.092,
+      "msReport": 0.196,
+      "usPerSlot": 24.446,
+      "slotsPerSecond": 40907,
       "opsCanTake": 7550,
       "opsFeasibleScan": 5973,
       "opsFeasibleCandidates": 614,
@@ -876,7 +876,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.721,
+      "msArithmeticMean": 5.233,
       "planFingerprint": "fbc874ea"
     },
     {
@@ -893,19 +893,19 @@
       "students": 81,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 0,
-      "msMean": 0.584,
-      "msMin": 0.584,
-      "msMax": 0.627,
-      "msSd": 0.018,
+      "msMean": 1.541,
+      "msMin": 1.541,
+      "msMax": 2.829,
+      "msSd": 0.554,
       "repeats": 5,
-      "msSetup": 0.28,
-      "msGreedy": 0.202,
-      "msRepair": 0.003,
-      "msImprove": 0.071,
-      "msIndividual": 0.024,
-      "msReport": 0.041,
-      "usPerSlot": 3.816,
-      "slotsPerSecond": 262024,
+      "msSetup": 0.616,
+      "msGreedy": 0.63,
+      "msRepair": 0.006,
+      "msImprove": 0.22,
+      "msIndividual": 0.073,
+      "msReport": 0.09,
+      "usPerSlot": 10.071,
+      "slotsPerSecond": 99291,
       "opsCanTake": 4778,
       "opsFeasibleScan": 4294,
       "opsFeasibleCandidates": 450,
@@ -955,7 +955,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 0.612,
+      "msArithmeticMean": 2.057,
       "planFingerprint": "949d7916"
     },
     {
@@ -972,19 +972,19 @@
       "students": 301,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 4.75,
-      "msMean": 2.145,
-      "msMin": 2.145,
-      "msMax": 2.689,
-      "msSd": 0.206,
+      "msMean": 6.025,
+      "msMin": 6.025,
+      "msMax": 7.883,
+      "msSd": 0.719,
       "repeats": 5,
-      "msSetup": 0.674,
-      "msGreedy": 0.598,
-      "msRepair": 0.14,
-      "msImprove": 0.534,
-      "msIndividual": 0.125,
-      "msReport": 0.095,
-      "usPerSlot": 6.5,
-      "slotsPerSecond": 153855,
+      "msSetup": 1.446,
+      "msGreedy": 1.804,
+      "msRepair": 0.432,
+      "msImprove": 1.812,
+      "msIndividual": 0.345,
+      "msReport": 0.274,
+      "usPerSlot": 18.257,
+      "slotsPerSecond": 54773,
       "opsCanTake": 13138,
       "opsFeasibleScan": 11235,
       "opsFeasibleCandidates": 1106,
@@ -1034,7 +1034,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 2.297,
+      "msArithmeticMean": 6.448,
       "planFingerprint": "6eca237a"
     },
     {
@@ -1051,19 +1051,19 @@
       "students": 265,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 4.95,
-      "msMean": 5.128,
-      "msMin": 5.128,
-      "msMax": 8.222,
-      "msSd": 1.129,
+      "msMean": 12.03,
+      "msMin": 12.03,
+      "msMax": 20.917,
+      "msSd": 3.221,
       "repeats": 5,
-      "msSetup": 1.44,
-      "msGreedy": 1.408,
-      "msRepair": 0.661,
-      "msImprove": 1.683,
-      "msIndividual": 0.157,
-      "msReport": 0.09,
-      "usPerSlot": 16.279,
-      "slotsPerSecond": 61429,
+      "msSetup": 3.126,
+      "msGreedy": 5.389,
+      "msRepair": 1.674,
+      "msImprove": 3.3,
+      "msIndividual": 0.417,
+      "msReport": 0.197,
+      "usPerSlot": 38.191,
+      "slotsPerSecond": 26184,
       "opsCanTake": 27403,
       "opsFeasibleScan": 22785,
       "opsFeasibleCandidates": 2718,
@@ -1113,7 +1113,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 6.001,
+      "msArithmeticMean": 15.041,
       "planFingerprint": "7b0a81a7"
     },
     {
@@ -1130,19 +1130,19 @@
       "students": 90,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 5,
-      "msMean": 0.63,
-      "msMin": 0.63,
-      "msMax": 0.728,
-      "msSd": 0.037,
+      "msMean": 5.238,
+      "msMin": 5.238,
+      "msMax": 7.937,
+      "msSd": 1.01,
       "repeats": 5,
-      "msSetup": 0.232,
-      "msGreedy": 0.139,
-      "msRepair": 0.055,
-      "msImprove": 0.154,
-      "msIndividual": 0.034,
-      "msReport": 0.025,
-      "usPerSlot": 3.989,
-      "slotsPerSecond": 250678,
+      "msSetup": 2.585,
+      "msGreedy": 1.045,
+      "msRepair": 0.317,
+      "msImprove": 0.888,
+      "msIndividual": 0.215,
+      "msReport": 0.416,
+      "usPerSlot": 33.151,
+      "slotsPerSecond": 30165,
       "opsCanTake": 3356,
       "opsFeasibleScan": 2637,
       "opsFeasibleCandidates": 538,
@@ -1192,7 +1192,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 0.66,
+      "msArithmeticMean": 5.993,
       "planFingerprint": "be9d8f36"
     },
     {
@@ -1209,19 +1209,19 @@
       "students": 416,
       "demandRatio": 1.35,
       "constraintsPerLecturer": 8.5,
-      "msMean": 3.133,
-      "msMin": 3.133,
-      "msMax": 4.004,
-      "msSd": 0.308,
+      "msMean": 9.271,
+      "msMin": 9.271,
+      "msMax": 15.995,
+      "msSd": 2.53,
       "repeats": 5,
-      "msSetup": 0.432,
-      "msGreedy": 1.374,
-      "msRepair": 0.271,
-      "msImprove": 0.914,
-      "msIndividual": 0.24,
-      "msReport": 0.041,
-      "usPerSlot": 5.812,
-      "slotsPerSecond": 172058,
+      "msSetup": 2.15,
+      "msGreedy": 7.357,
+      "msRepair": 0.82,
+      "msImprove": 2.62,
+      "msIndividual": 1.164,
+      "msReport": 0.138,
+      "usPerSlot": 17.2,
+      "slotsPerSecond": 58139,
       "opsCanTake": 29562,
       "opsFeasibleScan": 26012,
       "opsFeasibleCandidates": 1880,
@@ -1271,7 +1271,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 3.414,
+      "msArithmeticMean": 13.028,
       "planFingerprint": "f4ad1b3e"
     },
     {
@@ -1288,19 +1288,19 @@
       "students": 445,
       "demandRatio": 0.82,
       "constraintsPerLecturer": 5.15,
-      "msMean": 0.536,
-      "msMin": 0.536,
-      "msMax": 0.602,
-      "msSd": 0.026,
+      "msMean": 1.784,
+      "msMin": 1.784,
+      "msMax": 3.595,
+      "msSd": 0.692,
       "repeats": 5,
-      "msSetup": 0.115,
-      "msGreedy": 0.159,
-      "msRepair": 0.017,
-      "msImprove": 0.057,
-      "msIndividual": 0.147,
-      "msReport": 0.054,
-      "usPerSlot": 2.048,
-      "slotsPerSecond": 488389,
+      "msSetup": 0.47,
+      "msGreedy": 0.53,
+      "msRepair": 0.06,
+      "msImprove": 0.222,
+      "msIndividual": 0.422,
+      "msReport": 0.127,
+      "usPerSlot": 6.809,
+      "slotsPerSecond": 146856,
       "opsCanTake": 4018,
       "opsFeasibleScan": 3560,
       "opsFeasibleCandidates": 366,
@@ -1350,7 +1350,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 1,
-      "msArithmeticMean": 0.563,
+      "msArithmeticMean": 2.239,
       "planFingerprint": "52087dab"
     },
     {
@@ -1367,19 +1367,19 @@
       "students": 418,
       "demandRatio": 0.98,
       "constraintsPerLecturer": 7.55,
-      "msMean": 1.356,
-      "msMin": 1.356,
-      "msMax": 1.953,
-      "msSd": 0.224,
+      "msMean": 4.364,
+      "msMin": 4.364,
+      "msMax": 5.699,
+      "msSd": 0.611,
       "repeats": 5,
-      "msSetup": 0.22,
-      "msGreedy": 0.465,
-      "msRepair": 0.004,
-      "msImprove": 0.468,
-      "msIndividual": 0.195,
-      "msReport": 0.056,
-      "usPerSlot": 4.461,
-      "slotsPerSecond": 224154,
+      "msSetup": 0.747,
+      "msGreedy": 1.494,
+      "msRepair": 0.009,
+      "msImprove": 1.5,
+      "msIndividual": 0.478,
+      "msReport": 0.174,
+      "usPerSlot": 14.357,
+      "slotsPerSecond": 69655,
       "opsCanTake": 11012,
       "opsFeasibleScan": 9248,
       "opsFeasibleCandidates": 1045,
@@ -1429,7 +1429,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.534,
+      "msArithmeticMean": 4.884,
       "planFingerprint": "061a25b4"
     },
     {
@@ -1446,19 +1446,19 @@
       "students": 357,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 7,
-      "msMean": 2.026,
-      "msMin": 2.026,
-      "msMax": 2.85,
-      "msSd": 0.296,
+      "msMean": 5.625,
+      "msMin": 5.625,
+      "msMax": 6.982,
+      "msSd": 0.57,
       "repeats": 5,
-      "msSetup": 0.202,
-      "msGreedy": 0.412,
-      "msRepair": 0.721,
-      "msImprove": 0.613,
-      "msIndividual": 0.147,
-      "msReport": 0.095,
-      "usPerSlot": 7.058,
-      "slotsPerSecond": 141690,
+      "msSetup": 1.309,
+      "msGreedy": 1.21,
+      "msRepair": 1.99,
+      "msImprove": 1.231,
+      "msIndividual": 0.288,
+      "msReport": 0.22,
+      "usPerSlot": 19.599,
+      "slotsPerSecond": 51023,
       "opsCanTake": 11648,
       "opsFeasibleScan": 9267,
       "opsFeasibleCandidates": 1018,
@@ -1508,7 +1508,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 2.322,
+      "msArithmeticMean": 6.331,
       "planFingerprint": "89885dfa"
     },
     {
@@ -1525,19 +1525,19 @@
       "students": 244,
       "demandRatio": 0.82,
       "constraintsPerLecturer": 0,
-      "msMean": 1.561,
-      "msMin": 1.561,
-      "msMax": 2.121,
-      "msSd": 0.203,
+      "msMean": 3.88,
+      "msMin": 3.88,
+      "msMax": 4.036,
+      "msSd": 0.06,
       "repeats": 5,
-      "msSetup": 0.7,
-      "msGreedy": 0.626,
-      "msRepair": 0.004,
-      "msImprove": 0.191,
-      "msIndividual": 0.057,
-      "msReport": 0.123,
-      "usPerSlot": 4.774,
-      "slotsPerSecond": 209481,
+      "msSetup": 1.441,
+      "msGreedy": 1.526,
+      "msRepair": 0.009,
+      "msImprove": 0.545,
+      "msIndividual": 0.21,
+      "msReport": 0.211,
+      "usPerSlot": 11.864,
+      "slotsPerSecond": 84289,
       "opsCanTake": 12464,
       "opsFeasibleScan": 11199,
       "opsFeasibleCandidates": 1166,
@@ -1587,7 +1587,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.767,
+      "msArithmeticMean": 3.963,
       "planFingerprint": "42092362"
     },
     {
@@ -1604,19 +1604,19 @@
       "students": 645,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 5.03,
-      "msMean": 3.469,
-      "msMin": 3.469,
-      "msMax": 4.447,
-      "msSd": 0.351,
+      "msMean": 8.636,
+      "msMin": 8.636,
+      "msMax": 10.365,
+      "msSd": 0.629,
       "repeats": 5,
-      "msSetup": 1.175,
-      "msGreedy": 1.262,
-      "msRepair": 0.137,
-      "msImprove": 0.733,
-      "msIndividual": 0.166,
-      "msReport": 0.152,
-      "usPerSlot": 6.129,
-      "slotsPerSecond": 163159,
+      "msSetup": 2.834,
+      "msGreedy": 2.735,
+      "msRepair": 0.341,
+      "msImprove": 2.308,
+      "msIndividual": 0.497,
+      "msReport": 0.222,
+      "usPerSlot": 15.258,
+      "slotsPerSecond": 65538,
       "opsCanTake": 20819,
       "opsFeasibleScan": 17939,
       "opsFeasibleCandidates": 1968,
@@ -1666,7 +1666,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 3.757,
+      "msArithmeticMean": 9.14,
       "planFingerprint": "408e1c90"
     },
     {
@@ -1683,19 +1683,19 @@
       "students": 638,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 4.9,
-      "msMean": 7.785,
-      "msMin": 7.785,
-      "msMax": 10.068,
-      "msSd": 0.841,
+      "msMean": 20.564,
+      "msMin": 20.564,
+      "msMax": 24.57,
+      "msSd": 1.398,
       "repeats": 5,
-      "msSetup": 1.547,
-      "msGreedy": 2.485,
-      "msRepair": 1.972,
-      "msImprove": 1.683,
-      "msIndividual": 0.312,
-      "msReport": 0.061,
-      "usPerSlot": 13.04,
-      "slotsPerSecond": 76686,
+      "msSetup": 5.161,
+      "msGreedy": 6.129,
+      "msRepair": 6.71,
+      "msImprove": 4.68,
+      "msIndividual": 0.886,
+      "msReport": 0.282,
+      "usPerSlot": 34.445,
+      "slotsPerSecond": 29032,
       "opsCanTake": 49650,
       "opsFeasibleScan": 40710,
       "opsFeasibleCandidates": 4824,
@@ -1745,7 +1745,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 8.415,
+      "msArithmeticMean": 23.236,
       "planFingerprint": "923131fa"
     },
     {
@@ -1762,58 +1762,58 @@
       "students": 491,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.3,
-      "msMean": 1.457,
-      "msMin": 1.457,
-      "msMax": 2.502,
-      "msSd": 0.381,
+      "msMean": 4.541,
+      "msMin": 4.541,
+      "msMax": 4.734,
+      "msSd": 0.068,
       "repeats": 5,
-      "msSetup": 0.577,
-      "msGreedy": 0.441,
-      "msRepair": 0.148,
-      "msImprove": 0.281,
-      "msIndividual": 0.153,
-      "msReport": 0.054,
-      "usPerSlot": 4.483,
-      "slotsPerSecond": 223042,
-      "opsCanTake": 6842,
-      "opsFeasibleScan": 5481,
+      "msSetup": 1.52,
+      "msGreedy": 1.205,
+      "msRepair": 0.399,
+      "msImprove": 0.772,
+      "msIndividual": 0.51,
+      "msReport": 0.178,
+      "usPerSlot": 13.971,
+      "slotsPerSecond": 71577,
+      "opsCanTake": 6871,
+      "opsFeasibleScan": 5525,
       "opsFeasibleCandidates": 1122,
-      "opsLoadAdd": 1017,
-      "opsLoadRemove": 361,
-      "opsDeficitEvaluations": 472,
+      "opsLoadAdd": 1005,
+      "opsLoadRemove": 349,
+      "opsDeficitEvaluations": 496,
       "opsDeficitLecturerScans": 40,
       "repairPasses": 12,
-      "repairProbes": 139,
+      "repairProbes": 143,
       "repairMoves": 4,
-      "improvePasses": 802,
-      "improveProbes": 64,
+      "improvePasses": 655,
+      "improveProbes": 58,
       "improveMoves": 1,
-      "canTakePerSlot": 21.05,
+      "canTakePerSlot": 21.14,
       "slotsFilled": 325,
       "fillRate": 1,
-      "totalDesirability": 27893,
+      "totalDesirability": 27835,
       "desirabilityBound": 28392,
-      "optimalityGap": 0.0176,
-      "meanDesirability": 85.82,
+      "optimalityGap": 0.0196,
+      "meanDesirability": 85.65,
       "boundSlots": 325,
       "structuralErrors": 0,
-      "ceilingViolations": 10,
+      "ceilingViolations": 0,
       "ceilingViolationsBySearch": 0,
-      "ceilingViolationsByIndividual": 10,
+      "ceilingViolationsByIndividual": 0,
       "ceilingViolationsPreExisting": 0,
-      "ceilingOverrunHours": 96,
+      "ceilingOverrunHours": 0,
       "floorViolations": 8,
       "floorShortfall": 8,
       "lecturersBelowFloor": 7,
       "hoursMean": 482.65,
-      "hoursSd": 117.12,
-      "hoursCv": 0.243,
-      "hoursMin": 212,
-      "hoursMax": 618,
-      "hoursGini": 0.136,
-      "coursesMean": 8.28,
+      "hoursSd": 109.17,
+      "hoursCv": 0.226,
+      "hoursMin": 254,
+      "hoursMax": 600,
+      "hoursGini": 0.126,
+      "coursesMean": 8.25,
       "coursesMax": 13,
-      "utilisationMean": 0.847,
+      "utilisationMean": 0.848,
       "lecturersWithNoWork": 0,
       "studentsPlaced": 491,
       "studentsTotal": 491,
@@ -1824,8 +1824,8 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 1.833,
-      "planFingerprint": "a9dfa972"
+      "msArithmeticMean": 4.606,
+      "planFingerprint": "c333d0d8"
     },
     {
       "dataset": "oversubscribed-40",
@@ -1841,19 +1841,19 @@
       "students": 987,
       "demandRatio": 1.36,
       "constraintsPerLecturer": 8.07,
-      "msMean": 6.16,
-      "msMin": 6.16,
-      "msMax": 6.414,
-      "msSd": 0.092,
+      "msMean": 16.601,
+      "msMin": 16.601,
+      "msMax": 21.384,
+      "msSd": 1.819,
       "repeats": 5,
-      "msSetup": 0.751,
-      "msGreedy": 2.75,
-      "msRepair": 0.508,
-      "msImprove": 1.924,
-      "msIndividual": 0.356,
-      "msReport": 0.067,
-      "usPerSlot": 6.292,
-      "slotsPerSecond": 158926,
+      "msSetup": 2.163,
+      "msGreedy": 9.453,
+      "msRepair": 1.597,
+      "msImprove": 4.852,
+      "msIndividual": 1.106,
+      "msReport": 0.317,
+      "usPerSlot": 16.957,
+      "slotsPerSecond": 58972,
       "opsCanTake": 48990,
       "opsFeasibleScan": 42761,
       "opsFeasibleCandidates": 3318,
@@ -1903,7 +1903,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 6.324,
+      "msArithmeticMean": 18.846,
       "planFingerprint": "33cc09ea"
     },
     {
@@ -1920,19 +1920,19 @@
       "students": 780,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.63,
-      "msMean": 1.027,
-      "msMin": 1.027,
-      "msMax": 1.515,
-      "msSd": 0.184,
+      "msMean": 3.481,
+      "msMin": 3.481,
+      "msMax": 3.66,
+      "msSd": 0.064,
       "repeats": 5,
-      "msSetup": 0.247,
-      "msGreedy": 0.386,
-      "msRepair": 0.039,
-      "msImprove": 0.208,
-      "msIndividual": 0.129,
-      "msReport": 0.042,
-      "usPerSlot": 1.815,
-      "slotsPerSecond": 550963,
+      "msSetup": 0.759,
+      "msGreedy": 1.305,
+      "msRepair": 0.151,
+      "msImprove": 0.629,
+      "msIndividual": 0.554,
+      "msReport": 0.146,
+      "usPerSlot": 6.149,
+      "slotsPerSecond": 162619,
       "opsCanTake": 8427,
       "opsFeasibleScan": 7355,
       "opsFeasibleCandidates": 854,
@@ -1982,7 +1982,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 1,
-      "msArithmeticMean": 1.155,
+      "msArithmeticMean": 3.557,
       "planFingerprint": "af5c6582"
     },
     {
@@ -1999,19 +1999,19 @@
       "students": 639,
       "demandRatio": 0.92,
       "constraintsPerLecturer": 7.83,
-      "msMean": 4.947,
-      "msMin": 4.947,
-      "msMax": 5.182,
-      "msSd": 0.087,
+      "msMean": 13.488,
+      "msMin": 13.488,
+      "msMax": 15.799,
+      "msSd": 0.891,
       "repeats": 5,
-      "msSetup": 0.56,
-      "msGreedy": 1.64,
-      "msRepair": 0.008,
-      "msImprove": 2.637,
-      "msIndividual": 0.192,
-      "msReport": 0.053,
-      "usPerSlot": 7.169,
-      "slotsPerSecond": 139483,
+      "msSetup": 2.751,
+      "msGreedy": 4.184,
+      "msRepair": 0.015,
+      "msImprove": 7.048,
+      "msIndividual": 0.548,
+      "msReport": 0.175,
+      "usPerSlot": 19.548,
+      "slotsPerSecond": 51156,
       "opsCanTake": 30456,
       "opsFeasibleScan": 25164,
       "opsFeasibleCandidates": 2479,
@@ -2061,7 +2061,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 5.086,
+      "msArithmeticMean": 14.58,
       "planFingerprint": "90f4c3f7"
     },
     {
@@ -2078,19 +2078,19 @@
       "students": 336,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 6.93,
-      "msMean": 4.759,
-      "msMin": 4.759,
-      "msMax": 5.287,
-      "msSd": 0.193,
+      "msMean": 13.382,
+      "msMin": 13.382,
+      "msMax": 15.414,
+      "msSd": 0.894,
       "repeats": 5,
-      "msSetup": 0.483,
-      "msGreedy": 1.273,
-      "msRepair": 2.064,
-      "msImprove": 1.082,
-      "msIndividual": 0.096,
-      "msReport": 0.079,
-      "usPerSlot": 7.189,
-      "slotsPerSecond": 139098,
+      "msSetup": 1.424,
+      "msGreedy": 3.441,
+      "msRepair": 4.769,
+      "msImprove": 3.339,
+      "msIndividual": 0.274,
+      "msReport": 0.199,
+      "usPerSlot": 20.215,
+      "slotsPerSecond": 49469,
       "opsCanTake": 29426,
       "opsFeasibleScan": 23949,
       "opsFeasibleCandidates": 2203,
@@ -2140,7 +2140,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 5.009,
+      "msArithmeticMean": 14.144,
       "planFingerprint": "04de6062"
     },
     {
@@ -2157,19 +2157,19 @@
       "students": 327,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 0,
-      "msMean": 2.651,
-      "msMin": 2.651,
-      "msMax": 3.118,
-      "msSd": 0.169,
+      "msMean": 8.025,
+      "msMin": 8.025,
+      "msMax": 9.711,
+      "msSd": 0.605,
       "repeats": 5,
-      "msSetup": 0.497,
-      "msGreedy": 1.31,
-      "msRepair": 0.007,
-      "msImprove": 0.826,
-      "msIndividual": 0.082,
-      "msReport": 0.048,
-      "usPerSlot": 3.888,
-      "slotsPerSecond": 257213,
+      "msSetup": 1.585,
+      "msGreedy": 3.593,
+      "msRepair": 0.018,
+      "msImprove": 2.698,
+      "msIndividual": 0.256,
+      "msReport": 0.184,
+      "usPerSlot": 11.767,
+      "slotsPerSecond": 84986,
       "opsCanTake": 29250,
       "opsFeasibleScan": 26219,
       "opsFeasibleCandidates": 2449,
@@ -2219,7 +2219,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 2.856,
+      "msArithmeticMean": 8.542,
       "planFingerprint": "2e9efdb3"
     },
     {
@@ -2236,19 +2236,19 @@
       "students": 909,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 5.09,
-      "msMean": 6.543,
-      "msMin": 6.543,
-      "msMax": 7.483,
-      "msSd": 0.315,
+      "msMean": 18.992,
+      "msMin": 18.992,
+      "msMax": 21.312,
+      "msSd": 0.789,
       "repeats": 5,
-      "msSetup": 0.986,
-      "msGreedy": 2.839,
-      "msRepair": 0.7,
-      "msImprove": 1.606,
-      "msIndividual": 0.583,
-      "msReport": 0.094,
-      "usPerSlot": 5.164,
-      "slotsPerSecond": 193642,
+      "msSetup": 2.968,
+      "msGreedy": 7.515,
+      "msRepair": 1.978,
+      "msImprove": 7.245,
+      "msIndividual": 0.733,
+      "msReport": 0.294,
+      "usPerSlot": 14.99,
+      "slotsPerSecond": 66713,
       "opsCanTake": 50045,
       "opsFeasibleScan": 43586,
       "opsFeasibleCandidates": 4348,
@@ -2298,7 +2298,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 6.934,
+      "msArithmeticMean": 20.473,
       "planFingerprint": "ee89895e"
     },
     {
@@ -2315,19 +2315,19 @@
       "students": 1522,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.93,
-      "msMean": 17.265,
-      "msMin": 17.265,
-      "msMax": 18.366,
-      "msSd": 0.435,
+      "msMean": 51.22,
+      "msMin": 51.22,
+      "msMax": 54.462,
+      "msSd": 1.248,
       "repeats": 5,
-      "msSetup": 2.12,
-      "msGreedy": 5.346,
-      "msRepair": 4.699,
-      "msImprove": 4.438,
-      "msIndividual": 0.678,
-      "msReport": 0.114,
-      "usPerSlot": 14.948,
-      "slotsPerSecond": 66898,
+      "msSetup": 7.966,
+      "msGreedy": 14.355,
+      "msRepair": 11.456,
+      "msImprove": 16.598,
+      "msIndividual": 1.793,
+      "msReport": 0.408,
+      "usPerSlot": 44.347,
+      "slotsPerSecond": 22550,
       "opsCanTake": 97797,
       "opsFeasibleScan": 79271,
       "opsFeasibleCandidates": 9685,
@@ -2377,7 +2377,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 17.663,
+      "msArithmeticMean": 52.985,
       "planFingerprint": "833a1a01"
     },
     {
@@ -2394,70 +2394,70 @@
       "students": 1043,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.54,
-      "msMean": 3.018,
-      "msMin": 3.018,
-      "msMax": 3.765,
-      "msSd": 0.3,
+      "msMean": 9.69,
+      "msMin": 9.69,
+      "msMax": 12.146,
+      "msSd": 1.006,
       "repeats": 5,
-      "msSetup": 0.934,
-      "msGreedy": 0.786,
-      "msRepair": 0.437,
-      "msImprove": 0.609,
-      "msIndividual": 0.704,
-      "msReport": 0.092,
-      "usPerSlot": 5.498,
-      "slotsPerSecond": 181893,
-      "opsCanTake": 10867,
-      "opsFeasibleScan": 8224,
+      "msSetup": 2.852,
+      "msGreedy": 2.09,
+      "msRepair": 1.276,
+      "msImprove": 2.169,
+      "msIndividual": 1.302,
+      "msReport": 0.39,
+      "usPerSlot": 17.65,
+      "slotsPerSecond": 56658,
+      "opsCanTake": 10855,
+      "opsFeasibleScan": 8155,
       "opsFeasibleCandidates": 1910,
-      "opsLoadAdd": 2159,
-      "opsLoadRemove": 1002,
-      "opsDeficitEvaluations": 1134,
+      "opsLoadAdd": 2145,
+      "opsLoadRemove": 988,
+      "opsDeficitEvaluations": 802,
       "opsDeficitLecturerScans": 80,
-      "repairPasses": 33,
-      "repairProbes": 464,
-      "repairMoves": 11,
-      "improvePasses": 1469,
-      "improveProbes": 238,
-      "improveMoves": 7,
-      "canTakePerSlot": 19.79,
+      "repairPasses": 29,
+      "repairProbes": 478,
+      "repairMoves": 6,
+      "improvePasses": 1354,
+      "improveProbes": 259,
+      "improveMoves": 3,
+      "canTakePerSlot": 19.77,
       "slotsFilled": 545,
       "fillRate": 0.9927,
-      "totalDesirability": 45680,
+      "totalDesirability": 45411,
       "desirabilityBound": 47531,
-      "optimalityGap": 0.0389,
-      "meanDesirability": 83.82,
+      "optimalityGap": 0.0446,
+      "meanDesirability": 83.32,
       "boundSlots": 549,
       "structuralErrors": 0,
-      "ceilingViolations": 17,
+      "ceilingViolations": 1,
       "ceilingViolationsBySearch": 0,
-      "ceilingViolationsByIndividual": 17,
-      "ceilingViolationsPreExisting": 0,
-      "ceilingOverrunHours": 627,
-      "floorViolations": 23,
-      "floorShortfall": 25,
-      "lecturersBelowFloor": 21,
+      "ceilingViolationsByIndividual": 0,
+      "ceilingViolationsPreExisting": 1,
+      "ceilingOverrunHours": 20,
+      "floorViolations": 24,
+      "floorShortfall": 26,
+      "lecturersBelowFloor": 22,
       "hoursMean": 480.38,
-      "hoursSd": 129.67,
-      "hoursCv": 0.27,
-      "hoursMin": 216,
-      "hoursMax": 700,
-      "hoursGini": 0.154,
-      "coursesMean": 6.98,
+      "hoursSd": 119.74,
+      "hoursCv": 0.249,
+      "hoursMin": 200,
+      "hoursMax": 620,
+      "hoursGini": 0.137,
+      "coursesMean": 7,
       "coursesMax": 14,
       "utilisationMean": 0.87,
       "lecturersWithNoWork": 0,
       "studentsPlaced": 1043,
       "studentsTotal": 1043,
       "studentPlacementRate": 1,
-      "issuesTotal": 27,
+      "issuesTotal": 28,
       "issuesUnfilled": 4,
-      "issuesUnmetMinimum": 23,
+      "issuesUnmetMinimum": 24,
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 3.431,
-      "planFingerprint": "e8d64ad6"
+      "msArithmeticMean": 10.761,
+      "planFingerprint": "37df030e"
     },
     {
       "dataset": "oversubscribed-80",
@@ -2473,19 +2473,19 @@
       "students": 1940,
       "demandRatio": 1.35,
       "constraintsPerLecturer": 8.36,
-      "msMean": 12.693,
-      "msMin": 12.693,
-      "msMax": 13.467,
-      "msSd": 0.331,
+      "msMean": 38.336,
+      "msMin": 38.336,
+      "msMax": 43.025,
+      "msSd": 1.655,
       "repeats": 5,
-      "msSetup": 1.511,
-      "msGreedy": 7.02,
-      "msRepair": 1.251,
-      "msImprove": 2.253,
-      "msIndividual": 0.702,
-      "msReport": 0.143,
-      "usPerSlot": 6.259,
-      "slotsPerSecond": 159771,
+      "msSetup": 4.454,
+      "msGreedy": 22.601,
+      "msRepair": 4.067,
+      "msImprove": 7.143,
+      "msIndividual": 2.164,
+      "msReport": 0.635,
+      "usPerSlot": 18.904,
+      "slotsPerSecond": 52900,
       "opsCanTake": 104469,
       "opsFeasibleScan": 92755,
       "opsFeasibleCandidates": 6832,
@@ -2535,7 +2535,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 13.027,
+      "msArithmeticMean": 40.664,
       "planFingerprint": "3c6e4246"
     },
     {
@@ -2552,19 +2552,19 @@
       "students": 963,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.81,
-      "msMean": 2.327,
-      "msMin": 2.327,
-      "msMax": 2.964,
-      "msSd": 0.23,
+      "msMean": 7.799,
+      "msMin": 7.799,
+      "msMax": 10.045,
+      "msSd": 0.954,
       "repeats": 5,
-      "msSetup": 0.52,
-      "msGreedy": 1.1,
-      "msRepair": 0.12,
-      "msImprove": 0.491,
-      "msIndividual": 0.185,
-      "msReport": 0.09,
-      "usPerSlot": 1.835,
-      "slotsPerSecond": 544859,
+      "msSetup": 1.776,
+      "msGreedy": 3.146,
+      "msRepair": 0.438,
+      "msImprove": 3.475,
+      "msIndividual": 0.59,
+      "msReport": 0.256,
+      "usPerSlot": 6.151,
+      "slotsPerSecond": 162578,
       "opsCanTake": 20876,
       "opsFeasibleScan": 18465,
       "opsFeasibleCandidates": 1851,
@@ -2614,7 +2614,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 2.594,
+      "msArithmeticMean": 9.07,
       "planFingerprint": "d514f22c"
     },
     {
@@ -2631,19 +2631,19 @@
       "students": 980,
       "demandRatio": 0.92,
       "constraintsPerLecturer": 7.4,
-      "msMean": 8.474,
-      "msMin": 8.474,
-      "msMax": 8.968,
-      "msSd": 0.166,
+      "msMean": 25.657,
+      "msMin": 25.657,
+      "msMax": 29.678,
+      "msSd": 1.472,
       "repeats": 5,
-      "msSetup": 1.634,
-      "msGreedy": 4.03,
-      "msRepair": 0.004,
-      "msImprove": 2.612,
-      "msIndividual": 0.333,
-      "msReport": 0.112,
-      "usPerSlot": 5.695,
-      "slotsPerSecond": 175603,
+      "msSetup": 3.463,
+      "msGreedy": 10.74,
+      "msRepair": 0.016,
+      "msImprove": 10.551,
+      "msIndividual": 0.955,
+      "msReport": 0.429,
+      "usPerSlot": 17.243,
+      "slotsPerSecond": 57996,
       "opsCanTake": 68944,
       "opsFeasibleScan": 61030,
       "opsFeasibleCandidates": 5376,
@@ -2693,7 +2693,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 8.716,
+      "msArithmeticMean": 26.798,
       "planFingerprint": "312e1617"
     },
     {
@@ -2710,19 +2710,19 @@
       "students": 1275,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 6.73,
-      "msMean": 9.239,
-      "msMin": 9.239,
-      "msMax": 10.16,
-      "msSd": 0.327,
+      "msMean": 23.98,
+      "msMin": 23.98,
+      "msMax": 26.509,
+      "msSd": 0.888,
       "repeats": 5,
-      "msSetup": 1.781,
-      "msGreedy": 2.55,
-      "msRepair": 3.55,
-      "msImprove": 1.512,
-      "msIndividual": 0.464,
-      "msReport": 0.109,
-      "usPerSlot": 8.069,
-      "slotsPerSecond": 123925,
+      "msSetup": 2.653,
+      "msGreedy": 5.747,
+      "msRepair": 9.278,
+      "msImprove": 4.514,
+      "msIndividual": 2.858,
+      "msReport": 0.34,
+      "usPerSlot": 20.943,
+      "slotsPerSecond": 47749,
       "opsCanTake": 44103,
       "opsFeasibleScan": 35020,
       "opsFeasibleCandidates": 3806,
@@ -2772,7 +2772,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 9.796,
+      "msArithmeticMean": 25.311,
       "planFingerprint": "80fdd48b"
     },
     {
@@ -2789,19 +2789,19 @@
       "students": 882,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 0,
-      "msMean": 4.685,
-      "msMin": 4.685,
-      "msMax": 5.48,
-      "msSd": 0.367,
+      "msMean": 13.748,
+      "msMin": 13.748,
+      "msMax": 15.79,
+      "msSd": 0.88,
       "repeats": 5,
-      "msSetup": 1.646,
-      "msGreedy": 2.673,
-      "msRepair": 0.006,
-      "msImprove": 0.726,
-      "msIndividual": 0.261,
-      "msReport": 0.094,
-      "usPerSlot": 3.612,
-      "slotsPerSecond": 276853,
+      "msSetup": 2.826,
+      "msGreedy": 6.859,
+      "msRepair": 0.01,
+      "msImprove": 4.508,
+      "msIndividual": 0.845,
+      "msReport": 0.286,
+      "usPerSlot": 10.6,
+      "slotsPerSecond": 94343,
       "opsCanTake": 49784,
       "opsFeasibleScan": 45043,
       "opsFeasibleCandidates": 4449,
@@ -2851,7 +2851,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 5.146,
+      "msArithmeticMean": 14.846,
       "planFingerprint": "0f58adb0"
     },
     {
@@ -2868,19 +2868,19 @@
       "students": 2963,
       "demandRatio": 0.81,
       "constraintsPerLecturer": 5.08,
-      "msMean": 12.443,
-      "msMin": 12.443,
-      "msMax": 16.517,
-      "msSd": 1.425,
+      "msMean": 39.825,
+      "msMin": 39.825,
+      "msMax": 105.921,
+      "msSd": 24.041,
       "repeats": 5,
-      "msSetup": 2.081,
-      "msGreedy": 4.886,
-      "msRepair": 1.511,
-      "msImprove": 4.011,
-      "msIndividual": 0.807,
-      "msReport": 0.232,
-      "usPerSlot": 5.692,
-      "slotsPerSecond": 175675,
+      "msSetup": 6.555,
+      "msGreedy": 15.127,
+      "msRepair": 4.353,
+      "msImprove": 8.918,
+      "msIndividual": 11.897,
+      "msReport": 0.718,
+      "usPerSlot": 18.218,
+      "slotsPerSecond": 54891,
       "opsCanTake": 80141,
       "opsFeasibleScan": 68511,
       "opsFeasibleCandidates": 7681,
@@ -2930,7 +2930,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 13.862,
+      "msArithmeticMean": 58.731,
       "planFingerprint": "3b7058d0"
     },
     {
@@ -2947,19 +2947,19 @@
       "students": 1931,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 5.03,
-      "msMean": 40.945,
-      "msMin": 40.945,
-      "msMax": 57.476,
-      "msSd": 6.356,
+      "msMean": 126.836,
+      "msMin": 126.836,
+      "msMax": 139.678,
+      "msSd": 4.196,
       "repeats": 5,
-      "msSetup": 5.124,
-      "msGreedy": 14.023,
-      "msRepair": 11.305,
-      "msImprove": 9.493,
-      "msIndividual": 1.585,
-      "msReport": 0.26,
-      "usPerSlot": 16.107,
-      "slotsPerSecond": 62084,
+      "msSetup": 19.943,
+      "msGreedy": 38.794,
+      "msRepair": 40.238,
+      "msImprove": 28.916,
+      "msIndividual": 2.421,
+      "msReport": 1.088,
+      "usPerSlot": 49.896,
+      "slotsPerSecond": 20042,
       "opsCanTake": 229810,
       "opsFeasibleScan": 187946,
       "opsFeasibleCandidates": 21357,
@@ -3009,7 +3009,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 44.783,
+      "msArithmeticMean": 132.101,
       "planFingerprint": "415a4a40"
     },
     {
@@ -3026,70 +3026,70 @@
       "students": 2085,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 5,
-      "msMean": 8.501,
-      "msMin": 8.501,
-      "msMax": 8.971,
-      "msSd": 0.161,
+      "msMean": 29.444,
+      "msMin": 29.444,
+      "msMax": 32.846,
+      "msSd": 1.42,
       "repeats": 5,
-      "msSetup": 2.965,
-      "msGreedy": 2.332,
-      "msRepair": 0.939,
-      "msImprove": 1.661,
-      "msIndividual": 0.573,
-      "msReport": 0.216,
-      "usPerSlot": 6.396,
-      "slotsPerSecond": 156344,
-      "opsCanTake": 29676,
-      "opsFeasibleScan": 23438,
+      "msSetup": 11.425,
+      "msGreedy": 6.893,
+      "msRepair": 3.266,
+      "msImprove": 5.716,
+      "msIndividual": 2.512,
+      "msReport": 0.855,
+      "usPerSlot": 22.155,
+      "slotsPerSecond": 45136,
+      "opsCanTake": 30080,
+      "opsFeasibleScan": 23690,
       "opsFeasibleCandidates": 4579,
-      "opsLoadAdd": 4778,
-      "opsLoadRemove": 2179,
-      "opsDeficitEvaluations": 2172,
+      "opsLoadAdd": 4853,
+      "opsLoadRemove": 2255,
+      "opsDeficitEvaluations": 1856,
       "opsDeficitLecturerScans": 160,
-      "repairPasses": 55,
-      "repairProbes": 965,
-      "repairMoves": 14,
-      "improvePasses": 3898,
-      "improveProbes": 604,
-      "improveMoves": 11,
-      "canTakePerSlot": 22.33,
-      "slotsFilled": 1325,
-      "fillRate": 0.997,
-      "totalDesirability": 112475,
+      "repairPasses": 56,
+      "repairProbes": 1040,
+      "repairMoves": 9,
+      "improvePasses": 3732,
+      "improveProbes": 688,
+      "improveMoves": 7,
+      "canTakePerSlot": 22.63,
+      "slotsFilled": 1324,
+      "fillRate": 0.9962,
+      "totalDesirability": 111557,
       "desirabilityBound": 115804,
-      "optimalityGap": 0.0287,
-      "meanDesirability": 84.89,
+      "optimalityGap": 0.0367,
+      "meanDesirability": 84.26,
       "boundSlots": 1329,
       "structuralErrors": 0,
-      "ceilingViolations": 44,
+      "ceilingViolations": 2,
       "ceilingViolationsBySearch": 0,
-      "ceilingViolationsByIndividual": 44,
-      "ceilingViolationsPreExisting": 0,
-      "ceilingOverrunHours": 1037,
-      "floorViolations": 49,
-      "floorShortfall": 49,
-      "lecturersBelowFloor": 40,
-      "hoursMean": 480.05,
-      "hoursSd": 138.06,
-      "hoursCv": 0.288,
-      "hoursMin": 26,
-      "hoursMax": 680,
-      "hoursGini": 0.16,
-      "coursesMean": 7.79,
+      "ceilingViolationsByIndividual": 0,
+      "ceilingViolationsPreExisting": 2,
+      "ceilingOverrunHours": 96,
+      "floorViolations": 55,
+      "floorShortfall": 56,
+      "lecturersBelowFloor": 46,
+      "hoursMean": 479.86,
+      "hoursSd": 127.52,
+      "hoursCv": 0.266,
+      "hoursMin": 20,
+      "hoursMax": 670,
+      "hoursGini": 0.144,
+      "coursesMean": 7.81,
       "coursesMax": 13,
-      "utilisationMean": 0.898,
+      "utilisationMean": 0.9,
       "lecturersWithNoWork": 0,
       "studentsPlaced": 2085,
       "studentsTotal": 2085,
       "studentPlacementRate": 1,
-      "issuesTotal": 53,
-      "issuesUnfilled": 4,
-      "issuesUnmetMinimum": 49,
+      "issuesTotal": 60,
+      "issuesUnfilled": 5,
+      "issuesUnmetMinimum": 55,
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 8.719,
-      "planFingerprint": "dee80b55"
+      "msArithmeticMean": 31.05,
+      "planFingerprint": "92a55ff8"
     },
     {
       "dataset": "oversubscribed-160",
@@ -3105,19 +3105,19 @@
       "students": 3696,
       "demandRatio": 1.35,
       "constraintsPerLecturer": 8.12,
-      "msMean": 27.91,
-      "msMin": 27.91,
-      "msMax": 28.659,
-      "msSd": 0.289,
+      "msMean": 100.664,
+      "msMin": 100.664,
+      "msMax": 103.557,
+      "msSd": 1.051,
       "repeats": 5,
-      "msSetup": 3.674,
-      "msGreedy": 14.589,
-      "msRepair": 2.346,
-      "msImprove": 6.098,
-      "msIndividual": 1.272,
-      "msReport": 0.28,
-      "usPerSlot": 6.857,
-      "slotsPerSecond": 145828,
+      "msSetup": 13.643,
+      "msGreedy": 47.532,
+      "msRepair": 11.175,
+      "msImprove": 22.503,
+      "msIndividual": 3.909,
+      "msReport": 3.896,
+      "usPerSlot": 24.733,
+      "slotsPerSecond": 40432,
       "opsCanTake": 210686,
       "opsFeasibleScan": 186425,
       "opsFeasibleCandidates": 14121,
@@ -3167,7 +3167,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 28.289,
+      "msArithmeticMean": 102.305,
       "planFingerprint": "2d3e072b"
     },
     {
@@ -3184,19 +3184,19 @@
       "students": 2329,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.83,
-      "msMean": 5.446,
-      "msMin": 5.446,
-      "msMax": 6.113,
-      "msSd": 0.237,
+      "msMean": 19.84,
+      "msMin": 19.84,
+      "msMax": 21.212,
+      "msSd": 0.604,
       "repeats": 5,
-      "msSetup": 1.093,
-      "msGreedy": 2.266,
-      "msRepair": 0.234,
-      "msImprove": 0.786,
-      "msIndividual": 1.066,
-      "msReport": 0.153,
-      "usPerSlot": 2.284,
-      "slotsPerSecond": 437906,
+      "msSetup": 3.631,
+      "msGreedy": 6.955,
+      "msRepair": 0.737,
+      "msImprove": 3.02,
+      "msIndividual": 5.086,
+      "msReport": 0.652,
+      "usPerSlot": 8.319,
+      "slotsPerSecond": 120211,
       "opsCanTake": 39415,
       "opsFeasibleScan": 34881,
       "opsFeasibleCandidates": 3542,
@@ -3246,7 +3246,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 1,
-      "msArithmeticMean": 5.658,
+      "msArithmeticMean": 20.478,
       "planFingerprint": "58cefe02"
     },
     {
@@ -3263,19 +3263,19 @@
       "students": 2505,
       "demandRatio": 0.93,
       "constraintsPerLecturer": 7.78,
-      "msMean": 18.507,
-      "msMin": 18.507,
-      "msMax": 19.097,
-      "msSd": 0.213,
+      "msMean": 59.713,
+      "msMin": 59.713,
+      "msMax": 65.972,
+      "msSd": 2.557,
       "repeats": 5,
-      "msSetup": 3.019,
-      "msGreedy": 8.098,
-      "msRepair": 0.008,
-      "msImprove": 6.569,
-      "msIndividual": 0.761,
-      "msReport": 0.235,
-      "usPerSlot": 6.542,
-      "slotsPerSecond": 152862,
+      "msSetup": 11.267,
+      "msGreedy": 24.456,
+      "msRepair": 0.023,
+      "msImprove": 22.822,
+      "msIndividual": 2.431,
+      "msReport": 0.778,
+      "usPerSlot": 21.107,
+      "slotsPerSecond": 47377,
       "opsCanTake": 123865,
       "opsFeasibleScan": 108144,
       "opsFeasibleCandidates": 9927,
@@ -3325,7 +3325,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 18.759,
+      "msArithmeticMean": 62.574,
       "planFingerprint": "a23cde72"
     },
     {
@@ -3342,19 +3342,19 @@
       "students": 1927,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 6.75,
-      "msMean": 20.165,
-      "msMin": 20.165,
-      "msMax": 21.094,
-      "msSd": 0.341,
+      "msMean": 67.546,
+      "msMin": 67.546,
+      "msMax": 72.095,
+      "msSd": 1.792,
       "repeats": 5,
-      "msSetup": 2.693,
-      "msGreedy": 6.103,
-      "msRepair": 8.062,
-      "msImprove": 3.106,
-      "msIndividual": 0.528,
-      "msReport": 0.196,
-      "usPerSlot": 7.831,
-      "slotsPerSecond": 127695,
+      "msSetup": 6.751,
+      "msGreedy": 18.359,
+      "msRepair": 29.302,
+      "msImprove": 10.991,
+      "msIndividual": 1.504,
+      "msReport": 0.903,
+      "usPerSlot": 26.231,
+      "slotsPerSecond": 38122,
       "opsCanTake": 110851,
       "opsFeasibleScan": 91445,
       "opsFeasibleCandidates": 8710,
@@ -3404,7 +3404,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 20.578,
+      "msArithmeticMean": 69.112,
       "planFingerprint": "d534d5b6"
     },
     {
@@ -3421,19 +3421,19 @@
       "students": 2132,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 0,
-      "msMean": 10.426,
-      "msMin": 10.426,
-      "msMax": 11.185,
-      "msSd": 0.281,
+      "msMean": 36.131,
+      "msMin": 36.131,
+      "msMax": 42.965,
+      "msSd": 2.706,
       "repeats": 5,
-      "msSetup": 2.618,
-      "msGreedy": 5.375,
-      "msRepair": 0.008,
-      "msImprove": 1.73,
-      "msIndividual": 0.58,
-      "msReport": 0.183,
-      "usPerSlot": 4.209,
-      "slotsPerSecond": 237584,
+      "msSetup": 6.162,
+      "msGreedy": 22.643,
+      "msRepair": 0.021,
+      "msImprove": 6.115,
+      "msIndividual": 1.662,
+      "msReport": 0.637,
+      "usPerSlot": 14.586,
+      "slotsPerSecond": 68557,
       "opsCanTake": 93936,
       "opsFeasibleScan": 84451,
       "opsFeasibleCandidates": 8677,
@@ -3483,7 +3483,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 10.655,
+      "msArithmeticMean": 38.6,
       "planFingerprint": "1743781e"
     },
     {
@@ -3500,19 +3500,19 @@
       "students": 4380,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 5.06,
-      "msMean": 27.086,
-      "msMin": 27.086,
-      "msMax": 43.896,
-      "msSd": 6.231,
+      "msMean": 111.315,
+      "msMin": 111.315,
+      "msMax": 117.598,
+      "msSd": 2.48,
       "repeats": 5,
-      "msSetup": 5.62,
-      "msGreedy": 13.043,
-      "msRepair": 3.069,
-      "msImprove": 5.857,
-      "msIndividual": 1.314,
-      "msReport": 0.478,
-      "usPerSlot": 5.587,
-      "slotsPerSecond": 178988,
+      "msSetup": 22.118,
+      "msGreedy": 54.303,
+      "msRepair": 8.692,
+      "msImprove": 22.693,
+      "msIndividual": 3.918,
+      "msReport": 4.357,
+      "usPerSlot": 22.961,
+      "slotsPerSecond": 43552,
       "opsCanTake": 184911,
       "opsFeasibleScan": 162412,
       "opsFeasibleCandidates": 16615,
@@ -3562,7 +3562,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 31.658,
+      "msArithmeticMean": 115.081,
       "planFingerprint": "e100ed0a"
     },
     {
@@ -3579,19 +3579,19 @@
       "students": 4909,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.71,
-      "msMean": 64.361,
-      "msMin": 64.361,
-      "msMax": 87.249,
-      "msSd": 8.704,
+      "msMean": 246.045,
+      "msMin": 246.045,
+      "msMax": 259.858,
+      "msSd": 5.604,
       "repeats": 5,
-      "msSetup": 10.427,
-      "msGreedy": 24.844,
-      "msRepair": 15.487,
-      "msImprove": 12.355,
-      "msIndividual": 2.387,
-      "msReport": 0.857,
-      "usPerSlot": 13.949,
-      "slotsPerSecond": 71689,
+      "msSetup": 47.415,
+      "msGreedy": 81.279,
+      "msRepair": 64.66,
+      "msImprove": 53.012,
+      "msIndividual": 6.484,
+      "msReport": 2.059,
+      "usPerSlot": 53.326,
+      "slotsPerSecond": 18753,
       "opsCanTake": 371659,
       "opsFeasibleScan": 307412,
       "opsFeasibleCandidates": 38279,
@@ -3641,7 +3641,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 69.922,
+      "msArithmeticMean": 253.737,
       "planFingerprint": "731ab5b9"
     },
     {
@@ -3658,70 +3658,70 @@
       "students": 3872,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.73,
-      "msMean": 17.018,
-      "msMin": 17.018,
-      "msMax": 18.3,
-      "msSd": 0.449,
+      "msMean": 68.687,
+      "msMin": 68.687,
+      "msMax": 78.429,
+      "msSd": 3.764,
       "repeats": 5,
-      "msSetup": 5.37,
-      "msGreedy": 4.68,
-      "msRepair": 2.31,
-      "msImprove": 3.822,
-      "msIndividual": 1.08,
-      "msReport": 0.453,
-      "usPerSlot": 6.775,
-      "slotsPerSecond": 147611,
-      "opsCanTake": 55067,
-      "opsFeasibleScan": 43315,
+      "msSetup": 24.902,
+      "msGreedy": 16.144,
+      "msRepair": 7.914,
+      "msImprove": 19.506,
+      "msIndividual": 4.679,
+      "msReport": 1.878,
+      "usPerSlot": 27.343,
+      "slotsPerSecond": 36572,
+      "opsCanTake": 55226,
+      "opsFeasibleScan": 43271,
       "opsFeasibleCandidates": 8843,
-      "opsLoadAdd": 9102,
-      "opsLoadRemove": 4031,
-      "opsDeficitEvaluations": 4776,
+      "opsLoadAdd": 9018,
+      "opsLoadRemove": 3949,
+      "opsDeficitEvaluations": 3512,
       "opsDeficitLecturerScans": 320,
-      "repairPasses": 123,
-      "repairProbes": 1906,
-      "repairMoves": 42,
-      "improvePasses": 6877,
-      "improveProbes": 889,
-      "improveMoves": 28,
-      "canTakePerSlot": 21.92,
-      "slotsFilled": 2503,
-      "fillRate": 0.9964,
-      "totalDesirability": 210153,
+      "repairPasses": 111,
+      "repairProbes": 1835,
+      "repairMoves": 32,
+      "improvePasses": 6777,
+      "improveProbes": 1145,
+      "improveMoves": 23,
+      "canTakePerSlot": 21.98,
+      "slotsFilled": 2501,
+      "fillRate": 0.9956,
+      "totalDesirability": 208347,
       "desirabilityBound": 216515,
-      "optimalityGap": 0.0294,
-      "meanDesirability": 83.96,
+      "optimalityGap": 0.0377,
+      "meanDesirability": 83.31,
       "boundSlots": 2512,
       "structuralErrors": 0,
-      "ceilingViolations": 82,
+      "ceilingViolations": 1,
       "ceilingViolationsBySearch": 0,
-      "ceilingViolationsByIndividual": 82,
-      "ceilingViolationsPreExisting": 0,
-      "ceilingOverrunHours": 2484,
-      "floorViolations": 80,
-      "floorShortfall": 84,
-      "lecturersBelowFloor": 73,
-      "hoursMean": 479.5,
-      "hoursSd": 137.82,
-      "hoursCv": 0.287,
+      "ceilingViolationsByIndividual": 0,
+      "ceilingViolationsPreExisting": 1,
+      "ceilingOverrunHours": 4,
+      "floorViolations": 87,
+      "floorShortfall": 92,
+      "lecturersBelowFloor": 75,
+      "hoursMean": 479.41,
+      "hoursSd": 126.78,
+      "hoursCv": 0.264,
       "hoursMin": 86,
-      "hoursMax": 732,
-      "hoursGini": 0.162,
-      "coursesMean": 7.71,
+      "hoursMax": 604,
+      "hoursGini": 0.143,
+      "coursesMean": 7.7,
       "coursesMax": 14,
-      "utilisationMean": 0.886,
+      "utilisationMean": 0.888,
       "lecturersWithNoWork": 0,
       "studentsPlaced": 3872,
       "studentsTotal": 3872,
       "studentPlacementRate": 1,
-      "issuesTotal": 89,
-      "issuesUnfilled": 9,
-      "issuesUnmetMinimum": 80,
+      "issuesTotal": 98,
+      "issuesUnfilled": 11,
+      "issuesUnmetMinimum": 87,
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 17.72,
-      "planFingerprint": "7a266fb1"
+      "msArithmeticMean": 73.499,
+      "planFingerprint": "c3624590"
     },
     {
       "dataset": "oversubscribed-320",
@@ -3737,19 +3737,19 @@
       "students": 7204,
       "demandRatio": 1.35,
       "constraintsPerLecturer": 8.21,
-      "msMean": 65.602,
-      "msMin": 65.602,
-      "msMax": 96.715,
-      "msSd": 12.08,
+      "msMean": 242.581,
+      "msMin": 242.581,
+      "msMax": 377.421,
+      "msSd": 52.871,
       "repeats": 5,
-      "msSetup": 7.966,
-      "msGreedy": 33.977,
-      "msRepair": 5.913,
-      "msImprove": 14.165,
-      "msIndividual": 3.678,
-      "msReport": 0.894,
-      "usPerSlot": 7.889,
-      "slotsPerSecond": 126765,
+      "msSetup": 33.736,
+      "msGreedy": 118.579,
+      "msRepair": 26.037,
+      "msImprove": 51.813,
+      "msIndividual": 13.053,
+      "msReport": 2.651,
+      "usPerSlot": 29.17,
+      "slotsPerSecond": 34281,
       "opsCanTake": 447314,
       "opsFeasibleScan": 396692,
       "opsFeasibleCandidates": 28851,
@@ -3799,7 +3799,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 72.589,
+      "msArithmeticMean": 271.796,
       "planFingerprint": "9aa3a07a"
     },
     {
@@ -3816,19 +3816,19 @@
       "students": 4010,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 4.87,
-      "msMean": 13.19,
-      "msMin": 13.19,
-      "msMax": 14.266,
-      "msSd": 0.398,
+      "msMean": 50.789,
+      "msMin": 50.789,
+      "msMax": 55.381,
+      "msSd": 1.698,
       "repeats": 5,
-      "msSetup": 3.255,
-      "msGreedy": 6.36,
-      "msRepair": 0.506,
-      "msImprove": 2.225,
-      "msIndividual": 0.838,
-      "msReport": 0.333,
-      "usPerSlot": 2.585,
-      "slotsPerSecond": 386812,
+      "msSetup": 13.456,
+      "msGreedy": 20.065,
+      "msRepair": 1.634,
+      "msImprove": 15.507,
+      "msIndividual": 2.527,
+      "msReport": 1.322,
+      "usPerSlot": 9.955,
+      "slotsPerSecond": 100455,
       "opsCanTake": 89593,
       "opsFeasibleScan": 79929,
       "opsFeasibleCandidates": 7715,
@@ -3878,7 +3878,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 13.577,
+      "msArithmeticMean": 53.942,
       "planFingerprint": "e1589dff"
     },
     {
@@ -3895,19 +3895,19 @@
       "students": 4573,
       "demandRatio": 0.92,
       "constraintsPerLecturer": 7.61,
-      "msMean": 38.283,
-      "msMin": 38.283,
-      "msMax": 38.606,
-      "msSd": 0.128,
+      "msMean": 143.297,
+      "msMin": 143.297,
+      "msMax": 201.185,
+      "msSd": 21.888,
       "repeats": 5,
-      "msSetup": 6.19,
-      "msGreedy": 17.849,
-      "msRepair": 0.013,
-      "msImprove": 12.509,
-      "msIndividual": 1.353,
-      "msReport": 0.474,
-      "usPerSlot": 6.722,
-      "slotsPerSecond": 148761,
+      "msSetup": 24.745,
+      "msGreedy": 67.961,
+      "msRepair": 0.039,
+      "msImprove": 48.262,
+      "msIndividual": 4.167,
+      "msReport": 2.157,
+      "usPerSlot": 25.162,
+      "slotsPerSecond": 39743,
       "opsCanTake": 250231,
       "opsFeasibleScan": 218645,
       "opsFeasibleCandidates": 20075,
@@ -3957,7 +3957,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 38.433,
+      "msArithmeticMean": 158.023,
       "planFingerprint": "f8064e09"
     },
     {
@@ -3974,19 +3974,19 @@
       "students": 4039,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 6.73,
-      "msMean": 44.896,
-      "msMin": 44.896,
-      "msMax": 68.872,
-      "msSd": 9.436,
+      "msMean": 162.292,
+      "msMin": 162.292,
+      "msMax": 171.06,
+      "msSd": 3.059,
       "repeats": 5,
-      "msSetup": 4.955,
-      "msGreedy": 12.906,
-      "msRepair": 17.373,
-      "msImprove": 8.472,
-      "msIndividual": 1.36,
-      "msReport": 0.508,
-      "usPerSlot": 8.974,
-      "slotsPerSecond": 111435,
+      "msSetup": 22.606,
+      "msGreedy": 40.313,
+      "msRepair": 65.408,
+      "msImprove": 33.078,
+      "msIndividual": 3.186,
+      "msReport": 1.576,
+      "usPerSlot": 32.439,
+      "slotsPerSecond": 30827,
       "opsCanTake": 213056,
       "opsFeasibleScan": 171810,
       "opsFeasibleCandidates": 17265,
@@ -4036,7 +4036,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 50.015,
+      "msArithmeticMean": 166.644,
       "planFingerprint": "e6e99e95"
     },
     {
@@ -4053,19 +4053,19 @@
       "students": 5154,
       "demandRatio": 0.8,
       "constraintsPerLecturer": 0,
-      "msMean": 20.778,
-      "msMin": 20.778,
-      "msMax": 21.947,
-      "msSd": 0.42,
+      "msMean": 80.492,
+      "msMin": 80.492,
+      "msMax": 84.96,
+      "msSd": 1.632,
       "repeats": 5,
-      "msSetup": 5.193,
-      "msGreedy": 10.78,
-      "msRepair": 0.015,
-      "msImprove": 3.876,
-      "msIndividual": 1.473,
-      "msReport": 0.346,
-      "usPerSlot": 4.356,
-      "slotsPerSecond": 229567,
+      "msSetup": 15.299,
+      "msGreedy": 43.965,
+      "msRepair": 0.038,
+      "msImprove": 11.858,
+      "msIndividual": 9.692,
+      "msReport": 1.346,
+      "usPerSlot": 16.875,
+      "slotsPerSecond": 59261,
       "opsCanTake": 172847,
       "opsFeasibleScan": 154902,
       "opsFeasibleCandidates": 16730,
@@ -4115,7 +4115,7 @@
       "issuesNoCandidates": 0,
       "issuesNoStudents": 0,
       "issuesOverCeiling": 0,
-      "msArithmeticMean": 21.514,
+      "msArithmeticMean": 82.198,
       "planFingerprint": "203bf445"
     }
   ],
@@ -4123,21 +4123,21 @@
     {
       "id": "baseline-10",
       "walls": [
-        1.4816250000000082,
-        1.4910830000000033,
-        1.6060420000000022,
-        2.0484170000000006,
-        2.645667000000003
+        3.0296859999999697,
+        3.6191619999999602,
+        3.678217000000018,
+        3.914688999999953,
+        4.525049999999965
       ],
       "telemetry": {
         "ms": {
-          "total": 1.6023339999999848,
-          "setup": 0.314501000000007,
-          "greedy": 0.5464580000000012,
-          "repair": 0.1490000000000009,
-          "improve": 0.3436669999999822,
-          "individual": 0.19066599999999312,
-          "report": 0.05804200000000037
+          "total": 3.666341999999986,
+          "setup": 0.6650789999998779,
+          "greedy": 1.1427680000000464,
+          "repair": 0.31805499999995845,
+          "improve": 0.9716070000000627,
+          "individual": 0.4477710000001025,
+          "report": 0.12106199999993805
         },
         "size": {
           "lecturers": 10,
@@ -4167,7 +4167,8 @@
           "improveProbes": 31,
           "improveMoves": 1,
           "swapProbes": 28,
-          "swapMoves": 2
+          "swapMoves": 2,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4180,21 +4181,21 @@
     {
       "id": "dense-candidates-10",
       "walls": [
-        2.6415000000000077,
-        3.509999999999991,
-        3.5266660000000343,
-        3.5482089999999857,
-        4.450749999999971
+        8.47460000000001,
+        8.986870999999951,
+        10.861479000000031,
+        15.704926999999998,
+        19.923647999999957
       ],
       "telemetry": {
         "ms": {
-          "total": 3.5222500000000423,
-          "setup": 0.686834000000033,
-          "greedy": 0.8010409999999979,
-          "repair": 0.4429169999999658,
-          "improve": 1.3783750000000055,
-          "individual": 0.127791000000002,
-          "report": 0.08529200000003812
+          "total": 10.842513999999937,
+          "setup": 1.2278009999999995,
+          "greedy": 1.534024000000045,
+          "repair": 5.015831000000048,
+          "improve": 2.721160999999938,
+          "individual": 0.1892809999999372,
+          "report": 0.15441599999996924
         },
         "size": {
           "lecturers": 10,
@@ -4224,7 +4225,8 @@
           "improveProbes": 277,
           "improveMoves": 7,
           "swapProbes": 251,
-          "swapMoves": 33
+          "swapMoves": 33,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4237,21 +4239,21 @@
     {
       "id": "gaps-mode-10",
       "walls": [
-        0.5281249999999886,
-        0.5569590000000062,
-        0.6784170000000245,
-        1.4072499999999764,
-        2.761209000000008
+        1.4931739999999536,
+        1.7652919999999312,
+        1.7720370000000685,
+        3.6379819999999654,
+        6.098047000000065
       ],
       "telemetry": {
         "ms": {
-          "total": 0.6753749999999741,
-          "setup": 0.24804299999993873,
-          "greedy": 0.050583000000017364,
-          "repair": 0.0735419999999749,
-          "improve": 0.03633300000001327,
-          "individual": 0.20616600000005292,
-          "report": 0.06070799999997689
+          "total": 1.7610699999999042,
+          "setup": 0.4690499999999247,
+          "greedy": 0.12846600000000308,
+          "repair": 0.11915099999998802,
+          "improve": 0.14029299999992872,
+          "individual": 0.7410560000000714,
+          "report": 0.16305399999998826
         },
         "size": {
           "lecturers": 10,
@@ -4263,49 +4265,31 @@
           "students": 370
         },
         "ops": {
-          "canTake": 675,
-          "feasibleScan": 449,
+          "canTake": 683,
+          "feasibleScan": 447,
           "feasibleCandidates": 154,
           "greedyIterations": 52,
-          "heapPush": 62,
-          "heapPop": 62,
-          "heapStalePop": 9,
-          "loadAdd": 221,
-          "loadRemove": 113,
-          "deficitEvaluations": 166,
+          "heapPush": 68,
+          "heapPop": 68,
+          "heapStalePop": 15,
+          "loadAdd": 230,
+          "loadRemove": 122,
+          "deficitEvaluations": 158,
           "deficitLecturerScans": 10,
           "repairPasses": 4,
           "repairProbes": 54,
           "repairMoves": 1,
-          "improvePasses": 110,
-          "improveProbes": 13,
+          "improvePasses": 124,
+          "improveProbes": 21,
           "improveMoves": 1,
-          "swapProbes": 3,
-          "swapMoves": 0
+          "swapProbes": 4,
+          "swapMoves": 0,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
         "search": [],
-        "individual": [
-          {
-            "lecturerId": "L1",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 654,
-            "slotHours": 376,
-            "individualHours": 278,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L4",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 664,
-            "slotHours": 390,
-            "individualHours": 274,
-            "cause": "individual"
-          }
-        ],
+        "individual": [],
         "preExisting": [],
         "structural": []
       }
@@ -4313,21 +4297,21 @@
     {
       "id": "oversubscribed-10",
       "walls": [
-        1.759375000000034,
-        1.8109999999999786,
-        1.8709589999999707,
-        1.962333000000001,
-        2.5469590000000153
+        4.653903000000014,
+        5.919547999999963,
+        8.801854999999932,
+        9.233331000000021,
+        12.345084000000043
       ],
       "telemetry": {
         "ms": {
-          "total": 1.8602089999999976,
-          "setup": 0.5329589999999484,
-          "greedy": 0.5627500000000509,
-          "repair": 0.11933299999998326,
-          "improve": 0.42349999999999,
-          "individual": 0.11645800000002282,
-          "report": 0.1052090000000021
+          "total": 8.789576000000011,
+          "setup": 1.0282140000000481,
+          "greedy": 5.687094000000002,
+          "repair": 0.39566899999999805,
+          "improve": 1.1306820000000926,
+          "individual": 0.3284679999999298,
+          "report": 0.2194489999999405
         },
         "size": {
           "lecturers": 10,
@@ -4357,7 +4341,8 @@
           "improveProbes": 197,
           "improveMoves": 0,
           "swapProbes": 289,
-          "swapMoves": 5
+          "swapMoves": 5,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4370,21 +4355,21 @@
     {
       "id": "sparse-candidates-10",
       "walls": [
-        0.40595899999999574,
-        0.41862499999996317,
-        0.4389580000000137,
-        0.4535830000000374,
-        0.4540420000000154
+        1.0360640000000103,
+        1.0406730000000834,
+        1.0412660000000642,
+        1.1371849999999313,
+        1.1525229999999738
       ],
       "telemetry": {
         "ms": {
-          "total": 0.43641700000000583,
-          "setup": 0.1575409999999806,
-          "greedy": 0.0833329999999819,
-          "repair": 0.014334000000019387,
-          "improve": 0.03216599999996106,
-          "individual": 0.09345900000005258,
-          "report": 0.05558400000001029
+          "total": 1.0345530000000736,
+          "setup": 0.3321730000000116,
+          "greedy": 0.2307940000000599,
+          "repair": 0.04464499999994587,
+          "improve": 0.09983800000009069,
+          "individual": 0.22555499999998574,
+          "report": 0.10154799999997977
         },
         "size": {
           "lecturers": 10,
@@ -4414,7 +4399,8 @@
           "improveProbes": 13,
           "improveMoves": 0,
           "swapProbes": 10,
-          "swapMoves": 1
+          "swapMoves": 1,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4427,21 +4413,21 @@
     {
       "id": "tight-ceilings-10",
       "walls": [
-        1.6146669999999972,
-        1.6698750000000473,
-        1.6912499999999682,
-        1.7841250000000173,
-        2.150082999999995
+        4.584276000000045,
+        4.608255999999983,
+        4.671145000000024,
+        4.723140000000058,
+        4.834564999999998
       ],
       "telemetry": {
         "ms": {
-          "total": 1.6879170000000272,
-          "setup": 0.4111670000000345,
-          "greedy": 0.4180830000000242,
-          "repair": 0.0022919999999544416,
-          "improve": 0.7226250000000505,
-          "individual": 0.06162499999999227,
-          "report": 0.07212499999997135
+          "total": 4.6612010000000055,
+          "setup": 0.8795079999999871,
+          "greedy": 1.2156059999999798,
+          "repair": 0.006629999999972824,
+          "improve": 2.256821000000059,
+          "individual": 0.15714900000000398,
+          "report": 0.1454870000000028
         },
         "size": {
           "lecturers": 10,
@@ -4471,7 +4457,8 @@
           "improveProbes": 358,
           "improveMoves": 10,
           "swapProbes": 483,
-          "swapMoves": 27
+          "swapMoves": 27,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4484,21 +4471,21 @@
     {
       "id": "tight-floors-10",
       "walls": [
-        1.4396660000000452,
-        1.4622919999999908,
-        1.600958999999989,
-        1.8923330000000078,
-        2.207667000000015
+        4.180204000000003,
+        4.332855000000109,
+        4.640102999999954,
+        4.750639999999976,
+        8.259493999999904
       ],
       "telemetry": {
         "ms": {
-          "total": 1.5962089999999876,
-          "setup": 0.13820899999996072,
-          "greedy": 0.22191600000002154,
-          "repair": 0.9195419999999785,
-          "improve": 0.255457999999976,
-          "individual": 0.02887500000002774,
-          "report": 0.032209000000023025
+          "total": 4.625129000000015,
+          "setup": 0.8358550000000378,
+          "greedy": 0.8653039999999237,
+          "repair": 1.7374429999999847,
+          "improve": 0.8983570000000327,
+          "individual": 0.09245800000007875,
+          "report": 0.1957119999999577
         },
         "size": {
           "lecturers": 10,
@@ -4528,7 +4515,8 @@
           "improveProbes": 103,
           "improveMoves": 8,
           "swapProbes": 80,
-          "swapMoves": 22
+          "swapMoves": 22,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4541,21 +4529,21 @@
     {
       "id": "unconstrained-10",
       "walls": [
-        0.5839170000000422,
-        0.5975419999999758,
-        0.6237919999999804,
-        0.6260000000000332,
-        0.627083999999968
+        1.5409179999999196,
+        1.6409470000000965,
+        1.6431339999999182,
+        2.6289489999999205,
+        2.82861099999991
       ],
       "telemetry": {
         "ms": {
-          "total": 0.6213750000000005,
-          "setup": 0.27987600000000157,
-          "greedy": 0.20216600000003382,
-          "repair": 0.0026669999999739957,
-          "improve": 0.07133299999998144,
-          "individual": 0.024165999999979704,
-          "report": 0.04116700000002993
+          "total": 1.6344679999999698,
+          "setup": 0.6157450000000608,
+          "greedy": 0.6302009999999427,
+          "repair": 0.0062459999999191496,
+          "improve": 0.21977400000014313,
+          "individual": 0.07267099999990023,
+          "report": 0.08983100000000377
         },
         "size": {
           "lecturers": 10,
@@ -4585,7 +4573,8 @@
           "improveProbes": 18,
           "improveMoves": 0,
           "swapProbes": 12,
-          "swapMoves": 4
+          "swapMoves": 4,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4598,21 +4587,21 @@
     {
       "id": "baseline-20",
       "walls": [
-        2.1448749999999563,
-        2.159791000000041,
-        2.169499999999971,
-        2.3194579999999974,
-        2.6894159999999943
+        6.02485200000001,
+        6.052887999999939,
+        6.128881999999976,
+        6.1476410000000214,
+        7.883497999999918
       ],
       "telemetry": {
         "ms": {
-          "total": 2.1651659999999993,
-          "setup": 0.6738749999999527,
-          "greedy": 0.597500000000025,
-          "repair": 0.13954200000000583,
-          "improve": 0.5340419999999995,
-          "individual": 0.12504100000001017,
-          "report": 0.09516600000000608
+          "total": 6.113550000000032,
+          "setup": 1.4464030000001458,
+          "greedy": 1.8038480000000163,
+          "repair": 0.4318229999998948,
+          "improve": 1.8124729999999545,
+          "individual": 0.3447959999998602,
+          "report": 0.2742070000001604
         },
         "size": {
           "lecturers": 20,
@@ -4642,7 +4631,8 @@
           "improveProbes": 315,
           "improveMoves": 10,
           "swapProbes": 183,
-          "swapMoves": 22
+          "swapMoves": 22,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4655,21 +4645,21 @@
     {
       "id": "dense-candidates-20",
       "walls": [
-        5.127875000000017,
-        5.440417000000025,
-        5.443749999999966,
-        5.771957999999984,
-        8.222291999999982
+        12.030181999999968,
+        12.399070999999822,
+        14.126936000000114,
+        15.732115000000022,
+        20.916857000000164
       ],
       "telemetry": {
         "ms": {
-          "total": 5.438040999999998,
-          "setup": 1.4401249999999663,
-          "greedy": 1.4077910000000315,
-          "repair": 0.660541999999964,
-          "improve": 1.6825830000000224,
-          "individual": 0.15662500000001955,
-          "report": 0.09037499999999454
+          "total": 14.104041999999936,
+          "setup": 3.125972999999931,
+          "greedy": 5.3890389999999115,
+          "repair": 1.6743209999999635,
+          "improve": 3.300194000000147,
+          "individual": 0.41734500000006847,
+          "report": 0.19716999999991458
         },
         "size": {
           "lecturers": 20,
@@ -4699,7 +4689,8 @@
           "improveProbes": 416,
           "improveMoves": 24,
           "swapProbes": 335,
-          "swapMoves": 39
+          "swapMoves": 39,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4712,21 +4703,21 @@
     {
       "id": "gaps-mode-20",
       "walls": [
-        0.6302909999999997,
-        0.631416999999999,
-        0.6407080000000178,
-        0.6684170000000336,
-        0.7283330000000205
+        5.237919000000147,
+        5.284713000000011,
+        5.493193000000019,
+        6.0120459999998275,
+        7.937302000000045
       ],
       "telemetry": {
         "ms": {
-          "total": 0.6395840000000135,
-          "setup": 0.23241700000005494,
-          "greedy": 0.13941699999998036,
-          "repair": 0.05541699999997718,
-          "improve": 0.15420800000003965,
-          "individual": 0.03358299999996461,
-          "report": 0.024541999999996733
+          "total": 5.46473200000014,
+          "setup": 2.5845190000000002,
+          "greedy": 1.0446120000001429,
+          "repair": 0.3165799999999308,
+          "improve": 0.8882800000001225,
+          "individual": 0.215108999999984,
+          "report": 0.4156319999999596
         },
         "size": {
           "lecturers": 20,
@@ -4756,7 +4747,8 @@
           "improveProbes": 59,
           "improveMoves": 0,
           "swapProbes": 31,
-          "swapMoves": 1
+          "swapMoves": 1,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4769,21 +4761,21 @@
     {
       "id": "oversubscribed-20",
       "walls": [
-        3.1326670000000263,
-        3.252166999999986,
-        3.274417000000028,
-        3.405208000000016,
-        4.004333000000031
+        9.270810999999867,
+        10.87600899999984,
+        14.260723999999982,
+        14.738251999999875,
+        15.995259999999917
       ],
       "telemetry": {
         "ms": {
-          "total": 3.2712920000000167,
-          "setup": 0.4320830000000342,
-          "greedy": 1.3738749999999982,
-          "repair": 0.27054099999998016,
-          "improve": 0.9140840000000026,
-          "individual": 0.23958399999997937,
-          "report": 0.04112500000002228
+          "total": 14.248840999999857,
+          "setup": 2.15046499999994,
+          "greedy": 7.356547999999975,
+          "repair": 0.8196080000000165,
+          "improve": 2.619899999999916,
+          "individual": 1.1643770000000586,
+          "report": 0.1379429999999502
         },
         "size": {
           "lecturers": 20,
@@ -4813,7 +4805,8 @@
           "improveProbes": 482,
           "improveMoves": 0,
           "swapProbes": 425,
-          "swapMoves": 16
+          "swapMoves": 16,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4826,21 +4819,21 @@
     {
       "id": "sparse-candidates-20",
       "walls": [
-        0.5364580000000387,
-        0.5408750000000282,
-        0.5502500000000055,
-        0.5866659999999797,
-        0.6020829999999933
+        1.7840570000000753,
+        1.8136320000000978,
+        1.8375099999998383,
+        2.1642629999998917,
+        3.595467000000099
       ],
       "telemetry": {
         "ms": {
-          "total": 0.5489579999999705,
-          "setup": 0.1150000000000091,
-          "greedy": 0.1587910000000079,
-          "repair": 0.017374999999958618,
-          "improve": 0.05720900000000029,
-          "individual": 0.14699999999999136,
-          "report": 0.05358300000000327
+          "total": 1.831092000000126,
+          "setup": 0.4702800000000025,
+          "greedy": 0.5295799999998962,
+          "repair": 0.0600289999999859,
+          "improve": 0.22195000000010623,
+          "individual": 0.4218190000001414,
+          "report": 0.12743399999999383
         },
         "size": {
           "lecturers": 20,
@@ -4870,7 +4863,8 @@
           "improveProbes": 38,
           "improveMoves": 0,
           "swapProbes": 15,
-          "swapMoves": 0
+          "swapMoves": 0,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4883,21 +4877,21 @@
     {
       "id": "tight-ceilings-20",
       "walls": [
-        1.3562089999999785,
-        1.3742090000000076,
-        1.408124999999984,
-        1.5775409999999965,
-        1.9529999999999745
+        4.364381999999978,
+        4.384874999999965,
+        4.411112000000003,
+        5.563239999999951,
+        5.698887999999897
       ],
       "telemetry": {
         "ms": {
-          "total": 1.406708999999978,
-          "setup": 0.2202090000000112,
-          "greedy": 0.464540999999997,
-          "repair": 0.0036249999999995453,
-          "improve": 0.46787499999999227,
-          "individual": 0.19462499999997362,
-          "report": 0.05583400000000438
+          "total": 4.403195000000096,
+          "setup": 0.7472820000000411,
+          "greedy": 1.4942429999998694,
+          "repair": 0.009349000000156593,
+          "improve": 1.499704999999949,
+          "individual": 0.4781960000000254,
+          "report": 0.17442000000005464
         },
         "size": {
           "lecturers": 20,
@@ -4927,7 +4921,8 @@
           "improveProbes": 328,
           "improveMoves": 1,
           "swapProbes": 274,
-          "swapMoves": 12
+          "swapMoves": 12,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4940,21 +4935,21 @@
     {
       "id": "tight-floors-20",
       "walls": [
-        2.025541999999973,
-        2.112209000000007,
-        2.1943750000000364,
-        2.429499999999962,
-        2.8500000000000227
+        5.624903000000131,
+        5.805558999999903,
+        6.264476000000059,
+        6.979446000000053,
+        6.981661000000031
       ],
       "telemetry": {
         "ms": {
-          "total": 2.1907920000000445,
-          "setup": 0.20245800000003555,
-          "greedy": 0.4121250000000032,
-          "repair": 0.7214999999999918,
-          "improve": 0.6129999999999995,
-          "individual": 0.14720899999997528,
-          "report": 0.09450000000003911
+          "total": 6.248705999999856,
+          "setup": 1.3090769999998884,
+          "greedy": 1.2100570000000062,
+          "repair": 1.9902170000000297,
+          "improve": 1.2310509999999795,
+          "individual": 0.2884329999999409,
+          "report": 0.21987100000001192
         },
         "size": {
           "lecturers": 20,
@@ -4984,7 +4979,8 @@
           "improveProbes": 167,
           "improveMoves": 7,
           "swapProbes": 115,
-          "swapMoves": 13
+          "swapMoves": 13,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -4997,21 +4993,21 @@
     {
       "id": "unconstrained-20",
       "walls": [
-        1.5610000000000355,
-        1.6014170000000263,
-        1.7062080000000037,
-        1.8454160000000002,
-        2.121208000000024
+        3.8795319999999265,
+        3.9199499999999716,
+        3.9542539999999917,
+        4.026140999999825,
+        4.036343999999872
       ],
       "telemetry": {
         "ms": {
-          "total": 1.7013749999999845,
-          "setup": 0.700458000000026,
-          "greedy": 0.6264999999999645,
-          "repair": 0.003750000000025011,
-          "improve": 0.19079199999998764,
-          "individual": 0.05712499999998499,
-          "report": 0.12274999999999636
+          "total": 3.941900999999916,
+          "setup": 1.4412959999999657,
+          "greedy": 1.5258140000000822,
+          "repair": 0.009298999999828084,
+          "improve": 0.5447840000001634,
+          "individual": 0.2100390000000516,
+          "report": 0.21066899999982525
         },
         "size": {
           "lecturers": 20,
@@ -5041,7 +5037,8 @@
           "improveProbes": 62,
           "improveMoves": 2,
           "swapProbes": 23,
-          "swapMoves": 8
+          "swapMoves": 8,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5054,21 +5051,21 @@
     {
       "id": "baseline-40",
       "walls": [
-        3.469000000000051,
-        3.5739999999999554,
-        3.6317920000000186,
-        3.6614159999999742,
-        4.446957999999995
+        8.636183000000074,
+        8.71788800000013,
+        8.951518000000078,
+        9.028118000000177,
+        10.364974000000075
       ],
       "telemetry": {
         "ms": {
-          "total": 3.625,
-          "setup": 1.1749580000000037,
-          "greedy": 1.2622090000000412,
-          "repair": 0.13704100000001063,
-          "improve": 0.7333749999999668,
-          "individual": 0.1656669999999849,
-          "report": 0.15174999999999272
+          "total": 8.938452999999981,
+          "setup": 2.8337149999999838,
+          "greedy": 2.735488000000032,
+          "repair": 0.3414069999998901,
+          "improve": 2.308129000000008,
+          "individual": 0.4973410000000058,
+          "report": 0.22237300000006144
         },
         "size": {
           "lecturers": 40,
@@ -5098,7 +5095,8 @@
           "improveProbes": 453,
           "improveMoves": 5,
           "swapProbes": 156,
-          "swapMoves": 21
+          "swapMoves": 21,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5111,21 +5109,21 @@
     {
       "id": "dense-candidates-40",
       "walls": [
-        7.784999999999968,
-        7.910708999999997,
-        8.06379099999998,
-        8.245999999999981,
-        10.068125000000009
+        20.563750000000027,
+        23.274249999999938,
+        23.86925499999984,
+        23.903409999999894,
+        24.57040999999981
       ],
       "telemetry": {
         "ms": {
-          "total": 8.060375000000022,
-          "setup": 1.5472089999999525,
-          "greedy": 2.485458000000051,
-          "repair": 1.9721669999999563,
-          "improve": 1.6827910000000088,
-          "individual": 0.31183300000003555,
-          "report": 0.06091700000001765
+          "total": 23.848193000000038,
+          "setup": 5.160534999999982,
+          "greedy": 6.129070000000183,
+          "repair": 6.710130999999819,
+          "improve": 4.680447000000186,
+          "individual": 0.8857299999999668,
+          "report": 0.2822799999999006
         },
         "size": {
           "lecturers": 40,
@@ -5155,7 +5153,8 @@
           "improveProbes": 743,
           "improveMoves": 51,
           "swapProbes": 340,
-          "swapMoves": 37
+          "swapMoves": 37,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5168,21 +5167,21 @@
     {
       "id": "gaps-mode-40",
       "walls": [
-        1.457125000000019,
-        1.551458000000025,
-        1.6558750000000373,
-        1.9994579999998905,
-        2.5020419999999604
+        4.54056300000002,
+        4.556631000000152,
+        4.591361000000006,
+        4.6055059999998775,
+        4.733755000000201
       ],
       "telemetry": {
         "ms": {
-          "total": 1.6539999999999964,
-          "setup": 0.5770420000000058,
-          "greedy": 0.4410410000000411,
-          "repair": 0.1478749999999991,
-          "improve": 0.28079200000001947,
-          "individual": 0.15287499999999454,
-          "report": 0.054374999999936335
+          "total": 4.585064999999986,
+          "setup": 1.5200509999999667,
+          "greedy": 1.2051890000000185,
+          "repair": 0.39919499999996333,
+          "improve": 0.7718160000001717,
+          "individual": 0.51032599999985,
+          "report": 0.17848800000001575
         },
         "size": {
           "lecturers": 40,
@@ -5194,76 +5193,31 @@
           "students": 491
         },
         "ops": {
-          "canTake": 6842,
-          "feasibleScan": 5481,
+          "canTake": 6871,
+          "feasibleScan": 5525,
           "feasibleCandidates": 1122,
           "greedyIterations": 325,
-          "heapPush": 480,
-          "heapPop": 480,
-          "heapStalePop": 155,
-          "loadAdd": 1017,
-          "loadRemove": 361,
-          "deficitEvaluations": 472,
+          "heapPush": 492,
+          "heapPop": 492,
+          "heapStalePop": 167,
+          "loadAdd": 1005,
+          "loadRemove": 349,
+          "deficitEvaluations": 496,
           "deficitLecturerScans": 40,
           "repairPasses": 12,
-          "repairProbes": 139,
+          "repairProbes": 143,
           "repairMoves": 4,
-          "improvePasses": 802,
-          "improveProbes": 64,
+          "improvePasses": 655,
+          "improveProbes": 58,
           "improveMoves": 1,
-          "swapProbes": 23,
-          "swapMoves": 3
+          "swapProbes": 16,
+          "swapMoves": 1,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
         "search": [],
-        "individual": [
-          {
-            "lecturerId": "L1",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 602,
-            "slotHours": 580,
-            "individualHours": 22,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L5",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 618,
-            "slotHours": 524,
-            "individualHours": 94,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L8",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 616,
-            "slotHours": 450,
-            "individualHours": 166,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L11",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 614,
-            "slotHours": 498,
-            "individualHours": 116,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L14",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 602,
-            "slotHours": 518,
-            "individualHours": 84,
-            "cause": "individual"
-          }
-        ],
+        "individual": [],
         "preExisting": [],
         "structural": []
       }
@@ -5271,21 +5225,21 @@
     {
       "id": "oversubscribed-40",
       "walls": [
-        6.160082999999986,
-        6.29079200000001,
-        6.358957999999916,
-        6.395541999999978,
-        6.4138750000000755
+        16.601088000000118,
+        16.923409999999876,
+        19.507382000000007,
+        19.814997000000176,
+        21.383702000000085
       ],
       "telemetry": {
         "ms": {
-          "total": 6.35654199999999,
-          "setup": 0.7510829999999942,
-          "greedy": 2.7497090000000526,
-          "repair": 0.5080829999999423,
-          "improve": 1.9244580000000724,
-          "individual": 0.3560420000000022,
-          "report": 0.0671669999999267
+          "total": 19.487712999999985,
+          "setup": 2.16318699999988,
+          "greedy": 9.453282000000172,
+          "repair": 1.5970079999999598,
+          "improve": 4.851959999999963,
+          "individual": 1.1055750000000444,
+          "report": 0.31670099999996637
         },
         "size": {
           "lecturers": 40,
@@ -5315,7 +5269,8 @@
           "improveProbes": 1113,
           "improveMoves": 3,
           "swapProbes": 544,
-          "swapMoves": 20
+          "swapMoves": 20,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5328,21 +5283,21 @@
     {
       "id": "sparse-candidates-40",
       "walls": [
-        1.0272919999999885,
-        1.044499999999971,
-        1.0527080000000524,
-        1.137207999999987,
-        1.5149160000000848
+        3.4805209999999533,
+        3.504278999999997,
+        3.5482479999998304,
+        3.5926520000000437,
+        3.6599019999998745
       ],
       "telemetry": {
         "ms": {
-          "total": 1.0512089999999716,
-          "setup": 0.24679200000002766,
-          "greedy": 0.38591699999994944,
-          "repair": 0.03895800000009331,
-          "improve": 0.20841699999994034,
-          "individual": 0.1292079999999487,
-          "report": 0.041917000000012195
+          "total": 3.54382099999998,
+          "setup": 0.7587719999999081,
+          "greedy": 1.3049210000001494,
+          "repair": 0.15128899999990608,
+          "improve": 0.6294540000001234,
+          "individual": 0.5535310000000209,
+          "report": 0.14585399999987203
         },
         "size": {
           "lecturers": 40,
@@ -5372,7 +5327,8 @@
           "improveProbes": 102,
           "improveMoves": 0,
           "swapProbes": 47,
-          "swapMoves": 7
+          "swapMoves": 7,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5385,21 +5341,21 @@
     {
       "id": "tight-ceilings-40",
       "walls": [
-        4.946833000000083,
-        5.037082999999939,
-        5.092667000000006,
-        5.1707079999999905,
-        5.181625000000054
+        13.48818099999994,
+        13.65661399999999,
+        14.726554000000078,
+        15.228469000000132,
+        15.798566000000164
       ],
       "telemetry": {
         "ms": {
-          "total": 5.090291999999977,
-          "setup": 0.5597080000000005,
-          "greedy": 1.640041999999994,
-          "repair": 0.008041999999932159,
-          "improve": 2.637042000000065,
-          "individual": 0.19241699999997763,
-          "report": 0.05304100000000744
+          "total": 14.720776000000114,
+          "setup": 2.750839000000042,
+          "greedy": 4.183594999999968,
+          "repair": 0.014584000000013475,
+          "improve": 7.0481660000000375,
+          "individual": 0.5481330000000071,
+          "report": 0.17545900000004622
         },
         "size": {
           "lecturers": 40,
@@ -5429,7 +5385,8 @@
           "improveProbes": 1521,
           "improveMoves": 31,
           "swapProbes": 1026,
-          "swapMoves": 32
+          "swapMoves": 32,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5442,21 +5399,21 @@
     {
       "id": "tight-floors-40",
       "walls": [
-        4.7592500000000655,
-        4.824250000000006,
-        5.080542000000037,
-        5.09537499999999,
-        5.2871659999999565
+        13.382004000000052,
+        13.426785999999993,
+        13.451671000000033,
+        15.04307700000004,
+        15.414083000000119
       ],
       "telemetry": {
         "ms": {
-          "total": 5.078041999999982,
-          "setup": 0.4830409999999574,
-          "greedy": 1.2729170000000067,
-          "repair": 2.064292000000023,
-          "improve": 1.0823749999999563,
-          "individual": 0.09641700000008768,
-          "report": 0.07899999999995089
+          "total": 13.445351999999957,
+          "setup": 1.4236150000001544,
+          "greedy": 3.4409689999999955,
+          "repair": 4.769228999999996,
+          "improve": 3.3387109999998756,
+          "individual": 0.27404699999988225,
+          "report": 0.1987810000000536
         },
         "size": {
           "lecturers": 40,
@@ -5486,7 +5443,8 @@
           "improveProbes": 546,
           "improveMoves": 20,
           "swapProbes": 178,
-          "swapMoves": 26
+          "swapMoves": 26,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5499,21 +5457,21 @@
     {
       "id": "unconstrained-40",
       "walls": [
-        2.651499999999942,
-        2.7596659999999247,
-        2.7714999999999463,
-        2.979624999999942,
-        3.1179579999999305
+        8.024834000000055,
+        8.154921000000286,
+        8.340239999999994,
+        8.478881000000001,
+        9.710824999999659
       ],
       "telemetry": {
         "ms": {
-          "total": 2.769374999999968,
-          "setup": 0.49654099999997925,
-          "greedy": 1.3097080000000005,
-          "repair": 0.006791999999904874,
-          "improve": 0.8262080000000651,
-          "individual": 0.0822090000000344,
-          "report": 0.047916999999984
+          "total": 8.334158000000116,
+          "setup": 1.5847820000003594,
+          "greedy": 3.593094000000292,
+          "repair": 0.01840299999958006,
+          "improve": 2.6983110000001034,
+          "individual": 0.25595099999964077,
+          "report": 0.18361700000014025
         },
         "size": {
           "lecturers": 40,
@@ -5543,7 +5501,8 @@
           "improveProbes": 419,
           "improveMoves": 14,
           "swapProbes": 122,
-          "swapMoves": 30
+          "swapMoves": 30,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5556,21 +5515,21 @@
     {
       "id": "baseline-80",
       "walls": [
-        6.543000000000006,
-        6.805082999999968,
-        6.810665999999969,
-        7.028707999999938,
-        7.482708000000002
+        18.991847999999663,
+        20.46491900000001,
+        20.744728000000123,
+        20.853877999999895,
+        21.311549000000014
       ],
       "telemetry": {
         "ms": {
-          "total": 6.807374999999979,
-          "setup": 0.985791999999833,
-          "greedy": 2.8392500000001064,
-          "repair": 0.6998749999999063,
-          "improve": 1.6057500000000573,
-          "individual": 0.5828750000000582,
-          "report": 0.09383300000001782
+          "total": 20.732478999999785,
+          "setup": 2.967736999999943,
+          "greedy": 7.514791000000059,
+          "repair": 1.977577999999994,
+          "improve": 7.24494999999979,
+          "individual": 0.7330879999999524,
+          "report": 0.2943350000000464
         },
         "size": {
           "lecturers": 80,
@@ -5600,7 +5559,8 @@
           "improveProbes": 828,
           "improveMoves": 31,
           "swapProbes": 216,
-          "swapMoves": 44
+          "swapMoves": 44,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5613,21 +5573,21 @@
     {
       "id": "dense-candidates-80",
       "walls": [
-        17.265124999999898,
-        17.311250000000086,
-        17.39745800000003,
-        17.976957999999968,
-        18.36591700000008
+        51.220422999999755,
+        52.286543000000165,
+        52.60500000000002,
+        54.34975799999984,
+        54.462289000000055
       ],
       "telemetry": {
         "ms": {
-          "total": 17.394499999999994,
-          "setup": 2.1197080000000597,
-          "greedy": 5.345916999999986,
-          "repair": 4.69945800000005,
-          "improve": 4.437542000000008,
-          "individual": 0.6782919999999422,
-          "report": 0.1135829999999487
+          "total": 52.57643899999994,
+          "setup": 7.966105999999854,
+          "greedy": 14.355433000000176,
+          "repair": 11.456016999999974,
+          "improve": 16.59772800000019,
+          "individual": 1.7933179999999993,
+          "report": 0.4078369999997449
         },
         "size": {
           "lecturers": 80,
@@ -5657,7 +5617,8 @@
           "improveProbes": 2121,
           "improveMoves": 69,
           "swapProbes": 611,
-          "swapMoves": 68
+          "swapMoves": 68,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5670,21 +5631,21 @@
     {
       "id": "gaps-mode-80",
       "walls": [
-        3.0182499999999663,
-        3.13149999999996,
-        3.563625000000002,
-        3.6785840000000007,
-        3.7654589999999644
+        9.689770999999837,
+        10.07642799999985,
+        10.093620999999985,
+        11.8013890000002,
+        12.1458590000002
       ],
       "telemetry": {
         "ms": {
-          "total": 3.561042000000043,
-          "setup": 0.9337920000000395,
-          "greedy": 0.7864170000000286,
-          "repair": 0.4365419999999176,
-          "improve": 0.6088750000000118,
-          "individual": 0.7035829999999805,
-          "report": 0.09183300000006511
+          "total": 10.078975000000355,
+          "setup": 2.8520069999999578,
+          "greedy": 2.0898560000000543,
+          "repair": 1.2759989999999561,
+          "improve": 2.169214000000011,
+          "individual": 1.3019450000001598,
+          "report": 0.3899540000002162
         },
         "size": {
           "lecturers": 80,
@@ -5696,98 +5657,63 @@
           "students": 1043
         },
         "ops": {
-          "canTake": 10867,
-          "feasibleScan": 8224,
+          "canTake": 10855,
+          "feasibleScan": 8155,
           "feasibleCandidates": 1910,
           "greedyIterations": 545,
-          "heapPush": 913,
-          "heapPop": 913,
-          "heapStalePop": 364,
-          "loadAdd": 2159,
-          "loadRemove": 1002,
-          "deficitEvaluations": 1134,
+          "heapPush": 1020,
+          "heapPop": 1020,
+          "heapStalePop": 471,
+          "loadAdd": 2145,
+          "loadRemove": 988,
+          "deficitEvaluations": 802,
           "deficitLecturerScans": 80,
-          "repairPasses": 33,
-          "repairProbes": 464,
-          "repairMoves": 11,
-          "improvePasses": 1469,
-          "improveProbes": 238,
-          "improveMoves": 7,
-          "swapProbes": 22,
-          "swapMoves": 5
+          "repairPasses": 29,
+          "repairProbes": 478,
+          "repairMoves": 6,
+          "improvePasses": 1354,
+          "improveProbes": 259,
+          "improveMoves": 3,
+          "swapProbes": 37,
+          "swapMoves": 6,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
         "search": [],
-        "individual": [
+        "individual": [],
+        "preExisting": [
           {
-            "lecturerId": "L6",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 397,
-            "actual": 426,
-            "slotHours": 332,
-            "individualHours": 94,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L19",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 642,
-            "slotHours": 482,
-            "individualHours": 160,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L24",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 628,
-            "slotHours": 450,
-            "individualHours": 178,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L25",
+            "lecturerId": "L53",
             "rule": "MAX_HOURS_PER_YEAR",
             "limit": 600,
             "actual": 620,
-            "slotHours": 452,
-            "individualHours": 168,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L34",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 680,
-            "slotHours": 450,
-            "individualHours": 230,
-            "cause": "individual"
+            "slotHours": 572,
+            "individualHours": 48,
+            "cause": "pre-existing"
           }
         ],
-        "preExisting": [],
         "structural": []
       }
     },
     {
       "id": "oversubscribed-80",
       "walls": [
-        12.693167000000017,
-        12.709959000000026,
-        12.884874999999965,
-        13.377166999999986,
-        13.467374999999947
+        38.33633200000031,
+        39.33621200000016,
+        41.09529100000009,
+        41.528004999999666,
+        43.024863000000096
       ],
       "telemetry": {
         "ms": {
-          "total": 12.879542000000015,
-          "setup": 1.511167000000114,
-          "greedy": 7.020208000000025,
-          "repair": 1.2509589999999662,
-          "improve": 2.2526659999999765,
-          "individual": 0.7015829999999141,
-          "report": 0.14295900000001893
+          "total": 41.0645599999998,
+          "setup": 4.454300999999759,
+          "greedy": 22.600973000000067,
+          "repair": 4.066937000000053,
+          "improve": 7.1434220000001005,
+          "individual": 2.163825000000088,
+          "report": 0.6351019999997334
         },
         "size": {
           "lecturers": 80,
@@ -5817,7 +5743,8 @@
           "improveProbes": 1613,
           "improveMoves": 1,
           "swapProbes": 596,
-          "swapMoves": 15
+          "swapMoves": 15,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5830,21 +5757,21 @@
     {
       "id": "sparse-candidates-80",
       "walls": [
-        2.327207999999928,
-        2.4276660000000447,
-        2.508416000000011,
-        2.741624999999999,
-        2.963624999999979
+        7.79935499999965,
+        8.029214000000138,
+        9.691389999999956,
+        9.786750000000211,
+        10.044999000000189
       ],
       "telemetry": {
         "ms": {
-          "total": 2.505540999999994,
-          "setup": 0.5202909999999292,
-          "greedy": 1.1000830000000406,
-          "repair": 0.11970899999994344,
-          "improve": 0.4910409999999956,
-          "individual": 0.1849170000000413,
-          "report": 0.08950000000004366
+          "total": 9.680070000000342,
+          "setup": 1.776002000000517,
+          "greedy": 3.1458450000000084,
+          "repair": 0.4380559999999605,
+          "improve": 3.4745389999998224,
+          "individual": 0.5895529999997962,
+          "report": 0.2560750000002372
         },
         "size": {
           "lecturers": 80,
@@ -5874,7 +5801,8 @@
           "improveProbes": 221,
           "improveMoves": 0,
           "swapProbes": 115,
-          "swapMoves": 5
+          "swapMoves": 5,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5887,21 +5815,21 @@
     {
       "id": "tight-ceilings-80",
       "walls": [
-        8.473667000000091,
-        8.61566700000003,
-        8.728875000000016,
-        8.79200000000003,
-        8.968416000000047
+        25.657124999999724,
+        25.90595600000006,
+        26.16941599999973,
+        26.580830999999762,
+        29.677624999999807
       ],
       "telemetry": {
         "ms": {
-          "total": 8.725208000000066,
-          "setup": 1.634457999999995,
-          "greedy": 4.029916999999955,
-          "repair": 0.004208000000062384,
-          "improve": 2.612124999999992,
-          "individual": 0.33275000000003274,
-          "report": 0.1117500000000291
+          "total": 26.152599999999893,
+          "setup": 3.4631300000005467,
+          "greedy": 10.739842999999837,
+          "repair": 0.01551900000004025,
+          "improve": 10.550522,
+          "individual": 0.9546189999996386,
+          "report": 0.42896699999982957
         },
         "size": {
           "lecturers": 80,
@@ -5931,7 +5859,8 @@
           "improveProbes": 1522,
           "improveMoves": 4,
           "swapProbes": 754,
-          "swapMoves": 39
+          "swapMoves": 39,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -5944,21 +5873,21 @@
     {
       "id": "tight-floors-80",
       "walls": [
-        9.239458000000013,
-        9.632207999999991,
-        9.97037499999999,
-        9.980167000000165,
-        10.159541999999988
+        23.979729000000134,
+        24.73091400000021,
+        25.40143199999966,
+        25.934897000000092,
+        26.509268000000247
       ],
       "telemetry": {
         "ms": {
-          "total": 9.966083000000026,
-          "setup": 1.7814170000000331,
-          "greedy": 2.5500409999999647,
-          "repair": 3.550041999999962,
-          "improve": 1.5118330000000242,
-          "individual": 0.46387500000003,
-          "report": 0.10887500000001182
+          "total": 25.389771999999994,
+          "setup": 2.652537999999822,
+          "greedy": 5.746812999999747,
+          "repair": 9.277785000000222,
+          "improve": 4.51434399999971,
+          "individual": 2.8578980000002048,
+          "report": 0.34039400000028763
         },
         "size": {
           "lecturers": 80,
@@ -5988,7 +5917,8 @@
           "improveProbes": 651,
           "improveMoves": 32,
           "swapProbes": 262,
-          "swapMoves": 32
+          "swapMoves": 32,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6001,21 +5931,21 @@
     {
       "id": "unconstrained-80",
       "walls": [
-        4.684792000000016,
-        4.7095419999998285,
-        5.410082999999986,
-        5.445458000000144,
-        5.480041999999912
+        13.747713000000203,
+        13.818582999999762,
+        15.346435000000383,
+        15.528862000000117,
+        15.789850999999999
       ],
       "telemetry": {
         "ms": {
-          "total": 5.406875000000127,
-          "setup": 1.645917000000054,
-          "greedy": 2.673332999999957,
-          "repair": 0.005791999999928521,
-          "improve": 0.7264999999999873,
-          "individual": 0.26108300000009876,
-          "report": 0.09425000000010186
+          "total": 15.333757000000332,
+          "setup": 2.8255040000003646,
+          "greedy": 6.859497999999803,
+          "repair": 0.010020000000167784,
+          "improve": 4.507768999999826,
+          "individual": 0.8447719999999208,
+          "report": 0.2861940000002505
         },
         "size": {
           "lecturers": 80,
@@ -6045,7 +5975,8 @@
           "improveProbes": 222,
           "improveMoves": 6,
           "swapProbes": 50,
-          "swapMoves": 17
+          "swapMoves": 17,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6058,21 +5989,21 @@
     {
       "id": "baseline-160",
       "walls": [
-        12.443459000000075,
-        12.872000000000071,
-        13.535624999999982,
-        13.943416999999954,
-        16.517207999999982
+        39.824724999999944,
+        46.00009199999977,
+        47.597377999999935,
+        54.31320300000016,
+        105.920885
       ],
       "telemetry": {
         "ms": {
-          "total": 13.527500000000146,
-          "setup": 2.080957000000126,
-          "greedy": 4.885958999999957,
-          "repair": 1.5107499999999163,
-          "improve": 4.011000000000195,
-          "individual": 0.8067089999999553,
-          "report": 0.23212499999999636
+          "total": 47.56842599999982,
+          "setup": 6.555101999999806,
+          "greedy": 15.12710399999969,
+          "repair": 4.353078000000096,
+          "improve": 8.917907999999898,
+          "individual": 11.896958000000268,
+          "report": 0.7182760000000599
         },
         "size": {
           "lecturers": 160,
@@ -6102,7 +6033,8 @@
           "improveProbes": 1374,
           "improveMoves": 33,
           "swapProbes": 342,
-          "swapMoves": 65
+          "swapMoves": 65,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6115,21 +6047,21 @@
     {
       "id": "dense-candidates-160",
       "walls": [
-        40.94454100000007,
-        41.70720899999992,
-        41.79712500000005,
-        41.99179200000003,
-        57.47575000000006
+        126.8357390000001,
+        130.53902899999957,
+        131.4388769999996,
+        132.01205299999992,
+        139.6776749999999
       ],
       "telemetry": {
         "ms": {
-          "total": 41.78883399999995,
-          "setup": 5.124250999999958,
-          "greedy": 14.022750000000087,
-          "repair": 11.304624999999987,
-          "improve": 9.492792000000009,
-          "individual": 1.5847909999999956,
-          "report": 0.2596249999999145
+          "total": 131.40027800000007,
+          "setup": 19.942818999999872,
+          "greedy": 38.79404599999998,
+          "repair": 40.23833100000047,
+          "improve": 28.916110000000117,
+          "individual": 2.4208300000000236,
+          "report": 1.088141999999607
         },
         "size": {
           "lecturers": 160,
@@ -6159,7 +6091,8 @@
           "improveProbes": 4102,
           "improveMoves": 219,
           "swapProbes": 832,
-          "swapMoves": 108
+          "swapMoves": 108,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6172,21 +6105,21 @@
     {
       "id": "gaps-mode-160",
       "walls": [
-        8.500500000000102,
-        8.623792000000094,
-        8.691250000000082,
-        8.809541999999965,
-        8.971207999999933
+        29.444258000000445,
+        29.69059399999969,
+        30.701966999999968,
+        32.567675999999665,
+        32.84598199999982
       ],
       "telemetry": {
         "ms": {
-          "total": 8.685582999999951,
-          "setup": 2.9648329999999987,
-          "greedy": 2.3315000000000055,
-          "repair": 0.938959000000068,
-          "improve": 1.6613330000000133,
-          "individual": 0.5727079999999205,
-          "report": 0.21624999999994543
+          "total": 30.668484000000717,
+          "setup": 11.42524400000002,
+          "greedy": 6.893348999999944,
+          "repair": 3.2663880000000063,
+          "improve": 5.716422000000421,
+          "individual": 2.5121060000001307,
+          "report": 0.854975000000195
         },
         "size": {
           "lecturers": 160,
@@ -6198,98 +6131,72 @@
           "students": 2085
         },
         "ops": {
-          "canTake": 29676,
-          "feasibleScan": 23438,
+          "canTake": 30080,
+          "feasibleScan": 23690,
           "feasibleCandidates": 4579,
-          "greedyIterations": 1325,
-          "heapPush": 2266,
-          "heapPop": 2266,
-          "heapStalePop": 937,
-          "loadAdd": 4778,
-          "loadRemove": 2179,
-          "deficitEvaluations": 2172,
+          "greedyIterations": 1324,
+          "heapPush": 2502,
+          "heapPop": 2502,
+          "heapStalePop": 1173,
+          "loadAdd": 4853,
+          "loadRemove": 2255,
+          "deficitEvaluations": 1856,
           "deficitLecturerScans": 160,
-          "repairPasses": 55,
-          "repairProbes": 965,
-          "repairMoves": 14,
-          "improvePasses": 3898,
-          "improveProbes": 604,
-          "improveMoves": 11,
-          "swapProbes": 62,
-          "swapMoves": 17
+          "repairPasses": 56,
+          "repairProbes": 1040,
+          "repairMoves": 9,
+          "improvePasses": 3732,
+          "improveProbes": 688,
+          "improveMoves": 7,
+          "swapProbes": 60,
+          "swapMoves": 18,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
         "search": [],
-        "individual": [
+        "individual": [],
+        "preExisting": [
           {
-            "lecturerId": "L2",
+            "lecturerId": "L49",
             "rule": "MAX_HOURS_PER_YEAR",
             "limit": 600,
-            "actual": 634,
-            "slotHours": 500,
-            "individualHours": 134,
-            "cause": "individual"
+            "actual": 626,
+            "slotHours": 576,
+            "individualHours": 50,
+            "cause": "pre-existing"
           },
           {
-            "lecturerId": "L10",
+            "lecturerId": "L153",
             "rule": "MAX_HOURS_PER_YEAR",
             "limit": 600,
-            "actual": 608,
-            "slotHours": 596,
-            "individualHours": 12,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L11",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 616,
-            "slotHours": 568,
-            "individualHours": 48,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L16",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 614,
-            "slotHours": 556,
-            "individualHours": 58,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L19",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 622,
-            "slotHours": 506,
-            "individualHours": 116,
-            "cause": "individual"
+            "actual": 670,
+            "slotHours": 590,
+            "individualHours": 80,
+            "cause": "pre-existing"
           }
         ],
-        "preExisting": [],
         "structural": []
       }
     },
     {
       "id": "oversubscribed-160",
       "walls": [
-        27.909666000000016,
-        28.04362500000002,
-        28.269792000000052,
-        28.56275000000005,
-        28.659124999999904
+        100.66407400000026,
+        101.5461209999994,
+        102.75485200000003,
+        103.00266699999975,
+        103.55726800000048
       ],
       "telemetry": {
         "ms": {
-          "total": 28.258708999999953,
-          "setup": 3.6740839999999935,
-          "greedy": 14.58900000000017,
-          "repair": 2.3460829999999078,
-          "improve": 6.098375000000033,
-          "individual": 1.2715829999999642,
-          "report": 0.27958399999988615
+          "total": 102.65814300000056,
+          "setup": 13.643173000000388,
+          "greedy": 47.53178800000023,
+          "repair": 11.175273999999263,
+          "improve": 22.503295000000435,
+          "individual": 3.9088849999998274,
+          "report": 3.8957280000004175
         },
         "size": {
           "lecturers": 160,
@@ -6319,7 +6226,8 @@
           "improveProbes": 3930,
           "improveMoves": 0,
           "swapProbes": 1259,
-          "swapMoves": 53
+          "swapMoves": 53,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6332,21 +6240,21 @@
     {
       "id": "sparse-candidates-160",
       "walls": [
-        5.446374999999989,
-        5.504458999999997,
-        5.604000000000042,
-        5.6204589999999826,
-        6.113166999999976
+        19.840172000000166,
+        20.022719000000507,
+        20.106541000000107,
+        21.207534000000123,
+        21.212453000000096
       ],
       "telemetry": {
         "ms": {
-          "total": 5.598500000000058,
-          "setup": 1.092873999999938,
-          "greedy": 2.2660000000000764,
-          "repair": 0.2344590000000153,
-          "improve": 0.7864159999999174,
-          "individual": 1.0661669999999503,
-          "report": 0.1525840000001608
+          "total": 20.080931999999848,
+          "setup": 3.6307179999994332,
+          "greedy": 6.955496999999923,
+          "repair": 0.736735000000408,
+          "improve": 3.019967000000179,
+          "individual": 5.086420999999973,
+          "report": 0.6515939999999318
         },
         "size": {
           "lecturers": 160,
@@ -6376,7 +6284,8 @@
           "improveProbes": 424,
           "improveMoves": 1,
           "swapProbes": 174,
-          "swapMoves": 10
+          "swapMoves": 10,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6389,21 +6298,21 @@
     {
       "id": "tight-ceilings-160",
       "walls": [
-        18.506833000000142,
-        18.596750000000156,
-        18.697791999999936,
-        18.89645799999994,
-        19.096500000000106
+        59.712602999999945,
+        60.19108000000051,
+        61.82938800000011,
+        65.16439200000059,
+        65.97247599999992
       ],
       "telemetry": {
         "ms": {
-          "total": 18.689832999999908,
-          "setup": 3.0185409999999138,
-          "greedy": 8.098334000000023,
-          "repair": 0.008290999999871929,
-          "improve": 6.569334000000026,
-          "individual": 0.7607920000000377,
-          "report": 0.23454100000003564
+          "total": 61.777333,
+          "setup": 11.266542999999729,
+          "greedy": 24.456449000000248,
+          "repair": 0.022790999999415362,
+          "improve": 22.822199000000182,
+          "individual": 2.430898999999954,
+          "report": 0.7784520000004704
         },
         "size": {
           "lecturers": 160,
@@ -6433,7 +6342,8 @@
           "improveProbes": 3796,
           "improveMoves": 14,
           "swapProbes": 1464,
-          "swapMoves": 64
+          "swapMoves": 64,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6446,21 +6356,21 @@
     {
       "id": "tight-floors-160",
       "walls": [
-        20.165250000000015,
-        20.235957999999982,
-        20.69312500000001,
-        20.70229200000017,
-        21.09366699999987
+        67.54585599999973,
+        67.79778400000032,
+        67.84153500000048,
+        70.27805800000078,
+        72.09497399999964
       ],
       "telemetry": {
         "ms": {
-          "total": 20.687082999999802,
-          "setup": 2.6931670000001304,
-          "greedy": 6.102666999999883,
-          "repair": 8.061958000000004,
-          "improve": 3.1057080000000497,
-          "individual": 0.5278329999998732,
-          "report": 0.19574999999986176
+          "total": 67.80948799999987,
+          "setup": 6.750667999999678,
+          "greedy": 18.358807999999954,
+          "repair": 29.30213999999978,
+          "improve": 10.990845000000263,
+          "individual": 1.5044299999999566,
+          "report": 0.9025970000002417
         },
         "size": {
           "lecturers": 160,
@@ -6490,7 +6400,8 @@
           "improveProbes": 1367,
           "improveMoves": 60,
           "swapProbes": 375,
-          "swapMoves": 52
+          "swapMoves": 52,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6503,21 +6414,21 @@
     {
       "id": "unconstrained-160",
       "walls": [
-        10.425792000000001,
-        10.463334000000032,
-        10.49954200000002,
-        10.69945800000005,
-        11.184708
+        36.13055299999996,
+        36.132408000000396,
+        37.27223599999979,
+        40.50024999999914,
+        42.96520199999941
       ],
       "telemetry": {
         "ms": {
-          "total": 10.493708000000197,
-          "setup": 2.6180839999999534,
-          "greedy": 5.375250000000051,
-          "repair": 0.007583000000067841,
-          "improve": 1.7298749999999927,
-          "individual": 0.5795410000000629,
-          "report": 0.18337500000006912
+          "total": 37.24035100000037,
+          "setup": 6.162248999999974,
+          "greedy": 22.642569999999978,
+          "repair": 0.02095499999995809,
+          "improve": 6.114991000000373,
+          "individual": 1.6622999999999593,
+          "report": 0.637286000000131
         },
         "size": {
           "lecturers": 160,
@@ -6547,7 +6458,8 @@
           "improveProbes": 658,
           "improveMoves": 22,
           "swapProbes": 103,
-          "swapMoves": 40
+          "swapMoves": 40,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6560,21 +6472,21 @@
     {
       "id": "baseline-320",
       "walls": [
-        27.085541999999805,
-        27.593832999999904,
-        29.395375000000058,
-        30.31904099999997,
-        43.89591600000017
+        111.31502799999998,
+        113.03322800000024,
+        116.17376700000023,
+        117.2832899999994,
+        117.59813399999985
       ],
       "telemetry": {
         "ms": {
-          "total": 29.382166000000097,
-          "setup": 5.620417000000089,
-          "greedy": 13.042665999999826,
-          "repair": 3.0693750000000364,
-          "improve": 5.857083999999986,
-          "individual": 1.3144580000000587,
-          "report": 0.4781660000001011
+          "total": 116.08013699999992,
+          "setup": 22.11771299999964,
+          "greedy": 54.30318000000079,
+          "repair": 8.692272999999659,
+          "improve": 22.69260800000029,
+          "individual": 3.9177589999999327,
+          "report": 4.3566039999996065
         },
         "size": {
           "lecturers": 320,
@@ -6604,7 +6516,8 @@
           "improveProbes": 2455,
           "improveMoves": 77,
           "swapProbes": 382,
-          "swapMoves": 97
+          "swapMoves": 97,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6617,21 +6530,21 @@
     {
       "id": "dense-candidates-320",
       "walls": [
-        64.36137499999995,
-        65.00170900000012,
-        66.37283399999978,
-        66.6243330000002,
-        87.24904199999992
+        246.04537699999946,
+        248.45944299999974,
+        255.03216399999928,
+        259.29093999999986,
+        259.8578800000005
       ],
       "telemetry": {
         "ms": {
-          "total": 66.3566249999999,
-          "setup": 10.42712500000016,
-          "greedy": 24.84375,
-          "repair": 15.487166999999772,
-          "improve": 12.354541000000154,
-          "individual": 2.386833000000024,
-          "report": 0.8572089999997843
+          "total": 254.90926599999966,
+          "setup": 47.41516200000024,
+          "greedy": 81.27894400000059,
+          "repair": 64.65984799999933,
+          "improve": 53.012158000000454,
+          "individual": 6.4844539999994595,
+          "report": 2.0586999999995896
         },
         "size": {
           "lecturers": 320,
@@ -6661,7 +6574,8 @@
           "improveProbes": 5896,
           "improveMoves": 225,
           "swapProbes": 715,
-          "swapMoves": 113
+          "swapMoves": 113,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6674,21 +6588,21 @@
     {
       "id": "gaps-mode-320",
       "walls": [
-        17.01766600000019,
-        17.486167000000023,
-        17.72716700000001,
-        18.069166000000223,
-        18.299999999999727
+        68.68654900000001,
+        69.5282129999996,
+        75.13764999999967,
+        75.71433799999977,
+        78.42877000000044
       ],
       "telemetry": {
         "ms": {
-          "total": 17.714249999999993,
-          "setup": 5.370292000000063,
-          "greedy": 4.6798329999996895,
-          "repair": 2.30987499999992,
-          "improve": 3.822125000000142,
-          "individual": 1.0795000000002801,
-          "report": 0.45262499999989814
+          "total": 75.0224790000002,
+          "setup": 24.902264000000287,
+          "greedy": 16.144201000000066,
+          "repair": 7.914314000000559,
+          "improve": 19.505565999999817,
+          "individual": 4.678513999999268,
+          "report": 1.8776200000002063
         },
         "size": {
           "lecturers": 320,
@@ -6700,98 +6614,63 @@
           "students": 3872
         },
         "ops": {
-          "canTake": 55067,
-          "feasibleScan": 43315,
+          "canTake": 55226,
+          "feasibleScan": 43271,
           "feasibleCandidates": 8843,
-          "greedyIterations": 2503,
-          "heapPush": 4136,
-          "heapPop": 4136,
-          "heapStalePop": 1624,
-          "loadAdd": 9102,
-          "loadRemove": 4031,
-          "deficitEvaluations": 4776,
+          "greedyIterations": 2501,
+          "heapPush": 4639,
+          "heapPop": 4639,
+          "heapStalePop": 2127,
+          "loadAdd": 9018,
+          "loadRemove": 3949,
+          "deficitEvaluations": 3512,
           "deficitLecturerScans": 320,
-          "repairPasses": 123,
-          "repairProbes": 1906,
-          "repairMoves": 42,
-          "improvePasses": 6877,
-          "improveProbes": 889,
-          "improveMoves": 28,
-          "swapProbes": 75,
-          "swapMoves": 18
+          "repairPasses": 111,
+          "repairProbes": 1835,
+          "repairMoves": 32,
+          "improvePasses": 6777,
+          "improveProbes": 1145,
+          "improveMoves": 23,
+          "swapProbes": 101,
+          "swapMoves": 17,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
         "search": [],
-        "individual": [
+        "individual": [],
+        "preExisting": [
           {
-            "lecturerId": "L6",
+            "lecturerId": "L199",
             "rule": "MAX_HOURS_PER_YEAR",
             "limit": 600,
-            "actual": 616,
-            "slotHours": 380,
-            "individualHours": 236,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L27",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 608,
-            "slotHours": 562,
-            "individualHours": 46,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L29",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 614,
-            "slotHours": 550,
-            "individualHours": 64,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L38",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 630,
-            "slotHours": 578,
-            "individualHours": 52,
-            "cause": "individual"
-          },
-          {
-            "lecturerId": "L39",
-            "rule": "MAX_HOURS_PER_YEAR",
-            "limit": 600,
-            "actual": 650,
-            "slotHours": 450,
-            "individualHours": 200,
-            "cause": "individual"
+            "actual": 604,
+            "slotHours": 534,
+            "individualHours": 70,
+            "cause": "pre-existing"
           }
         ],
-        "preExisting": [],
         "structural": []
       }
     },
     {
       "id": "oversubscribed-320",
       "walls": [
-        65.60183300000017,
-        66.40037500000017,
-        66.62745799999993,
-        67.59895800000004,
-        96.71450000000004
+        242.58077199999934,
+        243.27133800000047,
+        246.07053900000028,
+        249.63455599999907,
+        377.4213259999997
       ],
       "telemetry": {
         "ms": {
-          "total": 66.5925000000002,
-          "setup": 7.966417000000092,
-          "greedy": 33.97654199999988,
-          "repair": 5.912833000000319,
-          "improve": 14.164582999999766,
-          "individual": 3.6784999999999854,
-          "report": 0.8936250000001564
+          "total": 245.86867000000166,
+          "setup": 33.73597500000142,
+          "greedy": 118.5785990000004,
+          "repair": 26.037475999999515,
+          "improve": 51.81319900000017,
+          "individual": 13.05269799999951,
+          "report": 2.650723000000653
         },
         "size": {
           "lecturers": 320,
@@ -6821,7 +6700,8 @@
           "improveProbes": 9209,
           "improveMoves": 9,
           "swapProbes": 2235,
-          "swapMoves": 123
+          "swapMoves": 123,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6834,21 +6714,21 @@
     {
       "id": "sparse-candidates-320",
       "walls": [
-        13.189875000000029,
-        13.192250000000058,
-        13.530416999999943,
-        13.704291999999896,
-        14.266166999999768
+        50.789145999999164,
+        53.616737000000285,
+        54.6291199999996,
+        55.293203999999605,
+        55.381421000000046
       ],
       "telemetry": {
         "ms": {
-          "total": 13.517249999999876,
-          "setup": 3.2547090000002754,
-          "greedy": 6.360124999999698,
-          "repair": 0.505500000000211,
-          "improve": 2.224999999999909,
-          "individual": 0.8384579999997186,
-          "report": 0.3334580000000642
+          "total": 54.511124000000564,
+          "setup": 13.45559300000059,
+          "greedy": 20.065264999999272,
+          "repair": 1.6343600000000151,
+          "improve": 15.506849999999758,
+          "individual": 2.527176999999938,
+          "report": 1.3218790000009903
         },
         "size": {
           "lecturers": 320,
@@ -6878,7 +6758,8 @@
           "improveProbes": 947,
           "improveMoves": 2,
           "swapProbes": 379,
-          "swapMoves": 26
+          "swapMoves": 26,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6891,21 +6772,21 @@
     {
       "id": "tight-ceilings-320",
       "walls": [
-        38.28295799999978,
-        38.31441700000005,
-        38.40754199999992,
-        38.553750000000036,
-        38.606166999999914
+        143.29681900000105,
+        144.38514100000066,
+        147.45468100000107,
+        153.79533400000037,
+        201.1845710000016
       ],
       "telemetry": {
         "ms": {
-          "total": 38.38866700000017,
-          "setup": 6.189834000000701,
-          "greedy": 17.84916599999997,
-          "repair": 0.013374999999996362,
-          "improve": 12.50891700000011,
-          "individual": 1.3529999999996107,
-          "report": 0.4743749999997817
+          "total": 147.33033200000136,
+          "setup": 24.744752000000517,
+          "greedy": 67.9608019999996,
+          "repair": 0.03870699999970384,
+          "improve": 48.262039999999615,
+          "individual": 4.166966000000684,
+          "report": 2.1570650000012392
         },
         "size": {
           "lecturers": 320,
@@ -6935,7 +6816,8 @@
           "improveProbes": 7792,
           "improveMoves": 24,
           "swapProbes": 2735,
-          "swapMoves": 129
+          "swapMoves": 129,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -6948,21 +6830,21 @@
     {
       "id": "tight-floors-320",
       "walls": [
-        44.8962919999999,
-        44.89683300000024,
-        45.59400000000005,
-        45.81437499999993,
-        68.87237499999992
+        162.29179999999906,
+        164.7825870000015,
+        166.26587300000028,
+        168.8175229999997,
+        171.0602369999997
       ],
       "telemetry": {
         "ms": {
-          "total": 45.57549999999992,
-          "setup": 4.955458999999792,
-          "greedy": 12.906208000000333,
-          "repair": 17.373458000000028,
-          "improve": 8.471749999999702,
-          "individual": 1.3601659999999356,
-          "report": 0.5084590000001299
+          "total": 166.16845700000158,
+          "setup": 22.60587800000212,
+          "greedy": 40.31310499999927,
+          "repair": 65.40831299999991,
+          "improve": 33.07843800000046,
+          "individual": 3.1864819999991596,
+          "report": 1.576241000000664
         },
         "size": {
           "lecturers": 320,
@@ -6992,7 +6874,8 @@
           "improveProbes": 3194,
           "improveMoves": 166,
           "swapProbes": 712,
-          "swapMoves": 130
+          "swapMoves": 130,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {
@@ -7005,21 +6888,21 @@
     {
       "id": "unconstrained-320",
       "walls": [
-        20.778249999999844,
-        21.33575000000019,
-        21.695208999999977,
-        21.812124999999924,
-        21.94662500000004
+        80.4915060000003,
+        80.60231300000123,
+        82.2644450000007,
+        82.66986300000099,
+        84.96039499999824
       ],
       "telemetry": {
         "ms": {
-          "total": 21.683415999999852,
-          "setup": 5.193373999999949,
-          "greedy": 10.780374999999822,
-          "repair": 0.015249999999923602,
-          "improve": 3.875542000000223,
-          "individual": 1.4727920000000267,
-          "report": 0.34608299999990777
+          "total": 82.19737600000008,
+          "setup": 15.298758999999336,
+          "greedy": 43.964679000000615,
+          "repair": 0.03822299999956158,
+          "improve": 11.857786000000488,
+          "individual": 9.691979999999603,
+          "report": 1.3459490000004735
         },
         "size": {
           "lecturers": 320,
@@ -7049,7 +6932,8 @@
           "improveProbes": 1014,
           "improveMoves": 20,
           "swapProbes": 147,
-          "swapMoves": 47
+          "swapMoves": 47,
+          "supervisionRepairMoves": 0
         }
       },
       "violations": {

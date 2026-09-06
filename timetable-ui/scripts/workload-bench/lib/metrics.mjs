@@ -54,7 +54,19 @@ export function verifyPlan(input, result) {
   const before = new Map(input.lecturers.map((l) => [l.id, blank(l)]));
   if (input.mode === 'gaps') {
     for (const w of input.workloads) {
-      if (w.teachingFormat === 'INDIVIDUALLY') continue;
+      if (w.teachingFormat === 'INDIVIDUALLY') {
+        // Locked supervision counts toward the seed state too. Leaving it out here was the mirror
+        // image of the generator's own accounting defect: a lecturer whose *pre-existing* work
+        // already exceeded the ceiling was reported as having been put over by this run, which
+        // blames the method for a state it inherited and cannot lawfully alter.
+        const roster = new Set(w.studentIds ?? []);
+        for (const a of w.assignedStudents ?? []) {
+          if (!roster.has(a.studentId)) continue;
+          const b = before.get(a.lecturerId);
+          if (b) b.hours += w.hours;
+        }
+        continue;
+      }
       for (const id of w.assignedLecturerIds ?? []) accrue(before.get(id), w);
     }
   }

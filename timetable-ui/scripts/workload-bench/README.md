@@ -230,7 +230,7 @@ defect:
 |---|---|
 | `ceilingViolationsBySearch` | the slot assignments chosen break a ceiling. **A bug.** The run exits non-zero |
 | `ceilingViolationsByIndividual` | slots are within the ceiling; only the individual-supervision hours push past it. See §6 |
-| `ceilingViolationsPreExisting` | in `gaps` mode, locked assignments that were already over. The run may not move them, so it cannot be blamed |
+| `ceilingViolationsPreExisting` | in `gaps` mode, locked work that was already over. The run may not move it, so it cannot be blamed. **Locked student–supervisor pairings count toward this seed state**, and until recently they did not: leaving them out was the mirror image of the generator's own accounting defect, and it charged the run with breaches it had inherited |
 | `structuralErrors` | a lecturer assigned who is not a candidate, a student assigned twice, more lecturers than slots, `MAX_STUDENTS` exceeded |
 | `floorViolations` `floorShortfall` `lecturersBelowFloor` | unmet minimums. **Not** failures — floors are soft by design and the generator reports them as issues |
 | `ceilingOverrunHours` | hours above the annual ceiling, summed. Severity rather than headcount: spreading an unavoidable overrun across more people raises the *count* of breaching lecturers while lowering the harm to each, so the count alone cannot say whether a change helped |
@@ -264,10 +264,13 @@ with instance size *is* the finding — a linear algorithm has a flat `usPerSlot
 ### What the committed baseline says
 
 `results/metrics.csv` is the current algorithm; `results/metrics.base.csv` is the version it replaced,
-measured on the same 48 instances. Both were taken on a 2-core Xeon at 2.8 GHz in a cloud container —
-deliberately modest hardware, and the reason the operation counts matter more than the milliseconds.
-Re-run it on your own machine before quoting any timing; on an Apple-silicon laptop the whole sweep
-finishes in about a third of the time.
+measured on the same 48 instances — but **not on the same machine**. The baseline was taken on a
+2-core x86-64 container and the current file on a four-core arm64 one (`results/run.log` records it),
+so the ratio between their wall-clock totals confounds the two implementations with the two hosts and
+is not a speed-up. This document used to say both came from the same Xeon and quote a "550× overall"
+from dividing them; that number measured the machines as much as the code. Every performance claim
+below is therefore an operation count, a fitted exponent, or a shape read *within* one column.
+`same-machine.mjs` (§8) exists to supply the timing comparison these two files cannot.
 
 **The algorithm is correct.** Across all 48 instances, before and after: **zero** ceiling breaches
 attributable to the slot search and **zero** structural errors, checked by code that shares nothing
@@ -277,17 +280,28 @@ with the generator. Every repeat of every instance produced an identical plan.
 
 | | before | after |
 |---|---:|---:|
-| total, all 48 instances | 851 s | **1.55 s** |
-| slowest single instance | 182.5 s (`oversubscribed-320`) | **0.28 s** (`dense-candidates-320`) |
-| growth, time ∝ Sᵅ | α ≈ **2.0**, R² ≥ 0.98 | α ≈ **1.0**, R² ≥ 0.94 |
+| total, all 48 instances (**different machines — do not divide**) | 851 s | 1.94 s |
+| slowest single instance | 182.5 s (`oversubscribed-320`) | 0.246 s (`dense-candidates-320`) |
+| growth, time ∝ Sᵅ | α ≈ **2.0**, R² ≥ 0.98 | α ≈ **1.0** |
 
-**550× overall**, median 202× per instance, 1 133× at the largest size. Cost *per slot* was rising
-with instance size — 400 µs at 151 slots, 14 450 µs at 4 922 — and is now flat.
+The exponents are the row to read: a constant hardware factor moves the intercept of a log--log fit
+and not its slope, so the change from ≈2 to ≈1 survives the machine change that the times do not.
+Quote it **per phase** rather than for the total — once the slot search stops dominating the run the
+total is a mixture of two differently-scaling costs and no longer a power law, which shows up as the
+total's fit quality falling to 0.947 while the per-phase fits stay clean.
+
+The other machine-independent reading is the *shape* of `usPerSlot` inside each column, since that
+compares an instance with a larger instance measured on the same host. Before, cost per slot climbs
+from 97.8 µs at 53 slots to 21 950 µs at 8 316. After, it is flat: 28.2 µs and 29 µs at those same
+two instances.
 
 The old cost was one statement. 87 % of all time sat in the greedy phase, and inside it the remaining
 slot list was re-sorted on every iteration with **each comparison recomputing both operands from
-scratch**. The measured comparison count was S²⁄2 to three significant figures: the array stays nearly
-sorted, so each sort costs a linear pass, and there are S of them.
+scratch**. The comparison count approaches S²⁄2 — the array stays nearly sorted, so each sort costs a
+linear pass and there are S of them — and the approach is asymptotic rather than exact: the ratio to
+S²⁄2 runs 1.00–1.07 over the 23 instances with S ≥ 1 000 and 1.03–1.24 over the 25 below, where the
+linear pass's constant term still matters. An earlier version of this paragraph called it "S²⁄2 to
+three significant figures", which is true of the largest instances and of no others.
 
 Four changes removed it, in descending order of measured value:
 
@@ -306,23 +320,33 @@ Four changes removed it, in descending order of measured value:
 
 | | before | after |
 |---|---:|---:|
-| ceiling overrun (hours above ст. 56's 600) | 230 842 | **4 362** |
-| lecturers finishing over the ceiling | 2 219 | **155** |
-| unmet floor shortfall | 13 382 | **5 045** |
-| hours Gini (0 = every lecturer equal) | 0.177 | **0.119** |
-| desirability per **filled** slot | 84.04 | 83.59 |
-| slots filled | 97.2 % | 94.5 % |
+| ceiling overrun (hours above ст. 56's 600) | 230 842 | **120** |
+| lecturers finishing over the ceiling | 2 219 | **4** |
+| …of those, put there by the run | 2 219 | **0** |
+| unmet floor shortfall | 13 382 | **5 061** |
+| hours Gini (0 = every lecturer equal) | 0.177 | **0.117** |
+| utilisation Gini (`balance.mjs`, the better axis) | 0.144 | **0.075** |
+| desirability per **filled** slot | 84.04 | 83.54 |
+| slots filled | 96.2 % | 92.6 % |
 
-Read the last two rows together. Desirability per filled slot moved by −0.5 %, so the search is not
-choosing worse lecturers. The 2.7 points of fill are the positions it now refuses to assign because
+Read the last two rows together. Desirability per filled slot moved by −0.6 %, so the search is not
+choosing worse lecturers. The 3.6 points of fill are the positions it now refuses to assign because
 doing so would put someone over the statutory ceiling: **every instance whose fill dropped by more
 than a point paid for that fill, in the old behaviour, with hundreds to tens of thousands of hours of
-illegal load.** On `oversubscribed-320`, 10.9 points of fill against 46 054 hours of overload. Those
-positions are now reported rather than silently covered.
+illegal load.** On `oversubscribed-10`, 16.4 points of fill against 1 772 hours of overload. Those
+positions are now reported rather than silently covered — and `iplex.py` (§8) shows the trade is not
+forced: a lawful arrangement covers some of them that this search does not find.
 
-That change came from moving individual supervision **before** the slot search — it is the least
+The overrun row needs its third line read as well as its first. The 120 hours that remain are **not**
+individual supervision spilling past the ceiling — `ceilingViolationsByIndividual` is 0. They are
+four lecturers on three `gaps`-mode instances whose *locked* work was already over the limit before
+the run started, which `gaps` mode forbids the generator to touch.
+
+Two changes got there. Moving individual supervision **before** the slot search: it is the least
 flexible work in the problem, and booking it last meant the slots had already spent the headroom of
-exactly the people who then had to absorb it. See WORKLOAD-GENERATION.md §5.
+exactly the people who then had to absorb it. And charging supervision a lecturer *already held*
+against their ceiling during the seed — without that, the generator's own ceiling test and this
+validator disagreed about the same lecturer's load. See WORKLOAD-GENERATION.md §4 and §5.
 
 #### What did not work, and is worth not retrying
 
@@ -341,22 +365,29 @@ exactly the people who then had to absorb it. See WORKLOAD-GENERATION.md §5.
 
 ## 6. Known limitations of the harness
 
-- **`distributeStudents` ignores the annual ceiling, and the harness reports rather than hides it.**
-  Individual supervision hours are added to a lecturer's load after the slot search has finished, by
-  a routine that consults only the candidate's `MIN_STUDENTS`/`MAX_STUDENTS` and never
-  `Load.canTake`. A lecturer can therefore finish over 600 hours without the search having done
-  anything wrong. This is the algorithm as written; the `ceilingViolationsByIndividual` column exists
-  to keep it visible and distinct from a real breach.
+- **Three instances start from a seed state that already breaks the ceiling, and no run can fix
+  them.** Over the 48 committed instances the validator reports 4 ceiling violations and 120
+  over-ceiling hours, all on `gaps-mode` instances and all in the
+  `ceilingViolationsPreExisting` column: `ceilingViolationsBySearch` and
+  `ceilingViolationsByIndividual` are both 0. `gaps` mode may not alter locked assignments, so the
+  generator solves the residual problem there — complete the plan without deepening an inherited
+  breach — and the four columns exist to keep *inherited* apart from *caused*. Read
+  `ceilingViolationsBySearch + ceilingViolationsByIndividual` as the number that must stay 0.
 - **One seed per cell.** Enough for a scaling curve, not enough for mean ± σ per cell. `seedFor`
   takes a `repeat` argument for exactly this; generating three seeds per cell triples `data/`.
 - **Synthetic instances.** They are shaped by real figures but are not real departments. A run
   against a real `working_curriculum_items` export would be a stronger claim, and the input format
   is the same `GenInput` the frontend builds, so such an export can be dropped into `data/` as-is.
-- **Single-threaded, one machine.** No claim is made about wall-clock on other hardware; that is
-  what the operation counts are for.
-- **The desirability bound is loose.** A tighter bound (an LP relaxation, or a min-cost-flow on the
-  ceiling-free problem) would make the optimality gap much more informative. That is the obvious
-  next piece of work if the article needs a strong quality claim.
+- **`metrics.csv` and `metrics.base.csv` were measured on different machines.** The wall-clock
+  columns of those two files must not be divided into each other: the ratio confounds the two
+  implementations with the two hosts. Use the operation counts and the fitted exponents, or run
+  `same-machine.mjs`, which times both implementations in one process and records the host beside
+  its results. Any future results file should record its machine in the row, not in a log next to
+  it.
+- **Supervision and slots are still assigned in sequence.** Supervision is placed first, so the slot
+  search works around hours that are already booked; a roster chosen without regard to which
+  lecturers the search will need can still spend headroom a scarce class then wants. The cost shows
+  up as unfilled slots rather than as a breach, and `iplex.py` measures how many.
 
 ## 7. Files
 
@@ -367,6 +398,11 @@ scripts/workload-bench/
 ├── run-benchmark.mjs         script 2 — writes results/
 ├── compare.mjs               two generators head to head, fails on a quality regression
 ├── experiment-multistart.mjs how much a multi-start would buy (answer: 0.25 %)
+├── same-machine.mjs          both implementations timed in one process, on one host
+├── omega-sweep.mjs           what the whole family does as the floor-deficit weight varies
+├── balance.mjs               Gini of hours and of utilisation, current vs. replaced
+├── ipbound.py                certified upper bound on total desirability (HiGHS)
+├── iplex.py                  certified optimum of the lexicographic objective, in three stages
 ├── lib/
 │   ├── rng.mjs               seeded mulberry32 + sampling helpers
 │   ├── model.mjs             every modelling constant, one place
@@ -377,9 +413,14 @@ scripts/workload-bench/
 ├── data/                     48 instances + index.json  (regenerable, byte-identical)
 └── results/
     ├── metrics.csv           the current algorithm
-    ├── metrics.base.csv      the version it replaced, same instances, same machine
+    ├── metrics.base.csv      the version it replaced, same instances, DIFFERENT machine
     ├── scaling.csv           fitted growth exponents
-    └── metrics.json          the above plus per-run detail and the environment
+    ├── metrics.json          the above plus per-run detail and the environment
+    ├── same-machine.csv      both implementations on one host  + -host.json, .log
+    ├── omega-sweep.csv       every instance at each floor-deficit weight
+    ├── balance.csv           hours Gini and utilisation Gini, per instance
+    ├── ip-bound.jsonl        desirability bound, + -sup.jsonl with supervision priced
+    └── ip-lex.jsonl          per-stage optima C*, D*, Z* with solver status and bounds
 ```
 
 Compare two versions of the generator directly:
@@ -390,3 +431,36 @@ node scripts/workload-bench/compare.mjs --base old.ts --cand src/app/workload-ge
 
 `compare.mjs` reports speed and quality side by side and exits non-zero on a quality regression,
 which is what makes it usable as a gate rather than a report.
+
+## 8. The standing benchmarks, and what each one answers
+
+Each writes into `results/` and each answers one question about the shipped generator. None of them
+is part of the application build; they are run when the algorithm changes.
+
+```bash
+# Is the wall-clock claim real, on one machine rather than across two?
+node --experimental-strip-types scripts/workload-bench/same-machine.mjs [--max-lecturers 320]
+
+# How much of the output depends on the floor-deficit weight, which is a policy choice?
+node --experimental-strip-types scripts/workload-bench/omega-sweep.mjs [--omegas 5,10,20]
+
+# Is the plan actually balanced, on utilisation and not only on raw hours?
+node --experimental-strip-types scripts/workload-bench/balance.mjs
+
+# How much desirability is left on the table?  (needs highspy)
+python3 scripts/workload-bench/ipbound.py --supervision
+
+# How far is the plan from the objective the generator really targets — coverage first,
+# then floor deficit, then desirability?
+python3 scripts/workload-bench/iplex.py
+```
+
+`iplex.py` is the one to run after a change to the search. `ipbound.py` bounds only the
+lowest-priority component, so a good desirability gap there can hide a plan that covers fewer slots
+than a lawful plan could; `iplex.py` reports coverage and floor deficit first and desirability only
+where those tie, which is the order the generator itself optimises. Both need HiGHS
+(`pip install highspy`) and both take minutes, not seconds, on the larger instances.
+
+`same-machine.mjs` needs `src/app/workload-generator.baseline.ts`, the pre-engineering
+implementation kept beside the current one purely as the performance comparand. It is never
+imported by the application.
