@@ -190,6 +190,8 @@ export interface GenOpCounters {
   improveMoves: number;
   swapProbes: number;
   swapMoves: number;
+  /** Students moved off an over-ceiling supervisor by the supervision repair pass. */
+  supervisionRepairMoves: number;
 }
 
 export interface GenTelemetry {
@@ -213,7 +215,8 @@ const newOpCounters = (): GenOpCounters => ({
   deficitEvaluations: 0, deficitLecturerScans: 0,
   repairPasses: 0, repairProbes: 0, repairMoves: 0,
   improvePasses: 0, improveProbes: 0, improveMoves: 0,
-  swapProbes: 0, swapMoves: 0
+  swapProbes: 0, swapMoves: 0,
+  supervisionRepairMoves: 0
 });
 
 /** `performance.now()` where it exists (browser, Node 16+), `Date.now()` as a last resort. */
@@ -395,12 +398,13 @@ class Load {
     if (!this.hasAnyFloor) return 0;
     let d = 0;
     if (this.minHoursLimit !== null && this.hours < this.minHoursLimit) d += this.minHoursLimit - this.hours;
+    const w = COURSE_DEFICIT_WEIGHT;
     for (let i = 0; i < COUNTED_HOUR_TYPES.length; i++) {
       // A missing course outweighs an hour: the weight is what makes the repair pass prefer giving
       // someone a discipline they lack over topping up someone's hours.
-      if (this.minType[i] !== null && this.typeSize[i] < this.minType[i]!) d += (this.minType[i]! - this.typeSize[i]) * 10;
-      if (this.minMandatory[i] !== null && this.mandatorySize[i] < this.minMandatory[i]!) d += (this.minMandatory[i]! - this.mandatorySize[i]) * 10;
-      if (this.minElective[i] !== null && this.electiveSize[i] < this.minElective[i]!) d += (this.minElective[i]! - this.electiveSize[i]) * 10;
+      if (this.minType[i] !== null && this.typeSize[i] < this.minType[i]!) d += (this.minType[i]! - this.typeSize[i]) * w;
+      if (this.minMandatory[i] !== null && this.mandatorySize[i] < this.minMandatory[i]!) d += (this.minMandatory[i]! - this.mandatorySize[i]) * w;
+      if (this.minElective[i] !== null && this.electiveSize[i] < this.minElective[i]!) d += (this.minElective[i]! - this.electiveSize[i]) * w;
     }
     return d;
   }
@@ -665,8 +669,53 @@ export function generateWorkloads(input: GenInput): GenResult {
   const studentPlans = new Map<string, { studentId: string; lecturerId: string }[]>();
   const individualBooked = new Map<string, number>();
   const tBeforeIndividual = now();
+
+  // Supervision a lecturer already holds costs hours exactly as a new pairing does, and in 'gaps'
+  // mode those pairings stand. They were never booked against anyone's ceiling: the seed loop above
+  // walks the *slot* positions, and `distributeStudents` copies an existing pairing into its plan
+  // without charging for it. The lecturer therefore looked emptier to every later decision than they
+  // were, and the plan could pass the generator's own ceiling test while the independent validator
+  // — which counts every supervised student — found the lecturer over the statutory limit. That is
+  // where the overrun the benchmark attributes to individual supervision actually comes from.
+  if (mode === 'gaps') {
+    for (const w of individual) {
+      const roster = new Set(w.studentIds ?? []);
+      for (const a of w.assignedStudents ?? []) {
+        if (!roster.has(a.studentId)) continue;
+        loads.get(a.lecturerId)?.addHours(w.hours);
+      }
+    }
+  }
   for (const w of individual) {
     studentPlans.set(w.id, distributeStudents(w, mode, loads, issues, individualBudget, individualBooked));
+  }
+  /**
+   * Which supervisions this run is not entitled to move.
+   *
+   * In `gaps` mode a student already paired with a supervisor is settled work: the mode exists to
+   * fill what is missing without disturbing what is there, and re-pairing a diploma student with a
+   * different supervisor part-way through a year is not a scheduling detail. The repair below
+   * therefore may only move supervisions this run created. Without this set it moved pre-existing
+   * ones too, which drove the reported ceiling overrun to zero by quietly rewriting the seed — a
+   * lawful-looking plan that the department never asked for.
+   */
+  const lockedSupervision = new Set<string>();
+  if (mode === 'gaps') {
+    for (const w of individual) {
+      const roster = new Set(w.studentIds ?? []);
+      for (const a of w.assignedStudents ?? []) {
+        if (roster.has(a.studentId)) lockedSupervision.add(`${w.id}\u0000${a.studentId}`);
+      }
+    }
+  }
+  // The positions were placed one at a time and could not see each other; this takes students off
+  // whoever ended up over the ceiling, wherever a lawful home for them exists.
+  const supervisionRepairs =
+    repairSupervisionCeilings(individual, studentPlans, loads, lockedSupervision, ops);
+  if (supervisionRepairs > 0) {
+    issues.push({ kind: 'over-ceiling', workloadId: '',
+      message: `Індивідуальну роботу перерозподілено: ${supervisionRepairs} студент(ів) передано ` +
+        'викладачам із запасом годин, щоб не перевищувати річний ліміт.' });
   }
   const individualMs = now() - tBeforeIndividual;
 
@@ -886,6 +935,26 @@ interface SearchContext {
 }
 
 /** Move limits. Generous enough never to bind on a real department, present so nothing can spin. */
+/**
+ * ω — the exchange rate between the two floor shortfalls, one unit per hour short and this many
+ * per course short.
+ *
+ * Hours and courses are different units and any single objective over both has to price one in the
+ * other. The value is a policy choice rather than a derived constant, so it is named here and it is
+ * overridable rather than asserted to be right; `scripts/workload-bench/omega-sweep.mjs` measures
+ * what the whole instance family does as it varies. `WL_COURSE_DEFICIT_WEIGHT` exists for that
+ * sweep; the deployed configuration never sets it.
+ */
+const COURSE_DEFICIT_WEIGHT = (() => {
+  // `globalThis.process` is typed only where @types/node is in scope; the app's tsconfig has no
+  // index signature for it, so the lookup is narrowed here rather than reaching through `any`.
+  // The optional chain is what keeps this safe in the browser, where there is no `process` at all.
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+    .process?.env;
+  const v = Number(env?.['WL_COURSE_DEFICIT_WEIGHT']);
+  return Number.isFinite(v) && v > 0 ? v : 10;
+})();
+
 const REPAIR_MOVE_CAP = 4;      // × the number of workloads
 const IMPROVE_MOVE_CAP = 4;
 
@@ -1118,6 +1187,105 @@ function improve(ctx: SearchContext) {
 
     if (movedHere) enqueue(i);
   }
+}
+
+/** How many times the supervision repair sweeps the over-ceiling lecturers before giving up. */
+const SUPERVISION_REPAIR_PASSES = 8;
+
+/**
+ * Moves supervision off lecturers who are over the annual ceiling, one student at a time.
+ *
+ * {@link distributeStudents} places each position greedily and in isolation: it sees the positions
+ * already booked, never the ones still to come. That is enough to keep most plans lawful but not
+ * all of them --- on two of the benchmark's forty-eight instances an integer program proves a
+ * lawful supervision roster exists while the greedy pass returns one over the ceiling, purely
+ * because an early position spent headroom a later position then needed.
+ *
+ * This pass repairs exactly that. A move is applied only when it takes a student from a supervisor
+ * who is over the ceiling and gives them to a candidate of the *same* position who is still under
+ * it afterwards, so the total overrun strictly falls and no new violation is ever created. Where no
+ * such move exists the overrun is inherent to the instance --- no ordering of the same students
+ * over the same candidate pools is lawful --- and the pass leaves it.
+ *
+ * Donors already at their desired student count give a student up first, so repairing a ceiling
+ * does not deepen a floor shortfall while any cheaper move remains. Every choice is totally
+ * ordered, so the result is deterministic.
+ */
+function repairSupervisionCeilings(
+  individual: GenWorkload[],
+  studentPlans: Map<string, { studentId: string; lecturerId: string }[]>,
+  loads: Map<string, Load>,
+  locked: Set<string>,
+  ops: GenOpCounters
+): number {
+  const room = (id: string) => {
+    const load = loads.get(id);
+    return load ? load.hoursHeadroom() : Infinity;
+  };
+  const overrun = (id: string) => {
+    const r = room(id);
+    return Number.isFinite(r) ? Math.max(0, -r) : 0;
+  };
+
+  const held = new Map<string, Set<string>>();
+  const byPosition = new Map<string, GenWorkload>();
+  for (const w of individual) {
+    byPosition.set(w.id, w);
+    for (const a of studentPlans.get(w.id) ?? []) {
+      let held_ = held.get(a.lecturerId);
+      if (!held_) held.set(a.lecturerId, (held_ = new Set()));
+      held_.add(w.id);
+    }
+  }
+
+  let moved = 0;
+  for (let pass = 0; pass < SUPERVISION_REPAIR_PASSES; pass++) {
+    const over = [...loads.keys()].filter((id) => overrun(id) > 0)
+      .sort((a, b) => overrun(b) - overrun(a) || (a < b ? -1 : 1));
+    if (!over.length) break;
+    let movedHere = false;
+
+    for (const from of over) {
+      const positions = [...(held.get(from) ?? [])].sort();
+      for (const wid of positions) {
+        if (overrun(from) <= 0) break;
+        const w = byPosition.get(wid);
+        if (!w || !w.hours) continue;
+        const plan = studentPlans.get(wid) ?? [];
+        const count = new Map<string, number>();
+        for (const a of plan) count.set(a.lecturerId, (count.get(a.lecturerId) ?? 0) + 1);
+
+        const cap = (c: GenCandidate) => (c.maxStudents == null ? Infinity : c.maxStudents);
+        const takers = w.candidates
+          .filter((c) => c.lecturerId !== from
+            && loads.has(c.lecturerId)
+            && (count.get(c.lecturerId) ?? 0) < cap(c)
+            && room(c.lecturerId) >= w.hours)
+          .sort((a, b) => room(b.lecturerId) - room(a.lecturerId)
+            || b.desirability - a.desirability
+            || (a.lecturerId < b.lecturerId ? -1 : 1));
+        if (!takers.length) continue;
+
+        // Only supervisions this run created may move; see `lockedSupervision` at the call site.
+        const student = plan
+          .filter((a) => a.lecturerId === from && !locked.has(`${wid}\u0000${a.studentId}`))
+          .map((a) => a.studentId).sort().pop();
+        if (student === undefined) continue;
+
+        const to = takers[0];
+        for (const a of plan) if (a.studentId === student) a.lecturerId = to.lecturerId;
+        loads.get(from)!.addHours(-w.hours);
+        loads.get(to.lecturerId)!.addHours(w.hours);
+        let held_ = held.get(to.lecturerId);
+        if (!held_) held.set(to.lecturerId, (held_ = new Set()));
+        held_.add(wid);
+        if (!plan.some((a) => a.lecturerId === from)) held.get(from)!.delete(wid);
+        moved++; movedHere = true; ops.supervisionRepairMoves++;
+      }
+    }
+    if (!movedHere) break;
+  }
+  return moved;
 }
 
 // ── INDIVIDUALLY: distribute students among candidates ───────────────────────

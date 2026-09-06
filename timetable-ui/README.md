@@ -243,6 +243,9 @@ src/app/
 │                                   #   Identity-H, tables that break across pages
 ├── pdf-fonts.ts                       # browser glue: lazy font fetch, cache, download
 ├── workload-generator.ts             # the automatic assignment algorithm — pure, no Angular
+├── workload-generator.baseline.ts    # the pre-engineering implementation, frozen. Never imported
+│                                     #   by the app; `scripts/workload-bench/same-machine.mjs` is
+│                                     #   the only caller, which times both on one host
 ├── lecturer-workload-list.ts/.html   # department tab: assign lecturers/groups/duration to each
 │                                     #   working (or combined) curriculum item — "Навантаження викладачів"
 ├── room-assignment-list.ts/.html     # faculty tab: where each class may be held —
@@ -1372,10 +1375,14 @@ npm run bench:check-data   # verify the committed fixtures match a fresh build
 ```
 
 It was written to answer a specific question and did: the search was quadratic, 87 % of the time sat
-in one statement, and fixing it made the whole 48-instance sweep 550× faster while cutting the hours
-of load assigned above the statutory ceiling by 98 %. `scripts/workload-bench/README.md` has the
-instances, the metric definitions, the before-and-after table, and a list of the things that were
-tried and did not work.
+in one statement, and fixing it took the observed slot-search growth from roughly quadratic to
+near-linear while cutting the hours of load assigned above the statutory ceiling from 230 842 to
+120 — and the 120 that remain are inherited from `gaps`-mode seed states, not created by the run.
+The wall-clock ratio between the two committed result files is **not** a speed-up: they were
+measured on different machines, so `same-machine.mjs` exists to time both implementations on one
+host. `scripts/workload-bench/README.md` has the instances, the metric definitions, the
+before-and-after table, the standing benchmarks and a list of the things that were tried and did not
+work.
 
 #### Measuring the timetable solver (`scripts/timetable-bench/`)
 
@@ -1678,7 +1685,12 @@ short version.
 
 Assigning lecturers to slots so as to maximise total desirability, subject to per-lecturer ceilings
 on annual hours and on distinct-course counts, is an integer program. Rather than pretend otherwise,
-it runs three passes:
+it places individual supervision first and then runs three passes over the slots.
+
+**Individual supervision goes before the slot search**, and the order is load-bearing rather than
+incidental: it is the least flexible work in the problem — every student needs a supervisor, from a
+small pool, at `hours × students` — so booking it last meant the slot search had already spent the
+headroom of exactly the people who then had to absorb it. Then:
 
 1. **Most-constrained-first greedy.** Slots are filled in order of how few feasible candidates they
    have — a slot with one viable lecturer must claim them before a slot with ten takes them for a
@@ -1698,11 +1710,15 @@ accrues the **full** hours, matching subgroup teaching.
 
 In **gaps** mode, assignments that already exist are locked — the repair and improvement passes
 cannot move them however much desirability a swap would buy, since "only fill what's missing" is the
-whole promise of that mode.
+whole promise of that mode. That covers student–supervisor pairings as well as slots, and the hours
+they already cost are charged against their supervisor's ceiling before anything else runs, so every
+later decision sees the load that lecturer actually carries.
 
 INDIVIDUALLY workloads are distributed by student rather than by slot: each candidate is brought up
 to their `MIN_STUDENTS` in order of desirability, then the remainder goes to the most desirable
-candidate with headroom below `MAX_STUDENTS`, load only breaking ties between equals. Students that
+candidate with headroom below `MAX_STUDENTS`, load only breaking ties between equals. A repair pass
+then moves students off any supervisor left over the annual ceiling, onto a candidate of the same
+position who stays under it — never touching a pairing that existed before the run. Students that
 don't fit anywhere are reported.
 
 #### Merging working curriculum items (`CombinedWorkingCurriculumItemList`, department "Об'єднані позиції РНП" tab)

@@ -231,6 +231,13 @@ earlier versions, and the reason is in §5. For the rest:
   move it however much desirability a swap would buy. "Only fill what's missing" is the mode's whole
   promise, and an unlocked improvement pass silently broke it — a real defect, and one that produced
   perfectly plausible output (§10).
+
+  **Supervision a lecturer already holds is charged here too**, and for a long time it was not. The
+  seed loop walks the *slot* positions only, so a pre-existing student pairing arrived carrying no
+  hours: every later decision saw an emptier lecturer than the independent validator did, and a plan
+  could pass the generator's own ceiling test while the validator — which counts every supervised
+  student — found the lecturer over the statutory limit. Each pairing on the position's current
+  roster now adds `hours` to its supervisor's `Load` before anything else runs.
 - **`all` mode** — every load starts empty and nothing is locked.
 
 A lecturer already assigned but *not* in this department (possible on a combined item) is kept in
@@ -366,9 +373,15 @@ greedy applies to slots, one level up. Individual supervision is the least flexi
 problem — every student must have a supervisor, the eligible pool is one course's candidates, and the
 cost is `hours × students`, which on a group of sixty is a third of somebody's year. Booking it last,
 as this used to, meant the slot search had already spent the headroom of exactly the people who then
-had to absorb it, and the annual ceiling was blown as a matter of routine: measured across the 48
-benchmark instances, **25 748 academic hours** of load above ст. 56's ceiling, none of it reported.
-Placing it first brings that to **214**, and what remains is reported rather than silent.
+had to absorb it, and the annual ceiling was blown as a matter of routine: across the 48 benchmark
+instances the implementation this one replaced leaves **230 842 academic hours** above ст. 56's
+ceiling on **2 219** lecturers, every one of them attributed to individual supervision
+(`ceilingViolationsByIndividual` in `results/metrics.base.csv`) and none of it reported. The current
+implementation leaves **120 hours** on **4** lecturers, and the attribution has moved entirely:
+`ceilingViolationsBySearch` and `ceilingViolationsByIndividual` are both **0**, and all four sit in
+`ceilingViolationsPreExisting` — inherited from three `gaps`-mode seed states that were already
+unlawful before the run began, on instances where no decision the generator is entitled to make can
+remove them.
 
 Going first must not mean taking everything, though, or the collision simply reverses — a lecturer
 filled to their ceiling with supervision has nothing left for the classes only they can teach. So
@@ -409,6 +422,27 @@ Supervision hours (`hours × students`) are added to each lecturer's `Load`, so 
 competes for the same annual ceiling as everything else — and, now that it is placed first, the slot
 search sees that competition instead of discovering it too late.
 
+### The repair pass, and what it may not touch
+
+`distributeStudents` places each position greedily and in isolation: it sees the positions already
+booked, never the ones still to come. That is enough for most plans but not all — an early position
+can spend headroom a later one then needs, and a lawful roster still exists that the greedy pass did
+not find. `repairSupervisionCeilings` then moves students, one at a time, off any supervisor who
+finished over the ceiling and onto a candidate of the *same* position who is still under it
+afterwards. The total overrun therefore falls strictly and no new violation is ever created; where
+no such move exists the overrun is inherent to the instance and the pass leaves it. Donors already at
+their desired student count give a student up first, so repairing a ceiling does not deepen a floor
+shortfall while a cheaper move remains, and every choice is totally ordered, so the result is
+deterministic. `supervisionRepairMoves` counts what it did, and a run that moved anybody reports it
+as an `over-ceiling` issue rather than adjusting the roster silently.
+
+**In `gaps` mode the pass may only move supervisions this run created.** A student already paired
+with a supervisor is settled work, and re-pairing a diploma student with somebody else part-way
+through a year is not a scheduling detail. Without that restriction the pass drove the reported
+overrun to zero by quietly rewriting the seed — a lawful-*looking* plan the department never asked
+for. The locked pairings are collected before the pass runs and it skips them, which gives up the
+zero and returns the inherited hours instead: a worse headline and a correct one.
+
 **This trade is worth naming.** Respecting the ceiling means some class positions can no longer be
 filled by anyone: on the benchmark, 96.2 % of slots filled becomes 92.6 %. Those positions are not
 lost, they are *reported* — the department is being told that the work it has planned cannot be
@@ -443,32 +477,43 @@ iteration and recomputed each slot's feasibility from scratch inside the compara
 ### Measured
 
 48 instances from `scripts/workload-bench` — eight scenarios × six department sizes (10 to 320
-lecturers, 113 to 8 255 slots), each an independently checked plan. Before and after, on identical
-inputs and identical hardware:
+lecturers, 53 to 8 316 slots), each an independently checked plan. Before and after, on identical
+inputs:
 
 | | before | after |
 |---|---:|---:|
-| total time, all 48 instances | 851 s | **1.55 s** |
-| slowest single instance | 182.5 s | **0.28 s** |
 | empirical growth, time ∝ Sᵅ | α ≈ **2.0** | α ≈ **1.0** |
-| ceiling overrun (hours above ст. 56's 600) | 230 842 | **4 362** |
-| lecturers finishing over the ceiling | 2 219 | **155** |
-| unmet floor shortfall | 13 382 | **5 045** |
-| hours Gini (0 = every lecturer equal) | 0.177 | **0.119** |
-| desirability per filled slot | 84.04 | 83.59 |
-| slots filled | 97.2 % | 94.5 % |
+| ceiling overrun (hours above ст. 56's 600) | 230 842 | **120** |
+| lecturers finishing over the ceiling | 2 219 | **4** |
+| …of those, caused by this run | 2 219 | **0** |
+| unmet floor shortfall | 13 382 | **5 061** |
+| hours Gini (0 = every lecturer equal) | 0.177 | **0.117** |
+| desirability per filled slot | 84.04 | 83.54 |
+| slots filled | 96.2 % | 92.6 % |
 | ceiling breaches by the slot search | 0 | 0 |
 | structural errors | 0 | 0 |
 
-**550× overall; 1 133× on the largest instance.** Growth against both lecturer count and slot count
-fits a power law with α ≈ 1.0 and R² ≥ 0.94 in every scenario.
+**The wall-clock columns of those two files must not be divided into each other.** `metrics.csv` and
+`metrics.base.csv` were measured on different machines — a two-core x86-64 container and a four-core
+arm64 one — so their time ratio confounds the two implementations with the two hosts, and the
+"550× overall" this section used to quote was a cross-hardware number rather than a speed-up.
+Nothing recorded in those files repairs that, which is why every performance claim here is an
+operation count or a fitted exponent. `same-machine.mjs` supplies the missing wall clock by running
+both implementations in one process and recording the host beside its results; on that host the
+median ratio is 118× and it rises with department size, which is the exponent showing up in seconds.
 
-Two rows deserve reading together. Desirability *per filled slot* moved by −0.5 %, so the search is
-not choosing worse lecturers. The 2.7 points of fill it gave up are entirely the positions it now
+Growth against both lecturer count and slot count fits a power law with α ≈ 1.0 per phase. Quote the
+exponent **per phase** rather than for the total: once the slot search stops dominating the run, the
+total is a mixture of two differently-scaling costs and no longer a power law at all, which is
+visible as the total's fit quality falling to 0.947 while the per-phase fits stay clean.
+
+Two rows deserve reading together. Desirability *per filled slot* moved by −0.9 %, so the search is
+not choosing worse lecturers. The 3.6 points of fill it gave up are entirely the positions it now
 refuses to assign because doing so would put someone over the statutory ceiling — every instance
 where fill dropped by more than a point paid for that drop with hundreds to tens of thousands of
-hours of overload in the old behaviour. On `oversubscribed-320`: 10.9 points of fill, against 46 054
-hours of illegal load. Those positions are reported, not lost.
+hours of overload in the old behaviour. On `oversubscribed-10`: 16.4 points of fill, against 1 772
+hours of illegal load. Those positions are reported, not lost — and `iplex.py` shows the trade is not
+forced, since a lawful arrangement covers some of them that this search does not find.
 
 The Gini row is the quietest and possibly the most useful in practice: the same work, spread
 substantially more evenly across the department.
@@ -499,6 +544,15 @@ had to — `scripts/workload-bench/README.md` has the numbers.
 | `held` | `Map<lecturerId, GenWorkload[]>` | what each lecturer currently holds |
 | `deficitOf` + `totalDeficit` | `Map` + `number` | per-lecturer floor shortfall and its running sum |
 | `shortOfFloor` | `Set<string>` | lecturers below a floor — the repair worklist's seed |
+| `lockedSupervision` | `Set<"workloadId\0studentId">` | `gaps` mode: pairings that existed before the run, which the supervision repair may not move |
+
+One constant is worth knowing about because a deployment could reasonably want to change it.
+`COURSE_DEFICIT_WEIGHT` (ω) is the exchange rate inside `Load.deficit()` between the two floor
+shortfalls: one unit per hour short, ω per *course* short, ω = 10. Hours and courses are different
+units and any single objective over both has to price one in the other, so this is a policy choice
+rather than a derived constant. It is overridable through `WL_COURSE_DEFICIT_WEIGHT` for
+`scripts/workload-bench/omega-sweep.mjs`, which measures what the whole instance family does as it
+varies; the deployed configuration never sets it, and the browser build has no `process.env` to read.
 
 ### `class Load` — one lecturer's capacity
 
@@ -540,8 +594,9 @@ why those phases do not use `feasible` at all and call `canTake` directly.
 ```
 generateWorkloads(input)
   ├── build Load per lecturer, candidateOf / candidateWorkloads / ranked   ── setup
-  ├── seed locked assignments (gaps mode)
+  ├── seed locked assignments, incl. supervision already held (gaps mode)
   ├── distributeStudents × individual workloads                            ── §5, goes first
+  ├── repairSupervisionCeilings, skipping locked pairings                  ── §5
   ├── initial feasible sets + heap seed
   ├── while heap: pop → skip if stale → pick best → take → revalidate      ── phase 1
   ├── repair(ctx)    worklist over lecturers short of a floor              ── phase 2
@@ -555,8 +610,9 @@ the two lecturers a move touches. Every other structure is derived.
 
 ### Telemetry
 
-`GenResult.telemetry` carries per-phase wall-clock and eighteen operation counters (`canTake`,
-heap pushes and stale pops, probes and accepted moves per pass, and so on). They are integer
+`GenResult.telemetry` carries per-phase wall-clock and twenty operation counters (`canTake`,
+heap pushes and stale pops, probes and accepted moves per pass, `supervisionRepairMoves`, and so
+on). They are integer
 increments that influence no decision, so a run with telemetry produces a byte-identical plan to one
 without; the UI ignores the field. The counters are the machine-independent half of any measurement —
 identical on any CPU for the same input — which is what makes them quotable in a way milliseconds
@@ -571,7 +627,10 @@ are not.
 - **No ceiling is ever violated by the slot search** — including the fallback annual maximum. Across
   the 48 benchmark instances, checked independently: zero, before and after the optimisation.
 - No lecturer is assigned to the same workload twice.
-- In `gaps` mode, an assignment that existed before the run still exists after it, unchanged.
+- In `gaps` mode, an assignment that existed before the run still exists after it, unchanged —
+  **student–supervisor pairings included**. That last clause is not decoration: the supervision
+  repair pass once moved pre-existing pairings too, which produced a lawful-looking plan by
+  re-pairing diploma students mid-year (§5).
 - Deterministic: identical input yields byte-identical output (every tie-break bottoms out in an id
   comparison).
 - Terminates on every input.
@@ -583,23 +642,30 @@ are not.
 - **The annual ceiling can be exceeded by individual supervision, and only by it.** A student cannot
   be left without a supervisor, so when every candidate for an `INDIVIDUALLY` position has run out of
   room the ceiling gives rather than the student. This is the one place the hard constraint is soft,
-  it is a last resort after two other tiers (§5), and it is reported — on the benchmark it accounts
-  for 4 362 hours across 48 instances, down from 230 842 before the individual pass was moved ahead
-  of the slot search.
+  it is a last resort after two other tiers and after the repair pass has tried to undo it (§5), and
+  it is reported. On the benchmark that last resort is currently never reached:
+  `ceilingViolationsByIndividual` is **0** across the 48 instances, down from 2 219 before the
+  individual pass was moved ahead of the slot search. The 120 over-ceiling hours that remain are
+  `ceilingViolationsPreExisting` — inherited from `gaps`-mode seed states that were unlawful before
+  the run, which the mode forbids the generator to alter.
 - **Not maximal coverage.** Filling the most slots and maximising desirability can conflict; the
   MRV ordering favours coverage but does not guarantee it. An unfilled slot is always reported.
   Coverage is also traded against the ceiling on purpose: the search will leave a position unfilled
-  rather than put someone over 600 hours, which costs about 2.7 points of fill on the benchmark and
+  rather than put someone over 600 hours, which costs about 3.6 points of fill on the benchmark and
   is the right way round — an unfilled position is a visible, actionable gap, an overloaded lecturer
-  is an invisible legal breach.
+  is an invisible legal breach. How much of that coverage a *lawful* plan could still recover is
+  measured rather than guessed: `iplex.py` solves the same objective exactly and reports the gap.
 - **Floors may go unmet** — they are objectives, not constraints. Reported per lecturer with the
   exact shortfall (`годин на рік: 120 з 300`).
 - **No fairness criterion.** The fill-ratio tie-break spreads work among equally desirable
   candidates, but nothing bounds the spread between lecturers of differing desirability. It is
   *measured* rather than bounded: the benchmark reports the Gini coefficient of the hour
-  distribution, currently 0.119 across the 48 instances (0 would be every lecturer carrying exactly
-  the same load). If fairness ever needs to be a constraint rather than an observation, that number
-  is where a target would be set.
+  distribution, currently 0.117 across the 48 instances (0 would be every lecturer carrying exactly
+  the same load). Read the **utilisation** Gini in preference to that one — `balance.mjs` reports
+  both, and it is currently 0.075. Raw hours are the wrong axis wherever posts differ in size, for
+  the same reason headroom is defined as a share: 600 hours on a full post and 300 on a half post
+  are perfectly balanced in utilisation and maximally unequal in hours. If fairness ever needs to be
+  a constraint rather than an observation, that is where a target would be set.
 - **No cross-department view.** Input is one department. A lecturer teaching for two departments has
   their annual hours counted separately in each, so both can independently believe they are within
   the ceiling.
@@ -704,7 +770,7 @@ What does exist is stronger in some ways and weaker in others.
 
 ### The benchmark harness (`scripts/workload-bench/`)
 
-48 instances — eight scenarios × six department sizes, 10 to 320 lecturers, 113 to 8 255 slots —
+48 instances — eight scenarios × six department sizes, 10 to 320 lecturers, 53 to 8 316 slots —
 covering all 21 lecturer constraint types, both candidate constraints, all three teaching formats,
 every course type, and both generation modes. Coverage of that list is asserted by the generator
 script, which exits non-zero if any of it is ever lost.
@@ -738,7 +804,7 @@ framework-free precisely so they are cheap to write.
 
 ### Defects found, and how
 
-Three, all of which produced *plausible* output:
+Five, all of which produced *plausible* output:
 
 1. In `gaps` mode the improvement pass moved pre-existing assignments — the mode's core promise,
    violated silently. Found by reading, fixed by the `locked` set.
@@ -748,10 +814,24 @@ Three, all of which produced *plausible* output:
    lecturer hundreds of hours over ст. 56's limit with nothing reported. Found by the benchmark's
    independent validator — 2 219 lecturers over the ceiling across the 48 instances — and fixed by
    moving the pass ahead of the slot search and giving it a budget (§5).
+4. **Supervision a lecturer already held was never charged against their ceiling** in `gaps` mode,
+   because the seed loop walks slot positions only. The generator's own ceiling test therefore passed
+   on plans the independent validator failed — the two disagreed about the same lecturer's load, and
+   the generator was the one that was wrong. Found by the validator, fixed by charging those hours
+   during the seed (§4).
+5. **The supervision repair pass took students off *any* supervisor, not only those this run
+   placed.** It drove the reported overrun to zero, which is what made it look right; what it
+   actually did was re-pair diploma students part-way through a year in the one mode that exists to
+   leave settled work alone. Found by asking why the number had improved, fixed by the
+   `lockedSupervision` set — which gives the zero back and reports the inherited hours instead (§5).
 
-A fourth came from reading the schema rather than testing: `durationHours` is non-null in
+A sixth came from reading the schema rather than testing: `durationHours` is non-null in
 `LecturerWorkloadInputPayload`, so applying a plan had to echo it or every mutation would have been
 rejected before reaching the resolver.
+
+Defects 4 and 5 are the same shape as each other and worth remembering as a pair: neither was a
+wrong answer to the question asked, both were the right answer to a question asked against the wrong
+state. A number that improves when you fix something is not evidence the fix was correct.
 
 ---
 

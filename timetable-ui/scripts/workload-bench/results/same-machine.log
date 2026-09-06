@@ -1,0 +1,15 @@
+Node      : v22.23.2   Linux arm64
+CPU       : unknown × 4
+Method    : warm-up + up to 5 timed repeats each (60000 ms budget), minimum reported
+
+dataset                     slots    before/ms    after/ms   speedup      filled b/a   overrun h b/a
+────────────────────────────────────────────────────────────────────────────────────────────────────
+baseline-10                   113         15.8        1.62      9.8×         113/113           220/0
+dense-candidates-10           162         76.3        3.09     24.7×         162/162           624/0
+gaps-mode-10                  109          4.5        0.79      5.7×           52/52           306/0
+oversubscribed-10             250         57.1        2.23     25.6×         211/170          1772/0
+sparse-candidates-10          106          4.9        0.68      7.2×         104/104           334/0
+tight-ceilings-10             193         35.2        2.29     15.4×         193/184           505/0
+tight-floors-10               171         53.4        2.11     25.3×         171/171           104/0
+unconstrained-10              153         16.6        0.84     19.8×         153/153           298/0
+baseline-20                   330        104.3        2.72     38.3×         330/330           616/0
